@@ -22,19 +22,24 @@ It did not contain the previously described comparison eligibility profile or de
 - Reject unresolved non-negative assignment `ResourceUID` values.
 - Reject missing, negative or malformed outline hierarchy.
 - Independently validate outline parent level and source ordering.
-- Record that canonical entity references are document-local in v0.1.
+- Record that canonical entity references are document-local in v0.1.1.
 - Record a source-derived `document_key` and defer durable cross-snapshot identity explicitly.
 - Define `VendorExtension` as normalized structured retention, not lossless XML preservation.
 - Keep the original MSPDI as the preservation authority.
-- Exercise the checked-in JSON Schema top-level/source contract in CI without adding a runtime dependency.
+- Exercise the current checked-in JSON Schema top-level/source contract in CI without adding a runtime dependency.
+- Preserve the historical v0.1.0 schema unchanged as evidence for importer v0.1.
 - Add regression tests for all review findings.
 - Correct README and Phase 1 scope records.
 
 ## Compatibility treatment
 
-Canonical schema version remains `0.1.0`. The additional source identity fields and WBS milestone field are compatible optional additions. The custom validator requires the identity fields only for importer profile `mspdi-import-v0.1.1` and continues to accept valid `mspdi-import-v0.1` documents without them.
+The historical schema at `schemas/canonical-schedule-v0.1.schema.json` remains the original `0.1.0` contract used by importer profile `mspdi-import-v0.1` and its committed Boiler evidence.
 
-The importer profile and package version advance to `0.1.1` because parsing and validation are deliberately stricter.
+The hardened importer emits canonical schema version `0.1.1` and importer profile `mspdi-import-v0.1.1`, described by `schemas/canonical-schedule-v0.1.1.schema.json`. The schema version advances because v0.1.1 adds explicit source identity requirements and summary-milestone state that were not part of the v0.1.0 contract.
+
+The custom validator targets the current `0.1.1` document contract. Historical v0.1.0 evidence remains reproducible through its preserved schema rather than by rewriting the old schema path into the new contract.
+
+The package version also advances to `0.1.1` because parsing and validation are deliberately stricter.
 
 ## Boundary
 
@@ -49,4 +54,4 @@ This hardening PR does not add:
 
 ## External source evidence
 
-The committed Boiler result remains labelled as historical evidence for importer profile `mspdi-import-v0.1`. Importer v0.1.1 changes canonical output intentionally. A new external Boiler hash must therefore be recorded as a separately labelled evidence run after this hardening slice is reviewed.
+The committed Boiler result remains labelled as historical evidence for importer profile `mspdi-import-v0.1` and canonical schema `0.1.0`. Importer v0.1.1 changes canonical output intentionally. A new external Boiler hash must therefore be recorded as a separately labelled evidence run after this hardening slice is reviewed.
