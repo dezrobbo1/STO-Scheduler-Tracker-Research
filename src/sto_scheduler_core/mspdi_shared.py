@@ -8,7 +8,7 @@ from .opaque import element_to_opaque, local_name
 
 MSPDI_NAMESPACE = "http://schemas.microsoft.com/project"
 SCHEMA_VERSION = "0.1.0"
-IMPORTER_PROFILE = "mspdi-import-v0.1"
+IMPORTER_PROFILE = "mspdi-import-v0.1.1"
 LINK_TYPES = {0: "FF", 1: "FS", 2: "SF", 3: "SS"}
 
 
@@ -68,11 +68,13 @@ def _calendar_ref(uid: int | None) -> str | None:
 
 
 def _resource_ref(uid: int | None, known_resource_uids: set[int]) -> str | None:
-    if uid is None:
+    """Resolve an assignment resource reference without inventing an identity."""
+
+    if uid is None or uid < 0:
         return None
-    if uid in known_resource_uids:
-        return f"resource:{uid}"
-    return f"external-resource:{uid}"
+    if uid not in known_resource_uids:
+        raise MspdiImportError(f"Assignment references unknown ResourceUID {uid}")
+    return f"resource:{uid}"
 
 
 def _external_references(
