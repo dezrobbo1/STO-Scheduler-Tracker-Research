@@ -1,6 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://example.invalid/sto-scheduler-tracker/canonical-schedule-v0.1.schema.json",
+  "$comment": "CI enforces this document's top-level/source contract with a repository-local standard-library test. Runtime import also uses the custom structural validator. This is not a claim that the complete Draft 2020-12 vocabulary is evaluated at runtime.",
   "title": "STO Canonical Schedule v0.1",
   "type": "object",
   "required": [
@@ -33,7 +34,10 @@
         "format": {"const": "MSPDI"},
         "namespace": {"const": "http://schemas.microsoft.com/project"},
         "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-        "byte_length": {"type": "integer", "minimum": 1}
+        "byte_length": {"type": "integer", "minimum": 1},
+        "identity_scope": {"const": "document-local-v0.1"},
+        "document_key": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "durable_cross_snapshot_identity": {"const": "not_implemented"}
       },
       "additionalProperties": true
     },
