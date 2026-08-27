@@ -7,7 +7,7 @@ from .duration import duration_value
 from .opaque import element_to_opaque, local_name
 
 MSPDI_NAMESPACE = "http://schemas.microsoft.com/project"
-SCHEMA_VERSION = "0.1.0"
+SCHEMA_VERSION = "0.1.1"
 IMPORTER_PROFILE = "mspdi-import-v0.1.1"
 LINK_TYPES = {0: "FF", 1: "FS", 2: "SF", 3: "SS"}
 
