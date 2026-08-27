@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sto-scheduler-core"
+version = "0.1.0"
+description = "Research-only canonical STO schedule model and MSPDI importer"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+sto-scheduler-core = "sto_scheduler_core.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
