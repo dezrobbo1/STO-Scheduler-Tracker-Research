@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Project xmlns="http://schemas.microsoft.com/project">
+  <SaveVersion>14</SaveVersion>
+  <BuildNumber>16.0.1</BuildNumber>
+  <Name>synthetic-basic.xml</Name>
+  <GUID>11111111-1111-1111-1111-111111111111</GUID>
+  <Title>Synthetic Basic</Title>
+  <CreationDate>2026-01-01T08:00:00</CreationDate>
+  <LastSaved>2026-01-02T08:00:00</LastSaved>
+  <ScheduleFromStart>1</ScheduleFromStart>
+  <StartDate>2026-01-05T08:00:00</StartDate>
+  <FinishDate>2026-01-05T12:00:00</FinishDate>
+  <StatusDate>2026-01-05T09:00:00</StatusDate>
+  <CalendarUID>1</CalendarUID>
+  <DefaultStartTime>08:00:00</DefaultStartTime>
+  <DefaultFinishTime>17:00:00</DefaultFinishTime>
+  <MinutesPerDay>480</MinutesPerDay>
+  <MinutesPerWeek>2400</MinutesPerWeek>
+  <DaysPerMonth>20</DaysPerMonth>
+  <CriticalSlackLimit>0</CriticalSlackLimit>
+  <MultipleCriticalPaths>0</MultipleCriticalPaths>
+  <SplitsInProgressTasks>1</SplitsInProgressTasks>
+  <CurrencyCode>AUD</CurrencyCode>
+  <ExtendedAttributes>
+    <ExtendedAttribute>
+      <FieldID>188743740</FieldID>
+      <FieldName>Text4</FieldName>
+      <Alias>Work Order No.</Alias>
+      <Guid>22222222-2222-2222-2222-222222222222</Guid>
+    </ExtendedAttribute>
+  </ExtendedAttributes>
+  <Calendars>
+    <Calendar>
+      <UID>1</UID>
+      <GUID>33333333-3333-3333-3333-333333333333</GUID>
+      <Name>Standard</Name>
+      <IsBaseCalendar>1</IsBaseCalendar>
+      <IsBaselineCalendar>0</IsBaselineCalendar>
+      <BaseCalendarUID>-1</BaseCalendarUID>
+      <WeekDays>
+        <WeekDay><DayType>1</DayType><DayWorking>0</DayWorking></WeekDay>
+        <WeekDay><DayType>2</DayType><DayWorking>1</DayWorking><WorkingTimes><WorkingTime><FromTime>08:00:00</FromTime><ToTime>12:00:00</ToTime></WorkingTime><WorkingTime><FromTime>13:00:00</FromTime><ToTime>17:00:00</ToTime></WorkingTime></WorkingTimes></WeekDay>
+      </WeekDays>
+      <Exceptions>
+        <Exception>
+          <EnteredByOccurrences>0</EnteredByOccurrences>
+          <TimePeriod><FromDate>2026-01-26T00:00:00</FromDate><ToDate>2026-01-26T23:59:00</ToDate></TimePeriod>
+          <Occurrences>1</Occurrences><Name>Holiday</Name><Type>1</Type><DayWorking>0</DayWorking>
+        </Exception>
+      </Exceptions>
+    </Calendar>
+  </Calendars>
+  <Tasks>
+    <Task>
+      <UID>0</UID><GUID>40000000-0000-0000-0000-000000000000</GUID><ID>0</ID><Name>Synthetic Basic</Name>
+      <Active>1</Active><Manual>0</Manual><Type>1</Type><IsNull>0</IsNull><CreateDate>2026-01-01T08:00:00</CreateDate>
+      <WBS>0</WBS><OutlineNumber>0</OutlineNumber><OutlineLevel>0</OutlineLevel><Priority>500</Priority>
+      <Start>2026-01-05T08:00:00</Start><Finish>2026-01-05T12:00:00</Finish><Duration>PT4H0M0S</Duration><Work>PT4H0M0S</Work>
+      <Estimated>0</Estimated><Milestone>0</Milestone><Summary>1</Summary><Critical>1</Critical>
+      <EarlyStart>2026-01-05T08:00:00</EarlyStart><EarlyFinish>2026-01-05T12:00:00</EarlyFinish>
+      <LateStart>2026-01-05T08:00:00</LateStart><LateFinish>2026-01-05T12:00:00</LateFinish>
+      <FreeSlack>0</FreeSlack><TotalSlack>0</TotalSlack><PercentComplete>0</PercentComplete><PercentWorkComplete>0</PercentWorkComplete><PhysicalPercentComplete>0</PhysicalPercentComplete>
+      <ActualDuration>PT0H0M0S</ActualDuration><ActualWork>PT0H0M0S</ActualWork><RemainingDuration>PT4H0M0S</RemainingDuration><RemainingWork>PT4H0M0S</RemainingWork>
+      <ConstraintType>0</ConstraintType><CalendarUID>1</CalendarUID>
+      <Baseline><Number>0</Number><Start>2026-01-05T08:00:00</Start><Finish>2026-01-05T12:00:00</Finish><Duration>PT4H0M0S</Duration><Work>PT4H0M0S</Work></Baseline>
+    </Task>
+    <Task>
+      <UID>1</UID><GUID>40000000-0000-0000-0000-000000000001</GUID><ID>1</ID><Name>Work Package</Name>
+      <Active>1</Active><Manual>0</Manual><Type>1</Type><IsNull>0</IsNull><CreateDate>2026-01-01T08:00:00</CreateDate>
+      <WBS>1</WBS><OutlineNumber>1</OutlineNumber><OutlineLevel>1</OutlineLevel><Priority>500</Priority>
+      <Start>2026-01-05T08:00:00</Start><Finish>2026-01-05T12:00:00</Finish><Duration>PT4H0M0S</Duration><Work>PT4H0M0S</Work>
+      <Estimated>0</Estimated><Milestone>0</Milestone><Summary>1</Summary><Critical>1</Critical>
+      <EarlyStart>2026-01-05T08:00:00</EarlyStart><EarlyFinish>2026-01-05T12:00:00</EarlyFinish>
+      <LateStart>2026-01-05T08:00:00</LateStart><LateFinish>2026-01-05T12:00:00</LateFinish>
+      <FreeSlack>0</FreeSlack><TotalSlack>0</TotalSlack><PercentComplete>0</PercentComplete><PercentWorkComplete>0</PercentWorkComplete><PhysicalPercentComplete>0</PhysicalPercentComplete>
+      <ActualDuration>PT0H0M0S</ActualDuration><ActualWork>PT0H0M0S</ActualWork><RemainingDuration>PT4H0M0S</RemainingDuration><RemainingWork>PT4H0M0S</RemainingWork>
+      <ConstraintType>0</ConstraintType><CalendarUID>1</CalendarUID>
+    </Task>
+    <Task>
+      <UID>2</UID><GUID>40000000-0000-0000-0000-000000000002</GUID><ID>2</ID><Name>Execute work</Name>
+      <Active>1</Active><Manual>0</Manual><Type>0</Type><IsNull>0</IsNull><CreateDate>2026-01-01T08:00:00</CreateDate>
+      <WBS>1.1</WBS><OutlineNumber>1.1</OutlineNumber><OutlineLevel>2</OutlineLevel><Priority>500</Priority>
+      <Start>2026-01-05T08:00:00</Start><Finish>2026-01-05T12:00:00</Finish><Duration>PT4H0M0S</Duration><Work>PT4H0M0S</Work>
+      <Estimated>0</Estimated><Milestone>0</Milestone><Summary>0</Summary><Critical>1</Critical>
+      <EarlyStart>2026-01-05T08:00:00</EarlyStart><EarlyFinish>2026-01-05T12:00:00</EarlyFinish>
+      <LateStart>2026-01-05T08:00:00</LateStart><LateFinish>2026-01-05T12:00:00</LateFinish>
+      <FreeSlack>0</FreeSlack><TotalSlack>0</TotalSlack><PercentComplete>0</PercentComplete><PercentWorkComplete>0</PercentWorkComplete><PhysicalPercentComplete>0</PhysicalPercentComplete>
+      <ActualDuration>PT0H0M0S</ActualDuration><ActualWork>PT0H0M0S</ActualWork><RemainingDuration>PT4H0M0S</RemainingDuration><RemainingWork>PT4H0M0S</RemainingWork>
+      <ConstraintType>0</ConstraintType><CalendarUID>1</CalendarUID>
+      <ExtendedAttribute><FieldID>188743740</FieldID><Value>6183209</Value></ExtendedAttribute>
+      <TimephasedData><Type>1</Type><UID>2</UID><Start>2026-01-05T08:00:00</Start><Finish>2026-01-05T12:00:00</Finish><Unit>2</Unit><Value>PT4H0M0S</Value></TimephasedData>
+      <SyntheticUnsupported>preserve me</SyntheticUnsupported>
+    </Task>
+    <Task>
+      <UID>3</UID><GUID>40000000-0000-0000-0000-000000000003</GUID><ID>3</ID><Name>Complete milestone</Name>
+      <Active>1</Active><Manual>0</Manual><Type>0</Type><IsNull>0</IsNull><CreateDate>2026-01-01T08:00:00</CreateDate>
+      <WBS>1.2</WBS><OutlineNumber>1.2</OutlineNumber><OutlineLevel>2</OutlineLevel><Priority>500</Priority>
+      <Start>2026-01-05T12:00:00</Start><Finish>2026-01-05T12:00:00</Finish><Duration>PT0H0M0S</Duration><Work>PT0H0M0S</Work>
+      <Estimated>0</Estimated><Milestone>1</Milestone><Summary>0</Summary><Critical>1</Critical>
+      <EarlyStart>2026-01-05T12:00:00</EarlyStart><EarlyFinish>2026-01-05T12:00:00</EarlyFinish>
+      <LateStart>2026-01-05T12:00:00</LateStart><LateFinish>2026-01-05T12:00:00</LateFinish>
+      <FreeSlack>0</FreeSlack><TotalSlack>0</TotalSlack><PercentComplete>0</PercentComplete><PercentWorkComplete>0</PercentWorkComplete><PhysicalPercentComplete>0</PhysicalPercentComplete>
+      <ActualDuration>PT0H0M0S</ActualDuration><ActualWork>PT0H0M0S</ActualWork><RemainingDuration>PT0H0M0S</RemainingDuration><RemainingWork>PT0H0M0S</RemainingWork>
+      <ConstraintType>0</ConstraintType><CalendarUID>1</CalendarUID>
+      <PredecessorLink><PredecessorUID>2</PredecessorUID><Type>1</Type><CrossProject>0</CrossProject><LinkLag>0</LinkLag><LagFormat>7</LagFormat></PredecessorLink>
+    </Task>
+  </Tasks>
+  <Resources>
+    <Resource><UID>0</UID><GUID>50000000-0000-0000-0000-000000000000</GUID><ID>0</ID><Type>1</Type><IsNull>0</IsNull><MaxUnits>1</MaxUnits><CalendarUID>-1</CalendarUID><CanLevel>0</CanLevel><IsGeneric>0</IsGeneric><IsInactive>0</IsInactive><IsEnterprise>0</IsEnterprise><IsCostResource>0</IsCostResource><IsBudget>0</IsBudget></Resource>
+    <Resource><UID>1</UID><GUID>50000000-0000-0000-0000-000000000001</GUID><ID>1</ID><Name>Crew A</Name><Type>1</Type><IsNull>0</IsNull><Initials>CA</Initials><Group>Mechanical</Group><MaxUnits>1</MaxUnits><CanLevel>1</CanLevel><Work>PT4H0M0S</Work><ActualWork>PT0H0M0S</ActualWork><RemainingWork>PT4H0M0S</RemainingWork><PercentWorkComplete>0</PercentWorkComplete><CalendarUID>1</CalendarUID><IsGeneric>0</IsGeneric><IsInactive>0</IsInactive><IsEnterprise>0</IsEnterprise><IsCostResource>0</IsCostResource><IsBudget>0</IsBudget></Resource>
+  </Resources>
+  <Assignments>
+    <Assignment><UID>1</UID><GUID>60000000-0000-0000-0000-000000000001</GUID><TaskUID>2</TaskUID><ResourceUID>1</ResourceUID><PercentWorkComplete>0</PercentWorkComplete><ActualWork>PT0H0M0S</ActualWork><RemainingWork>PT4H0M0S</RemainingWork><Start>2026-01-05T08:00:00</Start><Finish>2026-01-05T12:00:00</Finish><Units>1</Units><Work>PT4H0M0S</Work><Confirmed>1</Confirmed><Overallocated>0</Overallocated><TimephasedData><Type>1</Type><UID>1</UID><Start>2026-01-05T08:00:00</Start><Finish>2026-01-05T12:00:00</Finish><Unit>2</Unit><Value>PT4H0M0S</Value></TimephasedData></Assignment>
+  </Assignments>
+</Project>
