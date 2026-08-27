@@ -11,24 +11,39 @@ This repository is deliberately separate from:
 
 **Phase 1 — Boiler MSPDI canonical import and deterministic comparison**
 
-Phase 0 completed the scheduling-core inheritance audit. PR #4 merged the first structural Microsoft Project XML/MSPDI importer. A direct post-merge review then identified bounded importer-hardening work tracked by issue #5 and branch `phase1-importer-post-merge-hardening`.
+Phase 0 completed the scheduling-core inheritance audit. PR #4 merged the first structural Microsoft Project XML/MSPDI importer. PR #7 completed the bounded post-merge hardening of importer profile `mspdi-import-v0.1.1` and canonical schema `0.1.1`.
 
-Delivered and under hardening:
+Issue #8 and the active draft branch now add the first fail-closed calculation eligibility profile and engine-neutral forward-pass experiment.
+
+Delivered on `main`:
 
 - MSPDI namespace validation and structural inventory;
-- canonical schedule schema v0.1;
+- canonical schedule schemas `0.1.0` and `0.1.1`, with the historical contract preserved;
 - WBS/activity, relationship, calendar, resource, assignment, baseline and custom-field import;
 - deterministic structured retention of selected unmodelled MSPDI fields;
 - deterministic canonical JSON and SHA-256;
 - fail-closed structural validation;
+- explicit document-local identity boundaries;
 - synthetic regression fixtures and tests;
-- sanitized external Boiler import evidence.
+- sanitized external Boiler v0.1 import evidence.
 
-Not yet delivered:
+Implemented in the active Phase 1 calculation draft:
 
-- canonical-to-engine projection;
-- independent Boiler schedule calculation;
-- Project source-coordinate comparison;
+- external Boiler v0.1.1 deterministic import rerun;
+- fail-closed activity and relationship eligibility classification;
+- recursive effective-calendar resolution for the supported subset;
+- resource/task calendar selection and intersection rules;
+- engine-neutral eligible-subset projection;
+- deterministic FS zero-lag forward pass;
+- source Start/Finish comparison;
+- sanitized reproducible evidence.
+
+Still not delivered:
+
+- backward pass, late dates or float comparison;
+- non-zero lag or SS/FF/SF calculation;
+- progress/status-date calculation;
+- resource levelling;
 - MSPDI export;
 - native Microsoft Project round-trip evidence;
 - a production scheduling engine.
@@ -36,9 +51,10 @@ Not yet delivered:
 See:
 
 - `docs/phase1-boiler-mspdi-canonical-trial.md`
+- `docs/phase1-calculation-eligibility-profile-v0.1.md`
 - `docs/canonical-model-v0.1.md`
 - `docs/phase1-import-implementation-v0.1.md`
-- issues #3 and #5.
+- issues #3, #5 and #8.
 
 ## Commands
 
@@ -46,6 +62,7 @@ See:
 PYTHONPATH=src python -m unittest discover -s tests -v
 PYTHONPATH=src python -m sto_scheduler_core inventory-mspdi path/to/source.xml
 PYTHONPATH=src python -m sto_scheduler_core import-mspdi path/to/source.xml --output .external-results/canonical.json
+PYTHONPATH=src python scripts/run_external_calculation_trial.py path/to/source.xml --output .external-results/calculation-evidence.json
 ```
 
 The real source XML and full source-derived canonical output must remain outside this public repository.
@@ -71,4 +88,4 @@ Nothing in this repository currently proves:
 - production scheduling correctness;
 - production readiness.
 
-The current importer proves deterministic structural transformation only. Compatibility claims must come from explicit deterministic comparison and native-system conformance testing.
+The structural importer and bounded forward-pass experiment provide deterministic research evidence only. Compatibility claims require explicit semantic comparison and native-system conformance testing.

@@ -1,0 +1,82 @@
+{
+  "claim_boundary": "Comparison against source Start/Finish observations for the declared subset only. No Microsoft Project desktop recalculation or round trip was executed.",
+  "comparison": {
+    "compared_activities": 226,
+    "coordinate_differences": 0,
+    "exact_coordinate_matches": 226
+  },
+  "evidence_profile": "mspdi-calculation-eligibility-v0.1-sanitized-evidence-v0.1",
+  "fingerprints": {
+    "calculation_sha256": "92defd8fbe51f4d4adf3273363462f1d311aa328f083dff0085d2a1b20e931bf",
+    "difference_activity_ids_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "eligible_activity_ids_sha256": "3a73288360a338e2166473ed9f776755e6b748cd449b06edb37c58d0862dc8b4",
+    "eligible_relationship_ids_sha256": "f7ad33bf8890292d10df4df0c94745c87f87d0897f8a77d2903b98f7ac208b31",
+    "excluded_activity_ids_sha256": "9154c4d81e6c201af3e8ee82c30f5f8d7a6d349230e2a536f4b1584be21754c5",
+    "profile_sha256": "a1dc4716b44590f33cc67df14bd9bfb7c97a4d01924c1961dc591ecf7eb921a2",
+    "projection_sha256": "a3d6ca0d2ebc05a1ad97983e7a1a1238ac6aa95e772a6dbb2fcb3c05b96ddc81"
+  },
+  "full_canonical_output_committed": false,
+  "native_project_validation": "not_executed",
+  "primary_reason_counts": {
+    "ACTIVITY_INACTIVE": 9,
+    "DURATION_FORMAT_UNSUPPORTED": 2,
+    "INELIGIBLE_PREDECESSOR": 206,
+    "MULTIPLE_RESOURCE_CALENDARS_UNSUPPORTED": 11,
+    "RELATIONSHIP_LAG_UNSUPPORTED": 6
+  },
+  "profile_counts": {
+    "activities": 460,
+    "eligible_activities": 226,
+    "eligible_milestones": 24,
+    "eligible_non_milestones": 202,
+    "eligible_relationships": 253,
+    "excluded_activities": 234,
+    "excluded_relationships": 347,
+    "relationships": 600
+  },
+  "projection_counts": {
+    "activities": 226,
+    "effective_calendars": 5,
+    "relationships": 253
+  },
+  "reason_counts": {
+    "ACTIVITY_INACTIVE": 9,
+    "DURATION_FORMAT_UNSUPPORTED": 2,
+    "INELIGIBLE_PREDECESSOR": 219,
+    "MULTIPLE_RESOURCE_CALENDARS_UNSUPPORTED": 12,
+    "RELATIONSHIP_LAG_UNSUPPORTED": 6,
+    "WORK_UNITS_INCONSISTENT": 10
+  },
+  "reproducibility": {
+    "canonical_hashes_equal": true,
+    "import_runs": 2,
+    "profile_evidence_equal": true
+  },
+  "source": {
+    "canonical_sha256": "e1af182f32a5c090e533a5694c885d0387633bba61c2f24d9b5aaf22511a0dc6",
+    "document_key": "sha256:e6a3739976580e2144352011f818c0099c0dc0c278fb37a976c5b6a55fbc3420",
+    "importer_profile": "mspdi-import-v0.1.1",
+    "schema_version": "0.1.1",
+    "source_sha256": "e6a3739976580e2144352011f818c0099c0dc0c278fb37a976c5b6a55fbc3420"
+  },
+  "source_inventory": {
+    "activity_milestones": 58,
+    "assignments": 472,
+    "baselines": 14,
+    "calendars": 45,
+    "custom_field_definitions": 8,
+    "leaf_activities": 460,
+    "milestones": 60,
+    "preserved_extension_element_counts_sha256": "870b23a599eccd690eab85998ec361c1043a61d5e21bee6665cc737c36e85a71",
+    "relationship_types": {
+      "FS": 600
+    },
+    "relationships": 600,
+    "resources": 32,
+    "summary_milestones": 2,
+    "summary_tasks": 95,
+    "tasks": 555,
+    "vendor_extensions": 44935
+  },
+  "source_xml_committed": false
+}
