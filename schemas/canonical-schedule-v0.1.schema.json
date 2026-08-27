@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/sto-scheduler-tracker/canonical-schedule-v0.1.schema.json",
+  "title": "STO Canonical Schedule v0.1",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "importer_profile",
+    "source",
+    "project",
+    "wbs_nodes",
+    "work_packages",
+    "activities",
+    "relationships",
+    "calendars",
+    "resources",
+    "assignments",
+    "baselines",
+    "custom_field_definitions",
+    "vendor_extensions",
+    "source_inventory",
+    "compatibility",
+    "import_validation"
+  ],
+  "properties": {
+    "schema_version": {"const": "0.1.0"},
+    "importer_profile": {"type": "string"},
+    "source": {
+      "type": "object",
+      "required": ["system", "format", "namespace", "sha256", "byte_length"],
+      "properties": {
+        "system": {"const": "MicrosoftProject"},
+        "format": {"const": "MSPDI"},
+        "namespace": {"const": "http://schemas.microsoft.com/project"},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "byte_length": {"type": "integer", "minimum": 1}
+      },
+      "additionalProperties": true
+    },
+    "project": {"$ref": "#/$defs/entity"},
+    "wbs_nodes": {"type": "array", "items": {"$ref": "#/$defs/entity"}},
+    "work_packages": {"type": "array", "items": {"$ref": "#/$defs/entity"}},
+    "activities": {"type": "array", "items": {"$ref": "#/$defs/entity"}},
+    "relationships": {"type": "array", "items": {"$ref": "#/$defs/entity"}},
+    "calendars": {"type": "array", "items": {"$ref": "#/$defs/entity"}},
+    "resources": {"type": "array", "items": {"$ref": "#/$defs/entity"}},
+    "assignments": {"type": "array", "items": {"$ref": "#/$defs/entity"}},
+    "baselines": {"type": "array", "items": {"$ref": "#/$defs/entity"}},
+    "custom_field_definitions": {"type": "array", "items": {"$ref": "#/$defs/entity"}},
+    "vendor_extensions": {"type": "array", "items": {"$ref": "#/$defs/entity"}},
+    "source_inventory": {"type": "object"},
+    "compatibility": {"type": "object"},
+    "import_validation": {"type": "object"}
+  },
+  "$defs": {
+    "entity": {
+      "type": "object",
+      "required": ["id"],
+      "properties": {"id": {"type": "string", "minLength": 1}},
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": false
+}

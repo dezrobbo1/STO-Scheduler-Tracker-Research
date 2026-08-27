@@ -9,11 +9,37 @@ This repository is deliberately separate from:
 
 ## Current phase
 
-**Phase 0 — Scheduling-core inheritance audit**
+**Phase 1 — Boiler MSPDI canonical import and deterministic comparison**
 
-The first task is to decide which PM-Software components should be reused, adapted, wrapped, replaced or left behind before any scheduling code is copied into this repository.
+Phase 0 completed the scheduling-core inheritance audit. Phase 1 now tests a real external Microsoft Project XML/MSPDI shutdown schedule against a new vendor-neutral canonical model.
 
-See `docs/research/PHASE-0-INHERITANCE-AUDIT.md` and issue #1.
+Implemented in the active draft PR:
+
+- MSPDI namespace validation and structural inventory;
+- canonical schedule schema v0.1;
+- WBS/activity, relationship, calendar, resource, assignment, baseline and custom-field import;
+- structured preservation of unmodelled MSPDI fields;
+- deterministic canonical JSON and SHA-256;
+- custom structural validation;
+- synthetic regression fixture and 10 automated tests;
+- sanitized external Boiler import evidence.
+
+See:
+
+- `docs/phase1-boiler-mspdi-canonical-trial.md`
+- `docs/canonical-model-v0.1.md`
+- `docs/phase1-import-implementation-v0.1.md`
+- issue #3 and draft PR #4.
+
+## Commands
+
+```bash
+PYTHONPATH=src python -m unittest discover -s tests -v
+PYTHONPATH=src python -m sto_scheduler_core inventory-mspdi path/to/source.xml
+PYTHONPATH=src python -m sto_scheduler_core import-mspdi path/to/source.xml --output .external-results/canonical.json
+```
+
+The real source XML and full source-derived canonical output must remain outside this public repository.
 
 ## Research direction
 
@@ -36,4 +62,4 @@ Nothing in this repository currently proves:
 - production scheduling correctness;
 - production readiness.
 
-Compatibility claims must come from explicit conformance and native-system testing.
+The current importer proves deterministic structural transformation only. Compatibility claims must come from explicit deterministic comparison and native-system conformance testing.

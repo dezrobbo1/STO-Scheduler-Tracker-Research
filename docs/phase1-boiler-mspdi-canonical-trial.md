@@ -1,6 +1,6 @@
 # Phase 1 — Boiler MSPDI Canonical Import and Deterministic Comparison
 
-Status: **active research phase**
+Status: **active research phase — importer v0.1 implemented; deterministic scheduling comparison pending**
 
 Related issue: #3
 
@@ -18,23 +18,50 @@ Only non-sensitive structural metadata, mappings, derived fixtures and compariso
 
 ## Verified source inventory
 
-A local structural inspection of the source XML established:
+A local structural inspection and deterministic canonical import established:
 
 - MSPDI namespace: `http://schemas.microsoft.com/project`
 - 555 tasks
 - 95 summary tasks
-- 60 milestones
-- 600 predecessor links
+- 460 leaf activities
+- 60 milestones: 58 activity milestones and 2 summary tasks carrying the source milestone flag
+- 600 predecessor links, all source type `1` / FS
 - 32 resources
 - 472 assignments
 - 45 calendars
 - 8 project-level extended-attribute definitions
+- 14 baseline records across task/resource/assignment owners
 - schedule-from-start enabled
 - project-level minutes/day = 600
 - project-level minutes/week = 2400
 - task data includes early/late dates, total/free slack, baselines, actual/remaining values, timephased data, custom fields, resources and assignments
 
-These facts define source complexity only. They are not evidence of compatibility.
+These facts define source complexity and deterministic import structure only. They are not evidence of Microsoft Project scheduling-semantic compatibility.
+
+## Current implementation evidence
+
+Importer profile `mspdi-import-v0.1` now provides:
+
+- strict MSPDI root/namespace validation;
+- canonical schedule schema v0.1;
+- project, WBS, activity, relationship, calendar, resource, assignment, baseline and custom-field mapping;
+- typed Project external references;
+- structured `VendorExtension` preservation for unmodelled elements;
+- deterministic JSON and SHA-256;
+- structural validation;
+- sanitized inventory output;
+- external-source run tooling;
+- 10 passing synthetic regression tests.
+
+The real external source imported twice with identical canonical hash:
+
+```text
+d86a925d387671de79cb094675e233d5b989de226001830f810b89cb37fd7b8b
+```
+
+The structural validator reported zero errors and zero warnings. The source XML and full 12 MB source-derived canonical output were not committed.
+
+This establishes deterministic structural import only. It does not establish independent schedule calculation or native Project round-trip compatibility.
 
 ## Research boundary
 
@@ -63,7 +90,7 @@ Phase 1 excludes:
 
 The minimum canonical entities for this experiment are:
 
-- `ShutdownEvent`
+- `ShutdownEvent` / project scheduling context
 - `WbsNode`
 - `WorkPackage`
 - `Activity`
@@ -75,6 +102,8 @@ The minimum canonical entities for this experiment are:
 - `ScheduleVersion`
 - `ExternalReference`
 - `VendorExtension`
+
+Importer v0.1 leaves `work_packages` empty deliberately. Imported summary tasks become `WbsNode` records; a planner-defined operational work package remains a separate later mapping.
 
 The broader product model may later add `ExecutionEvent`, `Blocker`, `Action`, `EvidenceRef` and `MappingProfile`. Their absence from the first import experiment does not imply they are outside the product concept.
 
@@ -101,14 +130,15 @@ Every imported semantic must be classified as one of:
 
 `Full` is the strongest claim and requires deterministic and, where relevant, native round-trip evidence.
 
+Importer v0.1 currently classifies source identity as `Full` representation, WBS/tasks/relationships/calendars/resources/assignments/custom fields as `Mapped`, source calculated/actual fields as `Read-only`, and timephased/formula/unmodelled fields as `Preserved-only`. These are import classifications, not destination conformance results.
+
 ## First deterministic comparison profile
 
-The first comparison should prioritise semantics already represented in the PM-Software research core and present in the Boiler schedule:
+The next increment should prioritise semantics already represented in the PM-Software research core and present in the Boiler schedule:
 
 - task/milestone spans;
 - WBS identity and hierarchy;
-- FS/SS/FF/SF relationships;
-- positive and negative lag where supported;
+- FS relationships;
 - productive working calendars;
 - declared supported date constraints;
 - task start/finish;
@@ -116,6 +146,8 @@ The first comparison should prioritise semantics already represented in the PM-S
 - early/late coordinates where supported;
 - total/free float where supported;
 - completed and in-progress state where the inherited semantic profile is valid.
+
+Although the canonical relationship type supports FS/SS/FF/SF, the external Boiler source observed in this trial contains 600 FS links only.
 
 Anything outside the supported profile must fail closed or be marked preserved-only/unsupported.
 
@@ -170,7 +202,7 @@ The Phase 0 inheritance audit remains authoritative for reuse decisions.
 
 Useful PM-Software concepts may be selectively reused or adapted, but its frozen research protocols remain in the original repository and are not silently rewritten here.
 
-The existing PM-Software CPM kernel must not be relabelled a production scheduler.
+No PM-Software source code was copied in importer v0.1. The existing PM-Software CPM kernel must not be relabelled a production scheduler.
 
 ## Exit criteria
 
@@ -183,3 +215,5 @@ Phase 1 is complete only when:
 5. no unsupported semantic is silently approximated as `Full`;
 6. any native Project claim is backed by real native evidence; and
 7. unexplained differences are zero for every semantic declared `Full`.
+
+Items 1–3 are partially satisfied by importer v0.1. Items 4–7 remain open because independent scheduling and native Project evidence have not yet been completed.
