@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://example.invalid/sto-scheduler-tracker/canonical-schedule-v0.1.schema.json",
-  "$comment": "CI enforces this document's top-level/source contract with a repository-local standard-library test. Runtime import also uses the custom structural validator. This is not a claim that the complete Draft 2020-12 vocabulary is evaluated at runtime.",
-  "title": "STO Canonical Schedule v0.1",
+  "title": "STO Canonical Schedule v0.1 compatibility alias",
+  "$comment": "Pre-1.0 compatibility alias for the hardened v0.1.1 contract. CI requires its required/properties/$defs contract to remain identical to canonical-schedule-v0.1.1.schema.json. New work should use the dedicated v0.1.1 schema path.",
   "type": "object",
   "required": [
     "schema_version",
@@ -24,11 +24,20 @@
     "import_validation"
   ],
   "properties": {
-    "schema_version": {"const": "0.1.0"},
-    "importer_profile": {"type": "string"},
+    "schema_version": {"const": "0.1.1"},
+    "importer_profile": {"const": "mspdi-import-v0.1.1"},
     "source": {
       "type": "object",
-      "required": ["system", "format", "namespace", "sha256", "byte_length"],
+      "required": [
+        "system",
+        "format",
+        "namespace",
+        "sha256",
+        "byte_length",
+        "identity_scope",
+        "document_key",
+        "durable_cross_snapshot_identity"
+      ],
       "properties": {
         "system": {"const": "MicrosoftProject"},
         "format": {"const": "MSPDI"},
