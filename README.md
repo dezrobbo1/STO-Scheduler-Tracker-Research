@@ -11,25 +11,34 @@ This repository is deliberately separate from:
 
 **Phase 1 — Boiler MSPDI canonical import and deterministic comparison**
 
-Phase 0 completed the scheduling-core inheritance audit. Phase 1 now tests a real external Microsoft Project XML/MSPDI shutdown schedule against a new vendor-neutral canonical model.
+Phase 0 completed the scheduling-core inheritance audit. PR #4 merged the first structural Microsoft Project XML/MSPDI importer. A direct post-merge review then identified bounded importer-hardening work tracked by issue #5 and branch `phase1-importer-post-merge-hardening`.
 
-Implemented in the active draft PR:
+Delivered and under hardening:
 
 - MSPDI namespace validation and structural inventory;
 - canonical schedule schema v0.1;
 - WBS/activity, relationship, calendar, resource, assignment, baseline and custom-field import;
-- structured preservation of unmodelled MSPDI fields;
+- deterministic structured retention of selected unmodelled MSPDI fields;
 - deterministic canonical JSON and SHA-256;
-- custom structural validation;
-- synthetic regression fixture and 10 automated tests;
+- fail-closed structural validation;
+- synthetic regression fixtures and tests;
 - sanitized external Boiler import evidence.
+
+Not yet delivered:
+
+- canonical-to-engine projection;
+- independent Boiler schedule calculation;
+- Project source-coordinate comparison;
+- MSPDI export;
+- native Microsoft Project round-trip evidence;
+- a production scheduling engine.
 
 See:
 
 - `docs/phase1-boiler-mspdi-canonical-trial.md`
 - `docs/canonical-model-v0.1.md`
 - `docs/phase1-import-implementation-v0.1.md`
-- issue #3 and draft PR #4.
+- issues #3 and #5.
 
 ## Commands
 

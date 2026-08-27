@@ -30,6 +30,15 @@ def _compatibility_profile() -> dict[str, Any]:
     return {
         "profile": IMPORTER_PROFILE,
         "claim_boundary": "Import mapping classification only; not a Microsoft Project semantic compatibility claim.",
+        "identity_boundary": (
+            "Entity ids other than the project id are document-local in canonical model v0.1. "
+            "They must be scoped by source.document_key; durable cross-snapshot identity is not implemented."
+        ),
+        "preservation_boundary": (
+            "VendorExtension records are deterministic structured normalizations at declared locations. "
+            "They are not byte-for-byte XML preservation and do not prove safe MSPDI round trip. "
+            "The original source XML remains the preservation authority."
+        ),
         "semantics": {
             "project_identity": "Full",
             "task_uid_guid_id": "Full",
@@ -135,12 +144,7 @@ def import_mspdi(path: str | Path) -> dict[str, Any]:
 
     relationship_type_counts = Counter(item["type"] for item in relationships)
     activity_milestones = sum(1 for item in activities if item.get("milestone"))
-    task_container = _child(root, "Tasks")
-    summary_milestones = sum(
-        1
-        for element in (list(task_container) if task_container is not None else [])
-        if _boolean(element, "Summary", False) and _boolean(element, "Milestone", False)
-    )
+    summary_milestones = sum(1 for item in wbs_nodes if item.get("milestone_source"))
     inventory = {
         "tasks": len(wbs_nodes) + len(activities),
         "summary_tasks": len(wbs_nodes),
@@ -172,6 +176,9 @@ def import_mspdi(path: str | Path) -> dict[str, Any]:
             "namespace": namespace,
             "sha256": source_hash,
             "byte_length": source_path.stat().st_size,
+            "identity_scope": "document-local-v0.1",
+            "document_key": f"sha256:{source_hash}",
+            "durable_cross_snapshot_identity": "not_implemented",
             "document_name": _text(root, "Name"),
             "save_version": _integer(root, "SaveVersion"),
             "build_number": _text(root, "BuildNumber"),
@@ -206,6 +213,8 @@ def inventory_mspdi(path: str | Path) -> dict[str, Any]:
             "namespace": document["source"]["namespace"],
             "sha256": document["source"]["sha256"],
             "byte_length": document["source"]["byte_length"],
+            "identity_scope": document["source"]["identity_scope"],
+            "document_key": document["source"]["document_key"],
         },
         "schema_version": document["schema_version"],
         "counts": document["source_inventory"],

@@ -1,14 +1,61 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
 import json
 import tempfile
 import unittest
 from pathlib import Path
+from typing import Callable, Iterator
+from xml.etree import ElementTree as ET
 
-from sto_scheduler_core import canonical_sha256, import_mspdi, inventory_mspdi, validate_canonical_schedule
+from sto_scheduler_core import (
+    MSPDI_NAMESPACE,
+    MspdiImportError,
+    canonical_sha256,
+    import_mspdi,
+    inventory_mspdi,
+    validate_canonical_schedule,
+)
 from sto_scheduler_core.duration import parse_iso_duration_seconds
 
 FIXTURE = Path(__file__).parent / "fixtures" / "synthetic-basic.mspdi.xml"
+NS = {"p": MSPDI_NAMESPACE}
+
+
+def _task_by_uid(tree: ET.ElementTree, uid: int) -> ET.Element:
+    for task in tree.getroot().findall("p:Tasks/p:Task", NS):
+        uid_element = task.find("p:UID", NS)
+        if uid_element is not None and uid_element.text == str(uid):
+            return task
+    raise AssertionError(f"Synthetic fixture has no task UID {uid}")
+
+
+def _assignment_by_uid(tree: ET.ElementTree, uid: int) -> ET.Element:
+    for assignment in tree.getroot().findall("p:Assignments/p:Assignment", NS):
+        uid_element = assignment.find("p:UID", NS)
+        if uid_element is not None and uid_element.text == str(uid):
+            return assignment
+    raise AssertionError(f"Synthetic fixture has no assignment UID {uid}")
+
+
+def _set_child_text(element: ET.Element, name: str, value: str) -> None:
+    child = element.find(f"p:{name}", NS)
+    if child is None:
+        child = ET.SubElement(element, f"{{{MSPDI_NAMESPACE}}}{name}")
+    child.text = value
+
+
+@contextmanager
+def _mutated_fixture(
+    mutation: Callable[[ET.ElementTree], None],
+) -> Iterator[Path]:
+    with tempfile.TemporaryDirectory() as directory:
+        tree = ET.parse(FIXTURE)
+        mutation(tree)
+        path = Path(directory) / "mutated.mspdi.xml"
+        ET.register_namespace("", MSPDI_NAMESPACE)
+        tree.write(path, encoding="utf-8", xml_declaration=True)
+        yield path
 
 
 class DurationTests(unittest.TestCase):
@@ -32,6 +79,7 @@ class MspdiImportTests(unittest.TestCase):
         self.assertEqual(inventory["relationship_types"], {"FS": 1})
         self.assertEqual(self.document["wbs_nodes"][1]["parent_id"], "task:0")
         self.assertEqual(self.document["activities"][0]["parent_wbs_id"], "task:1")
+        self.assertFalse(self.document["wbs_nodes"][1]["milestone_source"])
 
     def test_relationship_semantics_are_explicit(self) -> None:
         relation = self.document["relationships"][0]
@@ -52,6 +100,9 @@ class MspdiImportTests(unittest.TestCase):
         }
         self.assertIn("TimephasedData", payload_names)
         self.assertIn("SyntheticUnsupported", payload_names)
+        boundary = self.document["compatibility"]["preservation_boundary"]
+        self.assertIn("not byte-for-byte XML preservation", boundary)
+        self.assertIn("original source XML remains", boundary)
 
     def test_calendars_resources_assignments_and_baseline(self) -> None:
         self.assertEqual(len(self.document["calendars"]), 1)
@@ -92,6 +143,63 @@ class MspdiImportTests(unittest.TestCase):
             path.write_text(json.dumps(self.document), encoding="utf-8")
             reloaded = json.loads(path.read_text(encoding="utf-8"))
         self.assertEqual(canonical_sha256(self.document), canonical_sha256(reloaded))
+
+    def test_identity_scope_is_document_local_and_explicit(self) -> None:
+        source = self.document["source"]
+        self.assertEqual(source["identity_scope"], "document-local-v0.1")
+        self.assertEqual(source["document_key"], f"sha256:{source['sha256']}")
+        self.assertEqual(source["durable_cross_snapshot_identity"], "not_implemented")
+        self.assertIn("document-local", self.document["compatibility"]["identity_boundary"])
+
+    def test_summary_milestone_state_is_preserved(self) -> None:
+        def mutation(tree: ET.ElementTree) -> None:
+            _set_child_text(_task_by_uid(tree, 1), "Milestone", "1")
+
+        with _mutated_fixture(mutation) as path:
+            document = import_mspdi(path)
+        summary = next(item for item in document["wbs_nodes"] if item["id"] == "task:1")
+        self.assertTrue(summary["milestone_source"])
+        self.assertEqual(document["source_inventory"]["summary_milestones"], 1)
+        self.assertEqual(document["source_inventory"]["milestones"], 2)
+
+    def test_unknown_assignment_resource_fails_closed(self) -> None:
+        def mutation(tree: ET.ElementTree) -> None:
+            _set_child_text(_assignment_by_uid(tree, 1), "ResourceUID", "999")
+
+        with _mutated_fixture(mutation) as path:
+            with self.assertRaisesRegex(MspdiImportError, "unknown ResourceUID 999"):
+                import_mspdi(path)
+
+    def test_skipped_outline_level_fails_closed(self) -> None:
+        def mutation(tree: ET.ElementTree) -> None:
+            _set_child_text(_task_by_uid(tree, 2), "OutlineLevel", "3")
+
+        with _mutated_fixture(mutation) as path:
+            with self.assertRaisesRegex(MspdiImportError, "no preceding summary parent"):
+                import_mspdi(path)
+
+    def test_validator_rejects_missing_expected_outline_parent(self) -> None:
+        copy = json.loads(json.dumps(self.document))
+        activity = next(item for item in copy["activities"] if item["id"] == "task:2")
+        activity["outline_level"] = 3
+        activity["parent_wbs_id"] = None
+        report = validate_canonical_schedule(copy)
+        self.assertFalse(report.valid)
+        self.assertTrue(any("requires a summary parent" in item for item in report.errors))
+
+    def test_validator_remains_compatible_with_v0_1_optional_additions(self) -> None:
+        legacy = json.loads(json.dumps(self.document))
+        legacy["importer_profile"] = "mspdi-import-v0.1"
+        for key in (
+            "identity_scope",
+            "document_key",
+            "durable_cross_snapshot_identity",
+        ):
+            legacy["source"].pop(key)
+        for node in legacy["wbs_nodes"]:
+            node.pop("milestone_source")
+        report = validate_canonical_schedule(legacy)
+        self.assertTrue(report.valid, report.errors)
 
 
 if __name__ == "__main__":

@@ -47,6 +47,7 @@ def _task_common(element: ET.Element, ref: str, source_order: int) -> dict[str, 
         "work": duration_value(_text(element, "Work")),
         "calendar_ref": _calendar_ref(calendar_uid),
         "estimated": _boolean(element, "Estimated"),
+        "milestone_source": bool(_boolean(element, "Milestone", False)),
         "critical_source": _boolean(element, "Critical"),
         "early_start_source": _text(element, "EarlyStart"),
         "early_finish_source": _text(element, "EarlyFinish"),
@@ -78,6 +79,7 @@ def _parse_tasks(container: ET.Element | None, add_extension):
     elements = list(container)
     task_ref_by_uid: dict[int, str] = {}
     summary_by_level: dict[int, str] = {}
+    root_outline_level: int | None = None
     wbs_nodes: list[dict[str, Any]] = []
     activities: list[dict[str, Any]] = []
     baselines: list[dict[str, Any]] = []
@@ -105,10 +107,29 @@ def _parse_tasks(container: ET.Element | None, add_extension):
         task_ref_by_uid[uid] = ref
         source_task_elements.append((element, ref))
 
-        level = _integer(element, "OutlineLevel", 0) or 0
+        level = _integer(element, "OutlineLevel")
+        if level is None:
+            raise MspdiImportError(f"Task UID {uid} has no OutlineLevel")
+        if level < 0:
+            raise MspdiImportError(f"Task UID {uid} has negative OutlineLevel {level}")
+        if root_outline_level is None:
+            root_outline_level = level
+        elif level < root_outline_level:
+            raise MspdiImportError(
+                f"Task UID {uid} OutlineLevel {level} is above root level {root_outline_level}"
+            )
+
         for old_level in [key for key in summary_by_level if key >= level]:
             del summary_by_level[old_level]
-        parent_ref = summary_by_level.get(level - 1) if level > 0 else None
+
+        parent_ref: str | None = None
+        if level > root_outline_level:
+            parent_ref = summary_by_level.get(level - 1)
+            if parent_ref is None:
+                raise MspdiImportError(
+                    f"Task UID {uid} at OutlineLevel {level} has no preceding summary parent at level {level - 1}"
+                )
+
         is_summary = bool(_boolean(element, "Summary", False))
         common = _task_common(element, ref, source_order)
         common["source_uid"] = uid
@@ -124,7 +145,7 @@ def _parse_tasks(container: ET.Element | None, add_extension):
             record = {
                 **common,
                 "parent_wbs_id": parent_ref,
-                "milestone": bool(_boolean(element, "Milestone", False)),
+                "milestone": common["milestone_source"],
             }
             activities.append(record)
 
