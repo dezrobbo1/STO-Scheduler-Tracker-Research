@@ -140,8 +140,8 @@ def _check_outline_hierarchy(
 
 def validate_canonical_schedule(document: dict[str, Any]) -> ValidationReport:
     report = ValidationReport()
-    if document.get("schema_version") != "0.1.0":
-        report.errors.append("schema_version must be '0.1.0'")
+    if document.get("schema_version") != "0.1.1":
+        report.errors.append("schema_version must be '0.1.1'")
 
     required_arrays = (
         "wbs_nodes",
