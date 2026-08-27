@@ -8,15 +8,16 @@ from sto_scheduler_core import import_mspdi, validate_canonical_schedule
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURE = ROOT / "tests" / "fixtures" / "synthetic-basic.mspdi.xml"
-SCHEMA_PATH = ROOT / "schemas" / "canonical-schedule-v0.1.schema.json"
+SCHEMA_PATH = ROOT / "schemas" / "canonical-schedule-v0.1.1.schema.json"
 
 
 class CanonicalSchemaContractTests(unittest.TestCase):
-    """Exercise the repository-owned top-level JSON Schema contract.
+    """Exercise the current repository-owned top-level JSON Schema contract.
 
     This deliberately uses only the Python standard library. It is not a full
-    Draft 2020-12 evaluator. It prevents the checked-in schema, importer output
-    and custom validator from silently drifting apart at the top-level boundary.
+    Draft 2020-12 evaluator. It prevents the current checked-in schema, importer
+    output and custom validator from silently drifting apart at the top-level
+    boundary.
     """
 
     def setUp(self) -> None:
@@ -36,17 +37,24 @@ class CanonicalSchemaContractTests(unittest.TestCase):
         self.assertEqual(
             self.document["schema_version"], properties["schema_version"]["const"]
         )
+        self.assertEqual(
+            self.document["importer_profile"], properties["importer_profile"]["const"]
+        )
         source_schema = properties["source"]
         source = self.document["source"]
         for key in source_schema["required"]:
             self.assertIn(key, source)
-        for key in ("system", "format", "namespace"):
+        for key in (
+            "system",
+            "format",
+            "namespace",
+            "identity_scope",
+            "durable_cross_snapshot_identity",
+        ):
             self.assertEqual(source[key], source_schema["properties"][key]["const"])
         self.assertRegex(source["sha256"], r"^[0-9a-f]{64}$")
         self.assertGreater(source["byte_length"], 0)
-        self.assertEqual(source["identity_scope"], "document-local-v0.1")
         self.assertEqual(source["document_key"], f"sha256:{source['sha256']}")
-        self.assertEqual(source["durable_cross_snapshot_identity"], "not_implemented")
 
     def test_schema_entity_collections_and_custom_validator_agree(self) -> None:
         collection_names = (
