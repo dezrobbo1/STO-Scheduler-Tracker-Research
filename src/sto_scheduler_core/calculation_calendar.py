@@ -11,7 +11,6 @@ from .calculation_common import (
 )
 from .provenance import canonical_sha256
 
-
 @dataclass(frozen=True, slots=True)
 class ResolvedCalendar:
     source_ref: str
@@ -61,10 +60,12 @@ def _normalize_intervals(
             intervals.append((0, 86400))
         elif finish > start:
             intervals.append((start, finish))
-        else:
+        elif finish == 0:
             intervals.append((start, 86400))
-            if finish > 0:
-                intervals.append((0, finish))
+        else:
+            raise ValueError(
+                "cross-midnight intervals ending after midnight are unsupported"
+            )
     intervals.sort()
     normalized: list[tuple[int, int]] = []
     for start, finish in intervals:

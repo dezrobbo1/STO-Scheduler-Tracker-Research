@@ -167,6 +167,21 @@ class CalculationProfileTests(unittest.TestCase):
         self.assertIn("DURATION_FORMAT_UNSUPPORTED", record["reason_codes"])
         self.assertIn("WORK_UNITS_INCONSISTENT", record["reason_codes"])
 
+    def test_cross_midnight_interval_fails_closed(self) -> None:
+        document = _document(
+            [
+                _activity(
+                    1,
+                    start="2026-01-05T18:00:00",
+                    finish="2026-01-06T02:00:00",
+                    duration_seconds=28800,
+                )
+            ],
+            calendars=[_calendar(1, [("18:00:00", "06:00:00")])],
+        )
+        record = build_calculation_profile(document)["activities"][0]
+        self.assertIn("TASK_CALENDAR_UNRESOLVED", record["reason_codes"])
+
     def test_special_calendar_day_inside_horizon_fails_closed(self) -> None:
         calendar = _calendar(1, [("08:00:00", "16:00:00")])
         calendar["week_days"].append(

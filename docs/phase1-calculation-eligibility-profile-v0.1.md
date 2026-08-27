@@ -87,7 +87,7 @@ If a predecessor is ineligible, every dependent successor is also excluded with 
 
 The profile resolves base-calendar inheritance recursively.
 
-Regular week definitions are normalized into Sunday-to-Saturday working intervals. Cross-midnight intervals are split deterministically. A start and finish time of `00:00:00` represents a full 24-hour working day.
+Regular week definitions are normalized into Sunday-to-Saturday working intervals. An interval ending at `00:00:00` is normalized to the end of that day; other cross-midnight intervals fail closed in profile v0.1. A start and finish time of `00:00:00` represents a full 24-hour working day.
 
 Calendar exceptions and special date-specific weekday entries are permitted only when their complete date range is outside the imported project horizon. Any unresolved or overlapping date-specific calendar rule excludes affected activities.
 
@@ -96,7 +96,7 @@ The effective calendar rule is:
 1. Explicit task calendar plus `IgnoreResourceCalendar = 1`: use the task calendar.
 2. Explicit task calendar plus one effective resource pattern: intersect task and resource working time.
 3. No explicit task calendar plus one effective resource pattern: use the resource calendar.
-4. No explicit task calendar and no assigned resource: use the project calendar.
+4. No explicit task calendar ind no assigned resource: use the project calendar.
 5. Multiple distinct effective resource patterns: exclude unless an explicit task calendar is configured to ignore resource calendars.
 
 Multiple resource-calendar identifiers are permitted only when they resolve to the same weekly pattern.
