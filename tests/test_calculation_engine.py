@@ -35,6 +35,7 @@ class CalculationProfileTests(unittest.TestCase):
         self.assertEqual(profile["counts"]["eligible_relationships"], 1)
         self.assertEqual(comparison["counts"]["exact_coordinate_matches"], 2)
         self.assertEqual(comparison["counts"]["coordinate_differences"], 0)
+        self.assertEqual(comparison["source"], calculation["source"])
         self.assertFalse(any("name" in item for item in projection["activities"]))
 
     def test_milestone_keeps_predecessor_time_without_calendar_snap(self) -> None:
@@ -90,6 +91,21 @@ class CalculationProfileTests(unittest.TestCase):
             CalculationProfileError, "does not match the supplied canonical document"
         ):
             build_engine_projection(second, profile)
+
+    def test_comparison_rejects_calculation_from_another_document(self) -> None:
+        first = _document(
+            [_activity(1, start="2026-01-05T08:00:00", finish="2026-01-05T12:00:00", duration_seconds=14400)]
+        )
+        second = _document(
+            [_activity(1, start="2026-01-05T08:00:00", finish="2026-01-05T10:00:00", duration_seconds=7200)]
+        )
+        calculation = calculate_forward_schedule(
+            build_engine_projection(first, build_calculation_profile(first))
+        )
+        with self.assertRaisesRegex(
+            CalculationProfileError, "does not match the supplied canonical document"
+        ):
+            compare_source_coordinates(second, calculation)
 
     def test_cycle_fails_deterministic_forward_pass(self) -> None:
         document = _document(
