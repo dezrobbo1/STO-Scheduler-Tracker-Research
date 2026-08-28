@@ -1,8 +1,8 @@
 # Phase 1 — Boiler MSPDI Canonical Import and Deterministic Comparison
 
-Status: **active research phase — structural importer implemented; post-merge hardening active; deterministic scheduling comparison pending**
+Status: **active research phase — importer hardening merged; bounded forward-pass comparison implemented; backward/float and native Project evidence pending**
 
-Related issues: #3 and #5
+Related issues: #3, #5 and #8
 
 ## Purpose
 
@@ -14,11 +14,11 @@ This phase tests whether a vendor-neutral STO canonical model and an adapted det
 
 The real Boiler XML is external test material and is **not committed** to this public repository.
 
-Only manually reviewed, non-sensitive structural metadata, mappings, public synthetic fixtures and sanitized comparison evidence may be committed.
+Only manually reviewed, non-sensitive structural metadata, mappings, public synthetic fixtures and sanitized comparison evidence may be committed. The full canonical document also remains external because it contains source-derived task, resource and custom-field values.
 
 ## Verified source inventory
 
-The importer v0.1 external trial recorded:
+The external Boiler trial records:
 
 - MSPDI namespace: `http://schemas.microsoft.com/project`
 - 555 tasks
@@ -38,45 +38,43 @@ The importer v0.1 external trial recorded:
 
 These facts define source complexity and deterministic import structure only. They are not evidence of Microsoft Project scheduling-semantic compatibility.
 
-## Delivered structural importer
+## Structural importer history
 
-PR #4 merged importer profile `mspdi-import-v0.1`, providing:
-
-- strict MSPDI root/namespace validation;
-- canonical schedule schema v0.1;
-- project, WBS, activity, relationship, calendar, resource, assignment, baseline and custom-field mapping;
-- typed Project external references;
-- normalized structured `VendorExtension` retention for selected unmodelled elements;
-- deterministic JSON and SHA-256;
-- structural validation;
-- sanitized inventory output;
-- external-source run tooling;
-- public synthetic regression tests.
-
-The external source imported twice under v0.1 with identical canonical hash:
+PR #4 merged importer profile `mspdi-import-v0.1`, providing the first canonical structural import. The external source imported twice under v0.1 with identical canonical hash:
 
 ```text
 d86a925d387671de79cb094675e233d5b989de226001830f810b89cb37fd7b8b
 ```
 
-The v0.1 structural validator reported zero errors and zero warnings. The source XML and full source-derived canonical output were not committed.
+PR #7 then merged the bounded post-merge hardening:
 
-## Post-merge review and hardening
-
-PR #4 was merged after Codex review usage was exhausted. A direct review of `main` found that the repository contained the structural importer and its importer tests, but not the comparison eligibility profile or deterministic reference engine described in an earlier progress report.
-
-Issue #5 therefore hardens only the structural importer before calculation work proceeds. Importer profile v0.1.1 adds:
-
+- canonical schema `0.1.1` and importer profile `mspdi-import-v0.1.1`;
 - retained summary milestone state;
-- fail-closed unknown assignment-resource handling;
+- fail-closed assignment-resource resolution;
 - fail-closed outline hierarchy parsing and independent hierarchy validation;
 - explicit document-local identity scope;
 - explicit durable cross-snapshot identity deferral;
-- corrected structured-retention wording, without a lossless XML claim;
-- schema/importer top-level contract checks in CI;
-- regression coverage for the findings.
+- corrected structured-retention wording without a lossless XML claim;
+- separate preservation of the historical schema `0.1.0` contract;
+- regression coverage for the review findings.
 
-The v0.1 canonical hash above remains historical evidence. Because v0.1.1 intentionally changes canonical output, its external Boiler hash must be recorded by a separately labelled rerun after the hardening code is reviewed.
+The historical v0.1 evidence remains tied to schema `0.1.0` and importer profile `mspdi-import-v0.1`.
+
+## External importer v0.1.1 result
+
+The same external source imported twice under the hardened profile with identical canonical hash.
+
+| Measure | Result |
+|---|---:|
+| Source SHA-256 | `e6a3739976580e2144352011f818c0099c0dc0c278fb37a976c5b6a55fbc3420` |
+| Canonical schema | `0.1.1` |
+| Importer profile | `mspdi-import-v0.1.1` |
+| Canonical SHA-256 | `e1af182f32a5c090e533a5694c885d0387633bba61c2f24d9b5aaf22511a0dc6` |
+| Structural validation errors | 0 |
+| Structural validation warnings | 0 |
+| Repeated import hashes equal | Yes |
+
+This supersedes no historical evidence; it is a separately versioned hardened-import result.
 
 ## Canonical model boundary
 
@@ -97,7 +95,7 @@ The minimum canonical entities for this experiment remain:
 
 Imported summary tasks become `WbsNode` records. `work_packages` remain empty because an operational work package is a later configured mapping rather than an automatic synonym for every summary task.
 
-Entity references such as `task:542` are document-local in canonical model v0.1 and must be paired with `source.document_key`. Durable cross-snapshot identities remain unimplemented.
+Entity references such as `task:542` are document-local in canonical model v0.1.1 and must be paired with `source.document_key`. Durable cross-snapshot identities remain unimplemented.
 
 ## Preservation boundary
 
@@ -105,7 +103,7 @@ Entity references such as `task:542` are document-local in canonical model v0.1 
 
 ## Compatibility vocabulary
 
-Every imported semantic is classified as one of:
+Every semantic is classified using the established vocabulary:
 
 - `Full`
 - `Mapped`
@@ -116,25 +114,104 @@ Every imported semantic is classified as one of:
 - `Preserved-only`
 - `Unsupported`
 
-`Full` is the strongest claim and requires deterministic and, where relevant, native round-trip evidence. Import classifications are not destination-system conformance results.
+`Full` is the strongest claim and requires deterministic and, where relevant, native round-trip evidence. Import or calculation-profile classifications are not destination-system conformance results.
 
-## Next deterministic comparison profile
+## Implemented calculation eligibility profile
 
-After importer hardening and the external v0.1.1 structural rerun, the next bounded increment should:
+Issue #8 introduces:
 
-1. define a versioned fail-closed eligibility profile;
-2. resolve effective calendars only for the supported subset;
-3. project eligible activities and relationships into a separate deterministic engine input;
-4. calculate supported task/milestone spans and relationship effects;
-5. compare task start/finish, duration, early/late coordinates and float only where the semantic profile supports them;
-6. classify every exclusion and difference;
-7. retain zero unexplained differences as the requirement for any semantic declared `Full`.
+```text
+mspdi-calculation-eligibility-v0.1
+```
 
-The external Boiler source currently contains 600 FS links, but the canonical relationship vocabulary retains FS, SS, FF and SF for later bounded tests.
+The profile is deliberately fail-closed. It admits only a bounded subset with:
+
+- schedule-from-start direction;
+- active, automatically scheduled, non-null leaf activities;
+- parsed non-estimated durations using source duration-format code `5`;
+- not-started actual/progress state;
+- ASAP constraints without constraint dates or deadlines;
+- FS relationships with zero lag only;
+- recursively resolved weekly calendars;
+- date-specific calendar rules only when wholly outside the project horizon;
+- one effective resource-calendar pattern, or identical patterns across assignments;
+- explicit task/resource calendar intersection rules;
+- consistent assignment work and units;
+- predecessor closure so no admitted activity relies on an excluded predecessor.
+
+The full profile and reason-code contract are documented in:
+
+```text
+docs/phase1-calculation-eligibility-profile-v0.1.md
+```
+
+## Engine-neutral projection and forward pass
+
+Only eligible semantics enter the projection:
+
+- project start;
+- activity ID and source order;
+- duration seconds;
+- milestone flag;
+- ASAP constraint;
+- effective-calendar reference;
+- FS zero-lag relationships.
+
+Task names, notes, source early/late values, slack and Project critical flags are excluded from calculation inputs.
+
+The reference forward pass uses stable topological ordering and calendar-aware working-time arithmetic. It produces engine-native start/finish dates only. It does not yet calculate late dates, float or a Project-labelled critical path.
+
+## External Boiler calculation result
+
+| Measure | Result |
+|---|---:|
+| Leaf activities considered | 460 |
+| Eligible activities | 226 |
+| Eligible non-milestones | 202 |
+| Eligible milestones | 24 |
+| Excluded activities | 234 |
+| Eligible relationships | 253 |
+| Effective calendar patterns | 5 |
+| Source Start/Finish comparisons | 226 |
+| Exact coordinate matches | 226 |
+| Coordinate differences | 0 |
+
+Reason counts can overlap because one activity may fail several local checks and may also inherit an excluded predecessor.
+
+| Reason code | Activities |
+|---|---:|
+| `INELIGIBLE_PREDECESSOR` | 219 |
+| `MULTIPLE_RESOURCE_CALENDARS_UNSUPPORTED` | 12 |
+| `WORK_UNITS_INCONSISTENT` | 10 |
+| `ACTIVITY_INACTIVE` | 9 |
+| `RELATIONSHIP_LAG_UNSUPPORTED` | 6 |
+| `DURATION_FORMAT_UNSUPPORTED` | 2 |
+
+The committed sanitized evidence is:
+
+```text
+results/phase1/boiler-mspdi-import-and-calculation-evidence-v0.1.1.json
+```
+
+## Interpretation of the zero-difference result
+
+The zero-difference result applies only to the frozen 226-activity subset and only to imported source `Start` and `Finish` observations.
+
+It demonstrates that the declared duration, calendar and zero-lag FS semantics are sufficient for the independent reference forward pass to reproduce those source coordinates for that subset.
+
+It does **not** establish:
+
+- Microsoft Project desktop recalculation equivalence;
+- early/late date equivalence;
+- total/free float equivalence;
+- critical-path equivalence;
+- correctness for excluded activities;
+- MSPDI export or round-trip compatibility;
+- production scheduling correctness.
 
 ## Difference classification
 
-Comparison differences must be classified as:
+Future comparisons must classify every difference as:
 
 1. canonical import defect;
 2. deterministic calculation defect;
@@ -143,11 +220,11 @@ Comparison differences must be classified as:
 5. source inconsistency;
 6. unexplained difference.
 
-A semantic cannot remain `Full` if unexplained differences exist.
+A semantic cannot be declared `Full` while unexplained differences remain.
 
 ## Native Project boundary
 
-Parsing, transforming or generating valid XML is not proof of Microsoft Project compatibility.
+Parsing, transforming or calculating from XML is not proof of Microsoft Project compatibility.
 
 A native result may only be recorded after an identified Microsoft Project desktop edition/version/build:
 
@@ -168,7 +245,21 @@ Phase 1 continues to exclude:
 - UI and mobile execution work;
 - AI features;
 - optimiser work;
+- resource levelling;
 - production-readiness claims.
+
+## Next bounded increment
+
+The next calculation slice should remain separate and should:
+
+1. freeze the current eligible subset and profile version;
+2. add a deterministic backward pass;
+3. define engine-native late dates and float terminology;
+4. compare imported source early/late/slack observations without labelling them Microsoft Project-equivalent;
+5. classify every difference;
+6. retain zero unexplained differences as the requirement for any semantic later declared `Full`.
+
+MSPDI export and native Project evidence remain later, separately reviewed experiments.
 
 ## Exit criteria
 
@@ -182,4 +273,4 @@ Phase 1 is complete only when:
 6. any native Project claim is backed by real native evidence; and
 7. unexplained differences are zero for every semantic declared `Full`.
 
-The structural import and classification foundations are implemented and being hardened. Independent schedule comparison, MSPDI export and native Project evidence remain open.
+The structural import, hardened identity/preservation boundary and bounded forward-pass comparison are now implemented. Backward-pass/float comparison, MSPDI export and native Project evidence remain open.

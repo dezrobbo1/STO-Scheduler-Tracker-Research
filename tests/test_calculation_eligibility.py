@@ -3,187 +3,216 @@ from __future__ import annotations
 import json
 import unittest
 
-from sto_scheduler_core.calculation_eligibility import (
-    ELIGIBILITY_PROFILE,
-    classify_calculation_eligibility,
-    sanitized_eligibility_evidence,
+from sto_scheduler_core.calculation_profile import (
+    CalculationProfileError,
+    PROFILE_VERSION,
+    build_calculation_profile,
+    build_engine_projection,
+    calculate_forward_schedule,
+    compare_source_coordinates,
+    sanitized_profile_evidence,
 )
 
-
-def _duration(seconds: int) -> dict[str, object]:
-    return {"raw": f"PT{seconds}S", "seconds": seconds, "status": "parsed"}
+from calculation_fixture import _activity, _calendar, _document, _duration, _relationship
 
 
-def _activity(activity_id: str, **overrides: object) -> dict[str, object]:
-    record: dict[str, object] = {
-        "id": activity_id,
-        "active": True,
-        "manual": False,
-        "is_null_source": False,
-        "start": "2026-01-01T08:00:00",
-        "finish": "2026-01-01T12:00:00",
-        "duration": _duration(14_400),
-        "milestone": False,
-        "percent_complete_source": 0,
-        "percent_work_complete_source": 0,
-        "physical_percent_complete_source": 0,
-        "actual_start_source": None,
-        "actual_finish_source": None,
-        "actual_duration_source": _duration(0),
-        "actual_work_source": _duration(0),
-        "remaining_duration_source": _duration(14_400),
-        "deadline_source": None,
-        "constraint_type_source": 0,
-        "constraint_date_source": None,
-        "calendar_ref": "calendar:1",
-    }
-    record.update(overrides)
-    return record
-
-
-def _relationship(
-    relationship_id: str,
-    predecessor: str,
-    successor: str,
-    **overrides: object,
-) -> dict[str, object]:
-    record: dict[str, object] = {
-        "id": relationship_id,
-        "predecessor_ref": predecessor,
-        "successor_ref": successor,
-        "type": "FS",
-        "lag_tenths_minutes": 0,
-        "cross_project": False,
-    }
-    record.update(overrides)
-    return record
-
-
-def _document(
-    activities: list[dict[str, object]],
-    relationships: list[dict[str, object]] | None = None,
-) -> dict[str, object]:
-    return {
-        "project": {"calendar_ref": "calendar:1"},
-        "activities": activities,
-        "relationships": relationships or [],
-        "calendars": [
-            {
-                "id": "calendar:1",
-                "base_calendar_ref": None,
-                "week_days": [
-                    {
-                        "day_type": 2,
-                        "working_times": [{"from": "08:00:00", "to": "12:00:00"}],
-                    }
-                ],
-                "exceptions": [],
-            }
-        ],
-        "resources": [],
-        "assignments": [],
-    }
-
-
-class CalculationEligibilityTests(unittest.TestCase):
-    def test_supported_closed_network_is_eligible(self) -> None:
-        result = classify_calculation_eligibility(
-            _document(
-                [_activity("task:1"), _activity("task:2")],
-                [_relationship("relationship:1", "task:1", "task:2")],
-            )
-        )
-        self.assertEqual(result["profile"], ELIGIBILITY_PROFILE)
-        self.assertEqual(result["eligible_activity_ids"], ["task:1", "task:2"])
-        self.assertEqual(result["eligible_relationship_ids"], ["relationship:1"])
-        self.assertEqual(result["counts"]["excluded_activities"], 0)
-
-    def test_local_unsupported_semantics_fail_closed(self) -> None:
+class CalculationProfileTests(unittest.TestCase):
+    def test_ineligible_predecessor_closes_successor(self) -> None:
         document = _document(
             [
-                _activity("task:manual", manual=True),
-                _activity("task:actual", actual_start_source="2026-01-01T08:00:00"),
-                _activity("task:deadline", deadline_source="2026-01-02T00:00:00"),
-                _activity("task:constraint", constraint_type_source=2),
-                _activity("task:duration", duration={"raw": "not-parsed", "seconds": None}),
-            ]
+                _activity(1, start="2026-01-05T08:00:00", finish="2026-01-05T12:00:00", duration_seconds=14400, active=False),
+                _activity(2, start="2026-01-05T12:00:00", finish="2026-01-05T16:00:00", duration_seconds=14400),
+            ],
+            relationships=[_relationship(1, 1, 2)],
         )
-        result = classify_calculation_eligibility(document)
-        reasons = result["excluded_activity_reasons"]
-        self.assertIn("manual_scheduling", reasons["task:manual"])
-        self.assertIn("actual_state", reasons["task:actual"])
-        self.assertIn("deadline", reasons["task:deadline"])
-        self.assertIn("unsupported_constraint", reasons["task:constraint"])
-        self.assertIn("unparsed_duration", reasons["task:duration"])
-        self.assertEqual(result["counts"]["eligible_activities"], 0)
+        profile = build_calculation_profile(document)
+        by_id = {item["activity_id"]: item for item in profile["activities"]}
+        self.assertIn("ACTIVITY_INACTIVE", by_id["task:1"]["reason_codes"])
+        self.assertIn("INELIGIBLE_PREDECESSOR", by_id["task:2"]["reason_codes"])
+        self.assertEqual(profile["counts"]["eligible_activities"], 0)
 
-    def test_calendar_exception_and_resource_calendar_interaction_fail_closed(self) -> None:
-        document = _document([_activity("task:1"), _activity("task:2")])
-        document["calendars"][0]["exceptions"] = [{"from": "2026-01-01", "to": "2026-01-01"}]
-        document["calendars"].append(
+    def test_nonzero_lag_excludes_successor_and_closes_network(self) -> None:
+        document = _document(
+            [
+                _activity(1, start="2026-01-05T08:00:00", finish="2026-01-05T10:00:00", duration_seconds=7200),
+                _activity(2, start="2026-01-05T10:00:00", finish="2026-01-05T12:00:00", duration_seconds=7200),
+                _activity(3, start="2026-01-05T12:00:00", finish="2026-01-05T14:00:00", duration_seconds=7200),
+            ],
+            relationships=[_relationship(1, 1, 2, lag=-600), _relationship(2, 2, 3)],
+        )
+        profile = build_calculation_profile(document)
+        by_id = {item["activity_id"]: item for item in profile["activities"]}
+        self.assertIn("RELATIONSHIP_LAG_UNSUPPORTED", by_id["task:2"]["reason_codes"])
+        self.assertIn("INELIGIBLE_PREDECESSOR", by_id["task:3"]["reason_codes"])
+        self.assertEqual(profile["counts"]["eligible_activities"], 1)
+
+    def test_resource_calendar_is_effective_when_task_calendar_is_not_explicit(self) -> None:
+        resource = {
+            "id": "resource:1",
+            "source_order": 1,
+            "external_references": [],
+            "name": "Sensitive resource",
+            "calendar_ref": "calendar:2",
+        }
+        assignment = {
+            "id": "assignment:1",
+            "source_order": 1,
+            "task_ref": "task:1",
+            "resource_ref": "resource:1",
+            "units_source": 1,
+            "work_source": _duration(14400),
+            "actual_work_source": _duration(0),
+            "remaining_work_source": _duration(14400),
+            "percent_work_complete_source": 0,
+            "work_contour_source": 0,
+            "extension_refs": [],
+        }
+        document = _document(
+            [
+                _activity(1, start="2026-01-05T18:00:00", finish="2026-01-05T22:00:00", duration_seconds=14400),
+            ],
+            calendars=[
+                _calendar(1, [("08:00:00", "16:00:00")]),
+                _calendar(2, [("18:00:00", "00:00:00")]),
+            ],
+            resources=[resource],
+            assignments=[assignment],
+        )
+        profile = build_calculation_profile(document)
+        self.assertEqual(profile["counts"]["eligible_activities"], 1)
+        comparison = compare_source_coordinates(
+            document, calculate_forward_schedule(build_engine_projection(document, profile))
+        )
+        self.assertEqual(comparison["counts"]["coordinate_differences"], 0)
+
+    def test_multiple_resource_patterns_fail_closed(self) -> None:
+        resources = [
+            {"id": "resource:1", "source_order": 1, "external_references": [], "name": "R1", "calendar_ref": "calendar:1"},
+            {"id": "resource:2", "source_order": 2, "external_references": [], "name": "R2", "calendar_ref": "calendar:2"},
+        ]
+        assignments = [
+            {"id": "assignment:1", "source_order": 1, "task_ref": "task:1", "resource_ref": "resource:1", "units_source": 1, "work_source": _duration(14400), "actual_work_source": _duration(0), "remaining_work_source": _duration(14400), "percent_work_complete_source": 0, "work_contour_source": 0, "extension_refs": []},
+            {"id": "assignment:2", "source_order": 2, "task_ref": "task:1", "resource_ref": "resource:2", "units_source": 1, "work_source": _duration(14400), "actual_work_source": _duration(0), "remaining_work_source": _duration(14400), "percent_work_complete_source": 0, "work_contour_source": 0, "extension_refs": []},
+        ]
+        document = _document(
+            [_activity(1, start="2026-01-05T08:00:00", finish="2026-01-05T12:00:00", duration_seconds=14400)],
+            calendars=[_calendar(1, [("08:00:00", "16:00:00")]), _calendar(2, [("18:00:00", "00:00:00")])],
+            resources=resources,
+            assignments=assignments,
+        )
+        profile = build_calculation_profile(document)
+        record = profile["activities"][0]
+        self.assertFalse(record["eligible"])
+        self.assertIn("MULTIPLE_RESOURCE_CALENDARS_UNSUPPORTED", record["reason_codes"])
+
+    def test_nonoverlapping_exception_is_allowed_but_overlapping_exception_is_not(self) -> None:
+        outside = {
+            "id": "exception:outside",
+            "from": "2025-12-25T00:00:00",
+            "to": "2025-12-25T23:59:00",
+        }
+        inside = {
+            "id": "exception:inside",
+            "from": "2026-01-06T00:00:00",
+            "to": "2026-01-06T23:59:00",
+        }
+        allowed = _document(
+            [_activity(1, start="2026-01-05T08:00:00", finish="2026-01-05T12:00:00", duration_seconds=14400)],
+            calendars=[_calendar(1, [("08:00:00", "16:00:00")], exceptions=[outside])],
+        )
+        rejected = _document(
+            [_activity(1, start="2026-01-05T08:00:00", finish="2026-01-05T12:00:00", duration_seconds=14400)],
+            calendars=[_calendar(1, [("08:00:00", "16:00:00")], exceptions=[inside])],
+        )
+        self.assertEqual(build_calculation_profile(allowed)["counts"]["eligible_activities"], 1)
+        record = build_calculation_profile(rejected)["activities"][0]
+        self.assertIn("TASK_CALENDAR_UNRESOLVED", record["reason_codes"])
+
+    def test_work_units_mismatch_and_duration_format_fail_closed(self) -> None:
+        resource = {
+            "id": "resource:1",
+            "source_order": 1,
+            "external_references": [],
+            "name": "R1",
+            "calendar_ref": "calendar:1",
+            "inactive_source": False,
+        }
+        assignment = {
+            "id": "assignment:1",
+            "source_order": 1,
+            "task_ref": "task:1",
+            "resource_ref": "resource:1",
+            "units_source": 1,
+            "work_source": _duration(7200),
+            "actual_work_source": _duration(0),
+            "remaining_work_source": _duration(7200),
+            "percent_work_complete_source": 0,
+            "work_contour_source": 0,
+            "extension_refs": [],
+        }
+        document = _document(
+            [
+                _activity(
+                    1,
+                    start="2026-01-05T08:00:00",
+                    finish="2026-01-05T12:00:00",
+                    duration_seconds=14400,
+                    duration_format="8",
+                )
+            ],
+            resources=[resource],
+            assignments=[assignment],
+        )
+        record = build_calculation_profile(document)["activities"][0]
+        self.assertIn("DURATION_FORMAT_UNSUPPORTED", record["reason_codes"])
+        self.assertIn("WORK_UNITS_INCONSISTENT", record["reason_codes"])
+
+    def test_cross_midnight_interval_fails_closed(self) -> None:
+        document = _document(
+            [
+                _activity(
+                    1,
+                    start="2026-01-05T18:00:00",
+                    finish="2026-01-06T02:00:00",
+                    duration_seconds=28800,
+                )
+            ],
+            calendars=[_calendar(1, [("18:00:00", "06:00:00")])],
+        )
+        record = build_calculation_profile(document)["activities"][0]
+        self.assertIn("TASK_CALENDAR_UNRESOLVED", record["reason_codes"])
+
+    def test_special_calendar_day_inside_horizon_fails_closed(self) -> None:
+        calendar = _calendar(1, [("08:00:00", "16:00:00")])
+        calendar["week_days"].append(
             {
-                "id": "calendar:2",
-                "base_calendar_ref": None,
-                "week_days": [{"day_type": 2, "working_times": [{"from": "09:00:00", "to": "13:00:00"}]}],
-                "exceptions": [],
+                "day_type": 0,
+                "working": False,
+                "working_times": [],
+                "extensions": [
+                    {
+                        "name": "TimePeriod",
+                        "children": [
+                            {"name": "FromDate", "text": "2026-01-06T00:00:00"},
+                            {"name": "ToDate", "text": "2026-01-06T23:59:00"},
+                        ],
+                    }
+                ],
             }
         )
-        document["resources"] = [{"id": "resource:1", "calendar_ref": "calendar:2"}]
-        document["assignments"] = [
-            {"id": "assignment:1", "task_ref": "task:2", "resource_ref": "resource:1"}
-        ]
-        result = classify_calculation_eligibility(document)
-        reasons = result["excluded_activity_reasons"]
-        self.assertIn("calendar_exceptions", reasons["task:1"])
-        self.assertIn("calendar_exceptions", reasons["task:2"])
-        self.assertIn("resource_calendar_interaction", reasons["task:2"])
-
-    def test_network_closure_removes_supported_neighbour_of_ineligible_task(self) -> None:
-        result = classify_calculation_eligibility(
-            _document(
-                [_activity("task:1"), _activity("task:2", manual=True), _activity("task:3")],
-                [
-                    _relationship("relationship:1", "task:1", "task:2"),
-                    _relationship("relationship:2", "task:2", "task:3"),
-                ],
-            )
+        document = _document(
+            [
+                _activity(
+                    1,
+                    start="2026-01-05T08:00:00",
+                    finish="2026-01-05T12:00:00",
+                    duration_seconds=14400,
+                )
+            ],
+            calendars=[calendar],
         )
-        self.assertEqual(result["eligible_activity_ids"], [])
-        reasons = result["excluded_activity_reasons"]
-        self.assertIn("network_has_ineligible_successor", reasons["task:1"])
-        self.assertIn("manual_scheduling", reasons["task:2"])
-        self.assertIn("network_has_ineligible_predecessor", reasons["task:3"])
-
-    def test_unsupported_relationship_removes_both_endpoints(self) -> None:
-        result = classify_calculation_eligibility(
-            _document(
-                [_activity("task:1"), _activity("task:2")],
-                [_relationship("relationship:1", "task:1", "task:2", type="UNKNOWN")],
-            )
-        )
-        self.assertEqual(result["eligible_activity_ids"], [])
-        self.assertEqual(
-            result["unsupported_relationship_reasons"]["relationship:1"],
-            ["unsupported_relationship_type"],
-        )
-        for activity_id in ("task:1", "task:2"):
-            self.assertIn(
-                "unsupported_adjacent_relationship",
-                result["excluded_activity_reasons"][activity_id],
-            )
-
-    def test_sanitized_evidence_contains_hashes_not_task_ids(self) -> None:
-        result = classify_calculation_eligibility(
-            _document(
-                [_activity("task:sensitive-a"), _activity("task:sensitive-b", manual=True)]
-            )
-        )
-        evidence = sanitized_eligibility_evidence(result)
-        serialized = json.dumps(evidence, sort_keys=True)
-        self.assertNotIn("task:sensitive-a", serialized)
-        self.assertNotIn("task:sensitive-b", serialized)
-        self.assertEqual(len(evidence["set_fingerprints"]["eligible_activity_ids_sha256"]), 64)
-        self.assertIn("manual_scheduling", evidence["set_fingerprints"]["excluded_activity_ids_by_reason_sha256"])
+        record = build_calculation_profile(document)["activities"][0]
+        self.assertIn("TASK_CALENDAR_UNRESOLVED", record["reason_codes"])
 
 
 if __name__ == "__main__":
