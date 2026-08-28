@@ -31,7 +31,7 @@ class CalculationProfileTests(unittest.TestCase):
         self.assertIn("INELIGIBLE_PREDECESSOR", by_id["task:2"]["reason_codes"])
         self.assertEqual(profile["counts"]["eligible_activities"], 0)
 
-    def test_nonzero_lag_excludes_successor_and_closes_network(self) -> None:
+    def test_unsupported_non_elapsed_lag_excludes_successor_and_closes_network(self) -> None:
         document = _document(
             [
                 _activity(1, start="2026-01-05T08:00:00", finish="2026-01-05T10:00:00", duration_seconds=7200),
