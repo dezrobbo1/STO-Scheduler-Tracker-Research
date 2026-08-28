@@ -40,7 +40,7 @@ class CalculationReviewCorrectionTests(unittest.TestCase):
             finish="2026-01-05T12:00:00",
             duration_seconds=14400,
         )
-        activity["actual_duration_source"] = {
+        activity[0]["actual_duration_source"] = {
             "raw": "UNPARSEABLE-ACTUAL-DURATION",
             "seconds": None,
             "parse_status": "unsupported",
