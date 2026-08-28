@@ -3,12 +3,13 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Iterable
 
-PROFILE_VERSION = "mspdi-calculation-eligibility-v0.1"
+PROFILE_VERSION = "mspdi-calculation-eligibility-v0.2"
 SUPPORTED_SCHEMA_VERSION = "0.1.1"
 SUPPORTED_IMPORTER_PROFILE = "mspdi-import-v0.1.1"
 SUPPORTED_CONSTRAINT_TYPES = {0: "ASAP"}
 SUPPORTED_RELATIONSHIP_TYPES = {"FS"}
 SUPPORTED_DURATION_FORMATS = {"5"}
+SUPPORTED_NEGATIVE_ELAPSED_LAG_FORMAT = 8
 
 REASON_PRIORITY = (
     "PROJECT_SCHEDULE_DIRECTION_UNSUPPORTED",
@@ -75,7 +76,7 @@ def _parse_datetime(value: str | None) -> datetime:
         raise ValueError("missing datetime")
     parsed = datetime.fromisoformat(value)
     if parsed.tzinfo is not None:
-        raise ValueError("timezone-aware datetimes are outside profile v0.1")
+        raise ValueError("timezone-aware datetimes are outside the bounded calculation profile")
     return parsed
 
 
