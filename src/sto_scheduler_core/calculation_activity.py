@@ -41,6 +41,23 @@ def _one_extension_value(
     return candidates[0]
 
 
+def _duration_contains_actual_state(value: dict[str, Any] | None) -> bool:
+    """Return True for any non-empty actual duration/work value we cannot prove is zero.
+
+    The calculation profile is fail-closed. Unsupported/unparsed duration text is therefore
+    evidence of source state, not equivalent to an absent value.
+    """
+
+    if value is None:
+        return False
+    if value.get("parse_status") != "parsed":
+        return True
+    seconds = value.get("seconds")
+    if not isinstance(seconds, (int, float)):
+        return True
+    return seconds != 0
+
+
 def classify_local_activities(document: dict[str, Any]) -> dict[str, Any]:
     _parse_datetime(document["project"].get("start"))
     extension_by_id = {
@@ -120,9 +137,9 @@ def classify_local_activities(document: dict[str, Any]) -> dict[str, Any]:
             activity_reasons.add("PROGRESS_STATE_PRESENT")
         if activity.get("actual_start_source") or activity.get("actual_finish_source"):
             activity_reasons.add("ACTUAL_STATE_PRESENT")
-        if _duration_seconds(activity.get("actual_duration_source")) not in (None, 0):
+        if _duration_contains_actual_state(activity.get("actual_duration_source")):
             activity_reasons.add("ACTUAL_STATE_PRESENT")
-        if _duration_seconds(activity.get("actual_work_source")) not in (None, 0):
+        if _duration_contains_actual_state(activity.get("actual_work_source")):
             activity_reasons.add("ACTUAL_STATE_PRESENT")
         if duration_seconds is not None and _duration_seconds(
             activity.get("remaining_duration_source")
@@ -190,10 +207,7 @@ def classify_local_activities(document: dict[str, Any]) -> dict[str, Any]:
 
             if (assignment.get("percent_work_complete_source") or 0) != 0:
                 activity_reasons.add("ASSIGNMENT_PROGRESS_STATE_PRESENT")
-            if _duration_seconds(assignment.get("actual_work_source")) not in (
-                None,
-                0,
-            ):
+            if _duration_contains_actual_state(assignment.get("actual_work_source")):
                 activity_reasons.add("ASSIGNMENT_PROGRESS_STATE_PRESENT")
             assignment_work = _duration_seconds(assignment.get("work_source"))
             assignment_remaining = _duration_seconds(
