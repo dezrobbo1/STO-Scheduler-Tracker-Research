@@ -11,6 +11,7 @@ from .calculation_common import (
 )
 from .provenance import canonical_sha256
 
+
 @dataclass(frozen=True, slots=True)
 class ResolvedCalendar:
     source_ref: str
@@ -56,8 +57,15 @@ def _normalize_intervals(
     for value in values:
         start = _clock_seconds(value.get("from"))
         finish = _clock_seconds(value.get("to"))
-        if start == finish:
+        if start == finish == 0:
+            # The bounded profile recognizes only the explicit midnight-to-midnight
+            # representation as a full-day interval. Other equal endpoints are
+            # ambiguous and must fail closed until independently verified.
             intervals.append((0, 86400))
+        elif start == finish:
+            raise ValueError(
+                "equal non-midnight working interval endpoints are ambiguous"
+            )
         elif finish > start:
             intervals.append((start, finish))
         elif finish == 0:
