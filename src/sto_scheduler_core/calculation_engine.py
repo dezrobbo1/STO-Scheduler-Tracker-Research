@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict, deque
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 from .calculation_calendar import _add_working_seconds, _next_working_time
@@ -37,7 +37,7 @@ def calculate_forward_schedule(projection: dict[str, Any]) -> dict[str, Any]:
         for item in projection["calendars"]
     }
     activities = {item["id"]: item for item in projection["activities"]}
-    predecessors: dict[str, list[str]] = defaultdict(list)
+    predecessors: dict[str, list[dict[str, Any]]] = defaultdict(list)
     successors: dict[str, list[str]] = defaultdict(list)
     indegree = {activity_id: 0 for activity_id in activities}
     for relationship in projection["relationships"]:
@@ -45,7 +45,14 @@ def calculate_forward_schedule(projection: dict[str, Any]) -> dict[str, Any]:
         successor = relationship["successor_ref"]
         if predecessor not in activities or successor not in activities:
             raise CalculationProfileError("Projection relationship endpoint missing")
-        predecessors[successor].append(predecessor)
+        if relationship.get("type") != "FS":
+            raise CalculationProfileError("Projection relationship type unsupported")
+        lag_seconds = relationship.get("lag_seconds")
+        if not isinstance(lag_seconds, (int, float)) or lag_seconds > 0:
+            raise CalculationProfileError("Projection relationship lag unsupported")
+        if lag_seconds < 0 and relationship.get("lag_basis") != "elapsed":
+            raise CalculationProfileError("Negative projection lag must declare elapsed basis")
+        predecessors[successor].append(relationship)
         successors[predecessor].append(successor)
         indegree[successor] += 1
 
@@ -61,18 +68,19 @@ def calculate_forward_schedule(projection: dict[str, Any]) -> dict[str, Any]:
         activity_id = queue.popleft()
         activity = activities[activity_id]
         order.append(activity_id)
-        candidate = max(
-            [project_start]
-            + [calculated[predecessor][1] for predecessor in predecessors[activity_id]]
-        )
+        dependency_candidates = []
+        for relationship in predecessors[activity_id]:
+            predecessor_finish = calculated[relationship["predecessor_ref"]][1]
+            dependency_candidates.append(
+                predecessor_finish + timedelta(seconds=relationship["lag_seconds"])
+            )
+        candidate = max([project_start] + dependency_candidates)
         if activity["milestone"]:
             start = finish = candidate
         else:
             pattern = calendars[activity["effective_calendar_ref"]]
             start = _next_working_time(candidate, pattern)
-            finish = _add_working_seconds(
-                start, activity["duration_seconds"], pattern
-            )
+            finish = _add_working_seconds(start, activity["duration_seconds"], pattern)
         calculated[activity_id] = (start, finish)
         for successor in sorted(
             successors[activity_id],
@@ -91,8 +99,8 @@ def calculate_forward_schedule(projection: dict[str, Any]) -> dict[str, Any]:
     return {
         "calculation_profile": PROFILE_VERSION,
         "claim_boundary": (
-            "Deterministic engine-native forward dates for the eligible subset. "
-            "They are not Microsoft Project early dates or a native compatibility result."
+            "Deterministic engine-native forward dates for the eligible subset, including the bounded "
+            "negative elapsed-day FS-lead semantic. They are not Microsoft Project early dates or a native compatibility result."
         ),
         "source": projection["source"],
         "activities": [
