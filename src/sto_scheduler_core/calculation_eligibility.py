@@ -165,7 +165,10 @@ def build_calculation_profile(document: dict[str, Any]) -> dict[str, Any]:
             "duration_formats": ["hours (source code 5)"],
             "progress": "not started only",
             "calendar_inheritance": "resolved recursively",
-            "calendar_exceptions": "permitted only when wholly outside the project horizon",
+            "calendar_exceptions": (
+                "permitted only when wholly outside the project, source-coordinate and "
+                "supported lead-candidate horizon"
+            ),
             "resource_calendars": (
                 "one effective resource pattern, or identical patterns across assignments; "
                 "explicit task calendars intersect unless IgnoreResourceCalendar is set"

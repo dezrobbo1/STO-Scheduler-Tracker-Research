@@ -50,8 +50,15 @@ def calculate_forward_schedule(projection: dict[str, Any]) -> dict[str, Any]:
         lag_seconds = relationship.get("lag_seconds")
         if not isinstance(lag_seconds, (int, float)) or lag_seconds > 0:
             raise CalculationProfileError("Projection relationship lag unsupported")
-        if lag_seconds < 0 and relationship.get("lag_basis") != "elapsed":
-            raise CalculationProfileError("Negative projection lag must declare elapsed basis")
+        if lag_seconds < 0:
+            if relationship.get("lag_basis") != "elapsed":
+                raise CalculationProfileError("Negative projection lag must declare elapsed basis")
+            if activities[successor].get("milestone"):
+                raise CalculationProfileError(
+                    "Negative projection lag into a milestone is unsupported"
+                )
+        elif relationship.get("lag_basis") != "none":
+            raise CalculationProfileError("Zero projection lag must declare no lag basis")
         predecessors[successor].append(relationship)
         successors[predecessor].append(successor)
         indegree[successor] += 1
@@ -74,7 +81,7 @@ def calculate_forward_schedule(projection: dict[str, Any]) -> dict[str, Any]:
             dependency_candidates.append(
                 predecessor_finish + timedelta(seconds=relationship["lag_seconds"])
             )
-        candidate = max([project_start] + dependency_candidates)
+        candidate = max(dependency_candidates) if dependency_candidates else project_start
         if activity["milestone"]:
             start = finish = candidate
         else:
