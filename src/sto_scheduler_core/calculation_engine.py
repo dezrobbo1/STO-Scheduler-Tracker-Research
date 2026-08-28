@@ -9,6 +9,16 @@ from .calculation_common import CalculationProfileError, PROFILE_VERSION, _parse
 from .provenance import canonical_sha256
 
 
+def _expected_calculation_source(document: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "schema_version": document["schema_version"],
+        "importer_profile": document["importer_profile"],
+        "source_sha256": document["source"]["sha256"],
+        "document_key": document["source"]["document_key"],
+        "canonical_sha256": canonical_sha256(document),
+    }
+
+
 def calculate_forward_schedule(projection: dict[str, Any]) -> dict[str, Any]:
     if projection.get("projection_profile") != PROFILE_VERSION:
         raise CalculationProfileError("Unexpected projection profile")
@@ -101,11 +111,24 @@ def calculate_forward_schedule(projection: dict[str, Any]) -> dict[str, Any]:
 def compare_source_coordinates(
     document: dict[str, Any], calculation: dict[str, Any]
 ) -> dict[str, Any]:
+    if calculation.get("calculation_profile") != PROFILE_VERSION:
+        raise CalculationProfileError("Unexpected calculation profile")
+    expected_source = _expected_calculation_source(document)
+    if calculation.get("source") != expected_source:
+        raise CalculationProfileError(
+            "Calculation does not match the supplied canonical document"
+        )
+
     source_by_id = {item["id"]: item for item in document["activities"]}
     differences = []
     exact = 0
     for item in calculation["activities"]:
-        source = source_by_id[item["id"]]
+        activity_id = item.get("id")
+        if activity_id not in source_by_id:
+            raise CalculationProfileError(
+                f"Calculation references activity missing from canonical document: {activity_id}"
+            )
+        source = source_by_id[activity_id]
         calculated_start = _parse_datetime(item["calculated_start"])
         calculated_finish = _parse_datetime(item["calculated_finish"])
         source_start = _parse_datetime(source.get("start"))
@@ -117,7 +140,7 @@ def compare_source_coordinates(
         else:
             differences.append(
                 {
-                    "activity_id": item["id"],
+                    "activity_id": activity_id,
                     "start_delta_seconds": start_delta,
                     "finish_delta_seconds": finish_delta,
                 }
@@ -128,6 +151,7 @@ def compare_source_coordinates(
             "Comparison against source Start/Finish observations for the declared subset only. "
             "No Microsoft Project desktop recalculation or round trip was executed."
         ),
+        "source": expected_source,
         "counts": {
             "compared_activities": len(calculation["activities"]),
             "exact_coordinate_matches": exact,
