@@ -19,7 +19,7 @@ class NegativeElapsedFsLagTests(unittest.TestCase):
     def test_negative_elapsed_lead_lands_in_working_time(self) -> None:
         document = _document(
             [
-                _activity(1, start="2026-01-05T08:00:00", finish="2026-01-08T12:00:00", duration_seconds=75600),
+                _activity(1, start="2026-01-05T08:00:00", finish="2026-01-08T12:00:00", duration_seconds=100800),
                 _activity(2, start="2026-01-07T12:00:00", finish="2026-01-07T16:00:00", duration_seconds=14400),
             ],
             relationships=[_relationship(1, 1, 2, lag=-ELAPSED_DAY_TENTHS, lag_format=8)],
@@ -49,8 +49,8 @@ class NegativeElapsedFsLagTests(unittest.TestCase):
     def test_multiple_predecessors_choose_latest_lag_adjusted_driver(self) -> None:
         document = _document(
             [
-                _activity(1, start="2026-01-05T08:00:00", finish="2026-01-08T12:00:00", duration_seconds=75600),
-                _activity(2, start="2026-01-05T08:00:00", finish="2026-01-07T14:00:00", duration_seconds=64800),
+                _activity(1, start="2026-01-05T08:00:00", finish="2026-01-08T12:00:00", duration_seconds=100800),
+                _activity(2, start="2026-01-05T08:00:00", finish="2026-01-07T14:00:00", duration_seconds=79200),
                 _activity(3, start="2026-01-07T14:00:00", finish="2026-01-08T10:00:00", duration_seconds=14400),
             ],
             relationships=[
@@ -89,7 +89,7 @@ class NegativeElapsedFsLagTests(unittest.TestCase):
     def test_negative_elapsed_lag_into_milestone_remains_excluded(self) -> None:
         document = _document(
             [
-                _activity(1, start="2026-01-05T08:00:00", finish="2026-01-08T12:00:00", duration_seconds=75600),
+                _activity(1, start="2026-01-05T08:00:00", finish="2026-01-08T12:00:00", duration_seconds=100800),
                 _activity(2, start="2026-01-07T12:00:00", finish="2026-01-07T12:00:00", duration_seconds=0, milestone=True),
             ],
             relationships=[_relationship(1, 1, 2, lag=-ELAPSED_DAY_TENTHS, lag_format=8)],
