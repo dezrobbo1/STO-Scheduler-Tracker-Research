@@ -1,10 +1,10 @@
 # Phase 1.3 — Negative elapsed-day FS lag experiment
 
-Status: **bounded implementation and external Boiler evidence complete on draft PR #13**
+Status: **merged on `main` via PR #13; bounded implementation and external Boiler evidence complete**
 
 Related issue: #12
 
-## Why this is next
+## Why this increment was selected
 
 The merged Boiler v0.1 calculation evidence admits 226 of 460 activities. The primary exclusion counts are:
 
@@ -14,7 +14,7 @@ The merged Boiler v0.1 calculation evidence admits 226 of 460 activities. The pr
 - `RELATIONSHIP_LAG_UNSUPPORTED`: 6
 - `INELIGIBLE_PREDECESSOR`: 206
 
-The 206 dependency-closure exclusions make the six unsupported lag links potentially high leverage: a small semantic addition may admit downstream chains without broadening unrelated scheduling behaviour.
+The 206 dependency-closure exclusions made the six unsupported lag links potentially high leverage: a small semantic addition could admit downstream chains without broadening unrelated scheduling behaviour.
 
 ## External Boiler lag inventory
 
