@@ -8,12 +8,32 @@ from .calculation_calendar import _pattern_payload
 from .calculation_common import (
     PROFILE_VERSION,
     SUPPORTED_IMPORTER_PROFILE,
+    SUPPORTED_NEGATIVE_ELAPSED_LAG_FORMAT,
     SUPPORTED_RELATIONSHIP_TYPES,
     SUPPORTED_SCHEMA_VERSION,
     CalculationProfileError,
     _first_reason,
 )
 from .provenance import canonical_sha256
+
+
+def _relationship_lag_supported(
+    relationship: dict[str, Any], activity_by_id: dict[str, dict[str, Any]]
+) -> bool:
+    lag = relationship.get("lag_tenths_minutes")
+    lag_seconds = relationship.get("lag_seconds")
+    if lag == 0:
+        return lag_seconds in (0, 0.0)
+    if not isinstance(lag, int) or lag >= 0:
+        return False
+    if relationship.get("lag_format_source") != SUPPORTED_NEGATIVE_ELAPSED_LAG_FORMAT:
+        return False
+    if not isinstance(lag_seconds, (int, float)) or lag_seconds != lag * 6:
+        return False
+    successor = activity_by_id.get(relationship.get("successor_ref"))
+    if successor is None or successor.get("milestone"):
+        return False
+    return True
 
 
 def build_calculation_profile(document: dict[str, Any]) -> dict[str, Any]:
@@ -27,7 +47,7 @@ def build_calculation_profile(document: dict[str, Any]) -> dict[str, Any]:
         )
     if document.get("project", {}).get("schedule_from_start") is not True:
         raise CalculationProfileError(
-            "Profile v0.1 supports schedule-from-start projects only"
+            "The bounded calculation profile supports schedule-from-start projects only"
         )
 
     local = classify_local_activities(document)
@@ -49,7 +69,7 @@ def build_calculation_profile(document: dict[str, Any]) -> dict[str, Any]:
         if relationship.get("type") not in SUPPORTED_RELATIONSHIP_TYPES:
             reasons[successor].add("RELATIONSHIP_TYPE_UNSUPPORTED")
             relation_supported = False
-        if relationship.get("lag_tenths_minutes") != 0:
+        if not _relationship_lag_supported(relationship, activity_by_id):
             reasons[successor].add("RELATIONSHIP_LAG_UNSUPPORTED")
             relation_supported = False
         if relationship.get("cross_project"):
@@ -138,22 +158,30 @@ def build_calculation_profile(document: dict[str, Any]) -> dict[str, Any]:
         "supported_semantics": {
             "schedule_direction": "from start",
             "constraints": ["ASAP"],
-            "relationships": ["FS with zero lag"],
+            "relationships": [
+                "FS with zero lag",
+                "FS with negative lag where LagFormat=8 (pjElapsedDays); lead is continuous elapsed time",
+            ],
             "duration_formats": ["hours (source code 5)"],
             "progress": "not started only",
             "calendar_inheritance": "resolved recursively",
-            "calendar_exceptions": "permitted only when wholly outside the project horizon",
+            "calendar_exceptions": (
+                "permitted only when wholly outside the project, source-coordinate and "
+                "supported lead-candidate horizon"
+            ),
             "resource_calendars": (
                 "one effective resource pattern, or identical patterns across assignments; "
                 "explicit task calendars intersect unless IgnoreResourceCalendar is set"
             ),
-            "milestones": "zero-duration milestones retain predecessor time without working-time snap",
+            "milestones": (
+                "zero-duration milestones retain predecessor time without working-time snap; "
+                "negative-lag links into milestones remain unsupported"
+            ),
         },
         "counts": {
             "activities": len(document["activities"]),
             "eligible_activities": len(eligible_activity_ids),
-            "excluded_activities": len(document["activities"])
-            - len(eligible_activity_ids),
+            "excluded_activities": len(document["activities"]) - len(eligible_activity_ids),
             "eligible_milestones": sum(
                 1
                 for activity_id in eligible_activity_ids
@@ -166,8 +194,7 @@ def build_calculation_profile(document: dict[str, Any]) -> dict[str, Any]:
             ),
             "relationships": len(document["relationships"]),
             "eligible_relationships": len(eligible_relationship_ids),
-            "excluded_relationships": len(document["relationships"])
-            - len(eligible_relationship_ids),
+            "excluded_relationships": len(document["relationships"]) - len(eligible_relationship_ids),
         },
         "reason_counts": dict(sorted(reason_counts.items())),
         "primary_reason_counts": dict(sorted(primary_reason_counts.items())),

@@ -11,9 +11,9 @@ This repository is deliberately separate from:
 
 **Phase 1 — Boiler MSPDI canonical import and deterministic comparison**
 
-Phase 0 completed the scheduling-core inheritance audit. PR #4 merged the first structural Microsoft Project XML/MSPDI importer. PR #7 completed the bounded post-merge hardening of importer profile `mspdi-import-v0.1.1` and canonical schema `0.1.1`.
+Phase 0 completed the scheduling-core inheritance audit. PR #4 merged the first structural Microsoft Project XML/MSPDI importer. PR #7 completed the bounded post-merge hardening of importer profile `mspdi-import-v0.1.1` and canonical schema `0.1.1`. PR #9 merged calculation profile v0.1 and its external Boiler evidence.
 
-Issue #8 and the active draft branch now add the first fail-closed calculation eligibility profile and engine-neutral forward-pass experiment.
+Issue #12 and draft PR #13 add only bounded negative elapsed-day FS-lead support in calculation profile v0.2.
 
 Delivered on `main`:
 
@@ -25,23 +25,23 @@ Delivered on `main`:
 - fail-closed structural validation;
 - explicit document-local identity boundaries;
 - synthetic regression fixtures and tests;
-- sanitized external Boiler v0.1 import evidence.
+- sanitized external Boiler v0.1.1 import and calculation evidence;
+- fail-closed v0.1 activity and relationship eligibility classification;
+- deterministic FS zero-lag forward pass and source-coordinate comparison.
 
-Implemented in the active Phase 1 calculation draft:
+Implemented in draft PR #13:
 
-- external Boiler v0.1.1 deterministic import rerun;
-- fail-closed activity and relationship eligibility classification;
-- recursive effective-calendar resolution for the supported subset;
-- resource/task calendar selection and intersection rules;
-- engine-neutral eligible-subset projection;
-- deterministic FS zero-lag forward pass;
-- source Start/Finish comparison;
-- sanitized reproducible evidence.
+- profile `mspdi-calculation-eligibility-v0.2`;
+- FS negative lead only where `LagFormat=8` (`pjElapsedDays`) and raw/normalized lag values agree;
+- continuous elapsed-time lead before successor working-calendar normalization;
+- latest lag-adjusted candidate selection across multiple predecessors;
+- fail-closed milestone, unsupported-format and pre-project calendar-exception guards;
+- deterministic external Boiler v0.2 evidence for the bounded admitted subset.
 
 Still not delivered:
 
 - backward pass, late dates or float comparison;
-- non-zero lag or SS/FF/SF calculation;
+- positive lag, non-elapsed lag or SS/FF/SF calculation;
 - progress/status-date calculation;
 - resource levelling;
 - MSPDI export;
@@ -52,9 +52,10 @@ See:
 
 - `docs/phase1-boiler-mspdi-canonical-trial.md`
 - `docs/phase1-calculation-eligibility-profile-v0.1.md`
+- `docs/phase1-negative-fs-lag-v0.2.md`
 - `docs/canonical-model-v0.1.md`
 - `docs/phase1-import-implementation-v0.1.md`
-- issues #3, #5 and #8.
+- issues #3, #5, #8 and #12.
 
 ## Commands
 

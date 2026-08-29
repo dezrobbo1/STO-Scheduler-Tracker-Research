@@ -66,6 +66,29 @@ class CalculationProfileTests(unittest.TestCase):
         self.assertNotIn("Sensitive task", serialized)
         self.assertNotIn("Sensitive notes", serialized)
         self.assertNotIn("Sensitive resource", serialized)
+        self.assertNotIn('"activity_id"', serialized)
+        self.assertNotIn('"relationship_id"', serialized)
+        self.assertNotIn('"differences"', serialized)
+        self.assertNotIn("task:", serialized)
+        self.assertNotIn("relationship:", serialized)
+        self.assertEqual(
+            set(first),
+            {
+                "evidence_profile",
+                "claim_boundary",
+                "source",
+                "source_inventory",
+                "profile_counts",
+                "reason_counts",
+                "primary_reason_counts",
+                "comparison",
+                "projection_counts",
+                "fingerprints",
+                "native_project_validation",
+                "source_xml_committed",
+                "full_canonical_output_committed",
+            },
+        )
         self.assertEqual(first["native_project_validation"], "not_executed")
 
     def test_projection_rejects_stale_or_tampered_profile(self) -> None:

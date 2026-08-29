@@ -1,0 +1,24 @@
+{
+  "claim_boundary": "Sanitized direct MSPDI source inventory only; no schedule calculation or Microsoft Project native recalculation.",
+  "evidence_profile": "boiler-negative-fs-lag-source-inventory-v0.1",
+  "lag_format_counts": {
+    "8": 6
+  },
+  "lag_tenths_minutes_counts": {
+    "-100800": 1,
+    "-28800": 1,
+    "-302400": 1,
+    "-403200": 2,
+    "-86400": 1
+  },
+  "negative_relationships": 6,
+  "nonzero_relationships": 6,
+  "positive_relationships": 0,
+  "relationship_type_counts": {
+    "1": 6
+  },
+  "signature_sha256": "1a3fcaeac8f0e3d940299af689179bcb349c57e1ec40eea7fdb9ccc697b3ae87",
+  "source_sha256": "e6a3739976580e2144352011f818c0099c0dc0c278fb37a976c5b6a55fbc3420",
+  "source_xml_committed": false,
+  "successor_milestones": 0
+}

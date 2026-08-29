@@ -1,0 +1,240 @@
+{
+  "baseline_comparison": {
+    "baseline": {
+      "base_commit": "641f32cc7cd1bc4d3f729fe0132122b19ec979ab",
+      "calculation_profile": "mspdi-calculation-eligibility-v0.1",
+      "calculation_sha256": "92defd8fbe51f4d4adf3273363462f1d311aa328f083dff0085d2a1b20e931bf",
+      "committed_evidence_path": "results/phase1/boiler-mspdi-import-and-calculation-evidence-v0.1.1.json",
+      "committed_evidence_sha256": "602a0064ca135f80fe09e486508561e89d42a2c59a7b942262cf350c69e0567d",
+      "eligible_activity_ids_sha256": "3a73288360a338e2166473ed9f776755e6b748cd449b06edb37c58d0862dc8b4",
+      "eligible_relationship_ids_sha256": "f7ad33bf8890292d10df4df0c94745c87f87d0897f8a77d2903b98f7ac208b31",
+      "profile_sha256": "a1dc4716b44590f33cc67df14bd9bfb7c97a4d01924c1961dc591ecf7eb921a2",
+      "projection_sha256": "a3d6ca0d2ebc05a1ad97983e7a1a1238ac6aa95e772a6dbb2fcb3c05b96ddc81",
+      "rerun_byte_equal_to_committed_evidence": true,
+      "source_and_canonical_sha256_equal_to_v0_2": true
+    },
+    "changed_cohort_comparison": {
+      "compared_activities": 56,
+      "coordinate_differences": 0,
+      "difference_activity_ids_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "exact_coordinate_matches": 56
+    },
+    "changed_cohorts": {
+      "direct_negative_elapsed_fs_lead_relationship_ids_sha256": "a6cf201b984f02a5890f616b2be4f4d96af232b552ce297054fb79b778056f6c",
+      "direct_negative_elapsed_fs_lead_relationships": 6,
+      "direct_negative_elapsed_fs_lead_successor_activity_ids_sha256": "db6d6e515f91f7430c3019d608a959b543f8fab1edb2358c4d2bd8102b2546a4",
+      "direct_negative_elapsed_fs_lead_successors": 6,
+      "downstream_dependency_closure_activities": 50,
+      "downstream_dependency_closure_activity_ids_sha256": "c92cfb480ba99188f9b801898bd22133257dd83f607a13cb63224ac68329135a",
+      "newly_eligible_activities": 56,
+      "newly_eligible_activity_ids_sha256": "7e07d98875f3c072e61f7df24284f7451e5cb291f1667a6b73f4d193c6e316d9",
+      "newly_eligible_milestones": 3,
+      "newly_eligible_non_milestones": 53,
+      "newly_eligible_relationship_ids_sha256": "6fedb294777e9d0ffbb779e281278118eed47cb9fe788a706a10e903cbd67b30",
+      "newly_eligible_relationships": 74,
+      "other_newly_eligible_relationship_ids_sha256": "6508adef8c0ae5ba236f1f6cfb368ba1565eb09222afab6afeb070257fe1c42f",
+      "other_newly_eligible_relationships": 68,
+      "removed_eligible_activities": 0,
+      "removed_eligible_relationships": 0
+    },
+    "coordinate_comparison": {
+      "delta": {
+        "compared_activities": 56,
+        "coordinate_differences": 0,
+        "exact_coordinate_matches": 56
+      },
+      "v0_1": {
+        "compared_activities": 226,
+        "coordinate_differences": 0,
+        "exact_coordinate_matches": 226
+      },
+      "v0_2": {
+        "compared_activities": 282,
+        "coordinate_differences": 0,
+        "exact_coordinate_matches": 282
+      }
+    },
+    "primary_reason_counts": {
+      "delta": {
+        "ACTIVITY_INACTIVE": 0,
+        "DURATION_FORMAT_UNSUPPORTED": 0,
+        "INELIGIBLE_PREDECESSOR": -50,
+        "MULTIPLE_RESOURCE_CALENDARS_UNSUPPORTED": 0,
+        "RELATIONSHIP_LAG_UNSUPPORTED": -6
+      },
+      "v0_1": {
+        "ACTIVITY_INACTIVE": 9,
+        "DURATION_FORMAT_UNSUPPORTED": 2,
+        "INELIGIBLE_PREDECESSOR": 206,
+        "MULTIPLE_RESOURCE_CALENDARS_UNSUPPORTED": 11,
+        "RELATIONSHIP_LAG_UNSUPPORTED": 6
+      },
+      "v0_2": {
+        "ACTIVITY_INACTIVE": 9,
+        "DURATION_FORMAT_UNSUPPORTED": 2,
+        "INELIGIBLE_PREDECESSOR": 156,
+        "MULTIPLE_RESOURCE_CALENDARS_UNSUPPORTED": 11,
+        "RELATIONSHIP_LAG_UNSUPPORTED": 0
+      }
+    },
+    "profile_counts": {
+      "delta": {
+        "activities": 0,
+        "eligible_activities": 56,
+        "eligible_milestones": 3,
+        "eligible_non_milestones": 53,
+        "eligible_relationships": 74,
+        "excluded_activities": -56,
+        "excluded_relationships": -74,
+        "relationships": 0
+      },
+      "v0_1": {
+        "activities": 460,
+        "eligible_activities": 226,
+        "eligible_milestones": 24,
+        "eligible_non_milestones": 202,
+        "eligible_relationships": 253,
+        "excluded_activities": 234,
+        "excluded_relationships": 347,
+        "relationships": 600
+      },
+      "v0_2": {
+        "activities": 460,
+        "eligible_activities": 282,
+        "eligible_milestones": 27,
+        "eligible_non_milestones": 255,
+        "eligible_relationships": 327,
+        "excluded_activities": 178,
+        "excluded_relationships": 273,
+        "relationships": 600
+      }
+    },
+    "reason_counts": {
+      "delta": {
+        "ACTIVITY_INACTIVE": 0,
+        "DURATION_FORMAT_UNSUPPORTED": 0,
+        "INELIGIBLE_PREDECESSOR": -50,
+        "MULTIPLE_RESOURCE_CALENDARS_UNSUPPORTED": 0,
+        "RELATIONSHIP_LAG_UNSUPPORTED": -6,
+        "WORK_UNITS_INCONSISTENT": 0
+      },
+      "v0_1": {
+        "ACTIVITY_INACTIVE": 9,
+        "DURATION_FORMAT_UNSUPPORTED": 2,
+        "INELIGIBLE_PREDECESSOR": 219,
+        "MULTIPLE_RESOURCE_CALENDARS_UNSUPPORTED": 12,
+        "RELATIONSHIP_LAG_UNSUPPORTED": 6,
+        "WORK_UNITS_INCONSISTENT": 10
+      },
+      "v0_2": {
+        "ACTIVITY_INACTIVE": 9,
+        "DURATION_FORMAT_UNSUPPORTED": 2,
+        "INELIGIBLE_PREDECESSOR": 169,
+        "MULTIPLE_RESOURCE_CALENDARS_UNSUPPORTED": 12,
+        "RELATIONSHIP_LAG_UNSUPPORTED": 0,
+        "WORK_UNITS_INCONSISTENT": 10
+      }
+    }
+  },
+  "claim_boundary": "Comparison against source Start/Finish observations for the declared subset only. No Microsoft Project desktop recalculation or round trip was executed.",
+  "comparison": {
+    "compared_activities": 282,
+    "coordinate_differences": 0,
+    "exact_coordinate_matches": 282
+  },
+  "difference_analysis": {
+    "classification": "calculation_implementation_defect",
+    "correction": "Project start anchors dependency-free roots only; dependency-driven successors use the latest lag-adjusted predecessor candidate before successor-calendar normalization.",
+    "initial_result": {
+      "compared_activities": 282,
+      "coordinate_differences": 56,
+      "exact_coordinate_matches": 226
+    },
+    "post_correction_result": {
+      "compared_activities": 282,
+      "coordinate_differences": 0,
+      "exact_coordinate_matches": 282
+    },
+    "sanitized_cause": "Dependency-driven negative lead candidates before project start were incorrectly clamped to project start.",
+    "secondary_fail_closed_correction": "Calendar exception overlap checks now include source-coordinate and supported pre-project lead-candidate bounds.",
+    "unexplained_differences_remaining": 0
+  },
+  "evidence_profile": "mspdi-calculation-eligibility-v0.2-sanitized-evidence-v0.1",
+  "fingerprints": {
+    "calculation_sha256": "b602e2f0ea2e6272bde01fd47053ab6b824fa07e0bab90ecf3ceb6579bb858f9",
+    "difference_activity_ids_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "eligible_activity_ids_sha256": "c2c84039ee52545ab5bc3014830849a699f338271941d790fd009f0582065769",
+    "eligible_relationship_ids_sha256": "439eb3b963cdf2b8b7928f37c7b7a70b78eb9ff3ec49b94494e6980f592e756f",
+    "excluded_activity_ids_sha256": "44b8915f9a5a15dc24cd74de6b688aeeba60b12a3a848baf2df57ff9099aeea8",
+    "profile_sha256": "8660db0bfd1016aa81c26b1b5147707756b01bd36f52704355cd04a3b277dde3",
+    "projection_sha256": "07b7a863fa609448430ba1e87269b58571cfb08e234380bd76f197097a0ce52b"
+  },
+  "full_canonical_output_committed": false,
+  "native_project_validation": "not_executed",
+  "primary_reason_counts": {
+    "ACTIVITY_INACTIVE": 9,
+    "DURATION_FORMAT_UNSUPPORTED": 2,
+    "INELIGIBLE_PREDECESSOR": 156,
+    "MULTIPLE_RESOURCE_CALENDARS_UNSUPPORTED": 11
+  },
+  "profile_counts": {
+    "activities": 460,
+    "eligible_activities": 282,
+    "eligible_milestones": 27,
+    "eligible_non_milestones": 255,
+    "eligible_relationships": 327,
+    "excluded_activities": 178,
+    "excluded_relationships": 273,
+    "relationships": 600
+  },
+  "projection_counts": {
+    "activities": 282,
+    "effective_calendars": 5,
+    "relationships": 327
+  },
+  "reason_counts": {
+    "ACTIVITY_INACTIVE": 9,
+    "DURATION_FORMAT_UNSUPPORTED": 2,
+    "INELIGIBLE_PREDECESSOR": 169,
+    "MULTIPLE_RESOURCE_CALENDARS_UNSUPPORTED": 12,
+    "WORK_UNITS_INCONSISTENT": 10
+  },
+  "reproducibility": {
+    "calculation_sha256_equal": true,
+    "canonical_hashes_equal": true,
+    "comparison_evidence_equal": true,
+    "eligibility_profile_evidence_equal": true,
+    "import_runs": 2,
+    "pipeline_runs": 2,
+    "profile_sha256_equal": true,
+    "projection_sha256_equal": true,
+    "sanitized_evidence_equal": true
+  },
+  "source": {
+    "canonical_sha256": "e1af182f32a5c090e533a5694c885d0387633bba61c2f24d9b5aaf22511a0dc6",
+    "document_key": "sha256:e6a3739976580e2144352011f818c0099c0dc0c278fb37a976c5b6a55fbc3420",
+    "importer_profile": "mspdi-import-v0.1.1",
+    "schema_version": "0.1.1",
+    "source_sha256": "e6a3739976580e2144352011f818c0099c0dc0c278fb37a976c5b6a55fbc3420"
+  },
+  "source_inventory": {
+    "activity_milestones": 58,
+    "assignments": 472,
+    "baselines": 14,
+    "calendars": 45,
+    "custom_field_definitions": 8,
+    "leaf_activities": 460,
+    "milestones": 60,
+    "preserved_extension_element_counts_sha256": "870b23a599eccd690eab85998ec361c1043a61d5e21bee6665cc737c36e85a71",
+    "relationship_types": {
+      "FS": 600
+    },
+    "relationships": 600,
+    "resources": 32,
+    "summary_milestones": 2,
+    "summary_tasks": 95,
+    "tasks": 555,
+    "vendor_extensions": 44935
+  },
+  "source_xml_committed": false
+}

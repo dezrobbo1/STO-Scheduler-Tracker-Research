@@ -126,7 +126,14 @@ def _activity(
     return activity, extensions
 
 
-def _relationship(uid: int, predecessor: int, successor: int, lag: int = 0) -> dict[str, object]:
+def _relationship(
+    uid: int,
+    predecessor: int,
+    successor: int,
+    lag: int = 0,
+    *,
+    lag_format: int = 7,
+) -> dict[str, object]:
     return {
         "id": f"relationship:{uid}",
         "source_order": uid,
@@ -136,7 +143,7 @@ def _relationship(uid: int, predecessor: int, successor: int, lag: int = 0) -> d
         "source_type_code": 1,
         "lag_tenths_minutes": lag,
         "lag_seconds": lag * 6,
-        "lag_format_source": 7,
+        "lag_format_source": lag_format,
         "cross_project": False,
         "cross_project_name": None,
         "extensions": [],
