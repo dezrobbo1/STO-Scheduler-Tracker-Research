@@ -13,7 +13,7 @@ This repository is deliberately separate from:
 
 Phase 0 completed the scheduling-core inheritance audit. PR #4 merged the first structural Microsoft Project XML/MSPDI importer. PR #7 completed the bounded post-merge hardening of importer profile `mspdi-import-v0.1.1` and canonical schema `0.1.1`. PR #9 merged calculation profile v0.1 and its external Boiler evidence.
 
-Issue #12 and draft PR #13 add only bounded negative elapsed-day FS-lead support in calculation profile v0.2.
+Issue #12 and merged PR #13 added only bounded negative elapsed-day FS-lead support in calculation profile v0.2.
 
 Delivered on `main`:
 
@@ -29,7 +29,7 @@ Delivered on `main`:
 - fail-closed v0.1 activity and relationship eligibility classification;
 - deterministic FS zero-lag forward pass and source-coordinate comparison.
 
-Implemented in draft PR #13:
+Phase 1.3 delivered by PR #13 on `main`:
 
 - profile `mspdi-calculation-eligibility-v0.2`;
 - FS negative lead only where `LagFormat=8` (`pjElapsedDays`) and raw/normalized lag values agree;
