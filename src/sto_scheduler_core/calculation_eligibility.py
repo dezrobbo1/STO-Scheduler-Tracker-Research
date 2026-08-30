@@ -12,7 +12,9 @@ from .calculation_common import (
     SUPPORTED_RELATIONSHIP_TYPES,
     SUPPORTED_SCHEMA_VERSION,
     CalculationProfileError,
+    _duration_seconds,
     _first_reason,
+    _is_integral_seconds,
 )
 from .provenance import canonical_sha256
 
@@ -22,13 +24,15 @@ def _relationship_lag_supported(
 ) -> bool:
     lag = relationship.get("lag_tenths_minutes")
     lag_seconds = relationship.get("lag_seconds")
+    if type(lag) is not int or not _is_integral_seconds(lag_seconds):
+        return False
     if lag == 0:
-        return lag_seconds in (0, 0.0)
-    if not isinstance(lag, int) or lag >= 0:
+        return lag_seconds == 0
+    if lag >= 0:
         return False
     if relationship.get("lag_format_source") != SUPPORTED_NEGATIVE_ELAPSED_LAG_FORMAT:
         return False
-    if not isinstance(lag_seconds, (int, float)) or lag_seconds != lag * 6:
+    if lag_seconds != lag * 6:
         return False
     successor = activity_by_id.get(relationship.get("successor_ref"))
     if successor is None or successor.get("milestone"):
@@ -56,6 +60,12 @@ def build_calculation_profile(document: dict[str, Any]) -> dict[str, Any]:
     effective_patterns = local["effective_patterns"]
     calendar_lineage = local["calendar_lineage"]
     ignored_exception_counts = local["ignored_exception_counts"]
+
+    for activity_id, activity in activity_by_id.items():
+        duration_seconds = _duration_seconds(activity.get("duration"))
+        if duration_seconds is not None and not _is_integral_seconds(duration_seconds):
+            reasons[activity_id].add("DURATION_NONINTEGRAL")
+
     activity_ids = set(activity_by_id)
     supported_relationship_ids: set[str] = set()
     for relationship in document["relationships"]:

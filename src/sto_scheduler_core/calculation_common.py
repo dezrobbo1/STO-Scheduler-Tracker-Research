@@ -20,6 +20,7 @@ REASON_PRIORITY = (
     "ESTIMATED_DURATION_UNSUPPORTED",
     "DURATION_MISSING",
     "DURATION_UNPARSED",
+    "DURATION_NONINTEGRAL",
     "DURATION_NEGATIVE",
     "DURATION_FORMAT_UNSUPPORTED",
     "MILESTONE_DURATION_MISMATCH",
@@ -84,7 +85,17 @@ def _duration_seconds(value: dict[str, Any] | None) -> int | float | None:
     if not value or value.get("parse_status") != "parsed":
         return None
     seconds = value.get("seconds")
-    return seconds if isinstance(seconds, (int, float)) else None
+    return seconds if isinstance(seconds, (int, float)) and not isinstance(seconds, bool) else None
+
+
+def _is_integral_seconds(value: object) -> bool:
+    """Return True only for exact integer-second values.
+
+    Booleans are excluded even though ``bool`` is an ``int`` subclass in Python.
+    The current bounded engine does not claim fractional-second scheduling.
+    """
+
+    return type(value) is int
 
 
 def _first_reason(reason_codes: Iterable[str]) -> str:
