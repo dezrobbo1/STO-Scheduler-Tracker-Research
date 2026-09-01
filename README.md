@@ -4,8 +4,16 @@ Experimental research repository for a **small, focused, adaptable and compatibl
 
 This repository is deliberately separate from:
 
-- `dezrobbo1/PM-Software` — deterministic scheduling-core research source;
+- `dezrobbo1/PM-Software` — deterministic-AI project-management and scheduling research;
 - the existing Shutdown Tracker repository — current product direction.
+
+## Relationship with PM-Software
+
+This repository is an **independent parallel experiment**, not a subordinate implementation of PM-Software.
+
+PM-Software is exploring the broader deterministic-AI core idea. This repository is free to continue pursuing STO-specific scheduling, live execution, interoperability and other ideas when they are producing useful capability or evidence.
+
+Neither project should be frozen simply to avoid overlap. Where both projects investigate similar problems, compare what actually works and selectively reuse useful ideas, tests or code. A shared package or repository merge should happen only if working experiments make that clearly beneficial.
 
 ## Current phase
 
