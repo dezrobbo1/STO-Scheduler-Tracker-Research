@@ -1,0 +1,563 @@
+"""Migrate a research-importer document (``mspdi-import-v0.1.1``) to canonical v1.
+
+The research importer produced an untyped, MSPDI-shaped dictionary: lags in
+tenths of a minute, Microsoft's integer task ``Type``, calculated values mixed
+in beside inputs as ``*_source`` keys, and document-local identifiers. This
+module turns one of those into a typed :class:`~sto.core.model.entities.Schedule`
+with durable identity, so the existing importer keeps earning its place as an
+oracle while everything downstream speaks canonical.
+
+Nothing is invented here. Where the source has no answer -- a lag calendar for a
+Microsoft file, say -- the field carries the policy value that says so rather
+than a guess.
+"""
+
+from __future__ import annotations
+
+from datetime import datetime, time
+from typing import Any
+from uuid import UUID
+
+from ..enums import (
+    ActivityKind,
+    CalendarType,
+    ConstraintType,
+    DurationType,
+    EntityKind,
+    LagCalendar,
+    MilestoneSnapPolicy,
+    PercentCompleteType,
+    ProgressPolicy,
+    RelationshipType,
+    ResourceType,
+    ScheduleDirection,
+    SchedulingClass,
+    SourceFormat,
+    SourceSystem,
+)
+from ..entities import (
+    Activity,
+    Assignment,
+    Calendar,
+    CalendarException,
+    CalendarWeekDay,
+    Constraint,
+    Duration,
+    ExternalRef,
+    MsSummaryProjection,
+    PercentComplete,
+    ProjectSettings,
+    Relationship,
+    Resource,
+    Schedule,
+    SourceObservations,
+    SourceSnapshot,
+    TimeInterval,
+    UdfDefinition,
+    UnitsTriple,
+    WbsNode,
+    WorkTriple,
+)
+from ..ids import IdentityMap, ReconciliationEntry, ReconciliationReport
+
+SUPPORTED_IMPORTER_PROFILES = frozenset({"mspdi-import-v0.1.1"})
+
+#: Microsoft ``Task/Type``. Fixed Units is the Project default.
+_MS_TASK_TYPE: dict[int, DurationType] = {
+    0: DurationType.FIXED_UNITS,
+    1: DurationType.FIXED_DURATION_AND_UNITS,
+    2: DurationType.FIXED_WORK,
+}
+
+#: Microsoft ``Task/ConstraintType``.
+_MS_CONSTRAINT: dict[int, ConstraintType] = {
+    0: ConstraintType.ASAP,
+    1: ConstraintType.ALAP,
+    2: ConstraintType.MSO,
+    3: ConstraintType.MFO,
+    4: ConstraintType.SNET,
+    5: ConstraintType.SNLT,
+    6: ConstraintType.FNET,
+    7: ConstraintType.FNLT,
+}
+
+#: Microsoft ``PredecessorLink/LagFormat`` codes that mean elapsed time. An
+#: elapsed lag runs on the clock, not on the successor's working calendar, and
+#: the distinction is why a -28ed lead lands where it does on the BOILER file.
+_MS_ELAPSED_LAG_FORMATS = frozenset({4, 6, 8, 10, 12, 20})
+
+
+class MigrationError(ValueError):
+    """Raised when a document cannot be migrated."""
+
+
+def _dt(value: Any) -> datetime | None:
+    if value is None or value == "":
+        return None
+    if isinstance(value, datetime):
+        return value
+    return datetime.fromisoformat(str(value))
+
+
+def _seconds_of_day(value: Any) -> int:
+    if value is None:
+        return 0
+    if isinstance(value, time):
+        parsed = value
+    else:
+        parsed = time.fromisoformat(str(value))
+    return parsed.hour * 3600 + parsed.minute * 60 + parsed.second
+
+
+def _duration(payload: Any) -> Duration | None:
+    """Convert the importer's ``{raw, seconds, parse_status}`` block."""
+
+    if not isinstance(payload, dict):
+        return None
+    seconds = payload.get("seconds")
+    if seconds is None:
+        return None
+    return Duration(seconds=int(seconds), unit=None, elapsed=False)
+
+
+def _permille(value: Any) -> int:
+    """Percentages arrive as whole percent; per-mille keeps them integral."""
+
+    if value is None:
+        return 0
+    return int(round(float(value) * 10))
+
+
+def _ref(system: SourceSystem, row: dict[str, Any], snapshot_sha: str | None) -> ExternalRef:
+    external = {
+        entry.get("type"): entry.get("value")
+        for entry in row.get("external_references", [])
+        if isinstance(entry, dict)
+    }
+    return ExternalRef(
+        system=system,
+        uid=str(external.get("UID") or external.get("FieldID") or ""),
+        id=str(external["ID"]) if external.get("ID") is not None else None,
+        guid=str(external["GUID"]) if external.get("GUID") is not None else None,
+        snapshot_sha256=snapshot_sha,
+    )
+
+
+def _external(row: dict[str, Any], kind: str) -> str | None:
+    for entry in row.get("external_references", []):
+        if isinstance(entry, dict) and entry.get("type") == kind:
+            value = entry.get("value")
+            return None if value is None else str(value)
+    return None
+
+
+def _observations(row: dict[str, Any]) -> SourceObservations | None:
+    """Lift the calculated values Microsoft Project already stored.
+
+    Slack arrives in tenths of a minute, which is six seconds -- the unit that
+    makes a naive comparison off by a factor of ten.
+    """
+
+    def slack(key: str) -> int | None:
+        raw = row.get(key)
+        return None if raw is None else int(raw) * 6
+
+    observations = SourceObservations(
+        start=_dt(row.get("start")),
+        finish=_dt(row.get("finish")),
+        early_start=_dt(row.get("early_start_source")),
+        early_finish=_dt(row.get("early_finish_source")),
+        late_start=_dt(row.get("late_start_source")),
+        late_finish=_dt(row.get("late_finish_source")),
+        total_float_seconds=slack("total_slack_tenths_minutes_source"),
+        free_float_seconds=slack("free_slack_tenths_minutes_source"),
+        critical=row.get("critical_source"),
+    )
+    return observations if observations != SourceObservations() else None
+
+
+def _lag_calendar(lag_format: Any) -> LagCalendar:
+    if lag_format is not None and int(lag_format) in _MS_ELAPSED_LAG_FORMATS:
+        return LagCalendar.ELAPSED_24H
+    return LagCalendar.INHERIT_PROJECT_POLICY
+
+
+def _activity_kind(row: dict[str, Any], duration: Duration | None) -> ActivityKind:
+    if not row.get("milestone_source"):
+        return ActivityKind.TASK
+    # Microsoft marks both ends of a zero-duration task as a milestone; the
+    # finish variety is the one planners mean, and the one Project draws.
+    if duration is not None and duration.seconds == 0:
+        return ActivityKind.FINISH_MILESTONE
+    return ActivityKind.START_MILESTONE
+
+
+def _constraint(row: dict[str, Any]) -> Constraint | None:
+    code = row.get("constraint_type_source")
+    if code is None:
+        return None
+    constraint_type = _MS_CONSTRAINT.get(int(code))
+    if constraint_type is None:
+        return None
+    if constraint_type is ConstraintType.ASAP:
+        return None
+    return Constraint(
+        type=constraint_type,
+        date=_dt(row.get("constraint_date_source")),
+        hard=constraint_type in (ConstraintType.MSO, ConstraintType.MFO),
+    )
+
+
+def _percent(row: dict[str, Any]) -> PercentComplete:
+    return PercentComplete(
+        type=PercentCompleteType.DURATION,
+        duration_permille=_permille(row.get("percent_complete_source")),
+        work_permille=_permille(row.get("percent_work_complete_source")),
+        physical_permille=_permille(row.get("physical_percent_complete_source")),
+    )
+
+
+def _udf_values(row: dict[str, Any], alias_of: dict[str, str]) -> dict[str, str]:
+    """Key custom-field values by their alias where the file names one.
+
+    The site's own convention lives here: ``Text4`` is aliased "Work Order No."
+    and ``Text5`` "Operation No.", which is the key a CMMS import links on.
+    """
+
+    values: dict[str, str] = {}
+    for entry in row.get("custom_fields", []) or []:
+        if not isinstance(entry, dict):
+            continue
+        field_id = str(entry.get("field_id"))
+        value = entry.get("value")
+        if value is None:
+            continue
+        values[alias_of.get(field_id, field_id)] = str(value)
+    return values
+
+
+def migrate(
+    document: dict[str, Any],
+    *,
+    identity: IdentityMap | None = None,
+    schedule_id: str | None = None,
+) -> tuple[Schedule, IdentityMap, ReconciliationReport]:
+    """Migrate one importer document.
+
+    Passing the :class:`IdentityMap` returned by an earlier migration is what
+    makes a re-import a re-import: rows keep the identifiers they had, and the
+    report says what changed.
+    """
+
+    profile = document.get("importer_profile")
+    if profile not in SUPPORTED_IMPORTER_PROFILES:
+        raise MigrationError(f"unsupported importer profile: {profile!r}")
+
+    system = SourceSystem.MICROSOFT_PROJECT
+    source = document.get("source", {})
+    project_row = document.get("project", {})
+    snapshot_sha = source.get("sha256")
+
+    resolved_id = schedule_id or _external(project_row, "GUID") or str(source.get("sha256"))
+    if identity is None:
+        identity = IdentityMap(schedule_id=resolved_id, system=system)
+    entries: list[ReconciliationEntry] = []
+
+    def uid_for(kind: EntityKind, row: dict[str, Any], external_uid: str | None = None) -> UUID:
+        external = external_uid if external_uid is not None else _external(row, "UID")
+        if external is None:
+            external = str(row.get("id"))
+        uid, entry = identity.resolve(kind, external, guid=_external(row, "GUID"))
+        entries.append(entry)
+        return uid
+
+    # --- calendars -------------------------------------------------------
+    calendar_uid_by_ref: dict[str, UUID] = {}
+    calendars: list[Calendar] = []
+    for row in document.get("calendars", []):
+        uid = uid_for(EntityKind.CALENDAR, row)
+        calendar_uid_by_ref[str(row.get("id"))] = uid
+
+    for row in document.get("calendars", []):
+        week = tuple(
+            CalendarWeekDay(
+                day=int(day["day_type"]),
+                working=bool(day.get("working")),
+                intervals=tuple(
+                    TimeInterval(
+                        start_second=_seconds_of_day(interval.get("from")),
+                        finish_second=_seconds_of_day(interval.get("to")) or 86400,
+                    )
+                    for interval in day.get("working_times", [])
+                ),
+            )
+            for day in row.get("week_days", [])
+        )
+        exceptions = tuple(
+            CalendarException(
+                from_date=_dt(entry.get("from")) or datetime.min,
+                to_date=_dt(entry.get("to")) or datetime.min,
+                working=bool(entry.get("working")),
+                intervals=tuple(
+                    TimeInterval(
+                        start_second=_seconds_of_day(interval.get("from")),
+                        finish_second=_seconds_of_day(interval.get("to")) or 86400,
+                    )
+                    for interval in entry.get("working_times", [])
+                ),
+                name=entry.get("name"),
+            )
+            for entry in row.get("exceptions", [])
+        )
+        base_ref = row.get("base_calendar_ref")
+        calendars.append(
+            Calendar(
+                uid=calendar_uid_by_ref[str(row.get("id"))],
+                name=row.get("name") or "",
+                type=CalendarType.BASE if row.get("is_base") else CalendarType.PROJECT,
+                base_uid=calendar_uid_by_ref.get(str(base_ref)) if base_ref else None,
+                week=week,
+                exceptions=exceptions,
+                external_refs=(_ref(system, row, snapshot_sha),),
+            )
+        )
+
+    # --- custom field definitions ---------------------------------------
+    alias_of: dict[str, str] = {}
+    udf_definitions: list[UdfDefinition] = []
+    for row in document.get("custom_field_definitions", []):
+        field_id = str(row.get("field_id"))
+        alias = row.get("alias")
+        if alias:
+            alias_of[field_id] = str(alias)
+        udf_definitions.append(
+            UdfDefinition(
+                uid=uid_for(EntityKind.UDF, row, external_uid=field_id),
+                name=str(row.get("field_name") or field_id),
+                owner_kind="activity",
+                data_type="text",
+                alias=str(alias) if alias else None,
+                ms_field_id=field_id,
+                formula=row.get("formula"),
+            )
+        )
+
+    # --- WBS -------------------------------------------------------------
+    wbs_uid_by_ref: dict[str, UUID] = {}
+    for row in document.get("wbs_nodes", []):
+        wbs_uid_by_ref[str(row.get("id"))] = uid_for(EntityKind.WBS_NODE, row)
+
+    wbs_nodes: list[WbsNode] = []
+    for row in document.get("wbs_nodes", []):
+        parent_ref = row.get("parent_id")
+        wbs_nodes.append(
+            WbsNode(
+                uid=wbs_uid_by_ref[str(row.get("id"))],
+                code=row.get("wbs") or row.get("outline_number"),
+                name=row.get("name") or "",
+                parent_uid=wbs_uid_by_ref.get(str(parent_ref)) if parent_ref else None,
+                seq=int(row.get("source_order") or 0),
+                level=int(row.get("outline_level") or 0),
+                ms_projection=MsSummaryProjection(
+                    task_uid=_external(row, "UID"),
+                    summary_milestone=bool(row.get("milestone_source")),
+                    external_id=_external(row, "ID"),
+                    notes=row.get("notes"),
+                ),
+                external_refs=(_ref(system, row, snapshot_sha),),
+                source_observations=_observations(row),
+            )
+        )
+
+    # --- activities ------------------------------------------------------
+    activity_uid_by_ref: dict[str, UUID] = {}
+    activities: list[Activity] = []
+    for row in document.get("activities", []):
+        uid = uid_for(EntityKind.ACTIVITY, row)
+        activity_uid_by_ref[str(row.get("id"))] = uid
+        duration = _duration(row.get("duration"))
+        parent_ref = row.get("parent_wbs_id")
+        calendar_ref = row.get("calendar_ref")
+        activities.append(
+            Activity(
+                uid=uid,
+                name=row.get("name") or "",
+                wbs_uid=wbs_uid_by_ref.get(str(parent_ref)) if parent_ref else None,
+                code=row.get("wbs") or row.get("outline_number"),
+                kind=_activity_kind(row, duration),
+                seq=int(row.get("source_order") or 0),
+                active=bool(row.get("active", True)),
+                manual=bool(row.get("manual", False)),
+                duration_type=_MS_TASK_TYPE.get(
+                    int(row.get("source_task_type") or 0), DurationType.FIXED_UNITS
+                ),
+                effort_driven=bool(row.get("effort_driven_source", False)),
+                planned_duration=duration,
+                remaining_duration=_duration(row.get("remaining_duration_source")),
+                actual_duration=_duration(row.get("actual_duration_source")),
+                planned_work=_duration(row.get("work")),
+                percent_complete=_percent(row),
+                actual_start=_dt(row.get("actual_start_source")),
+                actual_finish=_dt(row.get("actual_finish_source")),
+                calendar_uid=calendar_uid_by_ref.get(str(calendar_ref)) if calendar_ref else None,
+                primary_constraint=_constraint(row),
+                deadline=_dt(row.get("deadline_source")),
+                priority=row.get("priority"),
+                udfs=_udf_values(row, alias_of),
+                notes=row.get("notes"),
+                external_refs=(_ref(system, row, snapshot_sha),),
+                source_observations=_observations(row),
+            )
+        )
+
+    # --- relationships ---------------------------------------------------
+    node_uid = {**wbs_uid_by_ref, **activity_uid_by_ref}
+    relationships: list[Relationship] = []
+    for row in document.get("relationships", []):
+        predecessor = node_uid.get(str(row.get("predecessor_ref")))
+        successor = node_uid.get(str(row.get("successor_ref")))
+        if predecessor is None or successor is None:
+            # The importer already refuses documents with dangling endpoints;
+            # a survivor here would be a defect, not data.
+            continue
+        uid, entry = identity.resolve(EntityKind.RELATIONSHIP, str(row.get("id")))
+        entries.append(entry)
+        lag_seconds = int(row.get("lag_seconds") or 0)
+        lag_format = row.get("lag_format_source")
+        relationships.append(
+            Relationship(
+                uid=uid,
+                predecessor_uid=predecessor,
+                successor_uid=successor,
+                type=RelationshipType(str(row.get("type"))),
+                lag=Duration(
+                    seconds=lag_seconds,
+                    elapsed=lag_format is not None
+                    and int(lag_format) in _MS_ELAPSED_LAG_FORMATS,
+                    source_format_code=None if lag_format is None else int(lag_format),
+                )
+                if lag_seconds or lag_format is not None
+                else None,
+                lag_calendar=_lag_calendar(lag_format),
+                seq=int(row.get("source_order") or 0),
+                cross_project=bool(row.get("cross_project", False)),
+                cross_project_name=row.get("cross_project_name"),
+            )
+        )
+
+    # --- resources and assignments ---------------------------------------
+    resource_uid_by_ref: dict[str, UUID] = {}
+    resources: list[Resource] = []
+    for row in document.get("resources", []):
+        uid = uid_for(EntityKind.RESOURCE, row)
+        resource_uid_by_ref[str(row.get("id"))] = uid
+        calendar_ref = row.get("calendar_ref")
+        max_units = row.get("max_units")
+        resources.append(
+            Resource(
+                uid=uid,
+                name=row.get("name") or "",
+                code=row.get("initials"),
+                type=ResourceType.LABOR
+                if int(row.get("source_resource_type") or 1) == 1
+                else ResourceType.MATERIAL,
+                scheduling_class=SchedulingClass.RENEWABLE,
+                max_units_permille=None if max_units is None else _permille(max_units * 100),
+                calendar_uid=calendar_uid_by_ref.get(str(calendar_ref)) if calendar_ref else None,
+                group=row.get("group"),
+                inactive=bool(row.get("inactive_source", False)),
+                external_refs=(_ref(system, row, snapshot_sha),),
+            )
+        )
+
+    assignments: list[Assignment] = []
+    for row in document.get("assignments", []):
+        uid = uid_for(EntityKind.ASSIGNMENT, row)
+        task_ref = row.get("task_ref")
+        resource_ref = row.get("resource_ref")
+        units = row.get("units_source")
+        work = _duration(row.get("work_source"))
+        actual_work = _duration(row.get("actual_work_source"))
+        remaining_work = _duration(row.get("remaining_work_source"))
+        assignments.append(
+            Assignment(
+                uid=uid,
+                activity_uid=node_uid.get(str(task_ref)) if task_ref else None,
+                resource_uid=resource_uid_by_ref.get(str(resource_ref)) if resource_ref else None,
+                units=UnitsTriple(
+                    budgeted_permille=0 if units is None else _permille(units * 100)
+                ),
+                work=WorkTriple(
+                    budgeted_seconds=0 if work is None else work.seconds,
+                    actual_seconds=0 if actual_work is None else actual_work.seconds,
+                    remaining_seconds=0 if remaining_work is None else remaining_work.seconds,
+                ),
+                start=_dt(row.get("start_source")),
+                finish=_dt(row.get("finish_source")),
+                percent_work_complete_permille=_permille(row.get("percent_work_complete_source")),
+                unassigned_placeholder=resource_ref is None,
+                external_refs=(_ref(system, row, snapshot_sha),),
+            )
+        )
+
+    # --- project ---------------------------------------------------------
+    default_calendar_ref = project_row.get("calendar_ref")
+    project = ProjectSettings(
+        name=project_row.get("title") or project_row.get("name") or "",
+        start=_dt(project_row.get("start")),
+        finish=_dt(project_row.get("finish")),
+        status_date=_dt(project_row.get("status_date")),
+        schedule_direction=ScheduleDirection.FROM_START
+        if project_row.get("schedule_from_start", True)
+        else ScheduleDirection.FROM_FINISH,
+        progress_policy=ProgressPolicy.RETAINED_LOGIC,
+        # Microsoft Project exposes no lag-calendar setting. Recording the
+        # working assumption explicitly keeps it falsifiable rather than buried.
+        lag_calendar_policy=LagCalendar.SUCCESSOR,
+        milestone_snap_policy=MilestoneSnapPolicy.NONE,
+        default_calendar_uid=calendar_uid_by_ref.get(str(default_calendar_ref))
+        if default_calendar_ref
+        else None,
+        minutes_per_day=project_row.get("minutes_per_day"),
+        minutes_per_week=project_row.get("minutes_per_week"),
+        days_per_month=project_row.get("days_per_month"),
+    )
+
+    snapshot = SourceSnapshot(
+        snapshot_id=str(source.get("document_key") or source.get("sha256") or ""),
+        system=system,
+        format=SourceFormat.MSPDI,
+        file_sha256=str(source.get("sha256") or ""),
+        byte_length=int(source.get("byte_length") or 0),
+        importer_profile=str(profile),
+        document_name=source.get("document_name"),
+        application="Microsoft Project",
+        application_version=str(source.get("build_number"))
+        if source.get("build_number") is not None
+        else None,
+        save_version=int(source["save_version"])
+        if source.get("save_version") is not None
+        else None,
+        inventory={
+            "wbs_nodes": len(wbs_nodes),
+            "activities": len(activities),
+            "relationships": len(relationships),
+            "calendars": len(calendars),
+            "resources": len(resources),
+            "assignments": len(assignments),
+        },
+    )
+
+    schedule = Schedule(
+        schedule_id=resolved_id,
+        project=project,
+        snapshots=(snapshot,),
+        wbs_nodes=tuple(wbs_nodes),
+        activities=tuple(activities),
+        relationships=tuple(relationships),
+        calendars=tuple(calendars),
+        resources=tuple(resources),
+        assignments=tuple(assignments),
+        udf_definitions=tuple(udf_definitions),
+    )
+    return schedule, identity, ReconciliationReport(resolved_id, tuple(entries))
