@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Local Microsoft Project XML schedule workspace for STO scenario testing."
+    />
+    <title>STO Schedule Workspace</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand" aria-label="STO Schedule Workspace">
+          <span class="brand-mark" aria-hidden="true">STO</span>
+          <span>
+            <strong>Schedule workspace</strong>
+            <small>Prototype 0 · local</small>
+          </span>
+        </div>
+
+        <div class="top-actions">
+          <label class="button button-primary" for="fileInput">Import MSPDI XML</label>
+          <input
+            id="fileInput"
+            data-testid="mspdi-file-input"
+            class="visually-hidden"
+            type="file"
+            accept=".xml,.mspdi,application/xml,text/xml"
+          />
+          <button id="resetButton" class="button" type="button" disabled>
+            Reset scenario
+          </button>
+          <button id="exportButton" class="button" type="button" disabled>
+            Export JSON
+          </button>
+        </div>
+      </header>
+
+      <main>
+        <section id="emptyState" class="empty-state">
+          <div
+            id="dropZone"
+            class="drop-zone"
+            tabindex="0"
+            role="button"
+            aria-controls="fileInput"
+          >
+            <span class="drop-kicker">Microsoft Project XML / MSPDI</span>
+            <h1>Import a shutdown schedule</h1>
+            <p>
+              The complete hierarchy stays in this local workspace. Calculable tasks can be
+              changed without altering the imported dates.
+            </p>
+            <label class="button button-accent" for="fileInput">Choose XML file</label>
+            <small>Or drop the XML file here</small>
+          </div>
+        </section>
+
+        <section id="workspace" class="workspace" data-testid="schedule-workspace" hidden>
+          <div class="project-strip">
+            <div class="project-identity">
+              <span class="eyebrow">Imported shutdown</span>
+              <h1 id="projectName">—</h1>
+              <p id="sourceFile">—</p>
+            </div>
+            <dl class="project-dates">
+              <div>
+                <dt>Imported start</dt>
+                <dd id="projectStart">—</dd>
+              </div>
+              <div>
+                <dt>Imported finish</dt>
+                <dd id="projectFinish">—</dd>
+              </div>
+              <div>
+                <dt>Scenario</dt>
+                <dd id="scenarioState">Original</dd>
+              </div>
+            </dl>
+          </div>
+
+          <section class="metrics" aria-label="Schedule summary">
+            <div class="metric">
+              <span>Total tasks</span>
+              <strong id="taskCount">0</strong>
+            </div>
+            <div class="metric">
+              <span>Calculated tasks</span>
+              <strong id="supportedCount">0</strong>
+            </div>
+            <div class="metric">
+              <span>Relationships</span>
+              <strong id="relationshipCount">0</strong>
+            </div>
+            <div class="metric metric-change">
+              <span>Moved by scenario</span>
+              <strong id="movedCount">0</strong>
+            </div>
+          </section>
+
+          <div class="workspace-controls">
+            <label class="search-control">
+              <span class="visually-hidden">Find a task</span>
+              <input id="searchInput" type="search" placeholder="Find task or WBS" />
+            </label>
+            <label class="filter-control">
+              <span>Show</span>
+              <select id="taskFilter">
+                <option value="all">All tasks</option>
+                <option value="supported">Calculated tasks</option>
+                <option value="moved">Moved tasks</option>
+              </select>
+            </label>
+            <button id="expandAllButton" class="text-button" type="button">Expand all</button>
+            <button id="collapseAllButton" class="text-button" type="button">Collapse all</button>
+            <div class="legend" aria-label="Gantt legend">
+              <span><i class="legend-imported"></i>Imported</span>
+              <span><i class="legend-calculated"></i>Our calculation</span>
+              <span><i class="legend-original"></i>Before change</span>
+            </div>
+          </div>
+
+          <div class="workspace-grid">
+            <section class="schedule-panel" aria-label="Schedule task table and Gantt">
+              <div id="scheduleScroller" class="schedule-scroller">
+                <div class="schedule-row schedule-header" role="row">
+                  <div class="cell task-cell" role="columnheader">Task</div>
+                  <div class="cell" role="columnheader">State</div>
+                  <div class="cell number-cell" role="columnheader">Duration</div>
+                  <div class="cell" role="columnheader">Imported start</div>
+                  <div class="cell" role="columnheader">Imported finish</div>
+                  <div class="cell" role="columnheader">Our start</div>
+                  <div class="cell" role="columnheader">Our finish</div>
+                  <div id="timelineHeader" class="cell timeline-header" role="columnheader">
+                    Timeline
+                  </div>
+                </div>
+                <div id="taskRows" role="rowgroup"></div>
+                <div id="noRows" class="no-rows" hidden>No tasks match this view.</div>
+              </div>
+            </section>
+
+            <aside id="inspector" class="inspector" aria-labelledby="inspectorTitle">
+              <div id="inspectorEmpty" class="inspector-empty">
+                <span class="eyebrow">Duration scenario</span>
+                <h2 id="inspectorTitle">Select a calculated task</h2>
+                <p>Choose a task row to inspect its imported and calculated dates.</p>
+              </div>
+
+              <div id="inspectorContent" hidden>
+                <div class="inspector-head">
+                  <span id="inspectorBadge" class="status-badge">—</span>
+                  <span id="inspectorWbs" class="mono">—</span>
+                </div>
+                <h2 id="inspectorTaskName">—</h2>
+                <p id="inspectorTaskMeta" class="inspector-meta">—</p>
+
+                <dl class="date-comparison">
+                  <div>
+                    <dt>Imported</dt>
+                    <dd id="inspectorImportedDates">—</dd>
+                  </div>
+                  <div>
+                    <dt>Our calculation</dt>
+                    <dd id="inspectorCalculatedDates">—</dd>
+                  </div>
+                </dl>
+
+                <form id="durationForm" class="duration-form" data-testid="duration-form">
+                  <label for="durationHours">Scenario duration</label>
+                  <div class="duration-input">
+                    <input
+                      id="durationHours"
+                      data-testid="duration-hours"
+                      type="number"
+                      min="0.01"
+                      step="0.25"
+                      inputmode="decimal"
+                    />
+                    <span>hours</span>
+                  </div>
+                  <button id="recalculateButton" class="button button-accent" type="submit">
+                    Recalculate schedule
+                  </button>
+                </form>
+
+                <div id="unsupportedPanel" class="unsupported-panel" hidden>
+                  <strong>View only in this prototype</strong>
+                  <p id="unsupportedReasons"></p>
+                </div>
+              </div>
+
+              <p class="calculation-boundary">
+                Our dates cover the currently supported FS calculation subset. Summary and
+                unsupported tasks retain imported dates only.
+              </p>
+            </aside>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div id="loadingOverlay" class="loading-overlay" hidden aria-live="polite">
+      <div class="loading-card">
+        <span class="spinner" aria-hidden="true"></span>
+        <strong id="loadingTitle">Importing schedule</strong>
+        <span id="loadingDetail">Reading the complete MSPDI file…</span>
+      </div>
+    </div>
+
+    <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
+
+    <script src="/app.js" defer></script>
+  </body>
+</html>

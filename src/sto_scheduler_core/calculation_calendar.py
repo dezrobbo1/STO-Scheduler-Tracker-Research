@@ -90,59 +90,68 @@ def _normalize_intervals(
     return tuple(normalized)
 
 
+def calculation_source_horizon(
+    document: dict[str, Any],
+) -> tuple[datetime, datetime]:
+    """Return the source-derived horizon used to classify calendar exceptions."""
+
+    try:
+        project_start = _parse_datetime(document["project"].get("start"))
+        project_finish = _parse_datetime(document["project"].get("finish"))
+    except ValueError as exc:
+        raise CalculationProfileError(
+            f"Project start/finish are required as timezone-naive ISO datetimes: {exc}"
+        ) from exc
+    if project_finish < project_start:
+        raise CalculationProfileError("Project finish precedes project start")
+
+    horizon_values = [project_start, project_finish]
+    activity_by_id = {item["id"]: item for item in document["activities"]}
+    for activity in document["activities"]:
+        for field in ("start", "finish"):
+            try:
+                horizon_values.append(_parse_datetime(activity.get(field)))
+            except ValueError:
+                # The activity classifier records the unsupported coordinate.
+                pass
+    for relationship in document["relationships"]:
+        lag = relationship.get("lag_tenths_minutes")
+        lag_seconds = relationship.get("lag_seconds")
+        successor = activity_by_id.get(relationship.get("successor_ref"))
+        predecessor = activity_by_id.get(relationship.get("predecessor_ref"))
+        if not (
+            relationship.get("type") in SUPPORTED_RELATIONSHIP_TYPES
+            and isinstance(lag, int)
+            and lag < 0
+            and relationship.get("lag_format_source")
+            == SUPPORTED_NEGATIVE_ELAPSED_LAG_FORMAT
+            and isinstance(lag_seconds, (int, float))
+            and lag_seconds == lag * 6
+            and successor is not None
+            and not successor.get("milestone")
+            and predecessor is not None
+        ):
+            continue
+        try:
+            predecessor_finish = _parse_datetime(predecessor.get("finish"))
+        except ValueError:
+            continue
+        horizon_values.append(
+            predecessor_finish + timedelta(seconds=lag_seconds)
+        )
+
+    # A negative elapsed lead can legitimately place a successor before the
+    # project start. Exceptions are ignorable only outside both the source
+    # coordinate envelope and every supported source-derived lead candidate.
+    return min(horizon_values), max(horizon_values)
+
+
 class _CalendarResolver:
     def __init__(self, document: dict[str, Any]):
         self._calendars = {item["id"]: item for item in document["calendars"]}
-        try:
-            project_start = _parse_datetime(document["project"].get("start"))
-            project_finish = _parse_datetime(document["project"].get("finish"))
-        except ValueError as exc:
-            raise CalculationProfileError(
-                f"Project start/finish are required as timezone-naive ISO datetimes: {exc}"
-            ) from exc
-        if project_finish < project_start:
-            raise CalculationProfileError("Project finish precedes project start")
-
-        horizon_values = [project_start, project_finish]
-        activity_by_id = {item["id"]: item for item in document["activities"]}
-        for activity in document["activities"]:
-            for field in ("start", "finish"):
-                try:
-                    horizon_values.append(_parse_datetime(activity.get(field)))
-                except ValueError:
-                    # The activity classifier records the unsupported coordinate.
-                    pass
-        for relationship in document["relationships"]:
-            lag = relationship.get("lag_tenths_minutes")
-            lag_seconds = relationship.get("lag_seconds")
-            successor = activity_by_id.get(relationship.get("successor_ref"))
-            predecessor = activity_by_id.get(relationship.get("predecessor_ref"))
-            if not (
-                relationship.get("type") in SUPPORTED_RELATIONSHIP_TYPES
-                and isinstance(lag, int)
-                and lag < 0
-                and relationship.get("lag_format_source")
-                == SUPPORTED_NEGATIVE_ELAPSED_LAG_FORMAT
-                and isinstance(lag_seconds, (int, float))
-                and lag_seconds == lag * 6
-                and successor is not None
-                and not successor.get("milestone")
-                and predecessor is not None
-            ):
-                continue
-            try:
-                predecessor_finish = _parse_datetime(predecessor.get("finish"))
-            except ValueError:
-                continue
-            horizon_values.append(
-                predecessor_finish + timedelta(seconds=lag_seconds)
-            )
-
-        # A negative elapsed lead can legitimately place a successor before the
-        # project start. Calendar exceptions are ignorable only outside both the
-        # source-coordinate envelope and every supported source-derived lead candidate.
-        self._horizon_start = min(horizon_values)
-        self._horizon_finish = max(horizon_values)
+        self._horizon_start, self._horizon_finish = calculation_source_horizon(
+            document
+        )
         self._cache: dict[str, ResolvedCalendar] = {}
         self._active: set[str] = set()
 
