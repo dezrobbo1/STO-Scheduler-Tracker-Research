@@ -19,40 +19,37 @@ Neither project should be frozen simply to avoid overlap. Where both projects in
 
 **Prototype 0 — Local schedule workspace**
 
-Prototype 0 is the first usable vertical slice over the Phase 1 research core:
+Prototype 0 is the first usable vertical slice. It runs locally and now provides:
 
-- run a browser workspace bound to the local computer;
-- import a complete Microsoft Project XML/MSPDI schedule;
-- inspect its summary hierarchy and leaf activities in one task table;
-- compare imported Start/Finish observations with engine-native calculated dates for the currently admitted subset;
-- inspect the same rows on a simple imported-versus-calculated Gantt;
-- select a calculation-supported, non-milestone activity and change its working duration;
-- recalculate the supported network and highlight moved downstream activities;
-- reset scenario changes without discarding the import;
-- export the current local prototype state as JSON.
+- Microsoft Project XML/MSPDI import through the browser;
+- the complete imported task hierarchy, including unsupported tasks;
+- a row-aligned task table and simple Gantt;
+- side-by-side imported dates and dates from the current bounded scheduler;
+- duration editing for an eligible non-summary, non-milestone task;
+- scenario recalculation with moved tasks highlighted against their original calculated bars;
+- one-click scenario reset; and
+- a compact JSON export of the current workspace state, provenance, relationships and scenario hashes.
 
-The workspace keeps the canonical import immutable. Duration changes are scenario overrides applied only to a copied engine projection. Summary rows and excluded activities retain imported dates but receive no invented calculated dates.
+The canonical import remains immutable. A duration scenario changes a copy of the engine projection and therefore does not overwrite imported source facts.
 
-Install the checkout in editable mode, then start the workspace (the same commands work in PowerShell):
+### Run the workspace
+
+Python 3.11 or newer is required. From the repository root:
 
 ```bash
 python -m pip install -e .
-sto-scheduler-core workspace
+python -m sto_scheduler_core workspace
 ```
 
-An MSPDI file can be opened at startup, and automatic browser opening can be disabled:
+The workspace binds to the loopback-only address `127.0.0.1:8765` and opens in the default browser. Use `--no-open` to run it without opening a browser, or `--port` to select another local port.
 
-```bash
-sto-scheduler-core workspace path/to/source.xml --no-browser
-```
+Import a Microsoft Project XML file, select a row labelled **Calculated**, change its duration in hours, and choose **Recalculate schedule**. Unsupported activities and summary tasks remain visible but view-only. The supplied real XML schedules remain external to this public repository.
 
-Then open `http://127.0.0.1:8765/`. The server binds only to the loopback interface. The imported schedule and scenario state remain in memory; stopping the process clears them unless JSON was exported.
+See `docs/prototype0-local-schedule-workspace.md` for the exact workflow and current calculation boundary.
 
-See `docs/prototype0-local-schedule-workspace.md` for the exact boundary and acceptance flow.
+## Prior research foundation
 
-## Phase 1 foundation
-
-**Boiler MSPDI canonical import and deterministic comparison**
+**Phase 1 — Boiler MSPDI canonical import and deterministic comparison**
 
 Phase 0 completed the scheduling-core inheritance audit. PR #4 merged the first structural Microsoft Project XML/MSPDI importer. PR #7 completed the bounded post-merge hardening of importer profile `mspdi-import-v0.1.1` and canonical schema `0.1.1`. PR #9 merged calculation profile v0.1 and its external Boiler evidence.
 
@@ -105,6 +102,7 @@ See:
 
 ```bash
 PYTHONPATH=src python -m unittest discover -s tests -v
+PYTHONPATH=src python -m sto_scheduler_core workspace
 PYTHONPATH=src python -m sto_scheduler_core inventory-mspdi path/to/source.xml
 PYTHONPATH=src python -m sto_scheduler_core import-mspdi path/to/source.xml --output .external-results/canonical.json
 PYTHONPATH=src python scripts/run_external_calculation_trial.py path/to/source.xml --output .external-results/calculation-evidence.json

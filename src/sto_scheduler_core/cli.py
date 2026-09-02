@@ -50,19 +50,16 @@ def build_parser() -> argparse.ArgumentParser:
     digest.add_argument("source", type=Path)
 
     workspace = subparsers.add_parser(
-        "workspace", help="Run the Prototype 0 local schedule workspace"
+        "workspace", help="Open the Prototype 0 local schedule workspace"
     )
     workspace.add_argument(
-        "source",
-        type=Path,
-        nargs="?",
-        help="Optional MSPDI XML schedule to open at startup",
+        "--host", choices=("127.0.0.1", "localhost"), default="127.0.0.1"
     )
     workspace.add_argument("--port", type=int, default=8765)
     workspace.add_argument(
-        "--no-browser",
+        "--no-open",
         action="store_true",
-        help="Do not open the workspace in the default browser",
+        help="Run the workspace server without opening the default browser",
     )
     return parser
 
@@ -87,12 +84,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(canonical_sha256(document))
         return 0
     if args.command == "workspace":
-        from .workspace_server import run_workspace_server
+        from .workspace_server import workspace_main
 
-        run_workspace_server(
-            port=args.port,
-            source=args.source,
-            open_browser=not args.no_browser,
-        )
-        return 0
+        server_args = ["--host", args.host, "--port", str(args.port)]
+        if args.no_open:
+            server_args.append("--no-open")
+        return workspace_main(server_args)
     raise AssertionError(args.command)
