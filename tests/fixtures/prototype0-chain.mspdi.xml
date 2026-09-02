@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Project xmlns="http://schemas.microsoft.com/project">
+  <SaveVersion>14</SaveVersion>
+  <BuildNumber>16.0.synthetic</BuildNumber>
+  <Name>prototype0-chain.xml</Name>
+  <GUID>70000000-0000-0000-0000-000000000000</GUID>
+  <Title>Prototype 0 Synthetic Chain</Title>
+  <CreationDate>2026-01-01T08:00:00</CreationDate>
+  <LastSaved>2026-01-02T08:00:00</LastSaved>
+  <ScheduleFromStart>1</ScheduleFromStart>
+  <StartDate>2026-01-05T08:00:00</StartDate>
+  <FinishDate>2026-01-05T17:00:00</FinishDate>
+  <StatusDate>2026-01-05T08:00:00</StatusDate>
+  <CalendarUID>1</CalendarUID>
+  <DefaultStartTime>08:00:00</DefaultStartTime>
+  <DefaultFinishTime>17:00:00</DefaultFinishTime>
+  <MinutesPerDay>480</MinutesPerDay>
+  <MinutesPerWeek>2400</MinutesPerWeek>
+  <DaysPerMonth>20</DaysPerMonth>
+  <CriticalSlackLimit>0</CriticalSlackLimit>
+  <MultipleCriticalPaths>0</MultipleCriticalPaths>
+  <SplitsInProgressTasks>0</SplitsInProgressTasks>
+  <Calendars>
+    <Calendar>
+      <UID>1</UID>
+      <GUID>70000000-0000-0000-0000-000000000001</GUID>
+      <Name>Standard</Name>
+      <IsBaseCalendar>1</IsBaseCalendar>
+      <IsBaselineCalendar>0</IsBaselineCalendar>
+      <BaseCalendarUID>-1</BaseCalendarUID>
+      <WeekDays>
+        <WeekDay><DayType>1</DayType><DayWorking>0</DayWorking></WeekDay>
+        <WeekDay><DayType>2</DayType><DayWorking>1</DayWorking><WorkingTimes><WorkingTime><FromTime>08:00:00</FromTime><ToTime>12:00:00</ToTime></WorkingTime><WorkingTime><FromTime>13:00:00</FromTime><ToTime>17:00:00</ToTime></WorkingTime></WorkingTimes></WeekDay>
+        <WeekDay><DayType>3</DayType><DayWorking>1</DayWorking><WorkingTimes><WorkingTime><FromTime>08:00:00</FromTime><ToTime>12:00:00</ToTime></WorkingTime><WorkingTime><FromTime>13:00:00</FromTime><ToTime>17:00:00</ToTime></WorkingTime></WorkingTimes></WeekDay>
+        <WeekDay><DayType>4</DayType><DayWorking>1</DayWorking><WorkingTimes><WorkingTime><FromTime>08:00:00</FromTime><ToTime>12:00:00</ToTime></WorkingTime><WorkingTime><FromTime>13:00:00</FromTime><ToTime>17:00:00</ToTime></WorkingTime></WorkingTimes></WeekDay>
+        <WeekDay><DayType>5</DayType><DayWorking>1</DayWorking><WorkingTimes><WorkingTime><FromTime>08:00:00</FromTime><ToTime>12:00:00</ToTime></WorkingTime><WorkingTime><FromTime>13:00:00</FromTime><ToTime>17:00:00</ToTime></WorkingTime></WorkingTimes></WeekDay>
+        <WeekDay><DayType>6</DayType><DayWorking>1</DayWorking><WorkingTimes><WorkingTime><FromTime>08:00:00</FromTime><ToTime>12:00:00</ToTime></WorkingTime><WorkingTime><FromTime>13:00:00</FromTime><ToTime>17:00:00</ToTime></WorkingTime></WorkingTimes></WeekDay>
+        <WeekDay><DayType>7</DayType><DayWorking>0</DayWorking></WeekDay>
+      </WeekDays>
+    </Calendar>
+  </Calendars>
+  <Tasks>
+    <Task>
+      <UID>0</UID><GUID>71000000-0000-0000-0000-000000000000</GUID><ID>0</ID><Name>Prototype 0 Synthetic Chain</Name>
+      <Active>1</Active><Manual>0</Manual><Type>1</Type><IsNull>0</IsNull><CreateDate>2026-01-01T08:00:00</CreateDate>
+      <WBS>0</WBS><OutlineNumber>0</OutlineNumber><OutlineLevel>0</OutlineLevel><Priority>500</Priority>
+      <Start>2026-01-05T08:00:00</Start><Finish>2026-01-05T17:00:00</Finish><Duration>PT8H0M0S</Duration><Work>PT0H0M0S</Work>
+      <CalendarUID>1</CalendarUID><Estimated>0</Estimated><Milestone>0</Milestone><Summary>1</Summary><ConstraintType>0</ConstraintType>
+    </Task>
+    <Task>
+      <UID>1</UID><GUID>71000000-0000-0000-0000-000000000001</GUID><ID>1</ID><Name>Mechanical work package</Name>
+      <Active>1</Active><Manual>0</Manual><Type>1</Type><IsNull>0</IsNull><CreateDate>2026-01-01T08:00:00</CreateDate>
+      <WBS>1</WBS><OutlineNumber>1</OutlineNumber><OutlineLevel>1</OutlineLevel><Priority>500</Priority>
+      <Start>2026-01-05T08:00:00</Start><Finish>2026-01-05T17:00:00</Finish><Duration>PT8H0M0S</Duration><Work>PT0H0M0S</Work>
+      <CalendarUID>1</CalendarUID><Estimated>0</Estimated><Milestone>0</Milestone><Summary>1</Summary><ConstraintType>0</ConstraintType>
+    </Task>
+    <Task>
+      <UID>2</UID><GUID>71000000-0000-0000-0000-000000000002</GUID><ID>2</ID><Name>Isolate equipment</Name>
+      <Active>1</Active><Manual>0</Manual><Type>0</Type><IsNull>0</IsNull><CreateDate>2026-01-01T08:00:00</CreateDate>
+      <WBS>MECH.ISO</WBS><OutlineNumber>1.1</OutlineNumber><OutlineLevel>2</OutlineLevel><Priority>500</Priority>
+      <Start>2026-01-05T08:00:00</Start><Finish>2026-01-05T12:00:00</Finish><Duration>PT4H0M0S</Duration><DurationFormat>5</DurationFormat><Work>PT0H0M0S</Work>
+      <CalendarUID>1</CalendarUID><Estimated>0</Estimated><Milestone>0</Milestone><Summary>0</Summary><Critical>1</Critical>
+      <EarlyStart>2026-01-05T08:00:00</EarlyStart><EarlyFinish>2026-01-05T12:00:00</EarlyFinish><LateStart>2026-01-05T08:00:00</LateStart><LateFinish>2026-01-05T12:00:00</LateFinish>
+      <FreeSlack>0</FreeSlack><TotalSlack>0</TotalSlack><PercentComplete>0</PercentComplete><PercentWorkComplete>0</PercentWorkComplete><PhysicalPercentComplete>0</PhysicalPercentComplete>
+      <ActualDuration>PT0H0M0S</ActualDuration><ActualWork>PT0H0M0S</ActualWork><RemainingDuration>PT4H0M0S</RemainingDuration><RemainingWork>PT0H0M0S</RemainingWork>
+      <ConstraintType>0</ConstraintType><EffortDriven>0</EffortDriven><Recurring>0</Recurring><ExternalTask>0</ExternalTask><IsSubproject>0</IsSubproject><IgnoreResourceCalendar>1</IgnoreResourceCalendar><LevelingDelay>0</LevelingDelay>
+    </Task>
+    <Task>
+      <UID>3</UID><GUID>71000000-0000-0000-0000-000000000003</GUID><ID>3</ID><Name>Complete inspection</Name>
+      <Active>1</Active><Manual>0</Manual><Type>0</Type><IsNull>0</IsNull><CreateDate>2026-01-01T08:00:00</CreateDate>
+      <WBS>1.2</WBS><OutlineNumber>1.2</OutlineNumber><OutlineLevel>2</OutlineLevel><Priority>500</Priority>
+      <Start>2026-01-05T13:00:00</Start><Finish>2026-01-05T17:00:00</Finish><Duration>PT4H0M0S</Duration><DurationFormat>5</DurationFormat><Work>PT0H0M0S</Work>
+      <CalendarUID>1</CalendarUID><Estimated>0</Estimated><Milestone>0</Milestone><Summary>0</Summary><Critical>1</Critical>
+      <EarlyStart>2026-01-05T13:00:00</EarlyStart><EarlyFinish>2026-01-05T17:00:00</EarlyFinish><LateStart>2026-01-05T13:00:00</LateStart><LateFinish>2026-01-05T17:00:00</LateFinish>
+      <FreeSlack>0</FreeSlack><TotalSlack>0</TotalSlack><PercentComplete>0</PercentComplete><PercentWorkComplete>0</PercentWorkComplete><PhysicalPercentComplete>0</PhysicalPercentComplete>
+      <ActualDuration>PT0H0M0S</ActualDuration><ActualWork>PT0H0M0S</ActualWork><RemainingDuration>PT4H0M0S</RemainingDuration><RemainingWork>PT0H0M0S</RemainingWork>
+      <ConstraintType>0</ConstraintType><EffortDriven>0</EffortDriven><Recurring>0</Recurring><ExternalTask>0</ExternalTask><IsSubproject>0</IsSubproject><IgnoreResourceCalendar>1</IgnoreResourceCalendar><LevelingDelay>0</LevelingDelay>
+      <PredecessorLink><PredecessorUID>2</PredecessorUID><Type>1</Type><CrossProject>0</CrossProject><LinkLag>0</LinkLag><LagFormat>7</LagFormat></PredecessorLink>
+    </Task>
+    <Task>
+      <UID>4</UID><GUID>71000000-0000-0000-0000-000000000004</GUID><ID>4</ID><Name>Ready for handback</Name>
+      <Active>1</Active><Manual>0</Manual><Type>0</Type><IsNull>0</IsNull><CreateDate>2026-01-01T08:00:00</CreateDate>
+      <WBS>1.3</WBS><OutlineNumber>1.3</OutlineNumber><OutlineLevel>2</OutlineLevel><Priority>500</Priority>
+      <Start>2026-01-05T17:00:00</Start><Finish>2026-01-05T17:00:00</Finish><Duration>PT0H0M0S</Duration><DurationFormat>5</DurationFormat><Work>PT0H0M0S</Work>
+      <CalendarUID>1</CalendarUID><Estimated>0</Estimated><Milestone>1</Milestone><Summary>0</Summary><Critical>1</Critical>
+      <EarlyStart>2026-01-05T17:00:00</EarlyStart><EarlyFinish>2026-01-05T17:00:00</EarlyFinish><LateStart>2026-01-05T17:00:00</LateStart><LateFinish>2026-01-05T17:00:00</LateFinish>
+      <FreeSlack>0</FreeSlack><TotalSlack>0</TotalSlack><PercentComplete>0</PercentComplete><PercentWorkComplete>0</PercentWorkComplete><PhysicalPercentComplete>0</PhysicalPercentComplete>
+      <ActualDuration>PT0H0M0S</ActualDuration><ActualWork>PT0H0M0S</ActualWork><RemainingDuration>PT0H0M0S</RemainingDuration><RemainingWork>PT0H0M0S</RemainingWork>
+      <ConstraintType>0</ConstraintType><EffortDriven>0</EffortDriven><Recurring>0</Recurring><ExternalTask>0</ExternalTask><IsSubproject>0</IsSubproject><IgnoreResourceCalendar>1</IgnoreResourceCalendar><LevelingDelay>0</LevelingDelay>
+      <PredecessorLink><PredecessorUID>3</PredecessorUID><Type>1</Type><CrossProject>0</CrossProject><LinkLag>0</LinkLag><LagFormat>7</LagFormat></PredecessorLink>
+    </Task>
+  </Tasks>
+</Project>

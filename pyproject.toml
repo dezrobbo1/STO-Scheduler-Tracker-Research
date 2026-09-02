@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "sto-scheduler-core"
 version = "0.1.1"
-description = "Research-only canonical STO schedule model and MSPDI importer"
+description = "Research STO schedule model, MSPDI importer, and local scenario workspace"
 requires-python = ">=3.11"
 dependencies = []
 
@@ -17,3 +17,6 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+sto_scheduler_core = ["workspace_web/*.html", "workspace_web/*.css", "workspace_web/*.js"]

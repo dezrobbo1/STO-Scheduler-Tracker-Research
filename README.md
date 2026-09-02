@@ -15,9 +15,44 @@ PM-Software is exploring the broader deterministic-AI core idea. This repository
 
 Neither project should be frozen simply to avoid overlap. Where both projects investigate similar problems, compare what actually works and selectively reuse useful ideas, tests or code. A shared package or repository merge should happen only if working experiments make that clearly beneficial.
 
-## Current phase
+## Current milestone
 
-**Phase 1 — Boiler MSPDI canonical import and deterministic comparison**
+**Prototype 0 — Local schedule workspace**
+
+Prototype 0 is the first usable vertical slice over the Phase 1 research core:
+
+- run a browser workspace bound to the local computer;
+- import a complete Microsoft Project XML/MSPDI schedule;
+- inspect its summary hierarchy and leaf activities in one task table;
+- compare imported Start/Finish observations with engine-native calculated dates for the currently admitted subset;
+- inspect the same rows on a simple imported-versus-calculated Gantt;
+- select a calculation-supported, non-milestone activity and change its working duration;
+- recalculate the supported network and highlight moved downstream activities;
+- reset scenario changes without discarding the import;
+- export the current local prototype state as JSON.
+
+The workspace keeps the canonical import immutable. Duration changes are scenario overrides applied only to a copied engine projection. Summary rows and excluded activities retain imported dates but receive no invented calculated dates.
+
+Install the checkout in editable mode, then start the workspace (the same commands work in PowerShell):
+
+```bash
+python -m pip install -e .
+sto-scheduler-core workspace
+```
+
+An MSPDI file can be opened at startup, and automatic browser opening can be disabled:
+
+```bash
+sto-scheduler-core workspace path/to/source.xml --no-browser
+```
+
+Then open `http://127.0.0.1:8765/`. The server binds only to the loopback interface. The imported schedule and scenario state remain in memory; stopping the process clears them unless JSON was exported.
+
+See `docs/prototype0-local-schedule-workspace.md` for the exact boundary and acceptance flow.
+
+## Phase 1 foundation
+
+**Boiler MSPDI canonical import and deterministic comparison**
 
 Phase 0 completed the scheduling-core inheritance audit. PR #4 merged the first structural Microsoft Project XML/MSPDI importer. PR #7 completed the bounded post-merge hardening of importer profile `mspdi-import-v0.1.1` and canonical schema `0.1.1`. PR #9 merged calculation profile v0.1 and its external Boiler evidence.
 
@@ -53,6 +88,7 @@ Still not delivered:
 - progress/status-date calculation;
 - resource levelling;
 - MSPDI export;
+- JSON workspace re-import or durable persistence;
 - native Microsoft Project round-trip evidence;
 - a production scheduling engine.
 
@@ -72,6 +108,7 @@ PYTHONPATH=src python -m unittest discover -s tests -v
 PYTHONPATH=src python -m sto_scheduler_core inventory-mspdi path/to/source.xml
 PYTHONPATH=src python -m sto_scheduler_core import-mspdi path/to/source.xml --output .external-results/canonical.json
 PYTHONPATH=src python scripts/run_external_calculation_trial.py path/to/source.xml --output .external-results/calculation-evidence.json
+PYTHONPATH=src python -m sto_scheduler_core workspace
 ```
 
 The real source XML and full source-derived canonical output must remain outside this public repository.

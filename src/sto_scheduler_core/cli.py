@@ -48,6 +48,22 @@ def build_parser() -> argparse.ArgumentParser:
         "hash", help="Calculate the canonical SHA-256 of a canonical JSON document"
     )
     digest.add_argument("source", type=Path)
+
+    workspace = subparsers.add_parser(
+        "workspace", help="Run the Prototype 0 local schedule workspace"
+    )
+    workspace.add_argument(
+        "source",
+        type=Path,
+        nargs="?",
+        help="Optional MSPDI XML schedule to open at startup",
+    )
+    workspace.add_argument("--port", type=int, default=8765)
+    workspace.add_argument(
+        "--no-browser",
+        action="store_true",
+        help="Do not open the workspace in the default browser",
+    )
     return parser
 
 
@@ -69,5 +85,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "hash":
         document = json.loads(args.source.read_text(encoding="utf-8"))
         print(canonical_sha256(document))
+        return 0
+    if args.command == "workspace":
+        from .workspace_server import run_workspace_server
+
+        run_workspace_server(
+            port=args.port,
+            source=args.source,
+            open_browser=not args.no_browser,
+        )
         return 0
     raise AssertionError(args.command)

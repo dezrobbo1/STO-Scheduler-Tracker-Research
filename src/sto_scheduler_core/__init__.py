@@ -1,8 +1,9 @@
 """Vendor-neutral STO scheduling research core.
 
-Phase 1 provides a bounded Microsoft Project XML (MSPDI) importer, a canonical
-representation and a fail-closed deterministic calculation experiment. It does
-not claim Microsoft Project or Primavera P6 semantic compatibility.
+The package provides a bounded Microsoft Project XML (MSPDI) importer, a
+canonical representation, a fail-closed deterministic calculation experiment,
+and a local Prototype 0 scenario workspace. It does not claim Microsoft Project
+or Primavera P6 semantic compatibility.
 """
 
 from .calculation_profile import (
