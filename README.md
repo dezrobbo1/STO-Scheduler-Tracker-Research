@@ -1,4 +1,30 @@
-# STO Scheduler + Tracker Research
+# STO Scheduler + Tracker
+
+STO is a shutdown, turnaround and outage scheduler. It imports from a CMMS, from
+Primavera P6 or from Microsoft Project; it tracks, manages and schedules
+execution in real time; and it exports back to any of them.
+
+This repository is the product monorepo. `dezrobbo1/Shutdown-Tracker-Claude` and
+`dezrobbo1/Shutdown-Tracker` are frozen references being folded in here;
+`dezrobbo1/PM-Software` continues as independent research and supplies the
+semantic conformance suite. See `docs/adr/ADR-001-consolidation-and-repository-topology.md`.
+
+## Canonical model
+
+Every source lands in one typed model, `sto-canonical-1.0`, whose identifiers
+are stable across snapshots and source systems:
+
+```bash
+PYTHONPATH=src python3 -m sto.cli canonicalise path/to/schedule.xml --quiet
+PYTHONPATH=src python3 -m sto.cli reconcile earlier.xml later.xml
+```
+
+`reconcile` answers the question a re-import actually raises: which rows carried
+their identity forward, which are new, and which the later file no longer has.
+
+`sto.legacy` is the previous research importer and forward-pass engine, retained
+as the oracle the new engine and the MPXJ interchange service are checked
+against, and deleted once that cross-check is green.
 
 Experimental research repository for a **small, focused, adaptable and compatible** shutdown / turnaround / outage scheduling and live-execution platform.
 
@@ -38,7 +64,7 @@ Python 3.11 or newer is required. From the repository root:
 
 ```bash
 python -m pip install -e .
-python -m sto_scheduler_core workspace
+python -m sto.legacy workspace
 ```
 
 The workspace binds to the loopback-only address `127.0.0.1:8765` and opens in the default browser. Use `--no-open` to run it without opening a browser, or `--port` to select another local port.
@@ -102,11 +128,11 @@ See:
 
 ```bash
 PYTHONPATH=src python -m unittest discover -s tests -v
-PYTHONPATH=src python -m sto_scheduler_core workspace
-PYTHONPATH=src python -m sto_scheduler_core inventory-mspdi path/to/source.xml
-PYTHONPATH=src python -m sto_scheduler_core import-mspdi path/to/source.xml --output .external-results/canonical.json
+PYTHONPATH=src python -m sto.legacy workspace
+PYTHONPATH=src python -m sto.legacy inventory-mspdi path/to/source.xml
+PYTHONPATH=src python -m sto.legacy import-mspdi path/to/source.xml --output .external-results/canonical.json
 PYTHONPATH=src python scripts/run_external_calculation_trial.py path/to/source.xml --output .external-results/calculation-evidence.json
-PYTHONPATH=src python -m sto_scheduler_core workspace
+PYTHONPATH=src python -m sto.legacy workspace
 ```
 
 The real source XML and full source-derived canonical output must remain outside this public repository.
