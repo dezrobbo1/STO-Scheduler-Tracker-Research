@@ -4,8 +4,17 @@ from collections import defaultdict
 from typing import Any
 
 from .calculation_activity import _extension_values, _one_extension_value
-from .calculation_calendar import _CalendarResolver, _intersect_patterns, _pattern_payload
-from .calculation_common import CalculationProfileError, PROFILE_VERSION, _duration_seconds
+from .calculation_calendar import (
+    _CalendarResolver,
+    _intersect_patterns,
+    _pattern_payload,
+)
+from .calculation_common import (
+    CalculationProfileError,
+    PROFILE_VERSION,
+    _duration_seconds,
+    _is_integral_seconds,
+)
 from .calculation_eligibility import build_calculation_profile
 from .calculation_engine import calculate_forward_schedule, compare_source_coordinates
 from .provenance import canonical_sha256
@@ -26,12 +35,16 @@ def build_engine_projection(
 
     eligible_activity_ids = set(profile["eligible_activity_ids"])
     eligible_relationship_ids = set(profile["eligible_relationship_ids"])
-    profile_by_activity = {item["activity_id"]: item for item in profile["activities"]}
+    profile_by_activity = {
+        item["activity_id"]: item for item in profile["activities"]
+    }
     activity_by_id = {item["id"]: item for item in document["activities"]}
 
     calendar_by_fingerprint: dict[str, dict[str, Any]] = {}
     resolver = _CalendarResolver(document)
-    extension_by_id = {item["id"]: item for item in document.get("vendor_extensions", [])}
+    extension_by_id = {
+        item["id"]: item for item in document.get("vendor_extensions", [])
+    }
     resource_by_id = {item["id"]: item for item in document["resources"]}
     assignments_by_task: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for assignment in document["assignments"]:
@@ -44,38 +57,58 @@ def build_engine_projection(
     ):
         activity = activity_by_id[activity_id]
         extension_values = _extension_values(activity, extension_by_id)
-        ignore_resource_calendar = _one_extension_value(extension_values, "IgnoreResourceCalendar")
+        ignore_resource_calendar = _one_extension_value(
+            extension_values, "IgnoreResourceCalendar"
+        )
         explicit_task_ref = activity.get("calendar_ref")
-        task_calendar = resolver.resolve(explicit_task_ref or document["project"].get("calendar_ref"))
+        task_calendar = resolver.resolve(
+            explicit_task_ref or document["project"].get("calendar_ref")
+        )
         resource_calendars = []
         for assignment in assignments_by_task.get(activity_id, []):
             resource_ref = assignment.get("resource_ref")
             if resource_ref is None:
                 continue
-            resource_calendars.append(resolver.resolve(resource_by_id[resource_ref].get("calendar_ref")))
-        distinct_resource_patterns = {item.pattern for item in resource_calendars}
+            resource_calendars.append(
+                resolver.resolve(resource_by_id[resource_ref].get("calendar_ref"))
+            )
+        distinct_resource_patterns = {
+            item.pattern for item in resource_calendars
+        }
         if explicit_task_ref is not None:
             if ignore_resource_calendar == "1" or not resource_calendars:
                 pattern = task_calendar.pattern
             else:
-                pattern = _intersect_patterns(task_calendar.pattern, resource_calendars[0].pattern)
+                pattern = _intersect_patterns(
+                    task_calendar.pattern, resource_calendars[0].pattern
+                )
         elif distinct_resource_patterns:
             pattern = resource_calendars[0].pattern
         else:
             pattern = task_calendar.pattern
 
         fingerprint = canonical_sha256(_pattern_payload(pattern))
-        expected_fingerprint = profile_by_activity[activity_id]["effective_calendar_fingerprint"]
+        expected_fingerprint = profile_by_activity[activity_id][
+            "effective_calendar_fingerprint"
+        ]
         if fingerprint != expected_fingerprint:
-            raise CalculationProfileError(f"Effective calendar drift for eligible activity {activity_id}")
+            raise CalculationProfileError(
+                f"Effective calendar drift for eligible activity {activity_id}"
+            )
         calendar_id = f"effective-calendar:{fingerprint}"
         calendar_by_fingerprint.setdefault(
             fingerprint,
-            {"id": calendar_id, "fingerprint": fingerprint, "week": _pattern_payload(pattern)},
+            {
+                "id": calendar_id,
+                "fingerprint": fingerprint,
+                "week": _pattern_payload(pattern),
+            },
         )
         duration_seconds = _duration_seconds(activity.get("duration"))
-        if duration_seconds is None:
-            raise CalculationProfileError(f"Eligible activity {activity_id} has no parsed duration")
+        if not _is_integral_seconds(duration_seconds):
+            raise CalculationProfileError(
+                f"Eligible activity {activity_id} must have integral duration seconds"
+            )
         activities.append(
             {
                 "id": activity_id,
@@ -90,13 +123,16 @@ def build_engine_projection(
 
     relationships = []
     for relationship in sorted(
-        document["relationships"], key=lambda item: (item["source_order"], item["id"])
+        document["relationships"],
+        key=lambda item: (item["source_order"], item["id"]),
     ):
         if relationship["id"] not in eligible_relationship_ids:
             continue
         lag_seconds = relationship.get("lag_seconds")
-        if not isinstance(lag_seconds, (int, float)) or lag_seconds > 0:
-            raise CalculationProfileError(f"Eligible relationship {relationship['id']} has unsupported lag")
+        if not _is_integral_seconds(lag_seconds) or lag_seconds > 0:
+            raise CalculationProfileError(
+                f"Eligible relationship {relationship['id']} has unsupported lag"
+            )
         relationships.append(
             {
                 "id": relationship["id"],
@@ -116,11 +152,31 @@ def build_engine_projection(
             "Source task names, source early/late dates, source slack and Project critical flags are not inputs."
         ),
         "source": profile["source"],
-        "project": {"schedule_from_start": True, "start": document["project"]["start"]},
-        "calendars": [calendar_by_fingerprint[key] for key in sorted(calendar_by_fingerprint)],
+        "project": {
+            "schedule_from_start": True,
+            "start": document["project"]["start"],
+        },
+        "calendars": [
+            calendar_by_fingerprint[key]
+            for key in sorted(calendar_by_fingerprint)
+        ],
         "activities": activities,
         "relationships": relationships,
     }
+
+
+def _verified_stage(
+    supplied: dict[str, Any] | None,
+    expected: dict[str, Any],
+    label: str,
+) -> dict[str, Any]:
+    if supplied is not None and canonical_sha256(supplied) != canonical_sha256(
+        expected
+    ):
+        raise CalculationProfileError(
+            f"Supplied {label} does not match the recomputed canonical pipeline stage"
+        )
+    return expected
 
 
 def sanitized_profile_evidence(
@@ -130,13 +186,35 @@ def sanitized_profile_evidence(
     calculation: dict[str, Any] | None = None,
     comparison: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    profile = profile or build_calculation_profile(document)
-    projection = projection or build_engine_projection(document, profile)
-    calculation = calculation or calculate_forward_schedule(projection)
-    comparison = comparison or compare_source_coordinates(document, calculation)
+    """Return sanitized evidence only after independently rebuilding every stage.
+
+    Optional stage arguments are accepted for callers that already hold the pipeline
+    outputs, but they are treated as assertions rather than trusted inputs.
+    """
+
+    expected_profile = build_calculation_profile(document)
+    profile = _verified_stage(profile, expected_profile, "profile")
+
+    expected_projection = build_engine_projection(document, profile)
+    projection = _verified_stage(
+        projection, expected_projection, "projection"
+    )
+
+    expected_calculation = calculate_forward_schedule(projection)
+    calculation = _verified_stage(
+        calculation, expected_calculation, "calculation"
+    )
+
+    expected_comparison = compare_source_coordinates(document, calculation)
+    comparison = _verified_stage(
+        comparison, expected_comparison, "comparison"
+    )
+
     eligible_activity_ids = profile["eligible_activity_ids"]
     excluded_activity_ids = sorted(
-        item["activity_id"] for item in profile["activities"] if not item["eligible"]
+        item["activity_id"]
+        for item in profile["activities"]
+        if not item["eligible"]
     )
     return {
         "evidence_profile": f"{PROFILE_VERSION}-sanitized-evidence-v0.1",
@@ -145,15 +223,27 @@ def sanitized_profile_evidence(
         "source_inventory": {
             key: document["source_inventory"][key]
             for key in (
-                "tasks", "summary_tasks", "leaf_activities", "milestones",
-                "activity_milestones", "summary_milestones", "relationships",
-                "relationship_types", "calendars", "resources", "assignments",
-                "baselines", "custom_field_definitions", "vendor_extensions",
+                "tasks",
+                "summary_tasks",
+                "leaf_activities",
+                "milestones",
+                "activity_milestones",
+                "summary_milestones",
+                "relationships",
+                "relationship_types",
+                "calendars",
+                "resources",
+                "assignments",
+                "baselines",
+                "custom_field_definitions",
+                "vendor_extensions",
             )
         }
         | {
             "preserved_extension_element_counts_sha256": canonical_sha256(
-                document["source_inventory"].get("preserved_extension_element_counts", {})
+                document["source_inventory"].get(
+                    "preserved_extension_element_counts", {}
+                )
             )
         },
         "profile_counts": profile["counts"],
@@ -166,13 +256,21 @@ def sanitized_profile_evidence(
             "effective_calendars": len(projection["calendars"]),
         },
         "fingerprints": {
-            "eligible_activity_ids_sha256": canonical_sha256(sorted(eligible_activity_ids)),
-            "excluded_activity_ids_sha256": canonical_sha256(excluded_activity_ids),
-            "eligible_relationship_ids_sha256": canonical_sha256(sorted(profile["eligible_relationship_ids"])),
+            "eligible_activity_ids_sha256": canonical_sha256(
+                sorted(eligible_activity_ids)
+            ),
+            "excluded_activity_ids_sha256": canonical_sha256(
+                excluded_activity_ids
+            ),
+            "eligible_relationship_ids_sha256": canonical_sha256(
+                sorted(profile["eligible_relationship_ids"])
+            ),
             "profile_sha256": canonical_sha256(profile),
             "projection_sha256": canonical_sha256(projection),
             "calculation_sha256": canonical_sha256(calculation),
-            "difference_activity_ids_sha256": comparison["difference_activity_ids_sha256"],
+            "difference_activity_ids_sha256": comparison[
+                "difference_activity_ids_sha256"
+            ],
         },
         "native_project_validation": "not_executed",
         "source_xml_committed": False,
