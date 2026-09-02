@@ -10,7 +10,8 @@ requires-python = ">=3.12"
 dependencies = []
 
 [project.scripts]
-sto = "sto.legacy.cli:main"
+sto = "sto.cli:main"
+sto-legacy = "sto.legacy.cli:main"
 sto-workspace = "sto.legacy.workspace_server:workspace_main"
 
 [tool.setuptools]

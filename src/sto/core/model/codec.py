@@ -139,7 +139,16 @@ def decode(cls: type[T], payload: dict[str, Any]) -> T:
 
 
 def encode_schedule(schedule: _entities.Schedule) -> dict[str, Any]:
-    return encode(schedule)
+    """Encode a whole schedule.
+
+    ``schema_version`` is always written even though it equals its default. It
+    is the discriminator a reader needs before it can interpret anything else,
+    and a document that omits it is not self-describing.
+    """
+
+    payload = encode(schedule)
+    payload["schema_version"] = schedule.schema_version
+    return payload
 
 
 def decode_schedule(payload: dict[str, Any]) -> _entities.Schedule:

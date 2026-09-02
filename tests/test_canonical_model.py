@@ -155,6 +155,13 @@ class CodecTests(unittest.TestCase):
         self.assertNotIn("percent_complete", payload["activities"][0])
         self.assertNotIn("baselines", payload)
 
+    def test_schema_version_is_always_written(self):
+        """The discriminator is not an ordinary field: a document without it
+        cannot be interpreted, so default-omission must not apply to it."""
+
+        payload = encode_schedule(self._schedule())
+        self.assertEqual(payload["schema_version"], "sto-canonical-1.0")
+
     def test_encoded_document_hashes(self):
         canonical_sha256(encode_schedule(self._schedule()))
 
