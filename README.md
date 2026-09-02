@@ -15,7 +15,7 @@ PM-Software is exploring the broader deterministic-AI core idea. This repository
 
 Neither project should be frozen simply to avoid overlap. Where both projects investigate similar problems, compare what actually works and selectively reuse useful ideas, tests or code. A shared package or repository merge should happen only if working experiments make that clearly beneficial.
 
-## Current phase
+## Current milestone
 
 **Prototype 0 — Local schedule workspace**
 
@@ -85,6 +85,7 @@ Still not delivered:
 - progress/status-date calculation;
 - resource levelling;
 - MSPDI export;
+- JSON workspace re-import or durable persistence;
 - native Microsoft Project round-trip evidence;
 - a production scheduling engine.
 
@@ -105,6 +106,7 @@ PYTHONPATH=src python -m sto_scheduler_core workspace
 PYTHONPATH=src python -m sto_scheduler_core inventory-mspdi path/to/source.xml
 PYTHONPATH=src python -m sto_scheduler_core import-mspdi path/to/source.xml --output .external-results/canonical.json
 PYTHONPATH=src python scripts/run_external_calculation_trial.py path/to/source.xml --output .external-results/calculation-evidence.json
+PYTHONPATH=src python -m sto_scheduler_core workspace
 ```
 
 The real source XML and full source-derived canonical output must remain outside this public repository.
