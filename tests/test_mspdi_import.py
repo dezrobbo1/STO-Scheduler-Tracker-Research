@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Callable, Iterator
 from xml.etree import ElementTree as ET
 
-from sto_scheduler_core import (
+from sto.legacy import (
     MSPDI_NAMESPACE,
     MspdiImportError,
     canonical_sha256,
@@ -16,7 +16,7 @@ from sto_scheduler_core import (
     inventory_mspdi,
     validate_canonical_schedule,
 )
-from sto_scheduler_core.duration import parse_iso_duration_seconds
+from sto.legacy.duration import parse_iso_duration_seconds
 
 FIXTURE = Path(__file__).parent / "fixtures" / "synthetic-basic.mspdi.xml"
 NS = {"p": MSPDI_NAMESPACE}

@@ -9,8 +9,8 @@ from threading import Thread
 import unittest
 from urllib.parse import quote
 
-from sto_scheduler_core.mspdi import MspdiImportError, import_mspdi
-from sto_scheduler_core.workspace_server import (
+from sto.legacy.mspdi import MspdiImportError, import_mspdi
+from sto.legacy.workspace_server import (
     MAX_IMPORT_BYTES,
     create_workspace_server,
 )

@@ -4,7 +4,7 @@ import json
 import unittest
 from pathlib import Path
 
-from sto_scheduler_core import import_mspdi
+from sto.legacy import import_mspdi
 
 FIXTURE = Path(__file__).parent / "fixtures" / "synthetic-basic.mspdi.xml"
 SCHEMA_DIR = Path(__file__).parents[1] / "schemas"

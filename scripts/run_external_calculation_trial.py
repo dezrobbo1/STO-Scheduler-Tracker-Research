@@ -4,8 +4,8 @@ import argparse
 import json
 from pathlib import Path
 
-from sto_scheduler_core import canonical_sha256, import_mspdi
-from sto_scheduler_core.calculation_profile import (
+from sto.legacy import canonical_sha256, import_mspdi
+from sto.legacy.calculation_profile import (
     build_calculation_profile,
     build_engine_projection,
     calculate_forward_schedule,

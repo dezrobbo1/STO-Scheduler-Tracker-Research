@@ -3,15 +3,15 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "sto-scheduler-core"
-version = "0.1.1"
-description = "Research-only STO schedule importer, scheduler, and local workspace"
-requires-python = ">=3.11"
+name = "sto"
+version = "1.0.0.dev0"
+description = "STO: shutdown/turnaround scheduler with CMMS, P6 and Microsoft Project interchange"
+requires-python = ">=3.12"
 dependencies = []
 
 [project.scripts]
-sto-scheduler-core = "sto_scheduler_core.cli:main"
-sto-scheduler-workspace = "sto_scheduler_core.workspace_server:workspace_main"
+sto = "sto.legacy.cli:main"
+sto-workspace = "sto.legacy.workspace_server:workspace_main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
@@ -20,4 +20,18 @@ package-dir = {"" = "src"}
 where = ["src"]
 
 [tool.setuptools.package-data]
-sto_scheduler_core = ["workspace_static/*.html", "workspace_static/*.css", "workspace_static/*.js"]
+"sto.legacy" = ["workspace_static/*.html", "workspace_static/*.css", "workspace_static/*.js"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+"src/sto/legacy/*" = ["E501", "B", "UP"]
