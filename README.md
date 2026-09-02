@@ -17,6 +17,38 @@ Neither project should be frozen simply to avoid overlap. Where both projects in
 
 ## Current phase
 
+**Prototype 0 — Local schedule workspace**
+
+Prototype 0 is the first usable vertical slice. It runs locally and now provides:
+
+- Microsoft Project XML/MSPDI import through the browser;
+- the complete imported task hierarchy, including unsupported tasks;
+- a row-aligned task table and simple Gantt;
+- side-by-side imported dates and dates from the current bounded scheduler;
+- duration editing for an eligible non-summary, non-milestone task;
+- scenario recalculation with moved tasks highlighted against their original calculated bars;
+- one-click scenario reset; and
+- a compact JSON export of the current workspace state, provenance, relationships and scenario hashes.
+
+The canonical import remains immutable. A duration scenario changes a copy of the engine projection and therefore does not overwrite imported source facts.
+
+### Run the workspace
+
+Python 3.11 or newer is required. From the repository root:
+
+```bash
+python -m pip install -e .
+python -m sto_scheduler_core workspace
+```
+
+The workspace binds to the loopback-only address `127.0.0.1:8765` and opens in the default browser. Use `--no-open` to run it without opening a browser, or `--port` to select another local port.
+
+Import a Microsoft Project XML file, select a row labelled **Calculated**, change its duration in hours, and choose **Recalculate schedule**. Unsupported activities and summary tasks remain visible but view-only. The supplied real XML schedules remain external to this public repository.
+
+See `docs/prototype0-local-schedule-workspace.md` for the exact workflow and current calculation boundary.
+
+## Prior research foundation
+
 **Phase 1 — Boiler MSPDI canonical import and deterministic comparison**
 
 Phase 0 completed the scheduling-core inheritance audit. PR #4 merged the first structural Microsoft Project XML/MSPDI importer. PR #7 completed the bounded post-merge hardening of importer profile `mspdi-import-v0.1.1` and canonical schema `0.1.1`. PR #9 merged calculation profile v0.1 and its external Boiler evidence.
@@ -69,6 +101,7 @@ See:
 
 ```bash
 PYTHONPATH=src python -m unittest discover -s tests -v
+PYTHONPATH=src python -m sto_scheduler_core workspace
 PYTHONPATH=src python -m sto_scheduler_core inventory-mspdi path/to/source.xml
 PYTHONPATH=src python -m sto_scheduler_core import-mspdi path/to/source.xml --output .external-results/canonical.json
 PYTHONPATH=src python scripts/run_external_calculation_trial.py path/to/source.xml --output .external-results/calculation-evidence.json
