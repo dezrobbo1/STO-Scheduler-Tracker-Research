@@ -141,6 +141,34 @@ class EvidenceExecutionTests(unittest.TestCase):
                     )
         self.assertEqual(offences, [], "\n  ".join(offences))
 
+    def test_the_switch_really_turns_absence_into_failure(self):
+        """Mentioning the variable is not honouring it. Run the file and see."""
+
+        import os
+        import subprocess
+        import sys
+
+        env = dict(os.environ)
+        env.update(
+            {
+                "PYTHONPATH": str(REPO_ROOT / "src"),
+                "STO_REQUIRE_BOILER": "1",
+                "STO_BOILER_BEFORE": str(REPO_ROOT / "nope" / "absent-before.xml"),
+                "STO_BOILER_DAY5": str(REPO_ROOT / "nope" / "absent-day5.xml"),
+            }
+        )
+        result = subprocess.run(
+            [sys.executable, "-m", "unittest", "tests.test_canonical_model"],
+            cwd=REPO_ROOT,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        self.assertNotEqual(result.returncode, 0, "absence was tolerated")
+        self.assertIn("STO_REQUIRE_BOILER=1 but", result.stderr)
+        self.assertIn("absent-before.xml", result.stderr)
+
     def test_the_boiler_criteria_declare_that_they_do_not_always_run(self):
         """The specific case this machinery was built for.
 
@@ -187,13 +215,14 @@ class ConformanceCorpusTests(unittest.TestCase):
 
     def test_the_engine_gate_asks_for_the_executable_subset(self):
         roadmap = load()
-        expected = str(roadmap.conformance["executable_by_the_cpm_engine"])
+        expected = roadmap.conformance["executable_by_the_cpm_engine"]
         text = roadmap.gate_item("P1-G1")["text"]
-        self.assertIn(
-            expected,
-            text,
+        numbers = [int(value) for value in re.findall(r"\b(\d+)\b", text)]
+        self.assertEqual(
+            numbers,
+            [expected],
             "the P1 gate and the conformance block disagree on how many cases "
-            "the CPM engine must pass",
+            f"the CPM engine must pass: gate says {numbers}, data says {expected}",
         )
 
 

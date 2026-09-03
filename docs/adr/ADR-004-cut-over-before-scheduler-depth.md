@@ -11,9 +11,10 @@ unmaintained until everything before it is finished.
 
 Reading `docs/evidence/PARITY-CHECKLIST.md` against that order shows the
 ordering is accidental. Every item on the checklist is delivered by an earlier
-phase except two — raising a problem offline, and submitting a critical update
-against a work package. Levelling and operational constraints appear nowhere on
-it. They are the product's differentiators, not its parity bar, and the frozen
+phase except three — raising a problem offline, uploading evidence against a
+task, and submitting a critical update against a work package — and those three
+belong to two slices, problems-and-evidence and critical-watch. Levelling and
+operational constraints appear nowhere on it. They are the product's differentiators, not its parity bar, and the frozen
 repositories have neither, so deferring them cannot regress anything a user has
 today.
 

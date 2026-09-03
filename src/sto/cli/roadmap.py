@@ -47,6 +47,11 @@ def _status(args: argparse.Namespace) -> int:
         print("\nwaiting on")
         for dep in blocked:
             print(f"  {dep['id']:<22} {dep['what']}")
+    at_risk = roadmap.at_risk_for(*phase.get("slices", ()))
+    if at_risk:
+        print("\nat risk")
+        for dep in at_risk:
+            print(f"  {dep['id']:<22} {dep['what']}")
 
     print("\nrules")
     for rule in roadmap.rules:

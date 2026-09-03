@@ -1,5 +1,11 @@
 # Microsoft Project Progress Field Contract
 
+> Copied from `dezrobbo1/Shutdown-Tracker-Claude` (`origin/main`, blob
+> `a5432ce0…`). Every path below — `fixtures/project-files/boiler/` and the
+> candidate files — refers to **that** repository; the same bytes live outside
+> git here, recorded by hash in `fixtures/README.md`. Two summary-task names in
+> the rollup paragraph were replaced by their roles; nothing else is changed.
+
 Status: evidence-derived, 100%-complete case proven; partial-progress case pending.
 
 ## Source of evidence
@@ -94,7 +100,8 @@ Project-saved result (`boiler-roundtrip-project-saved-task43.xml`) shows:
   provides no evidence about scheduled-date movement; acceptance is evidenced by the exported
   progress surviving recalculation and save, and by Project rolling it up (below).
 - The only other progress in the file is rollup the legitimate recalculation set predicts:
-  summary ancestors ("Pre-Work" 2%, "Scaffold" 6%) and resource UID 4 (0% to 4% work complete).
+  summary ancestors (the phase summary at 2%, the parent work package at 6%) and resource UID 4
+  (0% to 4% work complete).
 
 Tasks with multiple assignments, or assignments with multiple timephased blocks, are not covered
 by this proof and need their own round-trip sample before the exporter's behavior on them is

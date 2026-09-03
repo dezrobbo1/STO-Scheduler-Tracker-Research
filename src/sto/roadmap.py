@@ -99,11 +99,26 @@ class Roadmap:
     def blockers_for(self, *refs: str) -> tuple[dict[str, Any], ...]:
         """Blocking dependencies that name any of these slice or criterion ids."""
 
+        return self._dependencies_for(BLOCKING_STATUSES, *refs)
+
+    def at_risk_for(self, *refs: str) -> tuple[dict[str, Any], ...]:
+        """Dependencies that exist but could be lost, naming any of these ids.
+
+        They do not hold a criterion open -- the thing is here -- but a gate
+        ritual that never mentioned them would let the one copy of an oracle
+        stay the one copy.
+        """
+
+        return self._dependencies_for(frozenset({"at_risk"}), *refs)
+
+    def _dependencies_for(
+        self, statuses: frozenset[str], *refs: str
+    ) -> tuple[dict[str, Any], ...]:
         wanted = set(refs)
         return tuple(
             dep
             for dep in self.dependencies
-            if dep["status"] in BLOCKING_STATUSES and wanted & set(dep["needed_by"])
+            if dep["status"] in statuses and wanted & set(dep["needed_by"])
         )
 
     def pending_rules(self) -> tuple[dict[str, Any], ...]:
@@ -354,10 +369,17 @@ def gate_checklist(roadmap: Roadmap, phase_id: str | None = None) -> str:
         for blocker in roadmap.blockers_for(item["id"]):
             lines.append(f"          BLOCKED by {blocker['id']}: {blocker['what']}")
 
-    blocked = roadmap.blockers_for(*phase.get("slices", ()), *(i["id"] for i in phase["gate"]))
+    refs = (*phase.get("slices", ()), *(i["id"] for i in phase["gate"]))
+    blocked = roadmap.blockers_for(*refs)
     if blocked:
         lines += ["", "External dependencies this phase waits on"]
         for dep in blocked:
+            lines.append(f"  {dep['id']}  {dep['what']}")
+            lines.append(f"          {dep['note']}")
+    at_risk = roadmap.at_risk_for(*refs)
+    if at_risk:
+        lines += ["", "At risk (not blocking, but this phase depends on it)"]
+        for dep in at_risk:
             lines.append(f"  {dep['id']}  {dep['what']}")
             lines.append(f"          {dep['note']}")
 

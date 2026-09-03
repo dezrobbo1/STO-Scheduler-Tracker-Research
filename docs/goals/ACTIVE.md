@@ -109,7 +109,7 @@ adapter and then named SAP PM, Maximo and Oracle EAM adapters; then **cut-over**
 then resource levelling and operational constraints.
 
 Cut-over comes before the levelling work, not after it. What the parity
-checklist asks for is problems and critical updates, not levelling, so putting
+checklist asks for is problems, evidence and critical updates, not levelling, so putting
 levelling first would leave `Shutdown-Tracker-Claude` deployed and unmaintained
 for the length of a slice it does not need (ADR-004). The differentiators are
 then built against a stack in use.

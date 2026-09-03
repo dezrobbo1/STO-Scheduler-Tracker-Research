@@ -29,12 +29,16 @@ totals are labelled as slice work with review and rework on top.
 
 ## Cut-over was queued behind work parity does not ask for
 
-`docs/evidence/PARITY-CHECKLIST.md` has fifteen items. Fourteen are delivered by
-the phases before the last one; the exceptions are problems-offline and critical
-updates, nine slice-days. Levelling and operational constraints appear on it
-nowhere, and the frozen repositories have neither — so deferring them regresses
-nothing anyone has today, while putting them first leaves a production system
-frozen and unmaintained for their duration.
+`docs/evidence/PARITY-CHECKLIST.md` has fifteen items. Twelve are delivered by
+the phases before the last one; the three exceptions — raising a problem
+offline, uploading evidence against a task, and submitting a critical update —
+are all owned by the problems-and-evidence slice and the critical-watch slice,
+nine slice-days between them. (First written as "fourteen" and "two"; the
+review caught the arithmetic, and a recount found evidence upload sitting in
+the same slice as problems.) Levelling and operational constraints appear on
+the checklist nowhere, and the frozen repositories have neither — so deferring
+them regresses nothing anyone has today, while putting them first leaves a
+production system frozen and unmaintained for their duration.
 
 Split, as ADR-004. Cut-over is its own phase and comes first; levelling and
 operational constraints follow, built against a stack in use.
