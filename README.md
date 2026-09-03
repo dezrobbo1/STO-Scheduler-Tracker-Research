@@ -22,6 +22,17 @@ PYTHONPATH=src python3 -m sto.cli reconcile earlier.xml later.xml
 `reconcile` answers the question a re-import actually raises: which rows carried
 their identity forward, which are new, and which the later file no longer has.
 
+## Where things are
+
+| | |
+|---|---|
+| What is being built now | `docs/goals/ACTIVE.md` |
+| Working mode and boundaries | `AGENTS.md` |
+| Decisions | `docs/adr/`, with `LEGACY-INDEX.md` mapping the frozen repositories' ADRs |
+| The full design | `docs/roadmap/CONSOLIDATION-PLAN.md` |
+| Native round-trip evidence | `docs/evidence/` |
+| Real schedules: hashes, provenance, recovery | `fixtures/README.md` |
+
 `sto.legacy` is the previous research importer and forward-pass engine, retained
 as the oracle the new engine and the MPXJ interchange service are checked
 against, and deleted once that cross-check is green.

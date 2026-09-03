@@ -2,7 +2,10 @@
 
 STO is becoming its own scheduler: import from a CMMS, Primavera P6 or Microsoft
 Project; track, manage and schedule in real time; export back to any of them.
-`AGENTS.md` holds the boundaries, `docs/adr/` the decisions.
+`AGENTS.md` holds the boundaries, `docs/adr/` the decisions, and
+`docs/roadmap/CONSOLIDATION-PLAN.md` the full design behind the summary below —
+the engine slices, field-mapping tables, CMMS mapping-profile schema, round-trip
+matrix and phase gates.
 
 Work is sequenced so that each slice ends with something demonstrable. Phases do
 not start until the previous gate passes.
@@ -78,3 +81,5 @@ PYTHONPATH=src python3 -m unittest discover -s tests
 
 The BOILER cases skip unless the real schedules are present; point
 `STO_BOILER_BEFORE` and `STO_BOILER_DAY5` at them to run the file oracle.
+`fixtures/README.md` records every file's hash, what it proves and how to
+recover it — including two that cannot be recovered and need backing up.
