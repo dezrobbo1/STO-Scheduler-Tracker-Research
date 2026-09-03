@@ -137,7 +137,6 @@ here so they are not rediscovered as surprises:
 | Summary-task constraints, deadlines, calendars, priority and custom fields are not retained on `WbsNode`. | S8, writeback |
 | `effort_driven` reads a key the importer never sets, so it is always `False`. | needs an importer change first |
 | Activity business keys (Work Order / Operation) are not passed to `IdentityMap.resolve`, so the documented fallback never fires. | the assignment-identity item above |
-| `schedule_id` is re-derived from the file hash when a project has no GUID, even when an `IdentityMap` was supplied. | edge case; no such file yet |
 | Fractional durations (`PT0.5S`) truncate to zero rather than failing. | no real file exercises it |
 | `scripts/compare_calculation_profiles.py` imports `sto.legacy`, which pre-consolidation checkouts do not have. | research script |
 
