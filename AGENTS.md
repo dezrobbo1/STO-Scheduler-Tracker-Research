@@ -103,11 +103,21 @@ experimental code solely because it might be reused.
 - Schema changes are new versioned files under `infra/migrations/`; never
   rewrite an applied one. **(pending — PR-migrations)**
 - No history rewriting, force-pushes, or merging without explicit instruction.
-- Automated review is advisory. One pass per capability change; classify each
-  finding fix-now / defer / reject; verify it against the code first, because
-  grade has not tracked severity. No clean-review loops, and never buy an
-  unobserved edge case at the cost of a new way for a real schedule to stop
-  importing.
+- Automated review is advisory and bounded by the declared PR outcome and the
+  current milestone. One review pass per capability change; classify each
+  finding fix-now / defer / reject and verify it against the code first, because
+  grade has not tracked severity. A finding blocks merge only when it exposes a
+  regression caused by the PR, violates an invariant or acceptance criterion the
+  PR claims to establish, can corrupt source or user data, lose state, create a
+  false success or security risk, or materially block the current milestone.
+  Later-roadmap ownership does not override those blocker categories; if one is
+  present it is fix-now even when the complete feature belongs to a later slice.
+  Other findings owned by later roadmap slices are deferred, not blockers;
+  record a material deferred item once and do not repeatedly reopen it in the
+  same PR. Review is complete only when every fix-now finding is resolved, every
+  remaining finding is legitimately deferred or rejected, acceptance criteria
+  pass and CI is green. No clean-review loops, and never buy an unobserved edge
+  case at the cost of a new way for a real schedule to stop importing.
 - **A diagnosis is a claim.** Before writing down why a number is what it is,
   measure the explanation against the data — including by checking that the
   proposed fix would actually change it. Twice now a confident cause has been
@@ -124,8 +134,9 @@ python3 -m compileall -q src
 git diff --check
 ```
 
-Six cases exercise real schedules and **skip silently** when they are absent, so
-a green run does not by itself mean the file oracle ran. To include them:
+Real-schedule oracle cases exercise real schedules and **skip silently** when
+they are absent, so a green run does not by itself mean the file oracle ran. To
+include them:
 
 ```bash
 export STO_BOILER_BEFORE=/path/to/boiler-before-no-progress.xml
