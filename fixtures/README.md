@@ -32,7 +32,7 @@ file**. Any evidence claim must name which one it used.
 
 | SHA-256 (first 16) | File | Bytes | What it is |
 |---|---|---|---|
-| `e6a3739976580e21` | `boiler-untouched-source.xml` | 3,734,688 | The untouched source cited by **both** `STO` phase-1 calculation evidence and `Shutdown-Tracker`'s native round-trip register. Same status date and build as the day-5 candidate, which is its progressed successor; no progress. What `STO_BOILER_UNTOUCHED` points at — the control for the GUID-stability measurement. Recovered 2026-09-03; see below. |
+| `e6a3739976580e21` | `boiler-untouched-source.xml` | 3,734,688 | The untouched source cited by **both** `STO` phase-1 calculation evidence and `Shutdown-Tracker`'s native round-trip register. 555 tasks, 472 assignments, `StatusDate 2025-05-09T17:00:00`, no progress, build `16.0.20131.20152` — the same status date and build as the day-5 candidate, which is its progressed successor. What `STO_BOILER_UNTOUCHED` points at — the control for the GUID-stability measurement. Recovered 2026-09-03; see below. |
 | `e9b9b7994cc5cc50` | `boiler-before-no-progress.xml` | 3,361,935 | ST-Claude's committed no-progress fixture. What `STO_BOILER_BEFORE` points at. |
 | `9fabe70debd004ac` | `boiler-after-native-progress.xml` | 3,871,501 | The same schedule after Microsoft Project natively completed task UIDs 43, 318, 319. The genuine Project-recalculation oracle for engine slice S5. |
 | `7dcd4d828944db9b` | `boiler-roundtrip-candidate-task43.xml` | 3,264,344 | The generated candidate. Hash matches ST-Claude's evidence record `RT-2026-08-28-BOILER-43` exactly. |
@@ -46,10 +46,21 @@ file**. Any evidence claim must name which one it used.
 — the single point where two independently produced evidence lines meet. Until
 2026-09-03 it was on no machine and in no repository. It was recovered from the
 user's Shutdown Tracker source-consolidation package (dated 2026-08-28, folder
-`03_ms_project_fixtures`), whose own manifest records the same full SHA-256.
-The calculation evidence and the native round-trip evidence can now be compared
-against their common baseline. Recovery route if lost again: that package, or
-ask for the original extract by hash.
+`03_ms_project_fixtures`, original name `NEW_6477046-BOILER-WG110-BLB001(1).xml`),
+where the package's own `MANIFEST.csv` records the same full SHA-256. The
+calculation evidence and the native round-trip evidence can now be compared
+against their common baseline.
+
+### Two other real schedules and a native `.mpp`, from the same package
+
+Not BOILER, not previously seen by any test here, and no progress recorded in any
+of them. Same policy: outside git, recorded by hash.
+
+| SHA-256 (first 16) | File | Bytes | What it is |
+|---|---|---|---|
+| `b7c14b631ecc7c15` | `kiln-wg047k-source.xml` | 3,474,383 | KILN work group: 518 tasks, 69 resources, 588 assignments, build `16.0.19822.20180`. A second site's calendar and resourcing conventions. |
+| `e952764512ae718e` | `calciner-wg050-source.xml` | 14,280,544 | CALCINER work group: 1,982 tasks, 58 resources, 3,114 assignments, build `16.0.19530.20226`. The largest real schedule available — three and a half times BOILER — and the first real scale test for the engine and the live loop. |
+| `14d60d31ae5adf00` | `sample.mpp` | 352,256 | A native `.mpp`. The first on this machine; what the `.mpp` import criterion can be crossed on. |
 
 ### One warning
 `boiler-before-no-progress.xml` is a *different* file and is not a substitute.

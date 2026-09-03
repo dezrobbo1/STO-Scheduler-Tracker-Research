@@ -47,7 +47,7 @@ criterion a blocked dependency names cannot be marked met.
 | `DEP-CMMS-EXTRACT` — A real CMMS extract - SAP IW37N/IW39, Maximo WOTRACK or Oracle eAM operations - even anonymised | blocked | I11, I12 | — |
 | `DEP-PROJECT-SESSION` — A Windows machine running Microsoft Project, for one native session per evidence register entry | available | I13, P3-G5 | — |
 | `DEP-SITE-TEMPLATES` — The site's own confirmation-upload template for whichever CMMS is first | blocked | I11 | — |
-| `DEP-UNTOUCHED-SOURCE` — The untouched BOILER source e6a3739976580e21 that both evidence lines cite | blocked | I13 | — |
+| `DEP-UNTOUCHED-SOURCE` — The untouched BOILER source e6a3739976580e21 that both evidence lines cite | available | I13 | 2026-09-03 |
 | `DEP-DAY5-BACKUP` — A durable off-machine copy of the day-5 candidate schedule, the only progress oracle | at risk | S5, P1-G2 | — |
 
 <!-- roadmap:end dependencies -->

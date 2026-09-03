@@ -128,3 +128,33 @@ held no stashes, and its one apparently-local branch was already contained in a
 remote branch, so nothing existed only there. `Shutdown-Tracker-Claude` keeps a
 remote named `legacy` pointing at that path; it is now dangling, and was left
 alone because that repository is frozen.
+
+## Later the same day: the missing source turns up, and the merged PR carries a defect
+
+The user shared two archives of project sources. One is a consolidation of the
+Shutdown Tracker research material, and its `03_ms_project_fixtures` folder
+holds `e6a3739976580e21` — the untouched BOILER source that both evidence lines
+cite, listed above as missing from every machine and repository. Its SHA-256
+matches `results/phase1/*.json` and the frozen native round-trip register to
+the last character. The dependency is closed; the two evidence lines finally
+share a baseline. The same folder carried two more real schedules, KILN and
+CALCINER, and a native `.mpp` — the first of each. CALCINER is 1,982 tasks and
+3,114 assignments, three and a half times BOILER, which makes it the first real
+scale test the engine and the live loop will face. All four are now beside the
+BOILER family outside git, read-only, recorded in `fixtures/README.md`.
+
+The archives also settle a question about `dezrobbo1/PM-Software`: it has been
+reset into proof-of-concept mode with an explicit instruction not to restart
+semantic-parity programmes or evidence registers. Its conformance corpus is
+therefore frozen at the commit pinned above and will not be maintained there.
+That is what the pin was for.
+
+PR #22 was merged at `bccc370` with a review finding still open: an
+external-UID match that never compares GUIDs, so a reused UID with a different
+GUID would be matched and both GUIDs bound to one canonical identity. PR #23
+then added a review-boundary rule to `AGENTS.md` under which that reads as a
+blocker. It was taken up as one — and the fix written for it matched nothing on
+the real BOILER pair, because Microsoft Project regenerates every task GUID
+between saves. The finding was rejected on measurement and its valid half
+shipped instead. That story is
+`docs/history/2026-09-03-a-conflict-rule-measured-and-withdrawn.md`.

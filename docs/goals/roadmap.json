@@ -62,12 +62,12 @@
     {
       "id": "DEP-UNTOUCHED-SOURCE",
       "what": "The untouched BOILER source e6a3739976580e21 that both evidence lines cite",
-      "status": "blocked",
+      "status": "available",
       "needed_by": [
         "I13"
       ],
-      "note": "Missing from this machine and from every repository. Until it is recovered the calculation evidence and the native round-trip evidence have no common baseline. fixtures/README.md records the hash.",
-      "asked_on": null
+      "note": "Recovered 2026-09-03 from the Shutdown Tracker source-consolidation package (03_ms_project_fixtures); SHA-256 matches results/phase1 and the frozen native round-trip register exactly. It sits with the other real schedules outside git; fixtures/README.md has the hash and provenance.",
+      "asked_on": "2026-09-03"
     },
     {
       "id": "DEP-DAY5-BACKUP",
