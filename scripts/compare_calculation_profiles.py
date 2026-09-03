@@ -9,10 +9,10 @@ import sys
 import tempfile
 from typing import Any
 
-from sto_scheduler_core.profile_comparison import (
+from sto.legacy.profile_comparison import (
     build_sanitized_profile_comparison,
 )
-from sto_scheduler_core.provenance import canonical_sha256
+from sto.legacy.provenance import canonical_sha256
 
 
 _PIPELINE_SNIPPET = r"""
@@ -20,8 +20,8 @@ from pathlib import Path
 import json
 import sys
 
-from sto_scheduler_core import import_mspdi
-from sto_scheduler_core.calculation_profile import (
+from sto.legacy import import_mspdi
+from sto.legacy.calculation_profile import (
     build_calculation_profile,
     build_engine_projection,
     calculate_forward_schedule,

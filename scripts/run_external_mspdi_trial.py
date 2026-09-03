@@ -4,8 +4,8 @@ import argparse
 import json
 from pathlib import Path
 
-from sto_scheduler_core import canonical_sha256, import_mspdi, inventory_mspdi
-from sto_scheduler_core.provenance import canonical_json_bytes
+from sto.legacy import canonical_sha256, import_mspdi, inventory_mspdi
+from sto.legacy.provenance import canonical_json_bytes
 
 
 def main() -> int:

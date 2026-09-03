@@ -4,7 +4,7 @@ import json
 import unittest
 from pathlib import Path
 
-from sto_scheduler_core import import_mspdi, validate_canonical_schedule
+from sto.legacy import import_mspdi, validate_canonical_schedule
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURE = ROOT / "tests" / "fixtures" / "synthetic-basic.mspdi.xml"

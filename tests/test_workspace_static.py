@@ -6,13 +6,13 @@ from pathlib import Path
 import re
 import unittest
 
-from sto_scheduler_core.cli import build_parser
+from sto.legacy.cli import build_parser
 
 
 STATIC_DIR = (
     Path(__file__).parents[1]
     / "src"
-    / "sto_scheduler_core"
+    / "sto" / "legacy"
     / "workspace_static"
 )
 
@@ -59,7 +59,7 @@ class WorkspaceStaticContractTests(unittest.TestCase):
         self.assertEqual(parser.asset_urls, ["/styles.css", "/app.js"])
         self.assertNotRegex(self.styles, r"https?:|@import")
 
-        package = resources.files("sto_scheduler_core").joinpath("workspace_static")
+        package = resources.files("sto.legacy").joinpath("workspace_static")
         for filename in ("index.html", "styles.css", "app.js"):
             with self.subTest(filename=filename):
                 self.assertTrue(package.joinpath(filename).is_file())

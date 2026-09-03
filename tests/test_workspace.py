@@ -6,8 +6,8 @@ from pathlib import Path
 import unittest
 
 from calculation_fixture import _activity, _calendar, _document, _relationship
-from sto_scheduler_core import canonical_sha256, import_mspdi
-from sto_scheduler_core.workspace import (
+from sto.legacy import canonical_sha256, import_mspdi
+from sto.legacy.workspace import (
     WORKSPACE_EXPORT_PROFILE,
     WORKSPACE_PROFILE,
     WorkspaceScenarioError,

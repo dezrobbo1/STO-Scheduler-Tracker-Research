@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import unittest
 
-from sto_scheduler_core.calculation_profile import (
+from sto.legacy.calculation_profile import (
     CalculationProfileError,
     PROFILE_VERSION,
     build_calculation_profile,

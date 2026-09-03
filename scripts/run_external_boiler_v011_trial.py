@@ -10,8 +10,8 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from sto_scheduler_core import canonical_sha256, import_mspdi  # noqa: E402
-from sto_scheduler_core.calculation_eligibility import (  # noqa: E402
+from sto.legacy import canonical_sha256, import_mspdi  # noqa: E402
+from sto.legacy.calculation_eligibility import (  # noqa: E402
     classify_calculation_eligibility,
     sanitized_eligibility_evidence,
 )

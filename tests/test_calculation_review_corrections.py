@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from sto_scheduler_core.calculation_profile import build_calculation_profile
+from sto.legacy.calculation_profile import build_calculation_profile
 
 from calculation_fixture import _activity, _calendar, _document, _duration
 
