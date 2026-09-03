@@ -221,11 +221,29 @@ def _reconcile(args: argparse.Namespace) -> int:
     return 0
 
 
+def _serve(args: argparse.Namespace) -> int:
+    try:
+        from sto.api.app import serve
+    except ImportError as error:
+        raise SystemExit(
+            f"the API needs the 'api' extra ({error.name} is missing): uv sync --extra api"
+        ) from None
+    serve(host=args.host, port=args.port)
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="sto", description="STO canonical schedule tooling"
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
+
+    serve = subparsers.add_parser("serve", help="Run the API (needs the 'api' extra)")
+    serve.add_argument("--host", default="127.0.0.1")
+    serve.add_argument(
+        "--port", type=int, default=8092, help="8090 is the deployed Java API until cut-over"
+    )
+    serve.set_defaults(handler=_serve)
 
     canonicalise = subparsers.add_parser(
         "canonicalise", help="Read a schedule and emit the canonical v1 document"

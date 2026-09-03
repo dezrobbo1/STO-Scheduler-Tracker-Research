@@ -17,18 +17,16 @@ not start until the previous gate passes.
 <!-- roadmap:begin now -->
 <!-- generated from docs/goals/roadmap.json by `sto roadmap render`; edit the JSON, not this -->
 
-**P0 — Monorepo and spine model** (in progress; 5 of 6 gate criteria met)
+**P1 — Engine and interchange spine** (in progress; 0 of 6 gate criteria met)
 
 | | Gate criterion | Shown by |
 |---|---|---|
-| ✓ | The canonical document round-trips exactly on both real BOILER snapshots | `tests/test_canonical_model.py` ‡ |
-| ✓ | Two imports of one file hash identically, and a later snapshot keeps the identifiers of every row whose source UID survived | `docs/history/2026-09-02-consolidation-and-canonical-model.md` |
-| ✓ | Every row the reconciliation reports as new or missing is attributable to a difference between the source documents, not to identity | `tests/test_canonical_model.py` ‡ |
-| · | Two schedules import into two projects and survive a restart with identical hashes | — |
-| ✓ | The unittest suite and compileall are green on the declared Python floor | `.github/workflows/ci.yml` |
-| ✓ | Every statement in AGENTS.md is either durable or machine-checked | `tests/test_governance_references.py` |
-
-‡ the real BOILER schedules live outside the repository, so this evidence does not execute in CI unless they are present; set `STO_REQUIRE_BOILER=1` to make their absence a failure rather than a skip.
+| · | The 47 executable conformance cases pass, byte-identically across three processes | — |
+| · | Both BOILER snapshots: every leaf activity gets a disposition, and no difference is UNEXPLAINED across start, finish, late dates, float and criticality | — |
+| · | The genuine Project-recalculation oracle (before to after-native-progress) reports zero unexpected differences | — |
+| · | The Python importer and the MPXJ sidecar produce identical canonical output on every fixture | — |
+| · | A native .mpp file imports | — |
+| · | No route accepts a trusted actor header | — |
 
 <!-- roadmap:end now -->
 
@@ -72,33 +70,46 @@ activities shared between the snapshots keep their identifiers while 18 new and
 13 departed rows are reported rather than conflated. `sto canonicalise` and
 `sto reconcile` expose it.
 
-## Now: finish Phase 0, then the engine spine
+**Persistence and multi-project (PL1).** PostgreSQL on the existing loopback
+instance, a new `sto` database, and one migration: projects, source files,
+import batches, and the schedule-version envelope — immutable versions with
+the full canonical document and identity map, a movable head per kind
+(ADR-007). FastAPI over it: create projects, upload a schedule, read the head.
+The working model is rebuilt from heads at boot and every load recomputes the
+document's hash from what PostgreSQL returns; a version that does not hash to
+what it says is reported by health and refused, not served. The gate — two
+schedules, two projects, a restart, identical hashes — is held by
+`tests/test_persistence_gate.py` on synthetic files in CI and on the BOILER pair
+here, where the recorded reconciliation counts come through the database
+unchanged. Third-party packages arrived behind the `api` extra; the bare suite
+and CI job stay stdlib-only (ADR-005). `sto serve` runs it on 8092 — 8090 is
+the deployed Java API until cut-over.
 
-1. **Explain the reconciliation counts, don't re-key them.** `sto reconcile`
-   over the two BOILER snapshots gives assignments 341 matched against 136 new
-   and 131 missing. That was first read as Microsoft Project renumbering
-   assignment UIDs, calling for a `(task UID, resource UID)` business key.
-   Measured, that key matches exactly the rows the UID already matches, on both
-   available file pairs — necessarily, because the importer derives both halves
-   of it from those UIDs. The split is real churn: of the 131, five are
-   unassigned placeholders, thirteen belong to a task that also went, and the
-   rest sit on tasks that survived while their resourcing changed. Identity is
-   working. What is owed is the guard that keeps it honest, which
-   `tests/test_canonical_model.py` now carries.
-2. **Persistence and multi-project.** PostgreSQL, schedule versions with a
-   movable head, FastAPI on 8090. Two files import into two projects and survive
-   a restart with identical hashes. Versions, heads and the stored document
-   only: the per-activity projection of early and late dates, float and
-   criticality waits for the passes that give those columns a meaning (ADR-006).
-   Third-party packages arrive here, behind the `api` extra — the base package,
-   the suite and CI stay stdlib-only (ADR-005).
-3. **Real authentication.** Password with TOTP, server sessions, device tokens
+## Now: the engine and interchange spine
+
+Phase 0 passed on 2026-09-03 with every criterion crossed on its inputs
+present. Phase 1 is the engine, the sidecar, and real authentication, in this
+order:
+
+1. **Calendars** compiled with exceptions applied, and interval arithmetic
+   lifted from the conformance corpus's reference implementation.
+2. **Forward pass** over all four relationship types with signed lag, run
+   against the corpus and the BOILER file oracle with every difference
+   classified.
+3. **Backward pass, float and criticality**, against the stored late dates and
+   slack of both BOILER snapshots.
+4. **Status date and progress** — retained logic and progress override —
+   against the day-5 candidate and the genuine Project-recalculation pair.
+5. **WBS rollup, the eligibility re-partition and an independent validator.**
+6. **The MPXJ sidecar** carried from the frozen repository, widened to emit the
+   full canonical document, cross-checked against the Python importer on every
+   fixture — and the first native `.mpp` import, for which a file now exists.
+7. **Real authentication.** Password with TOTP, server sessions, device tokens
    for the field app. No route accepts a trusted actor header.
 
-Then the engine, in order: calendars compiled with exceptions applied; forward
-pass over all four relationship types with signed lag; backward pass, float and
-criticality; status date and progress; WBS rollup, the eligibility re-partition
-and an independent validator.
+The engine's first slice is where the previously recorded gap about calendar
+exceptions being flattened is paid; the criticality-threshold gap is paid in
+the third.
 
 ## Next: the rest of the roadmap
 
@@ -136,7 +147,7 @@ asks for the rule to be promoted, so none of this depends on anyone remembering.
 | `PR-conformance-suite` | S3 | pending | src/sto/conformance exists |
 | `PR-evidence-register` | I13 | pending | docs/evidence/register.json exists |
 | `PR-approved-forecast` | PL6 | pending | sto.execution.review imports |
-| `PR-migrations` | PL1 | pending | infra/migrations exists |
+| `PR-migrations` | PL1 | live | `tests/test_migrations_are_immutable.py` |
 | `PR-legacy-retirement` | I4 | pending | src/sto/interchange exists |
 
 <!-- roadmap:end rules -->

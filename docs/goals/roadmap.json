@@ -1,7 +1,7 @@
 {
   "schema_version": "sto-roadmap-1",
   "note": "Time-varying truth: phases, slices, gate criteria and the rule registry. AGENTS.md holds the durable rules; docs/roadmap/CONSOLIDATION-PLAN.md is the frozen design record and does not describe current status. The generated regions of docs/goals/ACTIVE.md come from here - run `sto roadmap render` after editing.",
-  "current_phase": "P0",
+  "current_phase": "P1",
   "foreign_prefixes": [
     "dezrobbo1/",
     "~/"
@@ -85,7 +85,7 @@
     {
       "id": "P0",
       "title": "Monorepo and spine model",
-      "status": "in_progress",
+      "status": "passed",
       "slices": [
         "S1",
         "PL1"
@@ -120,8 +120,12 @@
         {
           "id": "P0-G4",
           "text": "Two schedules import into two projects and survive a restart with identical hashes",
-          "met": false,
-          "evidence": null
+          "met": true,
+          "evidence": "tests/test_persistence_gate.py",
+          "evidence_conditional": {
+            "env": "STO_REQUIRE_DB",
+            "why": "it needs a PostgreSQL and the api extra, so it runs in the api CI job and locally, not in the bare suite"
+          }
         },
         {
           "id": "P0-G5",
@@ -140,7 +144,7 @@
     {
       "id": "P1",
       "title": "Engine and interchange spine",
-      "status": "not_started",
+      "status": "in_progress",
       "slices": [
         "S2",
         "S3",
@@ -380,7 +384,7 @@
       "id": "PL1",
       "title": "Persistent multi-project workspace",
       "phase": "P0",
-      "status": "not_started",
+      "status": "done",
       "days": 4
     },
     {
@@ -668,12 +672,12 @@
       "id": "PR-migrations",
       "summary": "Schema changes are new versioned files under infra/migrations; an applied migration is never rewritten",
       "owed_to": "PL1",
-      "status": "pending",
+      "status": "live",
       "live_when": {
         "kind": "path_exists",
         "path": "infra/migrations"
       },
-      "enforced_by": null
+      "enforced_by": "tests/test_migrations_are_immutable.py"
     },
     {
       "id": "PR-legacy-retirement",
