@@ -6,6 +6,44 @@ on:
   pull_request:
 
 jobs:
+  api:
+    # The persistence gate: needs PostgreSQL and the api extra. The bare job
+    # below proves the suite still runs with nothing installed.
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports: ["5433:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --frozen --extra api --extra test
+      - name: persistence gate and the rest of the suite, with absence a failure
+        env:
+          STO_REQUIRE_DB: "1"
+          STO_TEST_ADMIN_URL: postgresql://postgres@127.0.0.1:5433/postgres
+        run: PYTHONPATH=src .venv/bin/python -m unittest discover -s tests -v
+      - name: migrations apply cleanly and the drift guard is green on a fresh database
+        env:
+          PGHOST: 127.0.0.1
+          PGPORT: "5433"
+          PGUSER: postgres
+          PGDATABASE: sto_ci
+        run: |
+          psql -d postgres -c 'CREATE DATABASE sto_ci'
+          scripts/db/apply-migrations.sh
+          scripts/db/check-schema-drift.sh
+
   test:
     runs-on: ubuntu-latest
     strategy:

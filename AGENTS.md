@@ -29,10 +29,12 @@ hash-recorded file* is different: it is evidence, it belongs in an ADR or
   MPXJ worker are running, and `~/shutdown-tracker-deploy/redeploy.sh` builds
   from that working copy. It stays deployed and unmodified until this repository
   passes `docs/evidence/PARITY-CHECKLIST.md`. Read it; do not change it.
-- **`dezrobbo1/Shutdown-Tracker` is frozen.** Read its current state through
-  `gh api`, not from the local clone, which predates its 2026-08-27 reset.
-- `dezrobbo1/PM-Software` continues as independent research and supplies the
-  semantic conformance suite. Do not fold it in.
+- **`dezrobbo1/Shutdown-Tracker` is frozen.** Read it through `gh api`; there
+  is no local clone any more, and the one there was predated its 2026-08-27
+  reset.
+- `dezrobbo1/PM-Software` continues as independent proof-of-concept research.
+  Its semantic conformance corpus is taken at the commit pinned in
+  `docs/history/`; it is not maintained there and is not folded in.
 
 ## The boundaries that matter
 
@@ -105,7 +107,9 @@ experimental code solely because it might be reused.
   on it. It is deleted when that cross-check is green on every fixture.
   **(pending — PR-legacy-retirement)**
 - Schema changes are new versioned files under `infra/migrations/`; never
-  rewrite an applied one. **(pending — PR-migrations)**
+  rewrite an applied one. `infra/migrations/CHECKSUMS` pins each file and
+  `tests/test_migrations_are_immutable.py` holds it to that;
+  `scripts/db/apply-migrations.sh` refuses a changed file at the database.
 - No history rewriting, force-pushes, or merging without explicit instruction.
 - Automated review is advisory and bounded by the declared PR outcome and the
   current milestone. One review pass per capability change; classify each
@@ -158,6 +162,17 @@ export STO_REQUIRE_BOILER=1     # their absence now fails instead of skipping
 Cross a phase gate with `STO_REQUIRE_BOILER=1` set. `docs/goals/roadmap.json`
 records which criteria depend on evidence that does not always execute, and
 `sto roadmap status` and `sto roadmap gate` say so.
+
+The persistence and API tests need a PostgreSQL and the `api` extra (ADR-005);
+in the bare suite they skip. To run them, and to make their absence a failure:
+
+```bash
+uv sync --extra api --extra test
+STO_REQUIRE_DB=1 PYTHONPATH=src .venv/bin/python -m unittest discover -s tests
+```
+
+They create and drop their own database on the server named by
+`STO_TEST_ADMIN_URL` (default: the local loopback instance on 5433).
 
 Manual native verification in Microsoft Project or P6 is required for handoff
 milestones and cannot be replaced by a smoke script.
