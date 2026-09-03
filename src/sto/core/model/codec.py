@@ -113,9 +113,15 @@ def decode_value(annotation: Any, value: Any) -> Any:
         if annotation is datetime:
             return datetime.fromisoformat(str(value))
         if annotation is bool:
-            return bool(value)
+            # Never coerce: bool("false") is True, so a version-skewed or
+            # hand-edited document would decode to the opposite meaning.
+            if not isinstance(value, bool):
+                raise CodecError(f"expected a boolean, got {value!r}")
+            return value
         if annotation is int:
-            return int(value)
+            if isinstance(value, bool) or not isinstance(value, int):
+                raise CodecError(f"expected an integer, got {value!r}")
+            return value
         if annotation is str:
             return str(value)
         if is_dataclass(annotation):
@@ -152,4 +158,20 @@ def encode_schedule(schedule: _entities.Schedule) -> dict[str, Any]:
 
 
 def decode_schedule(payload: dict[str, Any]) -> _entities.Schedule:
+    """Decode a whole schedule, checking the discriminator first.
+
+    ``encode_schedule`` always writes ``schema_version`` because a reader needs
+    it before it can interpret anything else. Honouring that means refusing a
+    document that omits it or declares a version this code does not implement,
+    rather than reflectively decoding a future document under v1 semantics.
+    """
+
+    version = payload.get("schema_version")
+    if version is None:
+        raise CodecError("document has no schema_version")
+    if version != _entities.SCHEMA_VERSION:
+        raise CodecError(
+            f"unsupported schema_version {version!r}; this build reads "
+            f"{_entities.SCHEMA_VERSION!r}"
+        )
     return decode(_entities.Schedule, payload)

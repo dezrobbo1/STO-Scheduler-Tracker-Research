@@ -20,6 +20,7 @@ from uuid import UUID
 
 from ..enums import (
     ActivityKind,
+    BaselineKind,
     CalendarType,
     ConstraintType,
     DurationType,
@@ -38,6 +39,8 @@ from ..enums import (
 from ..entities import (
     Activity,
     Assignment,
+    Baseline,
+    BaselineActivityState,
     Calendar,
     CalendarException,
     CalendarWeekDay,
@@ -65,7 +68,7 @@ SUPPORTED_IMPORTER_PROFILES = frozenset({"mspdi-import-v0.1.1"})
 #: Microsoft ``Task/Type``. Fixed Units is the Project default.
 _MS_TASK_TYPE: dict[int, DurationType] = {
     0: DurationType.FIXED_UNITS,
-    1: DurationType.FIXED_DURATION_AND_UNITS,
+    1: DurationType.FIXED_DURATION,
     2: DurationType.FIXED_WORK,
 }
 
@@ -208,6 +211,20 @@ def _constraint(row: dict[str, Any]) -> Constraint | None:
     )
 
 
+def _resource_type(code: Any) -> ResourceType:
+    """Microsoft ``Resource/Type``: 0 material, 1 work, 2 cost.
+
+    Written out rather than defaulted with ``or``, because ``0 or 1`` is 1 and
+    would silently reclassify every material resource as labour.
+    """
+
+    if code is None:
+        return ResourceType.LABOR
+    return {0: ResourceType.MATERIAL, 1: ResourceType.LABOR}.get(
+        int(code), ResourceType.NONLABOR
+    )
+
+
 def _percent(row: dict[str, Any]) -> PercentComplete:
     return PercentComplete(
         type=PercentCompleteType.DURATION,
@@ -262,6 +279,7 @@ def migrate(
     if identity is None:
         identity = IdentityMap(schedule_id=resolved_id, system=system)
     entries: list[ReconciliationEntry] = []
+    seen: dict[EntityKind, list[str]] = {}
 
     def uid_for(kind: EntityKind, row: dict[str, Any], external_uid: str | None = None) -> UUID:
         external = external_uid if external_uid is not None else _external(row, "UID")
@@ -269,6 +287,7 @@ def migrate(
             external = str(row.get("id"))
         uid, entry = identity.resolve(kind, external, guid=_external(row, "GUID"))
         entries.append(entry)
+        seen.setdefault(kind, []).append(entry.external_uid)
         return uid
 
     # --- calendars -------------------------------------------------------
@@ -420,8 +439,20 @@ def migrate(
             # The importer already refuses documents with dangling endpoints;
             # a survivor here would be a defect, not data.
             continue
-        uid, entry = identity.resolve(EntityKind.RELATIONSHIP, str(row.get("id")))
+        # The importer's id is ``relationship:{successor}:{ordinal}``, and the
+        # ordinal shifts when a link is inserted ahead of an existing one, so it
+        # cannot carry identity across snapshots. A relationship is identified
+        # by what it connects and how.
+        relationship_key = "|".join(
+            (
+                str(row.get("predecessor_ref")),
+                str(row.get("successor_ref")),
+                str(row.get("type")),
+            )
+        )
+        uid, entry = identity.resolve(EntityKind.RELATIONSHIP, relationship_key)
         entries.append(entry)
+        seen.setdefault(EntityKind.RELATIONSHIP, []).append(entry.external_uid)
         lag_seconds = int(row.get("lag_seconds") or 0)
         lag_format = row.get("lag_format_source")
         relationships.append(
@@ -458,9 +489,7 @@ def migrate(
                 uid=uid,
                 name=row.get("name") or "",
                 code=row.get("initials"),
-                type=ResourceType.LABOR
-                if int(row.get("source_resource_type") or 1) == 1
-                else ResourceType.MATERIAL,
+                type=_resource_type(row.get("source_resource_type")),
                 scheduling_class=SchedulingClass.RENEWABLE,
                 max_units_permille=None if max_units is None else _permille(max_units * 100),
                 calendar_uid=calendar_uid_by_ref.get(str(calendar_ref)) if calendar_ref else None,
@@ -497,6 +526,48 @@ def migrate(
                 percent_work_complete_permille=_permille(row.get("percent_work_complete_source")),
                 unassigned_placeholder=resource_ref is None,
                 external_refs=(_ref(system, row, snapshot_sha),),
+            )
+        )
+
+    # --- baselines -------------------------------------------------------
+    # Grouped by slot: Microsoft carries eleven, and each is a separate set of
+    # captured activity states rather than a bag of key-value pairs.
+    baseline_rows: dict[int, list[dict[str, Any]]] = {}
+    for row in document.get("baselines", []):
+        baseline_rows.setdefault(int(row.get("number") or 0), []).append(row)
+
+    baselines: list[Baseline] = []
+    for number, rows in sorted(baseline_rows.items()):
+        states: list[BaselineActivityState] = []
+        for row in rows:
+            owner = node_uid.get(str(row.get("owner_ref")))
+            if owner is None:
+                continue
+            values = row.get("values", {})
+            duration = _duration(values.get("duration"))
+            work = _duration(values.get("work"))
+            states.append(
+                BaselineActivityState(
+                    activity_uid=owner,
+                    start=_dt(values.get("start")),
+                    finish=_dt(values.get("finish")),
+                    duration_seconds=None if duration is None else duration.seconds,
+                    work_seconds=None if work is None else work.seconds,
+                )
+            )
+        baseline_uid, entry = identity.resolve(
+            EntityKind.BASELINE, f"ms-baseline-{number}"
+        )
+        entries.append(entry)
+        seen.setdefault(EntityKind.BASELINE, []).append(entry.external_uid)
+        baselines.append(
+            Baseline(
+                uid=baseline_uid,
+                name=f"Baseline {number}" if number else "Baseline",
+                kind=BaselineKind.MS_BASELINE,
+                number=number,
+                source_snapshot_id=str(source.get("sha256") or ""),
+                activity_states=tuple(states),
             )
         )
 
@@ -559,5 +630,13 @@ def migrate(
         resources=tuple(resources),
         assignments=tuple(assignments),
         udf_definitions=tuple(udf_definitions),
+        baselines=tuple(baselines),
     )
+
+    # Rows the identity map knows but this document did not carry. Without
+    # these the serialised report always says missing == 0 and disagrees with
+    # what the command line prints.
+    for kind, external_uids in seen.items():
+        entries.extend(identity.missing_since(kind, external_uids))
+
     return schedule, identity, ReconciliationReport(resolved_id, tuple(entries))

@@ -71,7 +71,7 @@ The canonical import remains immutable. A duration scenario changes a copy of th
 
 ### Run the workspace
 
-Python 3.11 or newer is required. From the repository root:
+Python 3.12 or newer is required. From the repository root:
 
 ```bash
 python -m pip install -e .

@@ -276,3 +276,106 @@ class BoilerSnapshotTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ReviewFollowUpTests(unittest.TestCase):
+    """Regressions for defects found by automated review of PR #22.
+
+    Each was verified against the code before being acted on; the findings that
+    would have made the migration refuse real files are recorded in
+    ``docs/goals/ACTIVE.md`` against the slice that owns them instead.
+    """
+
+    def test_rekeying_retires_the_old_external_key(self):
+        """Otherwise a rekeyed row is reported as rekeyed *and* missing, and a
+        reused UID would later resolve to the wrong entity."""
+
+        identity = IdentityMap("s", SourceSystem.MICROSOFT_PROJECT)
+        identity.resolve(EntityKind.ACTIVITY, "43", guid="G-43")
+        identity.resolve(EntityKind.ACTIVITY, "9043", guid="G-43")
+        missing = identity.missing_since(EntityKind.ACTIVITY, ["9043"])
+        self.assertEqual(missing, ())
+
+    def test_decoding_refuses_a_document_with_no_schema_version(self):
+        with self.assertRaises(Exception):
+            decode_schedule({"schedule_id": "s"})
+
+    def test_decoding_refuses_an_unsupported_schema_version(self):
+        with self.assertRaises(Exception):
+            decode_schedule({"schedule_id": "s", "schema_version": "sto-canonical-99.0"})
+
+    def test_booleans_are_not_coerced_from_strings(self):
+        """``bool("false")`` is True, which would invert an activity's meaning."""
+
+        from sto.core.model.codec import CodecError, decode
+        from sto.core.model.entities import Activity
+
+        uid = mint_uid("s", SourceSystem.MICROSOFT_PROJECT, EntityKind.ACTIVITY, "1")
+        with self.assertRaises(CodecError):
+            decode(Activity, {"uid": str(uid), "active": "false"})
+
+    def test_microsoft_fixed_duration_maps_to_fixed_duration(self):
+        """MS ``Type=1`` means Fixed Duration, not the Primavera
+        fixed-duration-and-units policy, which also pins units."""
+
+        from sto.core.model.enums import DurationType
+        from sto.core.model.migrate.sto_v011 import _MS_TASK_TYPE
+
+        self.assertIs(_MS_TASK_TYPE[1], DurationType.FIXED_DURATION)
+
+    def test_material_resources_are_not_reclassified_as_labour(self):
+        """``0 or 1`` is 1, which silently made every material resource work."""
+
+        from sto.core.model.enums import ResourceType
+        from sto.core.model.migrate.sto_v011 import _resource_type
+
+        self.assertIs(_resource_type(0), ResourceType.MATERIAL)
+        self.assertIs(_resource_type(1), ResourceType.LABOR)
+        self.assertIs(_resource_type(None), ResourceType.LABOR)
+
+    def test_baselines_survive_migration(self):
+        schedule, _, _ = migrate(import_mspdi(str(SYNTHETIC)))
+        self.assertTrue(schedule.baselines)
+        self.assertTrue(schedule.baselines[0].activity_states)
+
+    def test_relationship_identity_survives_reordering(self):
+        """The importer's id is ``relationship:{successor}:{ordinal}``, so
+        inserting a link ahead of another would hand over its identity."""
+
+        document = import_mspdi(str(SYNTHETIC))
+        first, identity, _ = migrate(document)
+
+        reordered = import_mspdi(str(SYNTHETIC))
+        reordered["relationships"] = list(reversed(reordered["relationships"]))
+        for index, row in enumerate(reordered["relationships"]):
+            row["id"] = f"relationship:reordered:{index}"
+
+        second, _, _ = migrate(reordered, identity=identity, schedule_id=first.schedule_id)
+        self.assertEqual(
+            {relationship.uid for relationship in first.relationships},
+            {relationship.uid for relationship in second.relationships},
+        )
+
+    def test_the_report_names_rows_the_later_document_dropped(self):
+        """The serialised report previously always said missing == 0, so it
+        disagreed with the table the command line printed."""
+
+        document = import_mspdi(str(SYNTHETIC))
+        _, identity, _ = migrate(document)
+
+        trimmed = import_mspdi(str(SYNTHETIC))
+        dropped = trimmed["activities"].pop()
+        _, _, report = migrate(trimmed, identity=identity)
+
+        missing = [entry for entry in report.entries if str(entry.outcome) == "missing"]
+        self.assertTrue(missing)
+        self.assertIn(
+            _external_uid_of(dropped), [entry.external_uid for entry in missing]
+        )
+
+
+def _external_uid_of(row: dict) -> str:
+    for entry in row.get("external_references", []):
+        if entry.get("type") == "UID":
+            return str(entry["value"])
+    return str(row.get("id"))

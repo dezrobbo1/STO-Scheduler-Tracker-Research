@@ -85,3 +85,60 @@ class ReconcileCommandTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class OutputGuardTests(unittest.TestCase):
+    """A mistyped --output must not destroy a schedule that has no other copy."""
+
+    def test_output_may_not_overwrite_the_source(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "schedule.xml"
+            source.write_bytes(SYNTHETIC.read_bytes())
+            with self.assertRaises(SystemExit):
+                main(["canonicalise", str(source), "--output", str(source)])
+            self.assertEqual(source.read_bytes(), SYNTHETIC.read_bytes())
+
+    def test_output_may_not_overwrite_the_source_through_a_symlink(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "schedule.xml"
+            source.write_bytes(SYNTHETIC.read_bytes())
+            alias = Path(directory) / "alias.xml"
+            alias.symlink_to(source)
+            with self.assertRaises(SystemExit):
+                main(["canonicalise", str(source), "--output", str(alias)])
+            self.assertEqual(source.read_bytes(), SYNTHETIC.read_bytes())
+
+    def test_the_two_outputs_may_not_collide(self):
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "both.json"
+            with self.assertRaises(SystemExit):
+                main(
+                    [
+                        "canonicalise",
+                        str(SYNTHETIC),
+                        "--output",
+                        str(target),
+                        "--identity-out",
+                        str(target),
+                    ]
+                )
+
+
+class ModuleEntryPointTests(unittest.TestCase):
+    def test_python_m_sto_cli_runs(self):
+        """The README documents this invocation, so it has to work in a
+        source checkout, not only through the installed console script."""
+
+        import subprocess
+        import sys
+
+        repo = Path(__file__).resolve().parent.parent
+        result = subprocess.run(
+            [sys.executable, "-m", "sto.cli", "canonicalise", str(SYNTHETIC), "--quiet"],
+            cwd=repo,
+            env={"PYTHONPATH": str(repo / "src"), "PATH": "/usr/bin:/bin"},
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("canonical_sha256", result.stdout)

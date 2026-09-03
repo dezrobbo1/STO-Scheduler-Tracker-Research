@@ -205,6 +205,13 @@ class IdentityMap:
         guid: str | None,
         business_key: str | None,
     ) -> None:
+        # Retire the key this entity used to be known by. Without this a
+        # rekeyed row is reported as both rekeyed and missing, and if the
+        # source later reuses the old UID for a different entity the
+        # external-UID lookup would conflate the two.
+        previous = self.external_of.get(uid)
+        if previous is not None and previous != external_uid:
+            self.by_external.pop((kind_key, previous), None)
         self.by_external[(kind_key, external_uid)] = uid
         self.external_of[uid] = external_uid
         if guid:

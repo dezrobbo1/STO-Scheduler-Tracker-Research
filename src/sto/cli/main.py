@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -39,6 +40,27 @@ def _load(path: Path, identity: IdentityMap | None = None, schedule_id: str | No
     return migrate(import_mspdi(str(path)), identity=identity, schedule_id=schedule_id)
 
 
+def _guard_outputs(source: Path, *outputs: Path | None) -> None:
+    """Refuse to write over the source, or to have two outputs collide.
+
+    Imported sources are immutable (AGENTS.md), and a mistyped --output that
+    resolves to the schedule would destroy a customer file that may have no
+    other copy. Symlinks are resolved so aliases are caught too.
+    """
+
+    resolved_source = source.resolve()
+    seen: dict[Path, str] = {}
+    for name, path in zip(("--output", "--identity-out"), outputs, strict=False):
+        if path is None:
+            continue
+        resolved = path.resolve()
+        if resolved == resolved_source:
+            raise SystemExit(f"{name} would overwrite the source schedule: {source}")
+        if resolved in seen:
+            raise SystemExit(f"{name} and {seen[resolved]} resolve to the same file: {path}")
+        seen[resolved] = name
+
+
 def _emit(payload: object, output: Path | None, pretty: bool) -> None:
     if pretty:
         text = json.dumps(payload, ensure_ascii=False, sort_keys=True, indent=2) + "\n"
@@ -52,6 +74,7 @@ def _emit(payload: object, output: Path | None, pretty: bool) -> None:
 
 
 def _canonicalise(args: argparse.Namespace) -> int:
+    _guard_outputs(args.source, args.output, args.identity_out)
     schedule, identity, _ = _load(args.source)
     payload = encode_schedule(schedule)
     digest = canonical_sha256(payload)
@@ -80,24 +103,42 @@ def _canonicalise(args: argparse.Namespace) -> int:
     return 0
 
 
-def _report_line(report: ReconciliationReport, kind: EntityKind, missing: int) -> str:
+def _report_line(report: ReconciliationReport, kind: EntityKind) -> str:
     entries = report.of_kind(kind)
-    matched = sum(1 for entry in entries if str(entry.outcome) == "matched")
-    new = sum(1 for entry in entries if str(entry.outcome) == "new")
-    rekeyed = sum(1 for entry in entries if str(entry.outcome) == "rekeyed")
-    return f"{str(kind):<14}{matched:>8}{new:>8}{rekeyed:>9}{missing:>9}"
+
+    def count(outcome: str) -> int:
+        return sum(1 for entry in entries if str(entry.outcome) == outcome)
+
+    return (
+        f"{str(kind):<14}{count('matched'):>8}{count('new'):>8}"
+        f"{count('rekeyed'):>9}{count('missing'):>9}"
+    )
 
 
 def _reconcile(args: argparse.Namespace) -> int:
+    _guard_outputs(args.earlier, args.output)
+    _guard_outputs(args.later, args.output)
     earlier, identity, _ = _load(args.earlier)
+    later_id = _load(args.later)[0].schedule_id
     _, _, report = _load(args.later, identity=identity, schedule_id=earlier.schedule_id)
+
+    if later_id != earlier.schedule_id:
+        # Legitimate - the two BOILER snapshots carry different project GUIDs
+        # and are still the same schedule - but treating them as one is the
+        # operator's judgement, not something the files assert. Saying so keeps
+        # a coincidental UID overlap from reading as durable-identity evidence.
+        print(
+            "warning: the two files declare different project identities\n"
+            f"         earlier {earlier.schedule_id}\n"
+            f"         later   {later_id}\n"
+            "         rows are matched on source UID under the earlier identity",
+            file=sys.stderr,
+        )
 
     print(f"schedule_id {earlier.schedule_id}")
     print(f"{'kind':<14}{'matched':>8}{'new':>8}{'rekeyed':>9}{'missing':>9}")
     for kind in _KINDS:
-        seen = [entry.external_uid for entry in report.of_kind(kind)]
-        missing = len(identity.missing_since(kind, seen))
-        print(_report_line(report, kind, missing))
+        print(_report_line(report, kind))
 
     if args.output is not None:
         _emit(report.to_dict(), args.output, args.pretty)
