@@ -117,7 +117,14 @@ The 50 conformance cases were not copied in. They arrive with the conformance
 suite in S3, with the SHA-256 pins the design requires; copying them now would
 put a corpus in the repository with no runner and no pin discipline.
 
-The stale `~/Shutdown-Tracker` clone was not deleted. It is 154 MB and about
-twenty-five merged pull requests behind its origin — the plan's "14 commits
-behind" reads a reference last fetched on 2026-08-17 — and deleting it is the
-user's call, not a review's.
+## Housekeeping
+
+The stale `~/Shutdown-Tracker` clone is gone, which the design plan asked for in
+§E4 and which had not happened. It was 146 MB, 113 MB of it `node_modules`, and
+about twenty-five merged pull requests behind its origin — the plan's "14
+commits behind" reads a reference last fetched on 2026-08-17, so the real
+distance was never visible from `git status`. Its working tree was clean, it
+held no stashes, and its one apparently-local branch was already contained in a
+remote branch, so nothing existed only there. `Shutdown-Tracker-Claude` keeps a
+remote named `legacy` pointing at that path; it is now dangling, and was left
+alone because that repository is frozen.
