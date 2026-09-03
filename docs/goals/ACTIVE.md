@@ -16,13 +16,13 @@ not start until the previous gate passes.
 <!-- roadmap:begin now -->
 <!-- generated from docs/goals/roadmap.json by `sto roadmap render`; edit the JSON, not this -->
 
-**P0 — Monorepo and spine model** (in progress; 4 of 6 gate criteria met)
+**P0 — Monorepo and spine model** (in progress; 5 of 6 gate criteria met)
 
 | | Gate criterion | Shown by |
 |---|---|---|
 | ✓ | The canonical document round-trips exactly on both real BOILER snapshots | `tests/test_canonical_model.py` |
 | ✓ | Two imports of one file hash identically, and a later snapshot keeps the identifiers of every row whose source UID survived | `docs/history/2026-09-02-consolidation-and-canonical-model.md` |
-| · | Every row the reconciliation reports as new or missing is attributable to a difference between the source documents, not to identity | — |
+| ✓ | Every row the reconciliation reports as new or missing is attributable to a difference between the source documents, not to identity | `tests/test_canonical_model.py` |
 | · | Two schedules import into two projects and survive a restart with identical hashes | — |
 | ✓ | The unittest suite and compileall are green on the declared Python floor | `.github/workflows/ci.yml` |
 | ✓ | Every statement in AGENTS.md is either durable or machine-checked | `tests/test_governance_references.py` |
