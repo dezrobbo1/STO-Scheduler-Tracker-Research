@@ -85,14 +85,27 @@ unchanged. Third-party packages arrived behind the `api` extra; the bare suite
 and CI job stay stdlib-only (ADR-005). `sto serve` runs it on 8092 — 8090 is
 the deployed Java API until cut-over.
 
+**Calendars (S2).** `sto.core.calendar` compiles a canonical calendar — base
+inheritance, weekday overrides, dated exceptions with their recurrence, and
+the legacy special days the migration now carries as exceptions — into sorted
+integer working intervals over a horizon, with a fingerprint. The reference
+arithmetic from the conformance corpus's implementation is kept verbatim; an
+indexed layer answers the engine's questions in O(log n) and is held to the
+reference on ten thousand random inputs per function, and to the previous
+engine on ten thousand (moment, duration) pairs across every real BOILER
+calendar. All forty-five compile. Every one of their exception days falls
+outside the 2026 schedule window — the calendars came from a 2024–25
+template — so the exception test compiles over 2025 to exercise them. Six of
+the corpus's ten calendar cases pass on the arithmetic alone; the four with
+relationships belong to the forward pass.
+
 ## Now: the engine and interchange spine
 
 Phase 0 passed on 2026-09-03 with every criterion crossed on its inputs
 present. Phase 1 is the engine, the sidecar, and real authentication, in this
 order:
 
-1. **Calendars** compiled with exceptions applied, and interval arithmetic
-   lifted from the conformance corpus's reference implementation.
+1. ~~Calendars~~ — done.
 2. **Forward pass** over all four relationship types with signed lag, run
    against the corpus and the BOILER file oracle with every difference
    classified.
@@ -107,9 +120,7 @@ order:
 7. **Real authentication.** Password with TOTP, server sessions, device tokens
    for the field app. No route accepts a trusted actor header.
 
-The engine's first slice is where the previously recorded gap about calendar
-exceptions being flattened is paid; the criticality-threshold gap is paid in
-the third.
+The criticality-threshold gap below is paid in the third slice.
 
 ## Next: the rest of the roadmap
 
@@ -191,7 +202,6 @@ here so they are not rediscovered as surprises:
 | `DurationFormat` is preserved by the importer only as a vendor extension, so `Duration.unit` and `source_format_code` are always empty. The field exists precisely to stop an imported `8h` being written back as `1d`. | S8, MSPDI writer |
 | `Assignment.timephased_ref` is never populated, so resource curves and exports cannot find the retained source payload. | S8 |
 | `ProjectSettings.critical_float_threshold_seconds` stays zero even when the file sets `CriticalSlackLimit`. | S4, criticality |
-| Calendar exceptions are flattened to one continuous `from`/`to`; `entered_by_occurrences` and `occurrences` are dropped, and a missing date becomes `datetime.min`. | S2, where exceptions are first applied |
 | `is_null_source` is dropped, so a null placeholder task looks ordinary. | S6, eligibility |
 | An unresolved task `CalendarUID` becomes `None`, indistinguishable from inheriting the project calendar. | S2/S3 |
 | Summary-task constraints, deadlines, calendars, priority and custom fields are not retained on `WbsNode`. | S8, writeback |
