@@ -27,13 +27,16 @@ artefact of the importer.
 
 Were the 539 the same tasks? 539 of 539 share the same work-order and
 operation key (`Text4`, `Text5`); 531 share the same name, and the 8 that
-differ are planner edits to the same task ("60T Crane…" to "Crane…"). There is
+differ are planner edits to the same task — a qualifier dropped from a crane
+requirement, a strainer described more briefly, a vendor prefix added. There is
 no UID reuse in the only real snapshot pair, and Microsoft Project does not
 recycle task UIDs within a file.
 
 So the premise of the finding — that a changed GUID on a matched UID signals a
-different row — is false for this source. It is the ordinary case. A rule built
-on it matches nothing.
+different row — is false on this site's export path. It is the ordinary case
+there. A rule built on it matches nothing. Whether other Project builds or
+export routes keep GUIDs is unmeasured; the rule is withdrawn because the one
+measurement available contradicts it, not because the opposite is proven.
 
 ## What shipped instead
 
@@ -49,9 +52,9 @@ activity changed GUID; on the untouched-to-before control none did.
 
 ## What this means for durable identity
 
-For Microsoft Project, UID is the durable per-row key and GUID is not. The
-rekey-by-GUID fallback only helps when the export path keeps GUIDs, which this
-site's did not. The independent rekey signal that *does* hold across these
+On this site's export path, UID is the durable per-row key and GUID is not.
+The rekey-by-GUID fallback only helps when the export path keeps GUIDs, and it
+stays in place for the paths that might. The independent rekey signal that *does* hold across these
 files is the work-order and operation pair — the activity business key that
 `docs/goals/ACTIVE.md` already records as not yet passed to `IdentityMap`.
 That gap moved up in importance today.

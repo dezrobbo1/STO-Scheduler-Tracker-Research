@@ -76,8 +76,13 @@ rule — a UID match with a changed GUID is a different row — and running it o
 the only real snapshot pair matched nothing: Microsoft Project regenerated
 every task GUID between the two saves (539 of 539 shared UIDs), while every one
 of those UIDs kept its work-order and operation key and 531 kept their names.
-The finding is rejected on measurement for this source. UID remains the primary
-key; GUID remains a fallback for rekeying, not evidence against a UID match.
+The finding is rejected on measurement for this site's export path — the only
+one measured; whether other Project builds or export routes keep GUIDs is not
+known. UID remains the primary key; GUID remains a fallback for rekeying, not
+evidence against a UID match. The counts above are properties of two files
+recorded by hash in `fixtures/README.md`, and the same measurement is pinned as
+a test in `tests/test_canonical_model.py`, so if they ever move the suite says
+so before this text does.
 
 What the finding was right about is visibility. A matched row whose GUID moved
 is now reported as such on the entry and counted in the report, so how much of

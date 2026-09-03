@@ -74,6 +74,41 @@ class GuidChangeTests(unittest.TestCase):
         _, entry = reloaded.resolve(EntityKind.ACTIVITY, "1", guid=GUID_A)
         self.assertTrue(entry.guid_changed)
 
+    def test_a_business_key_rekey_reports_its_guid_change_too(self):
+        """The fallback meant to find the same row must not hide what moved."""
+
+        identity = _fresh()
+        first, _ = identity.resolve(EntityKind.ACTIVITY, "1", guid=GUID_A, business_key="WO1/10")
+
+        again, entry = identity.resolve(
+            EntityKind.ACTIVITY, "9", guid=GUID_B, business_key="WO1/10"
+        )
+
+        self.assertEqual(again, first)
+        self.assertEqual(entry.outcome, ReconciliationOutcome.REKEYED)
+        self.assertEqual(entry.matched_by, "business_key")
+        self.assertTrue(entry.guid_changed)
+
+    def test_a_legacy_row_with_several_guids_has_no_current_until_seen_again(self):
+        """A map from before this field may hold every GUID a row ever had.
+
+        Picking one as current would report a change on the first import after
+        upgrading whenever the pick was wrong. Leave it unknown instead.
+        """
+
+        identity = _fresh()
+        first, _ = identity.resolve(EntityKind.ACTIVITY, "1", guid=GUID_A)
+        identity.resolve(EntityKind.ACTIVITY, "1", guid=GUID_B)
+        payload = identity.to_dict()
+        del payload["guid_of"]
+
+        reloaded = IdentityMap.from_dict(payload)
+
+        self.assertNotIn(first, reloaded.guid_of)
+        _, entry = reloaded.resolve(EntityKind.ACTIVITY, "1", guid=GUID_A)
+        self.assertFalse(entry.guid_changed)
+        self.assertEqual(reloaded.guid_of[first], GUID_A)
+
     def test_a_map_written_before_guid_of_existed_still_loads(self):
         identity = _fresh()
         first, _ = identity.resolve(EntityKind.ACTIVITY, "1", guid=GUID_A)

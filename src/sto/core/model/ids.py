@@ -27,11 +27,11 @@ schedule may still reference it.
 
 Step 1 wins over step 2 deliberately. Measured on the only real snapshot pair,
 Microsoft Project regenerated every task GUID between saves while every UID
-kept its work-order and operation key, so a UID match with a changed GUID is
-the ordinary case for that source and not evidence of a different row. The
+kept its work-order and operation key, so on that export path a UID match with
+a changed GUID is the ordinary case and not evidence of a different row. The
 change is recorded on the entry (``guid_changed``) and counted in the report,
-so a planner can see how much of the GUID fallback a source actually leaves
-standing.
+so a planner can see how much of the GUID fallback a given export path
+actually leaves standing.
 """
 
 from __future__ import annotations
@@ -233,6 +233,7 @@ class IdentityMap:
             by_key = self.by_business_key.get((kind_key, business_key))
             if by_key is not None:
                 previous = self.external_of.get(by_key)
+                previous_guid = self.guid_of.get(by_key)
                 self._record(kind_key, external_uid, by_key, guid, business_key)
                 return by_key, ReconciliationEntry(
                     kind=kind,
@@ -241,6 +242,7 @@ class IdentityMap:
                     outcome=ReconciliationOutcome.REKEYED,
                     matched_by="business_key",
                     previous_external_uid=previous,
+                    guid_changed=bool(guid and previous_guid and guid != previous_guid),
                 )
 
         generation = self.retired_external.get((kind_key, external_uid), 0)
@@ -360,13 +362,19 @@ class IdentityMap:
             ),
         )
         identity.external_of = {uid: external for (_, external), uid in by_external.items()}
-        # Maps written before ``guid_of`` existed have only ``by_guid``; any of
-        # a row's GUIDs will do as "current" until the next import records one.
+        # Maps written before ``guid_of`` existed have only ``by_guid``. A row
+        # with one GUID there has a known current; a row with several has an
+        # unknown one, and is left unset so the next import records a baseline
+        # rather than reporting a change against an arbitrary pick.
         current = payload.get("guid_of", {})
         identity.guid_of = {
             uuid.UUID(uid): normalise_guid(guid) or guid
             for uid, guid in current.items()  # type: ignore[union-attr]
         }
+        history: dict[uuid.UUID, set[str]] = {}
         for (_, guid), uid in by_guid.items():
-            identity.guid_of.setdefault(uid, guid)
+            history.setdefault(uid, set()).add(guid)
+        for uid, guids in history.items():
+            if len(guids) == 1:
+                identity.guid_of.setdefault(uid, next(iter(guids)))
         return identity
