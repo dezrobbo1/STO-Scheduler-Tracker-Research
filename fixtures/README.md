@@ -6,8 +6,8 @@ recovery route so the file oracle can be rebuilt on another machine.
 
 ## Why this file exists
 
-Six cases in `tests/test_canonical_model.py` run against real BOILER schedules
-and skip silently when the files are absent. Silence is the failure mode this
+One class in `tests/test_canonical_model.py` runs against real BOILER schedules
+and skips silently when the files are absent. Silence is the failure mode this
 document prevents: without it, a checkout where the schedules are missing looks
 green while the only tests that exercise a 3.4 MB real-world file are not
 running.
@@ -21,7 +21,9 @@ export STO_BOILER_UNTOUCHED=/path/to/boiler-untouched-source.xml   # the GUID co
 PYTHONPATH=src python3 -m unittest discover -s tests
 ```
 
-The defaults in the test module point at this machine's copies.
+The defaults in the test module point at this machine's copies. Add
+`STO_REQUIRE_BOILER=1` and a missing file fails the run instead of skipping it —
+use that whenever a gate criterion is being crossed on these cases.
 
 ## The BOILER family: at least four distinct files
 
@@ -57,7 +59,11 @@ repository, on no branch, in no other copy found on this machine. It is the only
 file carrying a status date and reported actuals, which makes it the only oracle
 for status-date scheduling, retained logic and progress override. If it is lost,
 engine slice S5 loses its verification and there is nothing to restore from.
-Back it up somewhere durable.
+
+As of 2026-09-03 a second copy sits beside the other four, and every file in
+that directory is read-only. Both copies are on one filesystem on one machine,
+so this is protection against deletion, not against loss: an off-machine copy is
+still owed, and is tracked as `DEP-DAY5-BACKUP` in `docs/goals/roadmap.json`.
 
 ## Recovering the four committed fixtures
 
