@@ -108,9 +108,15 @@ until the parity checklist passes.
 
 ## Known gaps recorded, not hidden
 
-- **Assignment reconciliation** as above: the counts are explained and pinned,
-  but no file yet exercises a source that genuinely renumbers, so the GUID and
-  business-key fallbacks in `IdentityMap` remain untested against real data.
+- **GUID is not a durable key on this site's Microsoft Project export path.**
+  Between the two BOILER snapshots every shared task UID kept its work-order and
+  operation key and carried a regenerated GUID, so the GUID rekey fallback in
+  `IdentityMap` cannot fire on that path and a rule treating a changed GUID as
+  a different row matches nothing (ADR-002, second amendment). Other builds and
+  export routes are unmeasured, so the fallback stays. Reconciliation now
+  counts matched rows whose GUID moved, which is how the next path gets
+  measured. The fallback that does hold here is the work-order and operation
+  pair — see the business-key gap below.
 - **Lag calendar for Microsoft files** is an assumption: `ProjectSettings`
   records `lag_calendar_policy = successor` because Microsoft Project exposes no
   such setting. It is written down so it can be falsified by a file with a

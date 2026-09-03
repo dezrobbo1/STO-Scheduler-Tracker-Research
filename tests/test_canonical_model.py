@@ -21,7 +21,12 @@ from sto.core.model.entities import (
     Schedule,
     SourceSnapshot,
 )
-from sto.core.model.enums import EntityKind, SourceFormat, SourceSystem
+from sto.core.model.enums import (
+    EntityKind,
+    ReconciliationOutcome,
+    SourceFormat,
+    SourceSystem,
+)
 from sto.core.model.ids import IdentityMap, mint_uid
 from sto.core.model.migrate.sto_v011 import MigrationError, migrate
 from sto.legacy import import_mspdi
@@ -33,6 +38,9 @@ SYNTHETIC = FIXTURES / "synthetic-basic.mspdi.xml"
 #: evidence fixtures to run the BOILER cases.
 BOILER_BEFORE = Path(os.environ.get("STO_BOILER_BEFORE", "/home/dez/sto-fixtures/boiler-before-no-progress.xml"))
 BOILER_DAY5 = Path(os.environ.get("STO_BOILER_DAY5", "/home/dez/BOILER-WG110-day5-candidate.mspdi.xml"))
+BOILER_UNTOUCHED = Path(
+    os.environ.get("STO_BOILER_UNTOUCHED", "/home/dez/sto-fixtures/boiler-untouched-source.xml")
+)
 
 
 class CanonicalHashingTests(unittest.TestCase):
@@ -315,6 +323,40 @@ class BoilerSnapshotTests(unittest.TestCase):
                         f"{kind} {entry.external_uid} is reported missing but is "
                         "in the later document: identity failed to match it",
                     )
+
+    def test_every_matched_activity_changed_guid_between_the_snapshots(self):
+        """Measured, not assumed: GUID is not a durable key for this source.
+
+        Microsoft Project regenerated every task GUID between these two saves
+        while every UID kept its work-order and operation key. A rule that
+        treated a UID match with a changed GUID as a different row would match
+        nothing here. The count is pinned as a property of the files.
+        """
+
+        before, identity, _ = migrate(self.before_document)
+        _, _, report = migrate(
+            self.day5_document, identity=identity, schedule_id=before.schedule_id
+        )
+        matched = [
+            entry
+            for entry in report.of_kind(EntityKind.ACTIVITY)
+            if entry.outcome is ReconciliationOutcome.MATCHED
+        ]
+        self.assertTrue(matched)
+        self.assertEqual(sum(1 for entry in matched if entry.guid_changed), len(matched))
+        self.assertEqual(report.guid_changed, report.to_dict()["guid_changed"])
+
+    @unittest.skipUnless(BOILER_UNTOUCHED.is_file(), "untouched BOILER source not present")
+    def test_a_resave_of_the_same_file_changes_no_guid(self):
+        """The control: untouched source to committed before-fixture."""
+
+        untouched = import_mspdi(str(BOILER_UNTOUCHED))
+        first, identity, _ = migrate(untouched)
+        _, _, report = migrate(
+            self.before_document, identity=identity, schedule_id=first.schedule_id
+        )
+        self.assertEqual(report.guid_changed, 0)
+        self.assertEqual(report.new + report.missing + report.rekeyed, 0)
 
     def test_the_reconciliation_counts_are_pinned(self):
         """Pinned so a change in identity moves a number somebody re-reads.

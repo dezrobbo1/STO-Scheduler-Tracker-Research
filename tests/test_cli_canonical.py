@@ -54,8 +54,10 @@ class ReconcileCommandTests(unittest.TestCase):
             main(["reconcile", str(SYNTHETIC), str(SYNTHETIC)])
         for line in buffer.getvalue().splitlines():
             if line.startswith("activity"):
-                _, matched, new, rekeyed, missing = line.split()
-                self.assertEqual((int(new), int(rekeyed), int(missing)), (0, 0, 0))
+                _, matched, new, rekeyed, missing, guid_changed = line.split()
+                self.assertEqual(
+                    (int(new), int(rekeyed), int(missing), int(guid_changed)), (0, 0, 0, 0)
+                )
                 self.assertGreater(int(matched), 0)
                 break
         else:  # pragma: no cover - the table always has an activity row
@@ -70,7 +72,7 @@ class ReconcileCommandTests(unittest.TestCase):
         activity_row = next(
             line for line in table.splitlines() if line.startswith("activity")
         )
-        _, _, new, _, missing = activity_row.split()
+        _, _, new, _, missing, _ = activity_row.split()
         self.assertTrue(int(new) or int(missing))
 
     def test_report_is_written_as_json(self):

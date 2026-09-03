@@ -65,3 +65,28 @@ claim about assignments, and the gate criterion it produced: `P0-G3` in
 attributable to a source difference, which `tests/test_canonical_model.py`
 checks. The GUID and business-key fallbacks remain in `IdentityMap` and remain
 untested against a real source that renumbers, because no such file is in hand.
+
+
+## Amendment 2026-09-03, second
+
+Review of PR #22 raised that the external-UID match never compares GUIDs, so a
+source that deleted a row and reused its UID for a different row would be
+matched and both GUIDs bound to one canonical identity. Encoding the opposite
+rule — a UID match with a changed GUID is a different row — and running it on
+the only real snapshot pair matched nothing: Microsoft Project regenerated
+every task GUID between the two saves (539 of 539 shared UIDs), while every one
+of those UIDs kept its work-order and operation key and 531 kept their names.
+The finding is rejected on measurement for this site's export path — the only
+one measured; whether other Project builds or export routes keep GUIDs is not
+known. UID remains the primary key; GUID remains a fallback for rekeying, not
+evidence against a UID match. The counts above are properties of two files
+recorded by hash in `fixtures/README.md`, and the same measurement is pinned as
+a test in `tests/test_canonical_model.py`, so if they ever move the suite says
+so before this text does.
+
+What the finding was right about is visibility. A matched row whose GUID moved
+is now reported as such on the entry and counted in the report, so how much of
+the GUID fallback a source leaves standing is a number, not an assumption. For
+BOILER it is all of it. The genuinely independent rekey signal for this site is
+the work-order and operation pair, which is the activity business key already
+recorded as owed in `docs/goals/ACTIVE.md`.
