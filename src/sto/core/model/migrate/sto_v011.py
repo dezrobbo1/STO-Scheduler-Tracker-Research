@@ -61,11 +61,16 @@ from ..entities import (
     WbsNode,
     WorkTriple,
 )
-from ..ids import IdentityMap, ReconciliationEntry, ReconciliationReport
+from ..ids import (
+    IdentityMap,
+    ReconciliationEntry,
+    ReconciliationReport,
+    normalise_guid,
+)
 
 SUPPORTED_IMPORTER_PROFILES = frozenset({"mspdi-import-v0.1.1"})
 
-#: Microsoft ``Task/Type``. Fixed Units is the Project default.
+#: Microsoft ``Task/Type``. Fixed Units is the Project default when omitted.
 _MS_TASK_TYPE: dict[int, DurationType] = {
     0: DurationType.FIXED_UNITS,
     1: DurationType.FIXED_DURATION,
@@ -98,8 +103,14 @@ def _dt(value: Any) -> datetime | None:
     if value is None or value == "":
         return None
     if isinstance(value, datetime):
-        return value
-    return datetime.fromisoformat(str(value))
+        parsed = value
+    else:
+        parsed = datetime.fromisoformat(str(value))
+    if parsed.utcoffset() is not None:
+        raise MigrationError(
+            f"timezone-aware source date is outside the canonical wall-clock contract: {value!r}"
+        )
+    return parsed
 
 
 def _seconds_of_day(value: Any) -> int:
@@ -141,7 +152,9 @@ def _ref(system: SourceSystem, row: dict[str, Any], snapshot_sha: str | None) ->
         system=system,
         uid=str(external.get("UID") or external.get("FieldID") or ""),
         id=str(external["ID"]) if external.get("ID") is not None else None,
-        guid=str(external["GUID"]) if external.get("GUID") is not None else None,
+        guid=normalise_guid(str(external["GUID"]))
+        if external.get("GUID") is not None
+        else None,
         snapshot_sha256=snapshot_sha,
     )
 
@@ -188,11 +201,14 @@ def _lag_calendar(lag_format: Any) -> LagCalendar:
 def _activity_kind(row: dict[str, Any], duration: Duration | None) -> ActivityKind:
     if not row.get("milestone_source"):
         return ActivityKind.TASK
+    # A non-zero-duration row must remain schedulable work even if Project also
+    # carries the display milestone flag. Treating it as a milestone would make
+    # the canonical model internally contradictory.
+    if duration is not None and duration.seconds != 0:
+        return ActivityKind.TASK
     # Microsoft marks both ends of a zero-duration task as a milestone; the
     # finish variety is the one planners mean, and the one Project draws.
-    if duration is not None and duration.seconds == 0:
-        return ActivityKind.FINISH_MILESTONE
-    return ActivityKind.START_MILESTONE
+    return ActivityKind.FINISH_MILESTONE
 
 
 def _constraint(row: dict[str, Any]) -> Constraint | None:
@@ -211,18 +227,39 @@ def _constraint(row: dict[str, Any]) -> Constraint | None:
     )
 
 
-def _resource_type(code: Any) -> ResourceType:
-    """Microsoft ``Resource/Type``: 0 material, 1 work, 2 cost.
+def _duration_type(code: Any) -> DurationType:
+    """Translate Microsoft ``Task/Type`` without guessing unknown values."""
 
-    Written out rather than defaulted with ``or``, because ``0 or 1`` is 1 and
-    would silently reclassify every material resource as labour.
-    """
+    if code is None:
+        return DurationType.FIXED_UNITS
+    try:
+        value = int(code)
+    except (TypeError, ValueError) as exc:
+        raise MigrationError(f"invalid Microsoft task Type: {code!r}") from exc
+    try:
+        return _MS_TASK_TYPE[value]
+    except KeyError as exc:
+        raise MigrationError(f"unsupported Microsoft task Type: {value}") from exc
+
+
+def _resource_type(code: Any) -> ResourceType:
+    """Microsoft ``Resource/Type``: 0 material, 1 work, 2 cost."""
 
     if code is None:
         return ResourceType.LABOR
-    return {0: ResourceType.MATERIAL, 1: ResourceType.LABOR}.get(
-        int(code), ResourceType.NONLABOR
-    )
+    try:
+        value = int(code)
+    except (TypeError, ValueError) as exc:
+        raise MigrationError(f"invalid Microsoft resource Type: {code!r}") from exc
+    mapping = {
+        0: ResourceType.MATERIAL,
+        1: ResourceType.LABOR,
+        2: ResourceType.COST,
+    }
+    try:
+        return mapping[value]
+    except KeyError as exc:
+        raise MigrationError(f"unsupported Microsoft resource Type: {value}") from exc
 
 
 def _percent(row: dict[str, Any]) -> PercentComplete:
@@ -263,7 +300,8 @@ def migrate(
 
     Passing the :class:`IdentityMap` returned by an earlier migration is what
     makes a re-import a re-import: rows keep the identifiers they had, and the
-    report says what changed.
+    report says what changed. A supplied map is copied first, so a failed
+    migration cannot partially mutate durable identity state.
     """
 
     profile = document.get("importer_profile")
@@ -274,10 +312,25 @@ def migrate(
     source = document.get("source", {})
     project_row = document.get("project", {})
     snapshot_sha = source.get("sha256")
+    snapshot_id = str(source.get("document_key") or source.get("sha256") or "")
+    project_guid = normalise_guid(_external(project_row, "GUID"))
 
-    resolved_id = schedule_id or _external(project_row, "GUID") or str(source.get("sha256"))
     if identity is None:
+        resolved_id = schedule_id or project_guid or str(source.get("sha256"))
         identity = IdentityMap(schedule_id=resolved_id, system=system)
+    else:
+        if identity.system is not system:
+            raise MigrationError(
+                f"identity map source system {identity.system} does not match {system}"
+            )
+        if schedule_id is not None and schedule_id != identity.schedule_id:
+            raise MigrationError(
+                "explicit schedule_id does not match the supplied identity map: "
+                f"{schedule_id!r} != {identity.schedule_id!r}"
+            )
+        resolved_id = identity.schedule_id
+        identity = identity.clone()
+
     entries: list[ReconciliationEntry] = []
     seen: dict[EntityKind, list[str]] = {}
 
@@ -285,7 +338,11 @@ def migrate(
         external = external_uid if external_uid is not None else _external(row, "UID")
         if external is None:
             external = str(row.get("id"))
-        uid, entry = identity.resolve(kind, external, guid=_external(row, "GUID"))
+        uid, entry = identity.resolve(
+            kind,
+            external,
+            guid=normalise_guid(_external(row, "GUID")),
+        )
         entries.append(entry)
         seen.setdefault(kind, []).append(entry.external_uid)
         return uid
@@ -405,11 +462,9 @@ def migrate(
                 code=row.get("wbs") or row.get("outline_number"),
                 kind=_activity_kind(row, duration),
                 seq=int(row.get("source_order") or 0),
-                active=bool(row.get("active", True)),
+                active=True if row.get("active") is None else bool(row.get("active")),
                 manual=bool(row.get("manual", False)),
-                duration_type=_MS_TASK_TYPE.get(
-                    int(row.get("source_task_type") or 0), DurationType.FIXED_UNITS
-                ),
+                duration_type=_duration_type(row.get("source_task_type")),
                 effort_driven=bool(row.get("effort_driven_source", False)),
                 planned_duration=duration,
                 remaining_duration=_duration(row.get("remaining_duration_source")),
@@ -426,6 +481,9 @@ def migrate(
                 notes=row.get("notes"),
                 external_refs=(_ref(system, row, snapshot_sha),),
                 source_observations=_observations(row),
+                source_fields={"milestone_source": "true"}
+                if row.get("milestone_source") and duration is not None and duration.seconds != 0
+                else {},
             )
         )
 
@@ -439,16 +497,12 @@ def migrate(
             # The importer already refuses documents with dangling endpoints;
             # a survivor here would be a defect, not data.
             continue
-        # The importer's id is ``relationship:{successor}:{ordinal}``, and the
-        # ordinal shifts when a link is inserted ahead of an existing one, so it
-        # cannot carry identity across snapshots. A relationship is identified
-        # by what it connects and how.
+        relationship_type = RelationshipType(str(row.get("type")))
+        # The importer's id is ``relationship:{successor}:{ordinal}``, and
+        # document-local endpoint refs can also change when a task is rekeyed.
+        # Canonical endpoints + type identify the same logical link across both.
         relationship_key = "|".join(
-            (
-                str(row.get("predecessor_ref")),
-                str(row.get("successor_ref")),
-                str(row.get("type")),
-            )
+            (str(predecessor), str(successor), str(relationship_type))
         )
         uid, entry = identity.resolve(EntityKind.RELATIONSHIP, relationship_key)
         entries.append(entry)
@@ -460,7 +514,7 @@ def migrate(
                 uid=uid,
                 predecessor_uid=predecessor,
                 successor_uid=successor,
-                type=RelationshipType(str(row.get("type"))),
+                type=relationship_type,
                 lag=Duration(
                     seconds=lag_seconds,
                     elapsed=lag_format is not None
@@ -484,13 +538,16 @@ def migrate(
         resource_uid_by_ref[str(row.get("id"))] = uid
         calendar_ref = row.get("calendar_ref")
         max_units = row.get("max_units")
+        resource_type = _resource_type(row.get("source_resource_type"))
         resources.append(
             Resource(
                 uid=uid,
                 name=row.get("name") or "",
                 code=row.get("initials"),
-                type=_resource_type(row.get("source_resource_type")),
-                scheduling_class=SchedulingClass.RENEWABLE,
+                type=resource_type,
+                scheduling_class=SchedulingClass.NON_RENEWABLE
+                if resource_type is ResourceType.COST
+                else SchedulingClass.RENEWABLE,
                 max_units_permille=None if max_units is None else _permille(max_units * 100),
                 calendar_uid=calendar_uid_by_ref.get(str(calendar_ref)) if calendar_ref else None,
                 group=row.get("group"),
@@ -566,7 +623,7 @@ def migrate(
                 name=f"Baseline {number}" if number else "Baseline",
                 kind=BaselineKind.MS_BASELINE,
                 number=number,
-                source_snapshot_id=str(source.get("sha256") or ""),
+                source_snapshot_id=snapshot_id,
                 activity_states=tuple(states),
             )
         )
@@ -595,7 +652,7 @@ def migrate(
     )
 
     snapshot = SourceSnapshot(
-        snapshot_id=str(source.get("document_key") or source.get("sha256") or ""),
+        snapshot_id=snapshot_id,
         system=system,
         format=SourceFormat.MSPDI,
         file_sha256=str(source.get("sha256") or ""),
@@ -633,10 +690,13 @@ def migrate(
         baselines=tuple(baselines),
     )
 
-    # Rows the identity map knows but this document did not carry. Without
-    # these the serialised report always says missing == 0 and disagrees with
-    # what the command line prints.
-    for kind, external_uids in seen.items():
-        entries.extend(identity.missing_since(kind, external_uids))
+    # Rows the identity map knows but this document did not carry. Iterate all
+    # kinds the map knows, not only kinds seen in the current document, so
+    # removing an entire collection is reported rather than disappearing.
+    known_kinds = {
+        EntityKind(kind_text) for kind_text, _ in identity.by_external.keys()
+    }
+    for kind in sorted(known_kinds | set(seen), key=str):
+        entries.extend(identity.missing_since(kind, seen.get(kind, ())))
 
     return schedule, identity, ReconciliationReport(resolved_id, tuple(entries))
