@@ -24,6 +24,14 @@ Reconciliation on re-import tries, in order:
 and mints a new UUID only when all three miss. A row that was present before and
 matches nothing now is reported ``missing``; it is never deleted, because the
 schedule may still reference it.
+
+Step 1 wins over step 2 deliberately. Measured on the only real snapshot pair,
+Microsoft Project regenerated every task GUID between saves while every UID
+kept its work-order and operation key, so a UID match with a changed GUID is
+the ordinary case for that source and not evidence of a different row. The
+change is recorded on the entry (``guid_changed``) and counted in the report,
+so a planner can see how much of the GUID fallback a source actually leaves
+standing.
 """
 
 from __future__ import annotations
@@ -86,6 +94,8 @@ class ReconciliationEntry:
     outcome: ReconciliationOutcome
     matched_by: str | None = None
     previous_external_uid: str | None = None
+    #: The row matched, and carries a different GUID from the one bound to it.
+    guid_changed: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -114,6 +124,10 @@ class ReconciliationReport:
     def rekeyed(self) -> int:
         return self._count(ReconciliationOutcome.REKEYED)
 
+    @property
+    def guid_changed(self) -> int:
+        return sum(1 for entry in self.entries if entry.guid_changed)
+
     def of_kind(self, kind: EntityKind) -> tuple[ReconciliationEntry, ...]:
         return tuple(entry for entry in self.entries if entry.kind is kind)
 
@@ -124,6 +138,7 @@ class ReconciliationReport:
             "new": self.new,
             "missing": self.missing,
             "rekeyed": self.rekeyed,
+            "guid_changed": self.guid_changed,
             "entries": [
                 {
                     "kind": str(entry.kind),
@@ -132,6 +147,7 @@ class ReconciliationReport:
                     "outcome": str(entry.outcome),
                     "matched_by": entry.matched_by,
                     "previous_external_uid": entry.previous_external_uid,
+                    "guid_changed": entry.guid_changed,
                 }
                 for entry in self.entries
             ],
@@ -159,6 +175,10 @@ class IdentityMap:
     retired_external: dict[tuple[str, str], int] = field(default_factory=dict)
     #: uid -> the external_uid it was last seen under
     external_of: dict[uuid.UUID, str] = field(default_factory=dict)
+    #: uid -> the GUID it was last seen with. ``by_guid`` keeps every GUID a
+    #: row has ever carried, so an older export can still rekey it; this holds
+    #: only the current one, so a change can be noticed.
+    guid_of: dict[uuid.UUID, str] = field(default_factory=dict)
 
     def clone(self) -> IdentityMap:
         """Return an independent copy suitable for transactional migration."""
@@ -181,6 +201,7 @@ class IdentityMap:
 
         known = self.by_external.get((kind_key, external_uid))
         if known is not None:
+            previous_guid = self.guid_of.get(known)
             # A later snapshot may add a GUID or business key to a row that was
             # first seen without one. Learn that evidence now so a subsequent
             # source-UID change can still resolve to the same canonical row.
@@ -191,6 +212,7 @@ class IdentityMap:
                 uid=known,
                 outcome=ReconciliationOutcome.MATCHED,
                 matched_by="external_uid",
+                guid_changed=bool(guid and previous_guid and guid != previous_guid),
             )
 
         if guid:
@@ -261,6 +283,7 @@ class IdentityMap:
         self.external_of[uid] = external_uid
         if guid:
             self.by_guid[(kind_key, guid)] = uid
+            self.guid_of[uid] = guid
         if business_key:
             self.by_business_key[(kind_key, business_key)] = uid
 
@@ -296,6 +319,7 @@ class IdentityMap:
                 SEP.join(key): generation
                 for key, generation in sorted(self.retired_external.items())
             },
+            "guid_of": {str(uid): guid for uid, guid in sorted(self.guid_of.items())},
         }
 
     @classmethod
@@ -336,4 +360,13 @@ class IdentityMap:
             ),
         )
         identity.external_of = {uid: external for (_, external), uid in by_external.items()}
+        # Maps written before ``guid_of`` existed have only ``by_guid``; any of
+        # a row's GUIDs will do as "current" until the next import records one.
+        current = payload.get("guid_of", {})
+        identity.guid_of = {
+            uuid.UUID(uid): normalise_guid(guid) or guid
+            for uid, guid in current.items()  # type: ignore[union-attr]
+        }
+        for (_, guid), uid in by_guid.items():
+            identity.guid_of.setdefault(uid, guid)
         return identity

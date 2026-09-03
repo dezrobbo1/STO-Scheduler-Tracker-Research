@@ -181,9 +181,10 @@ def _report_line(report: ReconciliationReport, kind: EntityKind) -> str:
     def count(outcome: str) -> int:
         return sum(1 for entry in entries if str(entry.outcome) == outcome)
 
+    guid_changed = sum(1 for entry in entries if entry.guid_changed)
     return (
         f"{str(kind):<14}{count('matched'):>8}{count('new'):>8}"
-        f"{count('rekeyed'):>9}{count('missing'):>9}"
+        f"{count('rekeyed'):>9}{count('missing'):>9}{guid_changed:>13}"
     )
 
 
@@ -208,7 +209,10 @@ def _reconcile(args: argparse.Namespace) -> int:
         )
 
     print(f"schedule_id {earlier.schedule_id}")
-    print(f"{'kind':<14}{'matched':>8}{'new':>8}{'rekeyed':>9}{'missing':>9}")
+    print(
+        f"{'kind':<14}{'matched':>8}{'new':>8}{'rekeyed':>9}{'missing':>9}"
+        f"{'guid changed':>13}"
+    )
     for kind in _KINDS:
         print(_report_line(report, kind))
 
