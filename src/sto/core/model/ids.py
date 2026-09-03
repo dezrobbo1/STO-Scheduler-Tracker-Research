@@ -150,6 +150,13 @@ class IdentityMap:
     by_guid: dict[tuple[str, str], uuid.UUID] = field(default_factory=dict)
     #: (kind, business_key) -> uid
     by_business_key: dict[tuple[str, str], uuid.UUID] = field(default_factory=dict)
+    #: Retired external source keys -> reuse generation.
+    #:
+    #: A rekeyed entity must release its old external UID so the source can
+    #: legitimately reuse it for a different row. The generation is persisted
+    #: because minting the reused UID with the original UUIDv5 name would
+    #: recreate the retired entity's canonical UUID.
+    retired_external: dict[tuple[str, str], int] = field(default_factory=dict)
     #: uid -> the external_uid it was last seen under
     external_of: dict[uuid.UUID, str] = field(default_factory=dict)
 
@@ -214,7 +221,13 @@ class IdentityMap:
                     previous_external_uid=previous,
                 )
 
-        minted = mint_uid(self.schedule_id, self.system, kind, external_uid)
+        generation = self.retired_external.get((kind_key, external_uid), 0)
+        mint_name = (
+            external_uid
+            if generation == 0
+            else SEP.join((external_uid, "reuse", str(generation)))
+        )
+        minted = mint_uid(self.schedule_id, self.system, kind, mint_name)
         self._record(kind_key, external_uid, minted, guid, business_key)
         return minted, ReconciliationEntry(
             kind=kind,
@@ -239,7 +252,11 @@ class IdentityMap:
         # external-UID lookup would conflate the two.
         previous = self.external_of.get(uid)
         if previous is not None and previous != external_uid:
-            self.by_external.pop((kind_key, previous), None)
+            retired_key = (kind_key, previous)
+            self.by_external.pop(retired_key, None)
+            self.retired_external[retired_key] = (
+                self.retired_external.get(retired_key, 0) + 1
+            )
         self.by_external[(kind_key, external_uid)] = uid
         self.external_of[uid] = external_uid
         if guid:
@@ -275,6 +292,10 @@ class IdentityMap:
             "by_external": _join(self.by_external),
             "by_guid": _join(self.by_guid),
             "by_business_key": _join(self.by_business_key),
+            "retired_external": {
+                SEP.join(key): generation
+                for key, generation in sorted(self.retired_external.items())
+            },
         }
 
     @classmethod
@@ -284,6 +305,18 @@ class IdentityMap:
             for key, value in mapping.items():
                 kind, _, rest = key.partition(SEP)
                 out[(kind, rest)] = uuid.UUID(value)
+            return out
+
+        def _split_int(mapping: Mapping[str, int]) -> dict[tuple[str, str], int]:
+            out: dict[tuple[str, str], int] = {}
+            for key, value in mapping.items():
+                kind, _, rest = key.partition(SEP)
+                generation = int(value)
+                if generation < 1:
+                    raise ValueError(
+                        f"retired external generation must be positive: {key!r}"
+                    )
+                out[(kind, rest)] = generation
             return out
 
         by_external = _split(payload.get("by_external", {}))  # type: ignore[arg-type]
@@ -298,6 +331,9 @@ class IdentityMap:
             by_external=by_external,
             by_guid=by_guid,
             by_business_key=_split(payload.get("by_business_key", {})),  # type: ignore[arg-type]
+            retired_external=_split_int(
+                payload.get("retired_external", {})  # type: ignore[arg-type]
+            ),
         )
         identity.external_of = {uid: external for (_, external), uid in by_external.items()}
         return identity

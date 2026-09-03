@@ -205,6 +205,16 @@ def validate_canonical_schedule(document: dict[str, Any]) -> ValidationReport:
             report.warnings.append(
                 f"Activity {activity['id']} references unresolved calendar {calendar_ref}"
             )
+        constraint_code = activity.get("constraint_type_source")
+        if constraint_code is not None and (
+            isinstance(constraint_code, bool)
+            or not isinstance(constraint_code, int)
+            or constraint_code not in range(8)
+        ):
+            report.errors.append(
+                f"Activity {activity['id']} has unsupported constraint_type_source "
+                f"{constraint_code!r}"
+            )
 
     valid_relationship_types = {"FF", "FS", "SF", "SS", "UNKNOWN"}
     for relation in document["relationships"]:
@@ -233,7 +243,12 @@ def validate_canonical_schedule(document: dict[str, Any]) -> ValidationReport:
     for assignment in document["assignments"]:
         task_ref = assignment.get("task_ref")
         resource_ref = assignment.get("resource_ref")
-        if task_ref not in all_task_ids:
+        if task_ref in wbs_ids:
+            report.errors.append(
+                f"Assignment {assignment['id']} targets summary task {task_ref}; "
+                "canonical assignments require a leaf activity"
+            )
+        elif task_ref not in activity_ids:
             report.errors.append(
                 f"Assignment {assignment['id']} references missing task {task_ref}"
             )

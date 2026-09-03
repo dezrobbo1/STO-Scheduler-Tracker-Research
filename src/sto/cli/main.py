@@ -18,11 +18,12 @@ import json
 import sys
 from collections.abc import Sequence
 from pathlib import Path
+from typing import Any
 
 from ..core.hashing import canonical_json_bytes, canonical_sha256
 from ..core.model import encode_schedule
 from ..core.model.enums import EntityKind
-from ..core.model.ids import IdentityMap, ReconciliationReport
+from ..core.model.ids import IdentityMap, ReconciliationReport, normalise_guid
 from ..core.model.migrate.sto_v011 import migrate
 from ..legacy.mspdi import import_mspdi
 from . import roadmap as _roadmap
@@ -54,6 +55,22 @@ def _load_identity(path: Path) -> IdentityMap:
         return IdentityMap.from_dict(payload)
     except (KeyError, TypeError, ValueError) as exc:
         raise SystemExit(f"invalid identity map {path}: {exc}") from exc
+
+
+def _declared_project_guid(document: dict[str, Any]) -> str | None:
+    """Read the source project's declared GUID without inventing identity."""
+
+    project = document.get("project")
+    if not isinstance(project, dict):
+        return None
+    for entry in project.get("external_references", []) or []:
+        if (
+            isinstance(entry, dict)
+            and entry.get("type") == "GUID"
+            and entry.get("value") not in (None, "")
+        ):
+            return normalise_guid(str(entry["value"]))
+    return None
 
 
 def _same_file(left: Path, right: Path) -> bool:
@@ -108,11 +125,29 @@ def _canonicalise(args: argparse.Namespace) -> int:
                 f"--output would overwrite the input identity map: {args.identity_in}"
             )
 
-    schedule, identity, _ = _load(
-        args.source,
-        identity=prior_identity,
-        schedule_id=prior_identity.schedule_id if prior_identity is not None else None,
-    )
+    document = import_mspdi(str(args.source))
+    declared_project_guid = _declared_project_guid(document)
+    if (
+        prior_identity is not None
+        and declared_project_guid is not None
+        and declared_project_guid != prior_identity.schedule_id
+    ):
+        if not args.allow_project_identity_mismatch:
+            raise SystemExit(
+                "identity map does not belong to the imported project's declared GUID:\n"
+                f"  identity map {prior_identity.schedule_id}\n"
+                f"  source       {declared_project_guid}\n"
+                "Use --allow-project-identity-mismatch only when you have verified "
+                "that the files are successive snapshots of the same shutdown."
+            )
+        print(
+            "warning: overriding a project-identity mismatch for canonicalisation\n"
+            f"         identity map {prior_identity.schedule_id}\n"
+            f"         source       {declared_project_guid}",
+            file=sys.stderr,
+        )
+
+    schedule, identity, _ = migrate(document, identity=prior_identity)
     payload = encode_schedule(schedule)
     digest = canonical_sha256(payload)
 
@@ -196,6 +231,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--identity-in",
         type=Path,
         help="Reuse a prior identity map when canonicalising a later snapshot",
+    )
+    canonicalise.add_argument(
+        "--allow-project-identity-mismatch",
+        action="store_true",
+        help=(
+            "Reuse --identity-in despite a different declared project GUID; "
+            "only for verified successive snapshots of the same shutdown"
+        ),
     )
     canonicalise.add_argument("--output", type=Path)
     canonicalise.add_argument("--identity-out", type=Path)
