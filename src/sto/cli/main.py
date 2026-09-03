@@ -34,6 +34,8 @@ _KINDS = (
     EntityKind.CALENDAR,
     EntityKind.RESOURCE,
     EntityKind.ASSIGNMENT,
+    EntityKind.UDF,
+    EntityKind.BASELINE,
 )
 
 
@@ -41,25 +43,48 @@ def _load(path: Path, identity: IdentityMap | None = None, schedule_id: str | No
     return migrate(import_mspdi(str(path)), identity=identity, schedule_id=schedule_id)
 
 
+def _load_identity(path: Path) -> IdentityMap:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise SystemExit(f"unable to read identity map {path}: {exc}") from exc
+    if not isinstance(payload, dict):
+        raise SystemExit(f"identity map must be a JSON object: {path}")
+    try:
+        return IdentityMap.from_dict(payload)
+    except (KeyError, TypeError, ValueError) as exc:
+        raise SystemExit(f"invalid identity map {path}: {exc}") from exc
+
+
+def _same_file(left: Path, right: Path) -> bool:
+    """Compare paths by inode when possible, falling back to resolved names."""
+
+    try:
+        return left.samefile(right)
+    except (FileNotFoundError, OSError):
+        return left.resolve() == right.resolve()
+
+
 def _guard_outputs(source: Path, *outputs: Path | None) -> None:
     """Refuse to write over the source, or to have two outputs collide.
 
     Imported sources are immutable (AGENTS.md), and a mistyped --output that
-    resolves to the schedule would destroy a customer file that may have no
-    other copy. Symlinks are resolved so aliases are caught too.
+    aliases the schedule would destroy a customer file that may have no other
+    copy. ``Path.resolve`` catches symlinks and ``samefile`` catches hard links.
     """
 
-    resolved_source = source.resolve()
-    seen: dict[Path, str] = {}
+    seen: list[tuple[str, Path]] = []
     for name, path in zip(("--output", "--identity-out"), outputs, strict=False):
         if path is None:
             continue
-        resolved = path.resolve()
-        if resolved == resolved_source:
+        if _same_file(path, source):
             raise SystemExit(f"{name} would overwrite the source schedule: {source}")
-        if resolved in seen:
-            raise SystemExit(f"{name} and {seen[resolved]} resolve to the same file: {path}")
-        seen[resolved] = name
+        for previous_name, previous_path in seen:
+            if _same_file(path, previous_path):
+                raise SystemExit(
+                    f"{name} and {previous_name} resolve to the same file: {path}"
+                )
+        seen.append((name, path))
 
 
 def _emit(payload: object, output: Path | None, pretty: bool) -> None:
@@ -76,7 +101,18 @@ def _emit(payload: object, output: Path | None, pretty: bool) -> None:
 
 def _canonicalise(args: argparse.Namespace) -> int:
     _guard_outputs(args.source, args.output, args.identity_out)
-    schedule, identity, _ = _load(args.source)
+    prior_identity = _load_identity(args.identity_in) if args.identity_in is not None else None
+    if args.identity_in is not None and args.output is not None:
+        if _same_file(args.identity_in, args.output):
+            raise SystemExit(
+                f"--output would overwrite the input identity map: {args.identity_in}"
+            )
+
+    schedule, identity, _ = _load(
+        args.source,
+        identity=prior_identity,
+        schedule_id=prior_identity.schedule_id if prior_identity is not None else None,
+    )
     payload = encode_schedule(schedule)
     digest = canonical_sha256(payload)
 
@@ -156,6 +192,11 @@ def build_parser() -> argparse.ArgumentParser:
         "canonicalise", help="Read a schedule and emit the canonical v1 document"
     )
     canonicalise.add_argument("source", type=Path)
+    canonicalise.add_argument(
+        "--identity-in",
+        type=Path,
+        help="Reuse a prior identity map when canonicalising a later snapshot",
+    )
     canonicalise.add_argument("--output", type=Path)
     canonicalise.add_argument("--identity-out", type=Path)
     canonicalise.add_argument("--pretty", action="store_true")
