@@ -35,10 +35,11 @@ def _status(args: argparse.Namespace) -> int:
                 f"always run; {env}=1 makes its absence a failure"
             )
 
+    members = set(phase.get("slices", ()))
     remaining = sum(
         entry["days"]
         for entry in roadmap.slices
-        if entry["phase"] == phase["id"] and entry["status"] != "done"
+        if entry["id"] in members and entry["status"] != "done"
     )
     print(f"effort   {remaining} slice-days left in this phase, before contingency")
 

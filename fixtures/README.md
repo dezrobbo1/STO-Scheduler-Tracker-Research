@@ -46,8 +46,8 @@ file**. Any evidence claim must name which one it used.
 — the single point where two independently produced evidence lines meet. Until
 2026-09-03 it was on no machine and in no repository. It was recovered from the
 user's Shutdown Tracker source-consolidation package (dated 2026-08-28, folder
-`03_ms_project_fixtures`, original name `NEW_6477046-BOILER-WG110-BLB001(1).xml`),
-where the package's own `MANIFEST.csv` records the same full SHA-256. The
+`03_ms_project_fixtures` — match on the hash, not the name), where the
+package's own `MANIFEST.csv` records the same full SHA-256. The
 calculation evidence and the native round-trip evidence can now be compared
 against their common baseline.
 

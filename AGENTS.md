@@ -17,8 +17,11 @@ A backtick around a path means **a path that exists in this repository now**;
 carries its owner prefix. A rule marked **(pending — PR-…)** is registered in
 `docs/goals/roadmap.json` and is not enforceable yet: it is written because it
 shapes what gets built, and the suite fails when its machinery appears and asks
-for it to be promoted. Never write a count in prose — counts are drift by
-construction.
+for it to be promoted. Never write a count of repository contents in prose —
+files, tests, cases, rules, ADRs — because that count drifts by construction;
+name the thing and let a command count it. A number *measured from a
+hash-recorded file* is different: it is evidence, it belongs in an ADR or
+`docs/history/`, and it is written with the test that pins it.
 
 ## Do not touch
 
@@ -60,9 +63,10 @@ Reported progress reaches the live schedule at once, marked unreviewed; it
 reaches the approved forecast — what exports read — only through supervisor then
 planner review. **(pending — PR-approved-forecast)**
 
-**`sto.core` depends on the standard library only**, so hashing stays testable
-without a database and no validation library can reorder a field and move a
-hash. Third-party code belongs at the API edge.
+**`sto.core` and the research importer `sto.legacy` depend on the standard
+library only**, so hashing stays testable without a database, no validation
+library can reorder a field and move a hash, and the file oracle never sits
+behind the extra the API needs. Third-party code belongs at the API edge.
 Enforced by `tests/test_core_is_stdlib_only.py`.
 
 ## Forward-progress test
@@ -118,6 +122,13 @@ experimental code solely because it might be reused.
   remaining finding is legitimately deferred or rejected, acceptance criteria
   pass and CI is green. No clean-review loops, and never buy an unobserved edge
   case at the cost of a new way for a real schedule to stop importing.
+  The reviewer re-runs on every push, so "one pass" is a rule about us, not
+  about it: the first pass is answered in full; a later pass is read for the
+  blocker categories above and for a guard the repository could carry but does
+  not — those are fixed — and everything else it raises is recorded once in a
+  single deferral comment and left. A finding the repository's own guards
+  could have caught is a finding about the guards: extend the guard, which
+  ends that class, rather than fixing the instance.
 - **A diagnosis is a claim.** Before writing down why a number is what it is,
   measure the explanation against the data — including by checking that the
   proposed fix would actually change it. Twice now a confident cause has been

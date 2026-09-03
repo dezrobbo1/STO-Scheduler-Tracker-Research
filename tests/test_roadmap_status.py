@@ -192,6 +192,21 @@ class EvidenceExecutionTests(unittest.TestCase):
         self.assertEqual(cites, conditional, "a criterion cites the skipping file silently")
 
 
+class MembershipTests(unittest.TestCase):
+    """Phase membership is written twice; loading refuses a disagreement."""
+
+    def test_a_slice_whose_phase_disagrees_with_the_list_is_refused(self):
+        import json
+        import tempfile
+
+        payload = json.loads((REPO_ROOT / "docs" / "goals" / "roadmap.json").read_text())
+        payload["slices"][0]["phase"] = "P6"
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as handle:
+            json.dump(payload, handle)
+        with self.assertRaises(RoadmapError):
+            load(Path(handle.name))
+
+
 class EffortTests(unittest.TestCase):
     def test_every_slice_records_its_effort(self):
         for entry in load().slices:

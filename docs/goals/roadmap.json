@@ -12,7 +12,7 @@
     "native_validation_only": 1,
     "levelling_only": 2,
     "executable_by_the_cpm_engine": 47,
-    "note": "SEM-STA-045 carries no reference forecast and requires a native run. SEM-DET-049 and SEM-DET-050 are resource-determinism cases and arrive with levelling in P6. The remaining 47 are what the CPM engine must pass at the P1 gate; the corpus as a whole is what bounds the engine's claims."
+    "note": "SEM-STA-045 carries no reference forecast and requires a native run. SEM-DET-049 and SEM-DET-050 are resource-determinism cases and arrive with levelling in P6. Every other case is what the CPM engine must pass at the P1 gate - the executable count above, which the gate text is tested against; the corpus as a whole is what bounds the engine's claims."
   },
   "dependencies": [
     {

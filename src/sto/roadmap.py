@@ -164,10 +164,24 @@ def load(path: Path | None = None) -> Roadmap:
         raise RoadmapError(f"current_phase {current!r} is not a declared phase")
 
     slice_ids = {entry["id"] for entry in slices}
+    phase_of: dict[str, str] = {}
     for entry in phases:
         for member in entry.get("slices", ()):
             if member not in slice_ids:
                 raise RoadmapError(f"phase {entry['id']} lists unknown slice {member!r}")
+            if member in phase_of:
+                raise RoadmapError(f"slice {member} is listed by both {phase_of[member]} and {entry['id']}")
+            phase_of[member] = entry["id"]
+    # Membership is written twice -- on the phase and on the slice -- so a
+    # resequence that updates one and not the other is caught here, not by
+    # two commands disagreeing.
+    for entry in slices:
+        listed = phase_of.get(entry["id"])
+        if listed != entry["phase"]:
+            raise RoadmapError(
+                f"slice {entry['id']} says phase {entry['phase']!r} but "
+                f"{'no phase' if listed is None else listed} lists it"
+            )
 
     for rule in rules:
         if rule["status"] not in RULE_STATUSES:
@@ -369,13 +383,21 @@ def gate_checklist(roadmap: Roadmap, phase_id: str | None = None) -> str:
         for blocker in roadmap.blockers_for(item["id"]):
             lines.append(f"          BLOCKED by {blocker['id']}: {blocker['what']}")
 
-    refs = (*phase.get("slices", ()), *(i["id"] for i in phase["gate"]))
-    blocked = roadmap.blockers_for(*refs)
-    if blocked:
-        lines += ["", "External dependencies this phase waits on"]
-        for dep in blocked:
+    criteria = tuple(i["id"] for i in phase["gate"])
+    slices = tuple(phase.get("slices", ()))
+    gating = roadmap.blockers_for(*criteria)
+    if gating:
+        lines += ["", "External dependencies this gate waits on"]
+        for dep in gating:
             lines.append(f"  {dep['id']}  {dep['what']}")
             lines.append(f"          {dep['note']}")
+    limiting = tuple(d for d in roadmap.blockers_for(*slices) if d not in gating)
+    if limiting:
+        lines += ["", "Blocked dependencies that limit this phase's slices, not its gate"]
+        for dep in limiting:
+            lines.append(f"  {dep['id']}  {dep['what']}")
+            lines.append(f"          {dep['note']}")
+    refs = (*slices, *criteria)
     at_risk = roadmap.at_risk_for(*refs)
     if at_risk:
         lines += ["", "At risk (not blocking, but this phase depends on it)"]

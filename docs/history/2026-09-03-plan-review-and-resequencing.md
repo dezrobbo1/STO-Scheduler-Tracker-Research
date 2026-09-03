@@ -11,12 +11,16 @@ the plan, and a handful of things nobody's slice owned.
 
 ## The schedule was a sum presented as a calendar
 
-Slice effort adds up to 140 days across the 33 surviving slices. The plan spread
-those over 26 weeks at five productive days a week with no slack, and the
-allocation is uneven in a way the totals hide: the engine-and-interchange phase
-carries 35 slice-days in 25 working days, export carries 27 in 20 — before the
-manual native sessions, which the plan puts outside the estimate entirely — and
-the final phase carries 22 days in 35.
+Slice effort adds up to 140 days across the 34 surviving slices, as recorded
+per slice in `docs/goals/roadmap.json`. The plan spread those over 26 weeks at
+five productive days a week with no slack, and the allocation is uneven in a
+way the totals hide: the engine-and-interchange phase carries 35 slice-days in
+25 working days, export carries 30 in 20 — before the manual native sessions,
+which the plan puts outside the estimate entirely — and the final phase carries
+22 days in 35. (The plan's own total discounted the export orchestration slice
+as overlap with the writer slices; the data records the slice as estimated, so
+the export figure here is 30, not the 27 first written. The slice count was
+first written as 33; it is 34.)
 
 The evidence that this already bites is in this repository. Phase 0 budgeted
 eight days for the canonical model and persistence. The model landed; the
