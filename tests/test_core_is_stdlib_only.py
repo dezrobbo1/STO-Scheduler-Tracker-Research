@@ -19,7 +19,12 @@ import sys
 import unittest
 from pathlib import Path
 
-CORE = Path(__file__).resolve().parent.parent / "src" / "sto" / "core"
+SRC = Path(__file__).resolve().parent.parent / "src" / "sto"
+#: ``sto.core`` for the reason in AGENTS.md; ``sto.legacy`` because it is the
+#: importer and oracle, and a third-party import there would put the file
+#: oracle behind the extra the API needs (ADR-005).
+CORE = SRC / "core"
+GUARDED = (CORE, SRC / "legacy")
 STDLIB = set(sys.stdlib_module_names)
 FIRST_PARTY = {"sto"}
 
@@ -40,7 +45,7 @@ def _imported_roots(path: Path) -> set[str]:
 class CorePurityTests(unittest.TestCase):
     def test_core_imports_nothing_third_party(self):
         offences: list[str] = []
-        for path in sorted(CORE.rglob("*.py")):
+        for path in sorted(p for root in GUARDED for p in root.rglob("*.py")):
             for root in sorted(_imported_roots(path)):
                 if root in STDLIB or root in FIRST_PARTY:
                     continue
@@ -55,6 +60,6 @@ class CorePurityTests(unittest.TestCase):
     def test_the_scan_found_the_core_package(self):
         """A purity check that silently scans nothing would always pass."""
 
-        modules = list(CORE.rglob("*.py"))
+        modules = [p for root in GUARDED for p in root.rglob("*.py")]
         self.assertGreater(len(modules), 5)
         self.assertTrue(any(path.name == "hashing.py" for path in modules))

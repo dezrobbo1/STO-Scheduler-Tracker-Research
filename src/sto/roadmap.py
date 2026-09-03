@@ -10,6 +10,12 @@ before it can be enforced carries a predicate saying when its machinery arrives.
 A test evaluates those predicates, so a rule marked pending whose machinery has
 appeared fails the suite and asks to be promoted. Nobody has to remember.
 
+Two things beside the registry live here for the same reason. Effort is
+recorded per slice in days, so a total is derived rather than written down and
+cannot go stale in prose. External dependencies -- a Primavera file, a CMMS
+extract -- are rows with the slices and criteria they gate, so a gate that
+cannot be crossed says so now rather than in the week it is reached.
+
 Two predicate kinds, deliberately. `path_exists` covers directories, register
 files, and -- pointed at a test -- "the enforcing test now exists".
 `import_succeeds` covers the one thing it cannot: a package present but not
@@ -34,10 +40,17 @@ SCHEMA_VERSION = "sto-roadmap-1"
 PREDICATE_KINDS = frozenset({"path_exists", "import_succeeds"})
 RULE_STATUSES = frozenset({"pending", "live"})
 
+#: An external dependency is `available`, `blocked` (it does not exist yet, or
+#: not to us), or `at_risk` (it exists in one fragile copy). Only `blocked`
+#: stops a criterion being met: `at_risk` is a warning about losing something,
+#: not about lacking it.
+DEPENDENCY_STATUSES = frozenset({"available", "blocked", "at_risk"})
+BLOCKING_STATUSES = frozenset({"blocked"})
+
 #: Regions of ACTIVE.md regenerated from this data. Everything outside them is
 #: hand-written: narrative is judgement, and generating it would mean editing a
 #: template to change a sentence.
-REGION_NAMES = ("now", "rules")
+REGION_NAMES = ("now", "dependencies", "rules")
 _BEGIN = "<!-- roadmap:begin {name} -->"
 _END = "<!-- roadmap:end {name} -->"
 _WARNING = (
@@ -57,6 +70,8 @@ class Roadmap:
     slices: tuple[dict[str, Any], ...]
     rules: tuple[dict[str, Any], ...]
     foreign_prefixes: tuple[str, ...]
+    dependencies: tuple[dict[str, Any], ...] = ()
+    conformance: dict[str, Any] | None = None
 
     def phase(self, phase_id: str) -> dict[str, Any]:
         for entry in self.phases:
@@ -67,6 +82,44 @@ class Roadmap:
     @property
     def slice_ids(self) -> frozenset[str]:
         return frozenset(entry["id"] for entry in self.slices)
+
+    @property
+    def gate_ids(self) -> frozenset[str]:
+        return frozenset(
+            item["id"] for phase in self.phases for item in phase["gate"]
+        )
+
+    def gate_item(self, criterion_id: str) -> dict[str, Any]:
+        for phase in self.phases:
+            for item in phase["gate"]:
+                if item["id"] == criterion_id:
+                    return item
+        raise RoadmapError(f"no gate criterion {criterion_id!r}")
+
+    def blockers_for(self, *refs: str) -> tuple[dict[str, Any], ...]:
+        """Blocking dependencies that name any of these slice or criterion ids."""
+
+        return self._dependencies_for(BLOCKING_STATUSES, *refs)
+
+    def at_risk_for(self, *refs: str) -> tuple[dict[str, Any], ...]:
+        """Dependencies that exist but could be lost, naming any of these ids.
+
+        They do not hold a criterion open -- the thing is here -- but a gate
+        ritual that never mentioned them would let the one copy of an oracle
+        stay the one copy.
+        """
+
+        return self._dependencies_for(frozenset({"at_risk"}), *refs)
+
+    def _dependencies_for(
+        self, statuses: frozenset[str], *refs: str
+    ) -> tuple[dict[str, Any], ...]:
+        wanted = set(refs)
+        return tuple(
+            dep
+            for dep in self.dependencies
+            if dep["status"] in statuses and wanted & set(dep["needed_by"])
+        )
 
     def pending_rules(self) -> tuple[dict[str, Any], ...]:
         return tuple(rule for rule in self.rules if rule["status"] == "pending")
@@ -111,10 +164,24 @@ def load(path: Path | None = None) -> Roadmap:
         raise RoadmapError(f"current_phase {current!r} is not a declared phase")
 
     slice_ids = {entry["id"] for entry in slices}
+    phase_of: dict[str, str] = {}
     for entry in phases:
         for member in entry.get("slices", ()):
             if member not in slice_ids:
                 raise RoadmapError(f"phase {entry['id']} lists unknown slice {member!r}")
+            if member in phase_of:
+                raise RoadmapError(f"slice {member} is listed by both {phase_of[member]} and {entry['id']}")
+            phase_of[member] = entry["id"]
+    # Membership is written twice -- on the phase and on the slice -- so a
+    # resequence that updates one and not the other is caught here, not by
+    # two commands disagreeing.
+    for entry in slices:
+        listed = phase_of.get(entry["id"])
+        if listed != entry["phase"]:
+            raise RoadmapError(
+                f"slice {entry['id']} says phase {entry['phase']!r} but "
+                f"{'no phase' if listed is None else listed} lists it"
+            )
 
     for rule in rules:
         if rule["status"] not in RULE_STATUSES:
@@ -125,12 +192,38 @@ def load(path: Path | None = None) -> Roadmap:
         if rule["owed_to"] not in slice_ids:
             raise RoadmapError(f"rule {rule['id']} is owed to unknown slice {rule['owed_to']!r}")
 
+    dependencies = tuple(payload.get("dependencies", ()))
+    gate_ids = {item["id"] for entry in phases for item in entry["gate"]}
+    for dependency in dependencies:
+        if dependency["status"] not in DEPENDENCY_STATUSES:
+            raise RoadmapError(
+                f"dependency {dependency['id']}: bad status {dependency['status']!r}"
+            )
+        if not dependency["needed_by"]:
+            raise RoadmapError(
+                f"dependency {dependency['id']} gates nothing; a dependency nobody "
+                "waits on is a note, not a dependency"
+            )
+        for ref in dependency["needed_by"]:
+            if ref not in slice_ids and ref not in gate_ids:
+                raise RoadmapError(
+                    f"dependency {dependency['id']} is needed by {ref!r}, "
+                    "which is neither a slice nor a gate criterion"
+                )
+
+    for entry in phases:
+        for item in entry["gate"]:
+            if item["met"] and not item.get("evidence"):
+                raise RoadmapError(f"{item['id']} is met but names no evidence")
+
     return Roadmap(
         current_phase=current,
         phases=phases,
         slices=slices,
         rules=rules,
         foreign_prefixes=tuple(payload.get("foreign_prefixes", ())),
+        dependencies=dependencies,
+        conformance=payload.get("conformance"),
     )
 
 
@@ -159,6 +252,11 @@ def describe(predicate: dict[str, Any]) -> str:
     return f"{predicate['module']} imports"
 
 
+#: Footnote marker for evidence that does not always execute. A criterion can
+#: be honestly met and still be invisible in CI; saying which is the point.
+CONDITIONAL_MARK = "‡"
+
+
 def _render_now(roadmap: Roadmap) -> str:
     phase = roadmap.phase(roadmap.current_phase)
     status = phase["status"].replace("_", " ")
@@ -170,10 +268,50 @@ def _render_now(roadmap: Roadmap) -> str:
         "| | Gate criterion | Shown by |",
         "|---|---|---|",
     ]
+    footnotes: list[str] = []
     for item in phase["gate"]:
-        mark = "✓" if item["met"] else "·"
+        blockers = roadmap.blockers_for(item["id"])
+        if item["met"]:
+            mark = "✓"
+        elif blockers:
+            mark = "⊘"
+        else:
+            mark = "·"
         evidence = f"`{item['evidence']}`" if item["evidence"] else "—"
+        conditional = item.get("evidence_conditional")
+        if conditional:
+            evidence += f" {CONDITIONAL_MARK}"
+            note = (
+                f"{CONDITIONAL_MARK} {conditional['why']}; "
+                f"set `{conditional['env']}=1` to make their absence a failure "
+                "rather than a skip."
+            )
+            if note not in footnotes:
+                footnotes.append(note)
+        if blockers:
+            evidence += " — waits on " + ", ".join(f"`{b['id']}`" for b in blockers)
         lines.append(f"| {mark} | {item['text']} | {evidence} |")
+    if footnotes:
+        lines += [""] + footnotes
+    return "\n".join(lines)
+
+
+def _render_dependencies(roadmap: Roadmap) -> str:
+    """What the work waits on that no amount of coding supplies."""
+
+    if not roadmap.dependencies:
+        return "None recorded."
+    lines = [
+        "| Dependency | Status | Gates | Asked |",
+        "|---|---|---|---|",
+    ]
+    for dep in roadmap.dependencies:
+        gates = ", ".join(dep["needed_by"])
+        asked = dep["asked_on"] or "—"
+        lines.append(
+            f"| `{dep['id']}` — {dep['what']} | {dep['status'].replace('_', ' ')} "
+            f"| {gates} | {asked} |"
+        )
     return "\n".join(lines)
 
 
@@ -193,7 +331,11 @@ def _render_rules(roadmap: Roadmap) -> str:
     return "\n".join(lines)
 
 
-_RENDERERS = {"now": _render_now, "rules": _render_rules}
+_RENDERERS = {
+    "now": _render_now,
+    "dependencies": _render_dependencies,
+    "rules": _render_rules,
+}
 
 
 def render_regions(text: str, roadmap: Roadmap) -> str:
@@ -229,6 +371,39 @@ def gate_checklist(roadmap: Roadmap, phase_id: str | None = None) -> str:
         lines.append(f"  [{'x' if item['met'] else ' '}] {item['id']}  {item['text']}")
         if item["evidence"]:
             lines.append(f"          shown by: {item['evidence']}")
+        conditional = item.get("evidence_conditional")
+        if conditional:
+            lines.append(
+                f"          NOT ALWAYS RUN: {conditional['why']}."
+            )
+            lines.append(
+                f"          Run the gate with {conditional['env']}=1 so a missing "
+                "input fails instead of skipping."
+            )
+        for blocker in roadmap.blockers_for(item["id"]):
+            lines.append(f"          BLOCKED by {blocker['id']}: {blocker['what']}")
+
+    criteria = tuple(i["id"] for i in phase["gate"])
+    slices = tuple(phase.get("slices", ()))
+    gating = roadmap.blockers_for(*criteria)
+    if gating:
+        lines += ["", "External dependencies this gate waits on"]
+        for dep in gating:
+            lines.append(f"  {dep['id']}  {dep['what']}")
+            lines.append(f"          {dep['note']}")
+    limiting = tuple(d for d in roadmap.blockers_for(*slices) if d not in gating)
+    if limiting:
+        lines += ["", "Blocked dependencies that limit this phase's slices, not its gate"]
+        for dep in limiting:
+            lines.append(f"  {dep['id']}  {dep['what']}")
+            lines.append(f"          {dep['note']}")
+    refs = (*slices, *criteria)
+    at_risk = roadmap.at_risk_for(*refs)
+    if at_risk:
+        lines += ["", "At risk (not blocking, but this phase depends on it)"]
+        for dep in at_risk:
+            lines.append(f"  {dep['id']}  {dep['what']}")
+            lines.append(f"          {dep['note']}")
 
     owed = [rule for rule in roadmap.pending_rules() if rule["owed_to"] in phase.get("slices", ())]
     if owed:
@@ -241,7 +416,8 @@ def gate_checklist(roadmap: Roadmap, phase_id: str | None = None) -> str:
     lines += [
         "",
         "Before declaring this phase passed",
-        "  1. Every criterion above is [x] and names what shows it.",
+        "  1. Every criterion above is [x] and names what shows it, and every",
+        "     criterion marked NOT ALWAYS RUN was crossed with its input present.",
         "  2. Re-read AGENTS.md end to end. Anything it asserts that is no longer",
         "     true is a defect: fix it now, not in the next phase.",
         "  3. For each rule that went live: write the enforcing test, set",

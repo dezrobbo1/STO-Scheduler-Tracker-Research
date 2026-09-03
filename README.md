@@ -29,7 +29,8 @@ their identity forward, which are new, and which the later file no longer has.
 | What is being built now | `docs/goals/ACTIVE.md` |
 | Working mode and boundaries | `AGENTS.md` |
 | Decisions | `docs/adr/`, with `docs/adr/LEGACY-INDEX.md` mapping the frozen repositories' ADRs |
-| The full design | `docs/roadmap/CONSOLIDATION-PLAN.md` |
+| The design, frozen 2026-09-02 and not maintained | `docs/roadmap/CONSOLIDATION-PLAN.md` |
+| Product contracts carried from the frozen repositories | `docs/product/` |
 | Native round-trip evidence | `docs/evidence/` |
 | How decisions were reached | `docs/history/` |
 | Real schedules: hashes, provenance, recovery | `fixtures/README.md` |

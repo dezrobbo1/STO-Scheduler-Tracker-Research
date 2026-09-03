@@ -12,8 +12,45 @@
 > repository, paths in a sibling repository, and paths that do not exist yet.
 > That ambiguity is why no reference guard scans this file.
 >
-> Corrections go to an ADR or to `ACTIVE.md`. Never here: a record that has
-> stopped being true is still an accurate record of what was decided.
+> Corrections go to an ADR or to `ACTIVE.md`, never into the body: a record
+> that has stopped being true is still an accurate record of what was decided.
+> This header is the one exception, and it is a pointer, not a correction — a
+> reader who never reaches the live documents should still learn that a passage
+> has been superseded and by what. (Two 2026-09-03 withdrawal notes in §C.5 and
+> §D.3 predate that rule being stated this way; they stay, bracketed, as
+> examples of it.)
+>
+> **Superseded since the freeze, beyond the figures above:**
+>
+> - **§A.2 S1 and §D.1's "expect 555 matched, 7 new"** was an estimate, never a
+>   measurement. Measured: 447 activities shared, 18 new, 13 departed. The gate
+>   criterion was restated as attribution rather than a count — see
+>   `docs/goals/roadmap.json` P0-G3 and `docs/goals/ACTIVE.md`.
+> - **§C.5's first-ten ADR list** is unrecoverable as written: numbering has
+>   diverged in subject, not only in count. This plan's ADR-002 (Python core /
+>   Java sidecar) is the repository's ADR-003. Read `docs/adr/` for what exists.
+> - **Platform slices `P1…P12` are `PL1…PL12`** here; `P0…P5` now name phases.
+>   `P3` dissolved into I3/I4, `S11` into I9–I12, and I14 is deferred. A bare
+>   `P<n>` in this document is a platform slice, not a phase.
+> - **The assignment-identity diagnosis behind §A.0's identity row was
+>   withdrawn** on 2026-09-03: the proposed `(task UID, resource UID)` business
+>   key is derived from the Microsoft UIDs, so it matches exactly what the UID
+>   already matched. See ADR-002's amendment and
+>   `docs/history/2026-09-03-governance-and-a-withdrawn-finding.md`.
+> - **§D.1's phase 5 is split** — cut-over now precedes levelling and
+>   operational constraints (ADR-004). **§C.1's single `uv`-managed dependency
+>   set is not adopted**; the base package stays dependency-free and the API's
+>   packages sit behind an extra (ADR-005). **§C.3 P1's projection table** waits
+>   for the passes that give its columns meanings (ADR-006).
+> - **§B.0 and §E2 overstate the fixture problem.** The four BOILER proof files
+>   are on this machine in `/home/dez/sto-fixtures/`, byte-identical to the
+>   blobs on ST-Claude `origin/main`. `fixtures/README.md` is authoritative.
+> - **PM-Software paths:** `canonical_json.py` is under
+>   `src/deterministic_scheduling_core/provenance/`, not under `canonical/`. The
+>   corpus is 50 cases, of which 47 are executable by the CPM engine — one needs
+>   a native run and two arrive with levelling. `docs/goals/roadmap.json` counts
+>   them; §A.2, §D.3 and this document's other figures describe different
+>   subsets and do not disagree.
 
 # STO: from four repos to one scheduler-centred product
 

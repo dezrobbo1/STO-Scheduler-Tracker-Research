@@ -79,6 +79,168 @@ class RoadmapDataTests(unittest.TestCase):
         )
 
 
+class DependencyTests(unittest.TestCase):
+    """A gate nobody can cross should say so now, not in the week it is reached."""
+
+    def setUp(self):
+        self.roadmap = load()
+
+    def test_a_blocked_dependency_holds_its_criteria_open(self):
+        offences = [
+            f"{item['id']} is met but waits on {dependency['id']}"
+            for dependency in self.roadmap.dependencies
+            if dependency["status"] == "blocked"
+            for ref in dependency["needed_by"]
+            if ref in self.roadmap.gate_ids
+            for item in [self.roadmap.gate_item(ref)]
+            if item["met"]
+        ]
+        self.assertEqual(
+            offences,
+            [],
+            "a criterion is marked met while something outside the code is missing; "
+            "either the dependency arrived and its status is stale, or the criterion "
+            "was crossed on something other than what it names",
+        )
+
+    def test_every_dependency_says_who_waits_and_why(self):
+        for dependency in self.roadmap.dependencies:
+            with self.subTest(dependency["id"]):
+                self.assertTrue(dependency["what"].strip())
+                self.assertTrue(dependency["note"].strip())
+                self.assertTrue(dependency["needed_by"])
+
+    def test_a_blocked_dependency_is_actually_exercised(self):
+        """Without one, the mechanism above proves nothing."""
+
+        statuses = {dependency["status"] for dependency in self.roadmap.dependencies}
+        self.assertIn("blocked", statuses)
+
+
+class EvidenceExecutionTests(unittest.TestCase):
+    """Evidence that skips shows green. A met criterion must not hide that."""
+
+    def setUp(self):
+        self.roadmap = load()
+
+    def test_conditional_evidence_is_bound_to_the_switch_it_names(self):
+        offences: list[str] = []
+        for phase in self.roadmap.phases:
+            for item in phase["gate"]:
+                conditional = item.get("evidence_conditional")
+                if not conditional:
+                    continue
+                evidence = REPO_ROOT / item["evidence"]
+                if not evidence.exists():
+                    offences.append(f"{item['id']} cites missing {item['evidence']}")
+                elif conditional["env"] not in evidence.read_text(encoding="utf-8"):
+                    offences.append(
+                        f"{item['id']} says {conditional['env']} governs "
+                        f"{item['evidence']}, which never mentions it — "
+                        "the binding is unverifiable"
+                    )
+        self.assertEqual(offences, [], "\n  ".join(offences))
+
+    def test_the_switch_really_turns_absence_into_failure(self):
+        """Mentioning the variable is not honouring it. Run the file and see."""
+
+        import os
+        import subprocess
+        import sys
+
+        env = dict(os.environ)
+        env.update(
+            {
+                "PYTHONPATH": str(REPO_ROOT / "src"),
+                "STO_REQUIRE_BOILER": "1",
+                "STO_BOILER_BEFORE": str(REPO_ROOT / "nope" / "absent-before.xml"),
+                "STO_BOILER_DAY5": str(REPO_ROOT / "nope" / "absent-day5.xml"),
+            }
+        )
+        result = subprocess.run(
+            [sys.executable, "-m", "unittest", "tests.test_canonical_model"],
+            cwd=REPO_ROOT,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        self.assertNotEqual(result.returncode, 0, "absence was tolerated")
+        self.assertIn("STO_REQUIRE_BOILER=1 but", result.stderr)
+        self.assertIn("absent-before.xml", result.stderr)
+
+    def test_the_boiler_criteria_declare_that_they_do_not_always_run(self):
+        """The specific case this machinery was built for.
+
+        `tests/test_canonical_model.py` skips its real-schedule class when the
+        files are absent, which is every CI run. Two criteria cite it.
+        """
+
+        conditional = {
+            item["id"]
+            for phase in self.roadmap.phases
+            for item in phase["gate"]
+            if item.get("evidence") == "tests/test_canonical_model.py"
+            and item.get("evidence_conditional")
+        }
+        cites = {
+            item["id"]
+            for phase in self.roadmap.phases
+            for item in phase["gate"]
+            if item.get("evidence") == "tests/test_canonical_model.py"
+        }
+        self.assertEqual(cites, conditional, "a criterion cites the skipping file silently")
+
+
+class MembershipTests(unittest.TestCase):
+    """Phase membership is written twice; loading refuses a disagreement."""
+
+    def test_a_slice_whose_phase_disagrees_with_the_list_is_refused(self):
+        import json
+        import tempfile
+
+        payload = json.loads((REPO_ROOT / "docs" / "goals" / "roadmap.json").read_text())
+        payload["slices"][0]["phase"] = "P6"
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as handle:
+            json.dump(payload, handle)
+        with self.assertRaises(RoadmapError):
+            load(Path(handle.name))
+
+
+class EffortTests(unittest.TestCase):
+    def test_every_slice_records_its_effort(self):
+        for entry in load().slices:
+            with self.subTest(entry["id"]):
+                self.assertIsInstance(entry["days"], int)
+                self.assertGreater(entry["days"], 0)
+
+
+class ConformanceCorpusTests(unittest.TestCase):
+    """The corpus is counted once here so no document has to say a number."""
+
+    def test_the_subsets_account_for_every_case(self):
+        corpus = load().conformance
+        self.assertEqual(
+            corpus["cases_total"],
+            corpus["native_validation_only"]
+            + corpus["levelling_only"]
+            + corpus["executable_by_the_cpm_engine"],
+            "the corpus subsets do not add up to the whole",
+        )
+
+    def test_the_engine_gate_asks_for_the_executable_subset(self):
+        roadmap = load()
+        expected = roadmap.conformance["executable_by_the_cpm_engine"]
+        text = roadmap.gate_item("P1-G1")["text"]
+        numbers = [int(value) for value in re.findall(r"\b(\d+)\b", text)]
+        self.assertEqual(
+            numbers,
+            [expected],
+            "the P1 gate and the conformance block disagree on how many cases "
+            f"the CPM engine must pass: gate says {numbers}, data says {expected}",
+        )
+
+
 class PendingRuleTests(unittest.TestCase):
     def setUp(self):
         self.roadmap = load()
