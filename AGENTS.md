@@ -110,12 +110,14 @@ experimental code solely because it might be reused.
   regression caused by the PR, violates an invariant or acceptance criterion the
   PR claims to establish, can corrupt source or user data, lose state, create a
   false success or security risk, or materially block the current milestone.
-  Findings owned by later roadmap slices are deferred, not blockers; record a
-  material deferred item once and do not repeatedly reopen it in the same PR.
-  When current-scope blockers are fixed or classified, acceptance criteria pass
-  and CI is green, review is complete. No clean-review loops, and never buy an
-  unobserved edge case at the cost of a new way for a real schedule to stop
-  importing.
+  Later-roadmap ownership does not override those blocker categories; if one is
+  present it is fix-now even when the complete feature belongs to a later slice.
+  Other findings owned by later roadmap slices are deferred, not blockers;
+  record a material deferred item once and do not repeatedly reopen it in the
+  same PR. Review is complete only when every fix-now finding is resolved, every
+  remaining finding is legitimately deferred or rejected, acceptance criteria
+  pass and CI is green. No clean-review loops, and never buy an unobserved edge
+  case at the cost of a new way for a real schedule to stop importing.
 - **A diagnosis is a claim.** Before writing down why a number is what it is,
   measure the explanation against the data — including by checking that the
   proposed fix would actually change it. Twice now a confident cause has been
