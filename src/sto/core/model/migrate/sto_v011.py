@@ -113,6 +113,63 @@ def _dt(value: Any) -> datetime | None:
     return parsed
 
 
+def _time_interval(interval: dict[str, Any], where: str) -> TimeInterval:
+    """A working window with both bounds present. Nothing is invented here."""
+
+    raw_from, raw_to = interval.get("from"), interval.get("to")
+    if not raw_from or not raw_to:
+        raise MigrationError(f"{where}: working time is missing a bound: {interval!r}")
+    start = _seconds_of_day(raw_from)
+    finish = _seconds_of_day(raw_to)
+    return TimeInterval(start_second=start, finish_second=finish or 86400)
+
+
+def _exception_from_row(entry: dict[str, Any], where: str) -> CalendarException:
+    from_date, to_date = _dt(entry.get("from")), _dt(entry.get("to"))
+    if from_date is None or to_date is None:
+        raise MigrationError(f"{where}: calendar exception without a date range: {entry!r}")
+    raw = {child.get("name"): child.get("text") for child in (entry.get("raw") or {}).get("children", [])}
+    recurrence = {"source": "exception"}
+    if entry.get("type") is not None:
+        recurrence["type"] = str(entry["type"])
+    if raw.get("Period") not in (None, ""):
+        recurrence["period"] = str(raw["Period"])
+    if entry.get("occurrences") is not None:
+        recurrence["occurrences"] = str(entry["occurrences"])
+    if entry.get("entered_by_occurrences") is not None:
+        recurrence["entered_by_occurrences"] = "1" if entry["entered_by_occurrences"] else "0"
+    return CalendarException(
+        from_date=from_date,
+        to_date=to_date,
+        working=bool(entry.get("working")),
+        intervals=tuple(
+            _time_interval(interval, where) for interval in entry.get("working_times", [])
+        ),
+        name=entry.get("name"),
+        recurrence=recurrence,
+    )
+
+
+def _special_day_from_row(day: dict[str, Any], where: str) -> CalendarException:
+    """A legacy ``DayType 0`` entry: one dated override carried as a TimePeriod."""
+
+    periods = [e for e in day.get("extensions", []) if e.get("name") == "TimePeriod"]
+    if len(periods) != 1:
+        raise MigrationError(f"{where}: special day without exactly one TimePeriod")
+    bounds = {c.get("name"): c.get("text") for c in periods[0].get("children", [])}
+    from_date, to_date = _dt(bounds.get("FromDate")), _dt(bounds.get("ToDate"))
+    if from_date is None or to_date is None:
+        raise MigrationError(f"{where}: special day without a date range")
+    return CalendarException(
+        from_date=from_date,
+        to_date=to_date,
+        working=bool(day.get("working")),
+        intervals=tuple(_time_interval(i, where) for i in day.get("working_times", [])),
+        name=None,
+        recurrence={"source": "special_day", "type": "1"},
+    )
+
+
 def _seconds_of_day(value: Any) -> int:
     if value is None:
         return 0
@@ -355,35 +412,34 @@ def migrate(
         calendar_uid_by_ref[str(row.get("id"))] = uid
 
     for row in document.get("calendars", []):
-        week = tuple(
-            CalendarWeekDay(
-                day=int(day["day_type"]),
-                working=bool(day.get("working")),
-                intervals=tuple(
-                    TimeInterval(
-                        start_second=_seconds_of_day(interval.get("from")),
-                        finish_second=_seconds_of_day(interval.get("to")) or 86400,
-                    )
-                    for interval in day.get("working_times", [])
-                ),
+        where = f"calendar {row.get('id')}"
+        week_days: list[CalendarWeekDay] = []
+        special_days: list[CalendarException] = []
+        for day in row.get("week_days", []):
+            day_type = day.get("day_type")
+            if day_type is None:
+                raise MigrationError(f"{where}: weekday without a DayType")
+            day_type = int(day_type)
+            if day_type == 0:
+                # Older Project versions wrote dated overrides as weekday 0.
+                special_days.append(_special_day_from_row(day, where))
+                continue
+            if day_type not in range(1, 8):
+                raise MigrationError(f"{where}: DayType {day_type} is not a weekday")
+            week_days.append(
+                CalendarWeekDay(
+                    day=day_type,
+                    working=bool(day.get("working")),
+                    intervals=tuple(
+                        _time_interval(interval, f"{where} day {day_type}")
+                        for interval in day.get("working_times", [])
+                    ),
+                )
             )
-            for day in row.get("week_days", [])
-        )
+        week = tuple(week_days)
         exceptions = tuple(
-            CalendarException(
-                from_date=_dt(entry.get("from")) or datetime.min,
-                to_date=_dt(entry.get("to")) or datetime.min,
-                working=bool(entry.get("working")),
-                intervals=tuple(
-                    TimeInterval(
-                        start_second=_seconds_of_day(interval.get("from")),
-                        finish_second=_seconds_of_day(interval.get("to")) or 86400,
-                    )
-                    for interval in entry.get("working_times", [])
-                ),
-                name=entry.get("name"),
-            )
-            for entry in row.get("exceptions", [])
+            [_exception_from_row(entry, where) for entry in row.get("exceptions", [])]
+            + special_days
         )
         base_ref = row.get("base_calendar_ref")
         calendars.append(
