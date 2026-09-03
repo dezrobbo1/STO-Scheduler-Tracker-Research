@@ -3,6 +3,12 @@
 The BOILER cases run only when the real schedules are present. They are real
 customer files and stay outside this repository by policy; the synthetic
 fixtures below carry the same assertions so CI still proves the behaviour.
+
+Two gate criteria cite this file, and a skipped case shows green. Set
+``STO_REQUIRE_BOILER=1`` and their absence becomes a failure instead --
+`docs/goals/roadmap.json` records that dependence against those criteria, and
+`sto roadmap gate` prints it, so crossing a gate on evidence that never ran
+takes a deliberate act rather than an oversight.
 """
 
 from __future__ import annotations
@@ -41,6 +47,19 @@ BOILER_DAY5 = Path(os.environ.get("STO_BOILER_DAY5", "/home/dez/BOILER-WG110-day
 BOILER_UNTOUCHED = Path(
     os.environ.get("STO_BOILER_UNTOUCHED", "/home/dez/sto-fixtures/boiler-untouched-source.xml")
 )
+
+#: Named in the roadmap against every criterion whose evidence is these cases.
+REQUIRE_BOILER = os.environ.get("STO_REQUIRE_BOILER") == "1"
+_BOILER_PRESENT = BOILER_BEFORE.is_file() and BOILER_DAY5.is_file()
+
+if REQUIRE_BOILER and not _BOILER_PRESENT:
+    missing = [str(p) for p in (BOILER_BEFORE, BOILER_DAY5) if not p.is_file()]
+    raise RuntimeError(
+        "STO_REQUIRE_BOILER=1 but the real schedules are not here: "
+        + ", ".join(missing)
+        + ". Point STO_BOILER_BEFORE and STO_BOILER_DAY5 at them; "
+        "fixtures/README.md records every hash and how to recover them."
+    )
 
 
 class CanonicalHashingTests(unittest.TestCase):
@@ -206,8 +225,9 @@ class MigrationTests(unittest.TestCase):
 
 
 @unittest.skipUnless(
-    BOILER_BEFORE.is_file() and BOILER_DAY5.is_file(),
-    "real BOILER schedules not present (they stay outside the repository)",
+    _BOILER_PRESENT,
+    "real BOILER schedules not present (they stay outside the repository); "
+    "set STO_REQUIRE_BOILER=1 to make this a failure",
 )
 class BoilerSnapshotTests(unittest.TestCase):
     """The file oracle's first rung: a real 3.4 MB shutdown schedule."""

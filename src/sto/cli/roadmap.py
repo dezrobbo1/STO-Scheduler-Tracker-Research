@@ -23,7 +23,36 @@ def _status(args: argparse.Namespace) -> int:
     print(f"gate     {met} of {len(phase['gate'])} criteria met")
     for item in phase["gate"]:
         if not item["met"]:
-            print(f"           open: {item['id']}  {item['text']}")
+            blockers = roadmap.blockers_for(item["id"])
+            state = "blocked" if blockers else "   open"
+            print(f"        {state}: {item['id']}  {item['text']}")
+            for blocker in blockers:
+                print(f"                 waits on {blocker['id']}")
+        elif item.get("evidence_conditional"):
+            env = item["evidence_conditional"]["env"]
+            print(
+                f"           met : {item['id']}  shown by evidence that does not "
+                f"always run; {env}=1 makes its absence a failure"
+            )
+
+    members = set(phase.get("slices", ()))
+    remaining = sum(
+        entry["days"]
+        for entry in roadmap.slices
+        if entry["id"] in members and entry["status"] != "done"
+    )
+    print(f"effort   {remaining} slice-days left in this phase, before contingency")
+
+    blocked = roadmap.blockers_for(*phase.get("slices", ()))
+    if blocked:
+        print("\nwaiting on")
+        for dep in blocked:
+            print(f"  {dep['id']:<22} {dep['what']}")
+    at_risk = roadmap.at_risk_for(*phase.get("slices", ()))
+    if at_risk:
+        print("\nat risk")
+        for dep in at_risk:
+            print(f"  {dep['id']:<22} {dep['what']}")
 
     print("\nrules")
     for rule in roadmap.rules:

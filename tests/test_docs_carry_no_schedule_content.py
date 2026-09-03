@@ -26,6 +26,8 @@ SUFFIXES = {".md", ".json", ".yaml", ".yml", ".txt", ".py"}
 PATTERNS: dict[str, re.Pattern[str]] = {
     "work-order number": re.compile(r"\bWO\d{6,}\b"),
     "operation/order pair": re.compile(r"\bWO\d{6,}\s*/\s*\d{2,}\b"),
+    # Site schedule exports are named after a numeric job identifier.
+    "job-numbered schedule filename": re.compile(r"\bNEW_\d{6,}[-_]"),
     # Loopback and the unspecified address are configuration, not location.
     "routable IPv4 address": re.compile(
         r"\b(?!127\.|0\.0\.0\.0)(?:\d{1,3}\.){3}\d{1,3}\b"
