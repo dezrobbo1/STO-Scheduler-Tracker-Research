@@ -141,7 +141,7 @@ class CodecTests(unittest.TestCase):
                     name="Scaffold access",
                     planned_duration=Duration(seconds=28800, unit="h"),
                     actual_start=datetime(2026, 8, 21, 13, 30),
-                    udfs={"Work Order No.": "WO6899500"},
+                    udfs={"Work Order No.": "WO-EXAMPLE"},
                 ),
             ),
         )

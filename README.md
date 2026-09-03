@@ -31,6 +31,7 @@ their identity forward, which are new, and which the later file no longer has.
 | Decisions | `docs/adr/`, with `LEGACY-INDEX.md` mapping the frozen repositories' ADRs |
 | The full design | `docs/roadmap/CONSOLIDATION-PLAN.md` |
 | Native round-trip evidence | `docs/evidence/` |
+| How decisions were reached | `docs/history/` |
 | Real schedules: hashes, provenance, recovery | `fixtures/README.md` |
 
 `sto.legacy` is the previous research importer and forward-pass engine, retained

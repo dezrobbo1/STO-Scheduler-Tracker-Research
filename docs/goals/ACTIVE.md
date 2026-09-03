@@ -3,6 +3,7 @@
 STO is becoming its own scheduler: import from a CMMS, Primavera P6 or Microsoft
 Project; track, manage and schedule in real time; export back to any of them.
 `AGENTS.md` holds the boundaries, `docs/adr/` the decisions, and
+`docs/history/` how each decision was reached, and
 `docs/roadmap/CONSOLIDATION-PLAN.md` the full design behind the summary below —
 the engine slices, field-mapping tables, CMMS mapping-profile schema, round-trip
 matrix and phase gates.
