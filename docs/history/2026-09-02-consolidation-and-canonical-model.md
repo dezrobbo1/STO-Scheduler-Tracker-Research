@@ -101,9 +101,13 @@ Two real shutdown snapshots, ~3.4 MB each, 562 tasks, 45 calendars, 635 links.
 | Present earlier, absent later | 13 |
 | Assignments matched / new / missing | 341 / 136 / 131 |
 
-The assignment row is the finding: Microsoft Project renumbers assignment UIDs,
-so they need a `(task UID, resource UID)` business key rather than their own.
-The progress field contract had observed the same renumbering independently.
+The assignment row was read as a finding — that Microsoft Project renumbers
+assignment UIDs and they therefore need a `(task UID, resource UID)` business
+key. **That was wrong, and is corrected in the 2026-09-03 entry.** Measured
+afterwards, the proposed key matches exactly the rows the UID already matches.
+The split is real churn between two different planning documents. The commit
+messages of `cc8039d` and `9421867` still carry the original claim and cannot
+be edited; this note is the correction.
 
 ## Corrections made along the way
 

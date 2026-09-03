@@ -264,6 +264,80 @@ class BoilerSnapshotTests(unittest.TestCase):
         matched = sum(1 for entry in activity_entries if str(entry.outcome) == "matched")
         self.assertEqual(matched, len(shared))
 
+    def test_every_new_or_missing_row_is_a_real_source_difference(self):
+        """Reconciliation must report churn, never manufacture it.
+
+        This replaces a wrong diagnosis. The 341/136/131 assignment split was
+        first read as evidence that Microsoft Project renumbers assignment UIDs,
+        and that assignments therefore needed a ``(task UID, resource UID)``
+        business key. Measured, that key matches exactly the rows the UID
+        already matches -- necessarily so, because the importer derives both
+        halves of it *from* those UIDs. The split is real churn: the two
+        documents carry different resourcing.
+
+        So the property worth holding is not "assignments match better" but
+        "every row we call new or missing is absent from the other document".
+        A future change that breaks identity shows up here as a row that is
+        present in both and still reported as new.
+        """
+
+        before, identity, _ = migrate(self.before_document)
+        _, _, report = migrate(
+            self.day5_document, identity=identity, schedule_id=before.schedule_id
+        )
+
+        def source_uids(document, collection):
+            return {
+                _external_uid_of(row) for row in document.get(collection, [])
+            }
+
+        for kind, collection in (
+            (EntityKind.ACTIVITY, "activities"),
+            (EntityKind.ASSIGNMENT, "assignments"),
+            (EntityKind.RESOURCE, "resources"),
+        ):
+            earlier = source_uids(self.before_document, collection)
+            later = source_uids(self.day5_document, collection)
+
+            for entry in report.of_kind(kind):
+                outcome = str(entry.outcome)
+                if outcome == "new":
+                    self.assertNotIn(
+                        entry.external_uid,
+                        earlier,
+                        f"{kind} {entry.external_uid} is reported new but was in "
+                        "the earlier document: identity failed to carry it forward",
+                    )
+                elif outcome == "missing":
+                    self.assertNotIn(
+                        entry.external_uid,
+                        later,
+                        f"{kind} {entry.external_uid} is reported missing but is "
+                        "in the later document: identity failed to match it",
+                    )
+
+    def test_the_reconciliation_counts_are_pinned(self):
+        """Pinned so a change in identity moves a number somebody re-reads.
+
+        These are properties of the two schedules, not of the code. If they
+        move without the schedules changing, identity changed.
+        """
+
+        before, identity, _ = migrate(self.before_document)
+        _, _, report = migrate(
+            self.day5_document, identity=identity, schedule_id=before.schedule_id
+        )
+
+        def counts(kind):
+            entries = report.of_kind(kind)
+            return tuple(
+                sum(1 for entry in entries if str(entry.outcome) == outcome)
+                for outcome in ("matched", "new", "missing")
+            )
+
+        self.assertEqual(counts(EntityKind.ACTIVITY), (447, 18, 13))
+        self.assertEqual(counts(EntityKind.ASSIGNMENT), (341, 136, 131))
+
     def test_rows_dropped_between_snapshots_are_reported_not_lost(self):
         before, identity, _ = migrate(self.before_document)
         _, _, report = migrate(

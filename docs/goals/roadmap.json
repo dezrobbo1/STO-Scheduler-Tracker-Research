@@ -30,7 +30,7 @@
         },
         {
           "id": "P0-G3",
-          "text": "Assignments reconcile on a (task UID, resource UID) business key, so a re-import does not report them as new",
+          "text": "Every row the reconciliation reports as new or missing is attributable to a difference between the source documents, not to identity",
           "met": false,
           "evidence": null
         },

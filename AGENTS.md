@@ -108,6 +108,10 @@ experimental code solely because it might be reused.
   grade has not tracked severity. No clean-review loops, and never buy an
   unobserved edge case at the cost of a new way for a real schedule to stop
   importing.
+- **A diagnosis is a claim.** Before writing down why a number is what it is,
+  measure the explanation against the data — including by checking that the
+  proposed fix would actually change it. Twice now a confident cause has been
+  recorded that the evidence did not support.
 
 ## Validation
 

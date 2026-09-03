@@ -22,7 +22,7 @@ not start until the previous gate passes.
 |---|---|---|
 | ✓ | The canonical document round-trips exactly on both real BOILER snapshots | `tests/test_canonical_model.py` |
 | ✓ | Two imports of one file hash identically, and a later snapshot keeps the identifiers of every row whose source UID survived | `docs/history/2026-09-02-consolidation-and-canonical-model.md` |
-| · | Assignments reconcile on a (task UID, resource UID) business key, so a re-import does not report them as new | — |
+| · | Every row the reconciliation reports as new or missing is attributable to a difference between the source documents, not to identity | — |
 | · | Two schedules import into two projects and survive a restart with identical hashes | — |
 | ✓ | The unittest suite and compileall are green on the declared Python floor | `.github/workflows/ci.yml` |
 | ✓ | Every statement in AGENTS.md is either durable or machine-checked | `tests/test_governance_references.py` |
@@ -47,12 +47,17 @@ activities shared between the snapshots keep their identifiers while 18 new and
 
 ## Now: finish Phase 0, then the engine spine
 
-1. **Assignment identity by business key.** `sto reconcile` over the two BOILER
-   snapshots gives assignments 341 matched against 136 new and 131 missing,
-   because Microsoft Project renumbers assignment UIDs — the progress field
-   contract observed the same thing when it noted resource UIDs and GUIDs were
-   renumbered between the before and after files. Key assignments on
-   `(task UID, resource UID)`. `IdentityMap` already takes a business key.
+1. **Explain the reconciliation counts, don't re-key them.** `sto reconcile`
+   over the two BOILER snapshots gives assignments 341 matched against 136 new
+   and 131 missing. That was first read as Microsoft Project renumbering
+   assignment UIDs, calling for a `(task UID, resource UID)` business key.
+   Measured, that key matches exactly the rows the UID already matches, on both
+   available file pairs — necessarily, because the importer derives both halves
+   of it from those UIDs. The split is real churn: of the 131, five are
+   unassigned placeholders, thirteen belong to a task that also went, and the
+   rest sit on tasks that survived while their resourcing changed. Identity is
+   working. What is owed is the guard that keeps it honest, which
+   `tests/test_canonical_model.py` now carries.
 2. **Persistence and multi-project.** PostgreSQL, schedule versions with a
    movable head, FastAPI on 8090. Two files import into two projects and survive
    a restart with identical hashes.
@@ -103,7 +108,9 @@ until the parity checklist passes.
 
 ## Known gaps recorded, not hidden
 
-- **Assignment identity** as above.
+- **Assignment reconciliation** as above: the counts are explained and pinned,
+  but no file yet exercises a source that genuinely renumbers, so the GUID and
+  business-key fallbacks in `IdentityMap` remain untested against real data.
 - **Lag calendar for Microsoft files** is an assumption: `ProjectSettings`
   records `lag_calendar_policy = successor` because Microsoft Project exposes no
   such setting. It is written down so it can be falsified by a file with a
