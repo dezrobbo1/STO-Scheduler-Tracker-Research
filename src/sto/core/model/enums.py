@@ -125,6 +125,7 @@ class ResourceType(StrEnum):
     LABOR = "labor"
     NONLABOR = "nonlabor"
     MATERIAL = "material"
+    COST = "cost"
 
 
 class SchedulingClass(StrEnum):
