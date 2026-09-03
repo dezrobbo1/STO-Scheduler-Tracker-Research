@@ -1,5 +1,7 @@
 """Documentation must not carry customer schedule content or credentials.
 
+Enforces PR-no-schedule-content from `docs/goals/roadmap.json`.
+
 This repository is public. Real schedules stay outside it (`AGENTS.md`,
 `fixtures/README.md`), and a session record is the likeliest place for a task
 name or a work-order number to slip in by accident.

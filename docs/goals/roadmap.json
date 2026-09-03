@@ -1,0 +1,552 @@
+{
+  "schema_version": "sto-roadmap-1",
+  "note": "Time-varying truth: phases, slices, gate criteria and the rule registry. AGENTS.md holds the durable rules; docs/roadmap/CONSOLIDATION-PLAN.md is the frozen design record and does not describe current status. The generated regions of docs/goals/ACTIVE.md come from here - run `sto roadmap render` after editing.",
+  "current_phase": "P0",
+  "foreign_prefixes": [
+    "dezrobbo1/",
+    "~/"
+  ],
+  "phases": [
+    {
+      "id": "P0",
+      "title": "Monorepo and spine model",
+      "status": "in_progress",
+      "slices": [
+        "S1",
+        "PL1"
+      ],
+      "gate": [
+        {
+          "id": "P0-G1",
+          "text": "The canonical document round-trips exactly on both real BOILER snapshots",
+          "met": true,
+          "evidence": "tests/test_canonical_model.py"
+        },
+        {
+          "id": "P0-G2",
+          "text": "Two imports of one file hash identically, and a later snapshot keeps the identifiers of every row whose source UID survived",
+          "met": true,
+          "evidence": "docs/history/2026-09-02-consolidation-and-canonical-model.md"
+        },
+        {
+          "id": "P0-G3",
+          "text": "Assignments reconcile on a (task UID, resource UID) business key, so a re-import does not report them as new",
+          "met": false,
+          "evidence": null
+        },
+        {
+          "id": "P0-G4",
+          "text": "Two schedules import into two projects and survive a restart with identical hashes",
+          "met": false,
+          "evidence": null
+        },
+        {
+          "id": "P0-G5",
+          "text": "The unittest suite and compileall are green on the declared Python floor",
+          "met": true,
+          "evidence": ".github/workflows/ci.yml"
+        },
+        {
+          "id": "P0-G6",
+          "text": "Every statement in AGENTS.md is either durable or machine-checked",
+          "met": true,
+          "evidence": "tests/test_governance_references.py"
+        }
+      ]
+    },
+    {
+      "id": "P1",
+      "title": "Engine and interchange spine",
+      "status": "not_started",
+      "slices": [
+        "S2",
+        "S3",
+        "S4",
+        "S5",
+        "S6",
+        "I1",
+        "I2",
+        "I3",
+        "I4",
+        "PL2"
+      ],
+      "gate": [
+        {
+          "id": "P1-G1",
+          "text": "The 47 executable conformance cases pass, byte-identically across three processes",
+          "met": false,
+          "evidence": null
+        },
+        {
+          "id": "P1-G2",
+          "text": "Both BOILER snapshots: every leaf activity gets a disposition, and no difference is UNEXPLAINED across start, finish, late dates, float and criticality",
+          "met": false,
+          "evidence": null
+        },
+        {
+          "id": "P1-G3",
+          "text": "The genuine Project-recalculation oracle (before to after-native-progress) reports zero unexpected differences",
+          "met": false,
+          "evidence": null
+        },
+        {
+          "id": "P1-G4",
+          "text": "The Python importer and the MPXJ sidecar produce identical canonical output on every fixture",
+          "met": false,
+          "evidence": null
+        },
+        {
+          "id": "P1-G5",
+          "text": "A native .mpp file imports",
+          "met": false,
+          "evidence": null
+        },
+        {
+          "id": "P1-G6",
+          "text": "No route accepts a trusted actor header",
+          "met": false,
+          "evidence": null
+        }
+      ]
+    },
+    {
+      "id": "P2",
+      "title": "Live execution loop",
+      "status": "not_started",
+      "slices": [
+        "S7",
+        "PL4",
+        "PL5",
+        "PL6",
+        "PL7"
+      ],
+      "gate": [
+        {
+          "id": "P2-G1",
+          "text": "Incremental rescheduling equals a full recompute on a thousand random networks",
+          "met": false,
+          "evidence": null
+        },
+        {
+          "id": "P2-G2",
+          "text": "Progress reaches a subscribed client in under a second at the 95th percentile on a real-sized schedule",
+          "met": false,
+          "evidence": null
+        },
+        {
+          "id": "P2-G3",
+          "text": "Replaying the update log from the baseline reproduces the head hash",
+          "met": false,
+          "evidence": null
+        },
+        {
+          "id": "P2-G4",
+          "text": "Three tasks reported in airplane mode arrive when connectivity returns, recorded in docs/evidence",
+          "met": false,
+          "evidence": null
+        },
+        {
+          "id": "P2-G5",
+          "text": "The approved forecast moves only on planner approval",
+          "met": false,
+          "evidence": null
+        }
+      ]
+    },
+    {
+      "id": "P3",
+      "title": "Export with evidence",
+      "status": "not_started",
+      "slices": [
+        "I5",
+        "I6",
+        "I7",
+        "I8",
+        "S8",
+        "PL8",
+        "I13"
+      ],
+      "gate": [
+        {
+          "id": "P3-G1",
+          "text": "A generated candidate differs from the committed proof candidate only in save metadata",
+          "met": false,
+          "evidence": null
+        },
+        {
+          "id": "P3-G2",
+          "text": "The returned-file classifier reports zero unexpected differences on the proof pair",
+          "met": false,
+          "evidence": null
+        },
+        {
+          "id": "P3-G3",
+          "text": "Regenerated artifacts round-trip within the expected-loss list for all three targets",
+          "met": false,
+          "evidence": null
+        },
+        {
+          "id": "P3-G4",
+          "text": "A profile without a register entry cannot be selected",
+          "met": false,
+          "evidence": null
+        },
+        {
+          "id": "P3-G5",
+          "text": "One manual Microsoft Project session re-verifies the transaction on the current build and records an untouched-source control run",
+          "met": false,
+          "evidence": null
+        }
+      ]
+    },
+    {
+      "id": "P4",
+      "title": "CMMS",
+      "status": "not_started",
+      "slices": [
+        "I9",
+        "I10",
+        "PL11",
+        "I11",
+        "I12"
+      ],
+      "gate": [
+        {
+          "id": "P4-G1",
+          "text": "Three synthetic CMMS extracts import, with rejected rows carrying coded reasons",
+          "met": false,
+          "evidence": null
+        },
+        {
+          "id": "P4-G2",
+          "text": "The site's work-order and operation fields resolve against a synthetic extract",
+          "met": false,
+          "evidence": null
+        },
+        {
+          "id": "P4-G3",
+          "text": "A second extract reports added, changed and departed operations without deleting anything",
+          "met": false,
+          "evidence": null
+        }
+      ]
+    },
+    {
+      "id": "P5",
+      "title": "Operations, scheduler depth, cut-over",
+      "status": "not_started",
+      "slices": [
+        "PL9",
+        "PL10",
+        "S9",
+        "S10",
+        "PL12"
+      ],
+      "gate": [
+        {
+          "id": "P5-G1",
+          "text": "docs/evidence/PARITY-CHECKLIST.md passes, driven through the interface and recorded",
+          "met": false,
+          "evidence": null
+        },
+        {
+          "id": "P5-G2",
+          "text": "The levelling verifier reports zero capacity violations on a real schedule",
+          "met": false,
+          "evidence": null
+        },
+        {
+          "id": "P5-G3",
+          "text": "Ports swap in one redeploy and the frozen repositories are archived",
+          "met": false,
+          "evidence": null
+        }
+      ]
+    }
+  ],
+  "slices": [
+    {
+      "id": "S1",
+      "title": "Canonical model v1 and durable identity",
+      "phase": "P0",
+      "status": "done"
+    },
+    {
+      "id": "PL1",
+      "title": "Persistent multi-project workspace",
+      "phase": "P0",
+      "status": "not_started"
+    },
+    {
+      "id": "S2",
+      "title": "Calendars compiled with exceptions applied",
+      "phase": "P1",
+      "status": "not_started"
+    },
+    {
+      "id": "S3",
+      "title": "Forward pass over four relationship types",
+      "phase": "P1",
+      "status": "not_started"
+    },
+    {
+      "id": "S4",
+      "title": "Backward pass, float and criticality",
+      "phase": "P1",
+      "status": "not_started"
+    },
+    {
+      "id": "S5",
+      "title": "Status date, actuals and progress policies",
+      "phase": "P1",
+      "status": "not_started"
+    },
+    {
+      "id": "S6",
+      "title": "WBS rollup, eligibility and independent validator",
+      "phase": "P1",
+      "status": "not_started"
+    },
+    {
+      "id": "I1",
+      "title": "Sidecar full extraction to canonical",
+      "phase": "P1",
+      "status": "not_started"
+    },
+    {
+      "id": "I2",
+      "title": "Format detection and widened inputs",
+      "phase": "P1",
+      "status": "not_started"
+    },
+    {
+      "id": "I3",
+      "title": "Sidecar client and process manager",
+      "phase": "P1",
+      "status": "not_started"
+    },
+    {
+      "id": "I4",
+      "title": "Import oracle, then retire the Python parser",
+      "phase": "P1",
+      "status": "not_started"
+    },
+    {
+      "id": "PL2",
+      "title": "Real authentication",
+      "phase": "P1",
+      "status": "not_started"
+    },
+    {
+      "id": "S7",
+      "title": "Execution layer and incremental rescheduling",
+      "phase": "P2",
+      "status": "not_started"
+    },
+    {
+      "id": "PL4",
+      "title": "Live loop API, events and audit",
+      "phase": "P2",
+      "status": "not_started"
+    },
+    {
+      "id": "PL5",
+      "title": "Field app, offline",
+      "phase": "P2",
+      "status": "not_started"
+    },
+    {
+      "id": "PL6",
+      "title": "Review chain as export governance",
+      "phase": "P2",
+      "status": "not_started"
+    },
+    {
+      "id": "PL7",
+      "title": "Planner editing, lease and scenarios",
+      "phase": "P2",
+      "status": "not_started"
+    },
+    {
+      "id": "I5",
+      "title": "Regenerate MSPDI, P6 XML and XER",
+      "phase": "P3",
+      "status": "not_started"
+    },
+    {
+      "id": "I6",
+      "title": "The proven completion transaction in the writer",
+      "phase": "P3",
+      "status": "not_started"
+    },
+    {
+      "id": "I7",
+      "title": "Returned-file delta classifier",
+      "phase": "P3",
+      "status": "not_started"
+    },
+    {
+      "id": "I8",
+      "title": "Export strategy and unified API",
+      "phase": "P3",
+      "status": "not_started"
+    },
+    {
+      "id": "S8",
+      "title": "Export orchestration and classifier port",
+      "phase": "P3",
+      "status": "not_started"
+    },
+    {
+      "id": "PL8",
+      "title": "Export lifecycle and profile registry",
+      "phase": "P3",
+      "status": "not_started"
+    },
+    {
+      "id": "I13",
+      "title": "Evidence register and control runs",
+      "phase": "P3",
+      "status": "not_started"
+    },
+    {
+      "id": "I9",
+      "title": "Work-order model and mapped-file adapter",
+      "phase": "P4",
+      "status": "not_started"
+    },
+    {
+      "id": "I10",
+      "title": "Work-order projection and link resolver",
+      "phase": "P4",
+      "status": "not_started"
+    },
+    {
+      "id": "PL11",
+      "title": "CMMS API seam",
+      "phase": "P4",
+      "status": "not_started"
+    },
+    {
+      "id": "I11",
+      "title": "SAP PM, Maximo and Oracle EAM adapters",
+      "phase": "P4",
+      "status": "not_started"
+    },
+    {
+      "id": "I12",
+      "title": "Re-import identity, scope delta and authority",
+      "phase": "P4",
+      "status": "not_started"
+    },
+    {
+      "id": "PL9",
+      "title": "Problems, actions, evidence and handover",
+      "phase": "P5",
+      "status": "not_started"
+    },
+    {
+      "id": "PL10",
+      "title": "Critical watch and reporting periods",
+      "phase": "P5",
+      "status": "not_started"
+    },
+    {
+      "id": "S9",
+      "title": "Resource levelling",
+      "phase": "P5",
+      "status": "not_started"
+    },
+    {
+      "id": "S10",
+      "title": "Operational constraints",
+      "phase": "P5",
+      "status": "not_started"
+    },
+    {
+      "id": "PL12",
+      "title": "Cut-over",
+      "phase": "P5",
+      "status": "not_started"
+    }
+  ],
+  "rules": [
+    {
+      "id": "PR-core-stdlib-only",
+      "summary": "sto.core depends on the standard library alone, so hashing stays testable without a database and no validation library can reorder a field and move a hash",
+      "owed_to": "S1",
+      "status": "live",
+      "live_when": {
+        "kind": "path_exists",
+        "path": "src/sto/core"
+      },
+      "enforced_by": "tests/test_core_is_stdlib_only.py"
+    },
+    {
+      "id": "PR-no-schedule-content",
+      "summary": "Real customer schedule content and credentials never enter the repository",
+      "owed_to": "S1",
+      "status": "live",
+      "live_when": {
+        "kind": "path_exists",
+        "path": "docs"
+      },
+      "enforced_by": "tests/test_docs_carry_no_schedule_content.py"
+    },
+    {
+      "id": "PR-conformance-suite",
+      "summary": "Engine claims are bounded by the 50-case semantic conformance suite as well as by the file oracle",
+      "owed_to": "S3",
+      "status": "pending",
+      "live_when": {
+        "kind": "path_exists",
+        "path": "src/sto/conformance"
+      },
+      "enforced_by": null
+    },
+    {
+      "id": "PR-evidence-register",
+      "summary": "A writer claims native-evidence-derived only when the register holds an entry for that target system and that application build",
+      "owed_to": "I13",
+      "status": "pending",
+      "live_when": {
+        "kind": "path_exists",
+        "path": "docs/evidence/register.json"
+      },
+      "enforced_by": null
+    },
+    {
+      "id": "PR-approved-forecast",
+      "summary": "The live schedule may change automatically; the exported forecast moves only through supervisor then planner review",
+      "owed_to": "PL6",
+      "status": "pending",
+      "live_when": {
+        "kind": "import_succeeds",
+        "module": "sto.execution.review"
+      },
+      "enforced_by": null
+    },
+    {
+      "id": "PR-migrations",
+      "summary": "Schema changes are new versioned files under infra/migrations; an applied migration is never rewritten",
+      "owed_to": "PL1",
+      "status": "pending",
+      "live_when": {
+        "kind": "path_exists",
+        "path": "infra/migrations"
+      },
+      "enforced_by": null
+    },
+    {
+      "id": "PR-legacy-retirement",
+      "summary": "sto.legacy is the oracle the new engine and the sidecar are checked against, and is deleted once that cross-check is green on every fixture",
+      "owed_to": "I4",
+      "status": "pending",
+      "live_when": {
+        "kind": "path_exists",
+        "path": "src/sto/interchange"
+      },
+      "enforced_by": null
+    }
+  ]
+}

@@ -25,6 +25,7 @@ from ..core.model.enums import EntityKind
 from ..core.model.ids import IdentityMap, ReconciliationReport
 from ..core.model.migrate.sto_v011 import migrate
 from ..legacy.mspdi import import_mspdi
+from . import roadmap as _roadmap
 
 _KINDS = (
     EntityKind.WBS_NODE,
@@ -171,6 +172,8 @@ def build_parser() -> argparse.ArgumentParser:
     reconcile.add_argument("--output", type=Path)
     reconcile.add_argument("--pretty", action="store_true")
     reconcile.set_defaults(handler=_reconcile)
+
+    _roadmap.add_subparser(subparsers)
 
     return parser
 

@@ -20,7 +20,8 @@ exceptions. MPXJ cannot write `.mpp`.
 ## Decision
 
 The core, engine and API are Python. File interchange is delegated to the
-existing Java service, ported here as `services/project-worker`, widened to emit
+existing Java service from `dezrobbo1/Shutdown-Tracker-Claude`, ported here under
+`src/sto/interchange/`, widened to emit
 the full canonical document and to write MSPDI, P6 XML and XER. Python speaks to
 it over HTTP with the shared-secret header it already implements, and manages its
 process lifecycle.

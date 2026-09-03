@@ -32,9 +32,9 @@ survives only on the archive branches. Cite by repository and commit.
 
 `Shutdown-Tracker-Claude`'s `docs/goals/ACTIVE.md` instructed agents not to use
 the number ADR-012 because it was "taken in `dezrobbo1/Shutdown-Tracker`", and
-to read `docs/product/user-tier-and-assignment-model.md` in that repository
+to read a user-tier document under that repository's `dezrobbo1/Shutdown-Tracker` docs/product directory
 first. Both instructions were stale: the 2026-08-27 reset deleted `docs/adr/`
-and `docs/product/` from that repository's `main`, so the reservation protected
+and its docs/product directory from that repository's `main`, so the reservation protected
 a number nothing held and the pointer resolved to nothing.
 
 Numbering restarts here, so no number is reserved and no cross-repository

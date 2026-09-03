@@ -11,6 +11,24 @@ matrix and phase gates.
 Work is sequenced so that each slice ends with something demonstrable. Phases do
 not start until the previous gate passes.
 
+## Where the plan stands
+
+<!-- roadmap:begin now -->
+<!-- generated from docs/goals/roadmap.json by `sto roadmap render`; edit the JSON, not this -->
+
+**P0 — Monorepo and spine model** (in progress; 4 of 6 gate criteria met)
+
+| | Gate criterion | Shown by |
+|---|---|---|
+| ✓ | The canonical document round-trips exactly on both real BOILER snapshots | `tests/test_canonical_model.py` |
+| ✓ | Two imports of one file hash identically, and a later snapshot keeps the identifiers of every row whose source UID survived | `docs/history/2026-09-02-consolidation-and-canonical-model.md` |
+| · | Assignments reconcile on a (task UID, resource UID) business key, so a re-import does not report them as new | — |
+| · | Two schedules import into two projects and survive a restart with identical hashes | — |
+| ✓ | The unittest suite and compileall are green on the declared Python floor | `.github/workflows/ci.yml` |
+| ✓ | Every statement in AGENTS.md is either durable or machine-checked | `tests/test_governance_references.py` |
+
+<!-- roadmap:end now -->
+
 ## Done
 
 **Monorepo restructure.** `sto_scheduler_core` moved wholesale to `sto.legacy`
@@ -53,6 +71,27 @@ approved forecast only through review); export with the proven Microsoft Project
 transaction and a bound evidence register; CMMS work orders through a mapped-file
 adapter and then named SAP PM, Maximo and Oracle EAM adapters; resource
 levelling; operational constraints; cut-over.
+
+## Rules stated but not yet enforceable
+
+`AGENTS.md` states some rules before the machinery exists to check them; each
+carries an id and a condition. When the condition is met the suite fails and
+asks for the rule to be promoted, so none of this depends on anyone remembering.
+
+<!-- roadmap:begin rules -->
+<!-- generated from docs/goals/roadmap.json by `sto roadmap render`; edit the JSON, not this -->
+
+| Rule | Owed to | Status | Enforced by / goes live when |
+|---|---|---|---|
+| `PR-core-stdlib-only` | S1 | live | `tests/test_core_is_stdlib_only.py` |
+| `PR-no-schedule-content` | S1 | live | `tests/test_docs_carry_no_schedule_content.py` |
+| `PR-conformance-suite` | S3 | pending | src/sto/conformance exists |
+| `PR-evidence-register` | I13 | pending | docs/evidence/register.json exists |
+| `PR-approved-forecast` | PL6 | pending | sto.execution.review imports |
+| `PR-migrations` | PL1 | pending | infra/migrations exists |
+| `PR-legacy-retirement` | I4 | pending | src/sto/interchange exists |
+
+<!-- roadmap:end rules -->
 
 ## Standing constraints
 

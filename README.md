@@ -28,7 +28,7 @@ their identity forward, which are new, and which the later file no longer has.
 |---|---|
 | What is being built now | `docs/goals/ACTIVE.md` |
 | Working mode and boundaries | `AGENTS.md` |
-| Decisions | `docs/adr/`, with `LEGACY-INDEX.md` mapping the frozen repositories' ADRs |
+| Decisions | `docs/adr/`, with `docs/adr/LEGACY-INDEX.md` mapping the frozen repositories' ADRs |
 | The full design | `docs/roadmap/CONSOLIDATION-PLAN.md` |
 | Native round-trip evidence | `docs/evidence/` |
 | How decisions were reached | `docs/history/` |

@@ -1,5 +1,7 @@
 """`sto.core` must depend on the standard library alone.
 
+Enforces PR-core-stdlib-only from `docs/goals/roadmap.json`.
+
 Two reasons, both load-bearing. The canonical model and its hashing have to be
 testable without a database or a web framework, so the engine can be exercised
 anywhere. And a canonical document must not pass through a validation library
