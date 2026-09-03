@@ -17,8 +17,7 @@ of the same schedule keeps the UUIDs of every row whose external UID survived.
 Reconciliation on re-import tries, in order:
 
 1.  the same ``(system, kind, external_uid)`` -- the ordinary case;
-2.  the same GUID under a changed UID -- Microsoft Project renumbers UIDs on
-    some operations but keeps GUIDs;
+2.  the same GUID under a changed UID;
 3.  a configured business key (activity code, WBS code, work-order/operation
     pair) -- for sources that renumber both;
 
@@ -41,6 +40,24 @@ STO_NAMESPACE = uuid.UUID("5f1b2b4e-9d3a-5c6f-9a21-0f7c9d2e4a10")
 #: Joins the parts of a minted name and of serialised map keys. It is a
 #: control character so it cannot occur inside a UID, GUID or business key.
 SEP = "\x1f"
+
+
+def normalise_guid(value: str | None) -> str | None:
+    """Return a canonical UUID spelling when ``value`` is a UUID.
+
+    Microsoft files and interchange libraries may vary UUID case or brace
+    formatting. Those presentation differences must not re-key a project or an
+    entity. Non-UUID identifiers are retained verbatim because some source
+    adapters use GUID-like opaque strings in tests and intermediate models.
+    """
+
+    if value is None:
+        return None
+    text = str(value)
+    try:
+        return str(uuid.UUID(text))
+    except (ValueError, AttributeError):
+        return text
 
 
 def mint_uid(
@@ -136,6 +153,11 @@ class IdentityMap:
     #: uid -> the external_uid it was last seen under
     external_of: dict[uuid.UUID, str] = field(default_factory=dict)
 
+    def clone(self) -> IdentityMap:
+        """Return an independent copy suitable for transactional migration."""
+
+        return IdentityMap.from_dict(self.to_dict())
+
     def resolve(
         self,
         kind: EntityKind,
@@ -148,9 +170,14 @@ class IdentityMap:
 
         kind_key = str(kind)
         external_uid = str(external_uid)
+        guid = normalise_guid(guid)
 
         known = self.by_external.get((kind_key, external_uid))
         if known is not None:
+            # A later snapshot may add a GUID or business key to a row that was
+            # first seen without one. Learn that evidence now so a subsequent
+            # source-UID change can still resolve to the same canonical row.
+            self._record(kind_key, external_uid, known, guid, business_key)
             return known, ReconciliationEntry(
                 kind=kind,
                 external_uid=external_uid,
@@ -205,6 +232,7 @@ class IdentityMap:
         guid: str | None,
         business_key: str | None,
     ) -> None:
+        guid = normalise_guid(guid)
         # Retire the key this entity used to be known by. Without this a
         # rekeyed row is reported as both rekeyed and missing, and if the
         # source later reuses the old UID for a different entity the
@@ -259,11 +287,16 @@ class IdentityMap:
             return out
 
         by_external = _split(payload.get("by_external", {}))  # type: ignore[arg-type]
+        raw_by_guid = _split(payload.get("by_guid", {}))  # type: ignore[arg-type]
+        by_guid = {
+            (kind, normalise_guid(guid) or guid): uid
+            for (kind, guid), uid in raw_by_guid.items()
+        }
         identity = cls(
             schedule_id=str(payload["schedule_id"]),
             system=SourceSystem(str(payload["system"])),
             by_external=by_external,
-            by_guid=_split(payload.get("by_guid", {})),  # type: ignore[arg-type]
+            by_guid=by_guid,
             by_business_key=_split(payload.get("by_business_key", {})),  # type: ignore[arg-type]
         )
         identity.external_of = {uid: external for (_, external), uid in by_external.items()}
