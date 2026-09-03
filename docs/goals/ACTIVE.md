@@ -15,7 +15,7 @@ not start until the previous gate passes.
 
 **Monorepo restructure.** `sto_scheduler_core` moved wholesale to `sto.legacy`
 (every internal import was relative, so the move cost nothing) and keeps working
-as the reference oracle. The unwired duplicate front-end `workspace_web/` is
+as the reference oracle. The unwired duplicate front-end workspace_web/ is
 deleted — it targeted an API that does not exist and was merged alongside the
 live UI without ever being connected.
 

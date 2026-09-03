@@ -17,7 +17,7 @@ gets built, but nothing checks them yet — do not assume the machinery exists.
 - **`dezrobbo1/Shutdown-Tracker-Claude` is serving live traffic.** Its API and
   MPXJ worker are running, and `~/shutdown-tracker-deploy/redeploy.sh` builds
   from that working copy. It stays deployed and unmodified until this repository
-  passes the parity checklist in `ACTIVE.md`. Read it; do not change it.
+  passes `docs/evidence/PARITY-CHECKLIST.md`. Read it; do not change it.
 - **`dezrobbo1/Shutdown-Tracker` is frozen.** Read its current state through
   `gh api`, not from the local clone, which predates its 2026-08-27 reset.
 - `dezrobbo1/PM-Software` continues as independent research and supplies the

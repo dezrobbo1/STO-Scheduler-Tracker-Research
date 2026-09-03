@@ -43,3 +43,11 @@ repository. The `no CPM` prohibition is lifted deliberately and recorded, rather
 than being quietly contradicted by sibling repositories. The frozen repositories
 keep their history and their evidence; ST-Claude stays deployed and untouched
 until this repository passes the parity checklist in `docs/goals/ACTIVE.md`.
+
+## Amendment 2026-09-03
+
+The parity checklist this decision depends on was described as living in
+`docs/goals/ACTIVE.md`, which never contained it; it existed only inside a table
+cell in the design plan. It is now `docs/evidence/PARITY-CHECKLIST.md`, so the
+reference is to a path a guard can check rather than to a claim about a
+document's contents. The decision itself is unchanged.

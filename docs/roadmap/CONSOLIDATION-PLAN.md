@@ -1,9 +1,19 @@
-> **Status.** The approved consolidation plan, written 2026-09-02 and approved
-> the same day. Phase 0 is built (see `docs/goals/ACTIVE.md` for live status);
-> everything after it is design, not yet implemented. Sections A, C and B are the
-> engine, platform and interchange designs; D is the phase sequence and its
-> gates; E is the session-handoff work. Where this document and
-> `docs/goals/ACTIVE.md` disagree about what is done, ACTIVE.md is right.
+> **Frozen design record.** Written and approved 2026-09-02. It records what was
+> decided that day and is not maintained.
+>
+> Phase status, gate criteria and slice status are **superseded by
+> `docs/goals/roadmap.json`**; what is being built now is in
+> `docs/goals/ACTIVE.md`. Several figures here were true on the day of writing
+> and are not now: the `ADR-001…010` count in §D.1, the "expect 115 tests" in
+> §E, and the §D.1 Phase 0 gate's "pytest, ruff, pyright green" (none of the
+> three is installed, and `dependencies = []` is deliberate).
+>
+> Backticked paths in this document mean three different things — paths in this
+> repository, paths in a sibling repository, and paths that do not exist yet.
+> That ambiguity is why no reference guard scans this file.
+>
+> Corrections go to an ADR or to `ACTIVE.md`. Never here: a record that has
+> stopped being true is still an accurate record of what was decided.
 
 # STO: from four repos to one scheduler-centred product
 
@@ -204,7 +214,7 @@ docs/goals/ACTIVE.md  docs/research/ (STO phase docs, PHASE-0 audit, results)  f
 - **One `AGENTS.md`:** Shutdown-Tracker's forward-progress test + STO's productive-line clause + ST-Claude's safety/validation/migration/fixture rules, **minus** "no CPM / Project is the authority", replaced by: STO is the scheduler; imported sources immutable, every export a separate candidate; profiles labelled baseline/diagnostic/native-evidence-derived and fail closed; the three claims (approved inputs correct / target produced a result / planner adopted) never conflated; append-only audit + supersession; **the live schedule may change automatically, the exported forecast only through review.**
 - **ADRs restart at 001** with `docs/adr/LEGACY-INDEX.md` mapping `STC-ADR-001…011`, `ST-ADR-001…012` (cite repo+commit; the accepted pre-reset ADR-012 no longer exists on main), and STO/PM phase docs → superseded / carried / withdrawn. First ten: 001 monorepo + frozen repos; 002 Python core / Java sidecar boundary; 003 schedule-version envelope; 004 live-vs-approved governance; 005 auth model; 006 TEXT+CHECK; 007 SSE; 008 Gantt port; 009 retire V007 trigger policy; 010 deployment (systemd, no Docker). **Resolves the ADR-012 collision.**
 - **`docs/evidence/` is a first-class deliverable:** `register.json` (profile → target → build → date → hashes → status); test binds profile registry to it; `redeploy.sh` prints the count of native-evidence-derived profiles.
-- **One `docs/goals/ACTIVE.md`**, updated in the same PR as each merged slice; CI check: a PR touching `src/` must touch `ACTIVE.md` or carry `no-goal-change`.
+- **One `docs/goals/ACTIVE.md`**, updated in the same PR as each merged slice. *(The CI check originally specified here was withdrawn on 2026-09-03; see §D.3.)*
 - Frozen repos: README banner "Superseded by dezrobbo1/STO (commit …)", `AGENTS.md` → one-paragraph freeze notice, GitHub archive.
 
 ### C.6 Risks
@@ -315,7 +325,7 @@ Engine (S), platform (P) and interchange (I) slices interleave. Each phase ends 
 - **Live loop (integration, real Postgres):** idempotent replay; p95 < 1 s POST→SSE on 555-task fixture; incremental-equals-full property test; update-log replay reproduces head hash; Playwright offline script.
 - **Export (unit + manual register):** candidate diff vs committed Project-saved fixture; classifier zero unexpected; profile registry ↔ `docs/evidence/register.json` binding test; manual native session per target/build with untouched-source control.
 - **Security:** test that no route accepts `X-Shutdown-Tracker-Actor-Id`; capability parity `Capability` enum ↔ generated `identity.ts` ↔ DB CHECK lists.
-- **Governance (CI):** PR touching `src/` must touch `docs/goals/ACTIVE.md` or carry `no-goal-change`; profile without register entry fails the registry test; `redeploy.sh` prints native-evidence-derived profile count.
+- **Governance (CI):** a profile without a register entry fails the registry test; `redeploy.sh` prints the native-evidence-derived profile count. *(The rule requiring every `src/` PR to touch `ACTIVE.md` or carry `no-goal-change` was withdrawn on 2026-09-03: per-change ceremony trains reflexive suppression. Drift is caught by the governance guards instead.)*
 - **Cut-over:** the 14-item parity checklist in C.3/P12, driven through the UI, recorded in `docs/evidence/`.
 
 ### D.4 What this plan deliberately does not do

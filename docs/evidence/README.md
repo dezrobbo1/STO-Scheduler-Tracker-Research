@@ -19,7 +19,7 @@ collapsed 2,202 timephased rows to 462 with no input from us at all.
 
 ```
 docs/evidence/
-  register.json                    machine-readable index, bound by a test
+  register.json                    machine-readable index (arrives with P8 - PR-evidence-register)
   microsoft-project/<build>/...    per build
   p6/<version>/...
   cmms/<system>/...
