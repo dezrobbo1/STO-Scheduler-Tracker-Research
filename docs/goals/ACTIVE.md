@@ -3,10 +3,11 @@
 STO is becoming its own scheduler: import from a CMMS, Primavera P6 or Microsoft
 Project; track, manage and schedule in real time; export back to any of them.
 `AGENTS.md` holds the boundaries, `docs/adr/` the decisions, and
-`docs/history/` how each decision was reached, and
-`docs/roadmap/CONSOLIDATION-PLAN.md` the full design behind the summary below —
-the engine slices, field-mapping tables, CMMS mapping-profile schema, round-trip
-matrix and phase gates.
+`docs/history/` how each decision was reached.
+`docs/roadmap/CONSOLIDATION-PLAN.md` is the design behind the summary below —
+the engine slices, field-mapping tables, CMMS mapping-profile schema and
+round-trip matrix — frozen on 2026-09-02 and not maintained. Phases, gates,
+effort and what the work waits on are here and in `docs/goals/roadmap.json`.
 
 Work is sequenced so that each slice ends with something demonstrable. Phases do
 not start until the previous gate passes.
@@ -20,14 +21,40 @@ not start until the previous gate passes.
 
 | | Gate criterion | Shown by |
 |---|---|---|
-| ✓ | The canonical document round-trips exactly on both real BOILER snapshots | `tests/test_canonical_model.py` |
+| ✓ | The canonical document round-trips exactly on both real BOILER snapshots | `tests/test_canonical_model.py` ‡ |
 | ✓ | Two imports of one file hash identically, and a later snapshot keeps the identifiers of every row whose source UID survived | `docs/history/2026-09-02-consolidation-and-canonical-model.md` |
-| ✓ | Every row the reconciliation reports as new or missing is attributable to a difference between the source documents, not to identity | `tests/test_canonical_model.py` |
+| ✓ | Every row the reconciliation reports as new or missing is attributable to a difference between the source documents, not to identity | `tests/test_canonical_model.py` ‡ |
 | · | Two schedules import into two projects and survive a restart with identical hashes | — |
 | ✓ | The unittest suite and compileall are green on the declared Python floor | `.github/workflows/ci.yml` |
 | ✓ | Every statement in AGENTS.md is either durable or machine-checked | `tests/test_governance_references.py` |
 
+‡ the real BOILER schedules live outside the repository, so this evidence does not execute in CI unless they are present; set `STO_REQUIRE_BOILER=1` to make their absence a failure rather than a skip.
+
 <!-- roadmap:end now -->
+
+## What the work waits on
+
+These are not code. Each names the slices and criteria it gates, so a gate that
+cannot be crossed says so now rather than in the week it is reached, and a
+criterion a blocked dependency names cannot be marked met.
+
+<!-- roadmap:begin dependencies -->
+<!-- generated from docs/goals/roadmap.json by `sto roadmap render`; edit the JSON, not this -->
+
+| Dependency | Status | Gates | Asked |
+|---|---|---|---|
+| `DEP-P6-FILE` — A real Primavera P6 export (XER or PMXML) from a site, and one P6 session to open what we write | blocked | I5, I13, P3-G3 | — |
+| `DEP-CMMS-EXTRACT` — A real CMMS extract - SAP IW37N/IW39, Maximo WOTRACK or Oracle eAM operations - even anonymised | blocked | I11, I12 | — |
+| `DEP-PROJECT-SESSION` — A Windows machine running Microsoft Project, for one native session per evidence register entry | available | I13, P3-G5 | — |
+| `DEP-SITE-TEMPLATES` — The site's own confirmation-upload template for whichever CMMS is first | blocked | I11 | — |
+| `DEP-UNTOUCHED-SOURCE` — The untouched BOILER source e6a3739976580e21 that both evidence lines cite | blocked | I13 | — |
+| `DEP-DAY5-BACKUP` — A durable off-machine copy of the day-5 candidate schedule, the only progress oracle | at risk | S5, P1-G2 | — |
+
+<!-- roadmap:end dependencies -->
+
+The first two are asks, not tasks: a Primavera export and a CMMS extract have to
+come from a site. Until they do, every P6 writer and every named CMMS adapter
+stays `diagnostic` by design rather than by omission.
 
 ## Done
 
@@ -60,7 +87,11 @@ activities shared between the snapshots keep their identifiers while 18 new and
    `tests/test_canonical_model.py` now carries.
 2. **Persistence and multi-project.** PostgreSQL, schedule versions with a
    movable head, FastAPI on 8090. Two files import into two projects and survive
-   a restart with identical hashes.
+   a restart with identical hashes. Versions, heads and the stored document
+   only: the per-activity projection of early and late dates, float and
+   criticality waits for the passes that give those columns a meaning (ADR-006).
+   Third-party packages arrive here, behind the `api` extra — the base package,
+   the suite and CI stay stdlib-only (ADR-005).
 3. **Real authentication.** Password with TOTP, server sessions, device tokens
    for the field app. No route accepts a trusted actor header.
 
@@ -74,8 +105,20 @@ and an independent validator.
 Live execution loop (progress reaches the live schedule in under a second, the
 approved forecast only through review); export with the proven Microsoft Project
 transaction and a bound evidence register; CMMS work orders through a mapped-file
-adapter and then named SAP PM, Maximo and Oracle EAM adapters; resource
-levelling; operational constraints; cut-over.
+adapter and then named SAP PM, Maximo and Oracle EAM adapters; then **cut-over**,
+then resource levelling and operational constraints.
+
+Cut-over comes before the levelling work, not after it. What the parity
+checklist asks for is problems and critical updates, not levelling, so putting
+levelling first would leave `Shutdown-Tracker-Claude` deployed and unmaintained
+for the length of a slice it does not need (ADR-004). The differentiators are
+then built against a stack in use.
+
+Effort is recorded per slice in `docs/goals/roadmap.json` and totalled by
+`sto roadmap status`, so no document has to carry a number that goes stale. Read
+those totals as slice work only: review, rework and the manual native sessions
+are on top, and the phases at the front of the list are the ones whose estimates
+have never been tested.
 
 ## Rules stated but not yet enforceable
 
@@ -159,6 +202,8 @@ PYTHONPATH=src python3 -m unittest discover -s tests
 ```
 
 The BOILER cases skip unless the real schedules are present; point
-`STO_BOILER_BEFORE` and `STO_BOILER_DAY5` at them to run the file oracle.
+`STO_BOILER_BEFORE` and `STO_BOILER_DAY5` at them to run the file oracle. Two
+gate criteria rest on those cases, so cross a gate with `STO_REQUIRE_BOILER=1`
+set — their absence then fails instead of skipping quietly.
 `fixtures/README.md` records every file's hash, what it proves and how to
 recover it — including two that cannot be recovered and need backing up.

@@ -6,6 +6,81 @@
     "dezrobbo1/",
     "~/"
   ],
+  "conformance": {
+    "source": "dezrobbo1/PM-Software benchmarks/semantic at 7a58a4f",
+    "cases_total": 50,
+    "native_validation_only": 1,
+    "levelling_only": 2,
+    "executable_by_the_cpm_engine": 47,
+    "note": "SEM-STA-045 carries no reference forecast and requires a native run. SEM-DET-049 and SEM-DET-050 are resource-determinism cases and arrive with levelling in P6. The remaining 47 are what the CPM engine must pass at the P1 gate; the corpus as a whole is what bounds the engine's claims."
+  },
+  "dependencies": [
+    {
+      "id": "DEP-P6-FILE",
+      "what": "A real Primavera P6 export (XER or PMXML) from a site, and one P6 session to open what we write",
+      "status": "blocked",
+      "needed_by": [
+        "I5",
+        "I13",
+        "P3-G3"
+      ],
+      "note": "No Primavera file exists anywhere in the estate. Until one arrives the XER reader has no file oracle, P6 lag-calendar semantics stay a hypothesis, and every P6 writer stays diagnostic.",
+      "asked_on": null
+    },
+    {
+      "id": "DEP-CMMS-EXTRACT",
+      "what": "A real CMMS extract - SAP IW37N/IW39, Maximo WOTRACK or Oracle eAM operations - even anonymised",
+      "status": "blocked",
+      "needed_by": [
+        "I11",
+        "I12"
+      ],
+      "note": "The P4 gate is satisfiable on synthetic fixtures by its own wording. This dependency gates the named adapters leaving diagnostic, not the phase.",
+      "asked_on": null
+    },
+    {
+      "id": "DEP-PROJECT-SESSION",
+      "what": "A Windows machine running Microsoft Project, for one native session per evidence register entry",
+      "status": "available",
+      "needed_by": [
+        "I13",
+        "P3-G5"
+      ],
+      "note": "Exists; three round trips ran on it in August. Each register entry costs about half a day and is outside the slice estimates.",
+      "asked_on": null
+    },
+    {
+      "id": "DEP-SITE-TEMPLATES",
+      "what": "The site's own confirmation-upload template for whichever CMMS is first",
+      "status": "blocked",
+      "needed_by": [
+        "I11"
+      ],
+      "note": "Every vendor's flat-file path is site-specific, so no adapter can claim more than diagnostic without one.",
+      "asked_on": null
+    },
+    {
+      "id": "DEP-UNTOUCHED-SOURCE",
+      "what": "The untouched BOILER source e6a3739976580e21 that both evidence lines cite",
+      "status": "blocked",
+      "needed_by": [
+        "I13"
+      ],
+      "note": "Missing from this machine and from every repository. Until it is recovered the calculation evidence and the native round-trip evidence have no common baseline. fixtures/README.md records the hash.",
+      "asked_on": null
+    },
+    {
+      "id": "DEP-DAY5-BACKUP",
+      "what": "A durable off-machine copy of the day-5 candidate schedule, the only progress oracle",
+      "status": "at_risk",
+      "needed_by": [
+        "S5",
+        "P1-G2"
+      ],
+      "note": "Two copies now exist on this machine and both are read-only, but they share one filesystem and the file has no upstream. If it is lost, S5 loses its verification with nothing to restore from.",
+      "asked_on": null
+    }
+  ],
   "phases": [
     {
       "id": "P0",
@@ -20,7 +95,11 @@
           "id": "P0-G1",
           "text": "The canonical document round-trips exactly on both real BOILER snapshots",
           "met": true,
-          "evidence": "tests/test_canonical_model.py"
+          "evidence": "tests/test_canonical_model.py",
+          "evidence_conditional": {
+            "env": "STO_REQUIRE_BOILER",
+            "why": "the real BOILER schedules live outside the repository, so this evidence does not execute in CI unless they are present"
+          }
         },
         {
           "id": "P0-G2",
@@ -32,7 +111,11 @@
           "id": "P0-G3",
           "text": "Every row the reconciliation reports as new or missing is attributable to a difference between the source documents, not to identity",
           "met": true,
-          "evidence": "tests/test_canonical_model.py"
+          "evidence": "tests/test_canonical_model.py",
+          "evidence_conditional": {
+            "env": "STO_REQUIRE_BOILER",
+            "why": "the real BOILER schedules live outside the repository, so this evidence does not execute in CI unless they are present"
+          }
         },
         {
           "id": "P0-G4",
@@ -233,13 +316,11 @@
     },
     {
       "id": "P5",
-      "title": "Operations, scheduler depth, cut-over",
+      "title": "Cut-over",
       "status": "not_started",
       "slices": [
         "PL9",
         "PL10",
-        "S9",
-        "S10",
         "PL12"
       ],
       "gate": [
@@ -251,13 +332,36 @@
         },
         {
           "id": "P5-G2",
+          "text": "Ports swap in one redeploy and the frozen repositories are archived",
+          "met": false,
+          "evidence": null
+        }
+      ]
+    },
+    {
+      "id": "P6",
+      "title": "Scheduler depth",
+      "status": "not_started",
+      "slices": [
+        "S9",
+        "S10"
+      ],
+      "gate": [
+        {
+          "id": "P6-G1",
+          "text": "The two resource-determinism cases pass, and three fresh processes agree byte for byte",
+          "met": false,
+          "evidence": null
+        },
+        {
+          "id": "P6-G2",
           "text": "The levelling verifier reports zero capacity violations on a real schedule",
           "met": false,
           "evidence": null
         },
         {
-          "id": "P5-G3",
-          "text": "Ports swap in one redeploy and the frozen repositories are archived",
+          "id": "P6-G3",
+          "text": "Permit windows, isolation states and workface occupancy are honoured on a fixture with a known optimum, with hard violations enumerated",
           "met": false,
           "evidence": null
         }
@@ -269,205 +373,239 @@
       "id": "S1",
       "title": "Canonical model v1 and durable identity",
       "phase": "P0",
-      "status": "done"
+      "status": "done",
+      "days": 4
     },
     {
       "id": "PL1",
       "title": "Persistent multi-project workspace",
       "phase": "P0",
-      "status": "not_started"
+      "status": "not_started",
+      "days": 4
     },
     {
       "id": "S2",
       "title": "Calendars compiled with exceptions applied",
       "phase": "P1",
-      "status": "not_started"
+      "status": "not_started",
+      "days": 3
     },
     {
       "id": "S3",
       "title": "Forward pass over four relationship types",
       "phase": "P1",
-      "status": "not_started"
+      "status": "not_started",
+      "days": 4
     },
     {
       "id": "S4",
       "title": "Backward pass, float and criticality",
       "phase": "P1",
-      "status": "not_started"
+      "status": "not_started",
+      "days": 4
     },
     {
       "id": "S5",
       "title": "Status date, actuals and progress policies",
       "phase": "P1",
-      "status": "not_started"
+      "status": "not_started",
+      "days": 4
     },
     {
       "id": "S6",
       "title": "WBS rollup, eligibility and independent validator",
       "phase": "P1",
-      "status": "not_started"
+      "status": "not_started",
+      "days": 3
     },
     {
       "id": "I1",
       "title": "Sidecar full extraction to canonical",
       "phase": "P1",
-      "status": "not_started"
+      "status": "not_started",
+      "days": 6
     },
     {
       "id": "I2",
       "title": "Format detection and widened inputs",
       "phase": "P1",
-      "status": "not_started"
+      "status": "not_started",
+      "days": 1
     },
     {
       "id": "I3",
       "title": "Sidecar client and process manager",
       "phase": "P1",
-      "status": "not_started"
+      "status": "not_started",
+      "days": 3
     },
     {
       "id": "I4",
       "title": "Import oracle, then retire the Python parser",
       "phase": "P1",
-      "status": "not_started"
+      "status": "not_started",
+      "days": 3
     },
     {
       "id": "PL2",
       "title": "Real authentication",
       "phase": "P1",
-      "status": "not_started"
+      "status": "not_started",
+      "days": 4
     },
     {
       "id": "S7",
       "title": "Execution layer and incremental rescheduling",
       "phase": "P2",
-      "status": "not_started"
+      "status": "not_started",
+      "days": 5
     },
     {
       "id": "PL4",
       "title": "Live loop API, events and audit",
       "phase": "P2",
-      "status": "not_started"
+      "status": "not_started",
+      "days": 5
     },
     {
       "id": "PL5",
       "title": "Field app, offline",
       "phase": "P2",
-      "status": "not_started"
+      "status": "not_started",
+      "days": 5
     },
     {
       "id": "PL6",
       "title": "Review chain as export governance",
       "phase": "P2",
-      "status": "not_started"
+      "status": "not_started",
+      "days": 4
     },
     {
       "id": "PL7",
       "title": "Planner editing, lease and scenarios",
       "phase": "P2",
-      "status": "not_started"
+      "status": "not_started",
+      "days": 5
     },
     {
       "id": "I5",
       "title": "Regenerate MSPDI, P6 XML and XER",
       "phase": "P3",
-      "status": "not_started"
+      "status": "not_started",
+      "days": 8
     },
     {
       "id": "I6",
       "title": "The proven completion transaction in the writer",
       "phase": "P3",
-      "status": "not_started"
+      "status": "not_started",
+      "days": 5
     },
     {
       "id": "I7",
       "title": "Returned-file delta classifier",
       "phase": "P3",
-      "status": "not_started"
+      "status": "not_started",
+      "days": 3
     },
     {
       "id": "I8",
       "title": "Export strategy and unified API",
       "phase": "P3",
-      "status": "not_started"
+      "status": "not_started",
+      "days": 2
     },
     {
       "id": "S8",
       "title": "Export orchestration and classifier port",
       "phase": "P3",
-      "status": "not_started"
+      "status": "not_started",
+      "days": 4
     },
     {
       "id": "PL8",
       "title": "Export lifecycle and profile registry",
       "phase": "P3",
-      "status": "not_started"
+      "status": "not_started",
+      "days": 5
     },
     {
       "id": "I13",
       "title": "Evidence register and control runs",
       "phase": "P3",
-      "status": "not_started"
+      "status": "not_started",
+      "days": 3
     },
     {
       "id": "I9",
       "title": "Work-order model and mapped-file adapter",
       "phase": "P4",
-      "status": "not_started"
+      "status": "not_started",
+      "days": 6
     },
     {
       "id": "I10",
       "title": "Work-order projection and link resolver",
       "phase": "P4",
-      "status": "not_started"
+      "status": "not_started",
+      "days": 4
     },
     {
       "id": "PL11",
       "title": "CMMS API seam",
       "phase": "P4",
-      "status": "not_started"
+      "status": "not_started",
+      "days": 2
     },
     {
       "id": "I11",
       "title": "SAP PM, Maximo and Oracle EAM adapters",
       "phase": "P4",
-      "status": "not_started"
+      "status": "not_started",
+      "days": 6
     },
     {
       "id": "I12",
       "title": "Re-import identity, scope delta and authority",
       "phase": "P4",
-      "status": "not_started"
+      "status": "not_started",
+      "days": 3
     },
     {
       "id": "PL9",
       "title": "Problems, actions, evidence and handover",
       "phase": "P5",
-      "status": "not_started"
+      "status": "not_started",
+      "days": 5
     },
     {
       "id": "PL10",
       "title": "Critical watch and reporting periods",
       "phase": "P5",
-      "status": "not_started"
+      "status": "not_started",
+      "days": 4
     },
     {
       "id": "S9",
       "title": "Resource levelling",
-      "phase": "P5",
-      "status": "not_started"
+      "phase": "P6",
+      "status": "not_started",
+      "days": 5
     },
     {
       "id": "S10",
       "title": "Operational constraints",
-      "phase": "P5",
-      "status": "not_started"
+      "phase": "P6",
+      "status": "not_started",
+      "days": 5
     },
     {
       "id": "PL12",
       "title": "Cut-over",
       "phase": "P5",
-      "status": "not_started"
+      "status": "not_started",
+      "days": 3
     }
   ],
   "rules": [
@@ -495,7 +633,7 @@
     },
     {
       "id": "PR-conformance-suite",
-      "summary": "Engine claims are bounded by the 50-case semantic conformance suite as well as by the file oracle",
+      "summary": "Engine claims are bounded by the semantic conformance corpus as well as by the file oracle; the corpus and its executable subset are counted in the conformance block, never in prose",
       "owed_to": "S3",
       "status": "pending",
       "live_when": {

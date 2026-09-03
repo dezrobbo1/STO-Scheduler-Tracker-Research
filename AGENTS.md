@@ -134,14 +134,19 @@ python3 -m compileall -q src
 git diff --check
 ```
 
-Real-schedule oracle cases exercise real schedules and **skip silently** when
-they are absent, so a green run does not by itself mean the file oracle ran. To
-include them:
+One class in `tests/test_canonical_model.py` exercises real schedules and
+**skips silently** when they are absent, so a green run does not by itself mean
+the file oracle ran. Gate criteria rest on it. To include them:
 
 ```bash
 export STO_BOILER_BEFORE=/path/to/boiler-before-no-progress.xml
 export STO_BOILER_DAY5=/path/to/day5-candidate.mspdi.xml
+export STO_REQUIRE_BOILER=1     # their absence now fails instead of skipping
 ```
+
+Cross a phase gate with `STO_REQUIRE_BOILER=1` set. `docs/goals/roadmap.json`
+records which criteria depend on evidence that does not always execute, and
+`sto roadmap status` and `sto roadmap gate` say so.
 
 Manual native verification in Microsoft Project or P6 is required for handoff
 milestones and cannot be replaced by a smoke script.
