@@ -48,6 +48,8 @@ class GuidChangeTests(unittest.TestCase):
         by_old, old_entry = identity.resolve(EntityKind.ACTIVITY, "8", guid=GUID_A)
         self.assertEqual(by_old, first)
         self.assertEqual(old_entry.outcome, ReconciliationOutcome.REKEYED)
+        self.assertTrue(old_entry.guid_changed, "the current GUID moved from B back to A")
+        self.assertEqual(identity.guid_of[first], GUID_A)
 
     def test_an_unchanged_or_absent_guid_is_not_a_change(self):
         identity = _fresh()

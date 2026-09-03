@@ -219,6 +219,9 @@ class IdentityMap:
             by_guid = self.by_guid.get((kind_key, guid))
             if by_guid is not None:
                 previous = self.external_of.get(by_guid)
+                # ``by_guid`` keeps every GUID a row has carried, so this may
+                # be an older one coming back; that is a change too.
+                previous_guid = self.guid_of.get(by_guid)
                 self._record(kind_key, external_uid, by_guid, guid, business_key)
                 return by_guid, ReconciliationEntry(
                     kind=kind,
@@ -227,6 +230,7 @@ class IdentityMap:
                     outcome=ReconciliationOutcome.REKEYED,
                     matched_by="guid",
                     previous_external_uid=previous,
+                    guid_changed=bool(previous_guid and guid != previous_guid),
                 )
 
         if business_key:
