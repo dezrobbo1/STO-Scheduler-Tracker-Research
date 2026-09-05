@@ -17,7 +17,15 @@ from uuid import NAMESPACE_URL, UUID, uuid5
 from sto import conformance
 from sto.core.calendar.arithmetic import CompiledIntervals, intersect_intervals
 from sto.core.engine import Network, PlannedActivity, PlannedRelationship
-from sto.core.model.enums import ConstraintType, RelationshipType
+from sto.core.model.enums import ConstraintType, ProgressPolicy, RelationshipType
+
+#: The corpus's progress policies, mapped onto the canonical model's own enum.
+PROGRESS_POLICIES = {
+    "none": ProgressPolicy.NONE,
+    "retained_logic": ProgressPolicy.RETAINED_LOGIC,
+    "progress_override": ProgressPolicy.PROGRESS_OVERRIDE,
+    "actual_dates": ProgressPolicy.ACTUAL_DATES,
+}
 
 #: The corpus names constraints in words; the canonical model names them in the
 #: vendors' initials. Anything not here is refused rather than guessed at.
@@ -82,6 +90,9 @@ def _build_network(case_id: str, case: dict) -> tuple[Network, dict[str, UUID]]:
                 calendar=CompiledIntervals.of(intervals),
                 constraint_type=constraint_type,
                 constraint_coordinate=coordinate,
+                actual_start=activity.get("actual_start"),
+                actual_finish=activity.get("actual_finish"),
+                remaining_duration=activity.get("remaining_duration"),
             )
         )
 
@@ -106,5 +117,23 @@ def _build_network(case_id: str, case: dict) -> tuple[Network, dict[str, UUID]]:
         relationships=relationships,
         project_start=schedule["project"]["project_start"],
         horizon=schedule["time_axis"]["horizon"],
+        status_time=schedule["project"].get("status_time"),
     )
     return network, uid_by_id
+
+
+def _progress_policy(case: dict) -> ProgressPolicy:
+    """The case's declared progress policy, refused rather than guessed at.
+
+    The corpus spells its policies exactly as the canonical model does, so this
+    is an identity mapping written out rather than assumed: a policy the mapping
+    does not cover raises instead of quietly becoming the default.
+    """
+
+    declared = case["schedule"]["project"].get("progress_policy")
+    if declared is None:
+        return ProgressPolicy.RETAINED_LOGIC
+    policy = PROGRESS_POLICIES.get(declared)
+    if policy is None:
+        raise ValueError(f"{case['case_id']}: unmapped progress policy {declared}")
+    return policy

@@ -34,15 +34,25 @@ and that is negative float -- the schedule cannot be delivered as drawn. Taking
 an absolute value or clamping at zero would hide exactly the case the number
 exists to surface.
 
-Criticality is ``total_float <= threshold``, where the threshold is the
-project's own critical-float threshold, zero unless the source file set one.
-Bounded claim: on the un-progressed BOILER snapshot that rule reproduces the
-``Critical`` flag Project stored for every one of the file's activities **from
-the file's own slack**, at the threshold the file declares; on the progressed
-snapshots it does not, because a complete activity is not critical whatever its
-slack. That difference is the status date's and is S5's. What this module does
-*not* claim is that our own dates reproduce Project's -- they do not, and the
-forward pass says so in ``docs/history/2026-09-03-forward-pass.md``.
+Criticality is ``total_float <= threshold`` **and the activity is not already
+complete**, where the threshold is the project's own critical-float threshold,
+zero unless the source file set one. Both halves are measured. The first
+reproduces the ``Critical`` flag Project stored for every activity of the
+un-progressed BOILER snapshot **from the file's own slack**, at the threshold
+the file declares. The second is what the progressed files add: in the two files
+Project itself recalculated after progress was entered, every completed activity
+carries a stored total slack of zero -- which is at the threshold -- and a
+``Critical`` flag of false. Four activities across the two files, and the
+threshold rule alone is wrong on all four. A completed activity cannot be on the
+critical path because nothing it does can move the finish date any more.
+
+The two reasons an activity is not critical are kept apart on the row:
+``complete`` says which one applies, so "no slack but already done" never looks
+like "has slack".
+
+What this module does *not* claim is that our own dates reproduce Project's --
+they do not, and the forward pass says so in
+``docs/history/2026-09-03-forward-pass.md``.
 """
 
 from __future__ import annotations
@@ -77,6 +87,11 @@ class ActivityFloat:
     critical: bool
     start_float: int = 0
     finish_float: int = 0
+    #: Reported finished, and therefore not critical whatever the float says.
+    #: Kept beside ``critical`` so the two reasons an activity is not critical
+    #: -- it has slack, or it is already done -- are told apart on the row
+    #: rather than inferred from a float of zero.
+    complete: bool = False
 
     @property
     def negative(self) -> bool:
@@ -209,12 +224,21 @@ def float_analysis(
     outgoing = network.successors()
     early_spans = {uid: (row.early_start, row.early_finish) for uid, row in early.items()}
 
+    complete = forward.complete_activities()
+
     rows: list[ActivityFloat] = []
     for uid in forward.order:
         calendar = calendars[uid]
-        start_float = signed_working(
-            calendar, early[uid].early_start, late[uid].late_start
-        )
+        # For work already under way the movable thing is the remaining span,
+        # not the actual start -- which cannot move at all, having happened. The
+        # backward pass places the same remaining duration, so both sides of
+        # this subtraction describe the same piece of work; measuring the late
+        # start of the remaining work against an actual start that predates it
+        # would report the delay as slack.
+        early_start = early[uid].remaining_start
+        if early_start is None:
+            early_start = early[uid].early_start
+        start_float = signed_working(calendar, early_start, late[uid].late_start)
         finish_float = signed_working(
             calendar, early[uid].early_finish, late[uid].late_finish
         )
@@ -232,9 +256,10 @@ def float_analysis(
                 uid=uid,
                 total_float=total,
                 free_float=free,
-                critical=total <= threshold,
+                critical=total <= threshold and uid not in complete,
                 start_float=start_float,
                 finish_float=finish_float,
+                complete=uid in complete,
             )
         )
 

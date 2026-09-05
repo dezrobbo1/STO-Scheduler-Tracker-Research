@@ -17,11 +17,11 @@ not start until the previous gate passes.
 <!-- roadmap:begin now -->
 <!-- generated from docs/goals/roadmap.json by `sto roadmap render`; edit the JSON, not this -->
 
-**P1 — Engine and interchange spine** (in progress; 0 of 6 gate criteria met)
+**P1 — Engine and interchange spine** (in progress; 1 of 6 gate criteria met)
 
 | | Gate criterion | Shown by |
 |---|---|---|
-| · | The 47 executable conformance cases pass, byte-identically across three processes | — |
+| ✓ | The 47 executable conformance cases pass, byte-identically across three processes | `tests/test_conformance_determinism.py` |
 | · | Both BOILER snapshots: every leaf activity gets a disposition, and no difference is UNEXPLAINED across start, finish, late dates, float and criticality | — |
 | · | The genuine Project-recalculation oracle (before to after-native-progress) reports zero unexpected differences | — |
 | · | The Python importer and the MPXJ sidecar produce identical canonical output on every fixture | — |
@@ -46,7 +46,7 @@ criterion a blocked dependency names cannot be marked met.
 | `DEP-PROJECT-SESSION` — A Windows machine running Microsoft Project, for one native session per evidence register entry | available | I13, P3-G5 | — |
 | `DEP-SITE-TEMPLATES` — The site's own confirmation-upload template for whichever CMMS is first | blocked | I11 | — |
 | `DEP-UNTOUCHED-SOURCE` — The untouched BOILER source e6a3739976580e21 that both evidence lines cite | available | I13 | 2026-09-03 |
-| `DEP-DAY5-BACKUP` — A durable off-machine copy of the day-5 candidate schedule, the only progress oracle | at risk | S5, P1-G2 | — |
+| `DEP-DAY5-BACKUP` — A durable off-machine copy of the day-5 candidate schedule, the only file carrying an activity that has started and not finished | at risk | S5, P1-G2 | — |
 
 <!-- roadmap:end dependencies -->
 
@@ -147,6 +147,40 @@ what remains is placement rather than logic. Every count is pinned in
 `tests/test_backward_pass_boiler.py`, so closing the forward-pass difference
 fails those assertions rather than passing unnoticed.
 
+**Status date and progress (S5).** `sto.core.engine.progress` reads three facts
+off each activity — an actual start, an actual finish, a remaining duration —
+and puts it in one of three states, from the dates alone (ADR-009). A complete
+activity is its two actual dates in both directions and nothing recomputes them;
+an in-progress one keeps its actual start while its *remaining* duration is
+placed as a fresh span, and its successors read the forecast finish that span
+ends at. Both passes place the remaining duration, so float is measured from the
+remaining start rather than from an actual start that cannot move. The
+out-of-sequence policies are the project's: retained logic keeps the
+predecessor's forecast finish over the remaining work, progress override
+replaces it with the status date, and `actual_dates` is refused rather than
+answered, because the corpus declares no forecast for it.
+
+With the corpus's status cases the engine now runs every case the corpus
+declares an answer for and does not hold back for levelling. `P1-G1` asks for
+that *and* for byte-identity across processes, so both halves are asserted: the
+case ids the suite runs must be exactly the corpus's own executable subset, and
+one digest over every case's three pass fingerprints must be identical in three
+subprocesses under three hash seeds.
+
+The criticality rule S4 left open is closed, and it needed two halves rather
+than one. In the two files Microsoft Project itself recalculated after progress
+was entered, every completed activity carries late dates equal to its actual
+dates, a stored slack of zero, and `Critical` false — so the backward pass pins
+completed work, and criticality excludes it. The threshold rule alone is wrong
+on all four of those rows.
+
+Not claimed, and asserted so it cannot be forgotten: the day-5 candidate is an
+oracle for reported work and **not** for slack. Its completed rows carry early
+dates equal to their actuals, which the pass reproduces exactly, and late dates
+three weeks later, because it was written by tooling rather than recalculated by
+Project. Every one of its completed rows is already non-critical on slack alone,
+so it cannot distinguish the two rules and is never quoted for them.
+
 ## Now: the engine and interchange spine
 
 Phase 0 passed on 2026-09-03 with every criterion crossed on its inputs
@@ -160,8 +194,10 @@ order:
    *rules* are settled against the real files (ADR-008); the *dates* still
    carry the forward pass's difference, which is the status date's to close as
    much as this slice's.
-4. **Status date and progress** — retained logic and progress override —
-   against the day-5 candidate and the genuine Project-recalculation pair.
+4. ~~Status date and progress~~ — done. The policies are settled against the
+   corpus and completion against the genuine Project-recalculation pair; the
+   status date itself is proven by the corpus alone, because no file here
+   carries one inside its own schedule.
 5. **WBS rollup, the eligibility re-partition and an independent validator.**
 6. **The per-activity result projection**, which ADR-006 deferred until its
    columns had meanings and a result type to mirror. They do now.
@@ -239,6 +275,24 @@ until the parity checklist passes.
   and P6 XML paths have no oracle and every P6 writer stays `diagnostic`.
 - **`MsSummaryProjection` is populated but nothing writes it back yet**; it
   becomes load-bearing when the MSPDI writer lands.
+- **No file in this estate can test the status date.** Every BOILER variant
+  declares `StatusDate` 2025-05-09 and starts on 2026-09-13 — sixteen months
+  later, from the same 2024-25 template the calendars came from. The status date
+  therefore falls outside the compiled window on all of them, `build_plan`
+  reports that on `status_time_outside_window` and carries no status time rather
+  than scheduling unfinished work from a date sixteen months in the past, and
+  the rule that remaining work starts at the status date is proven by the
+  conformance corpus alone. `tests/test_progress_boiler.py` asserts this, so a
+  file that one day carries a usable status date fails and asks for the claim to
+  be widened.
+- **The late dates of an in-progress activity are not measured.** No file here
+  carries a Project-recalculated late date for an activity that had started and
+  not finished, so the backward pass places its remaining duration as the mirror
+  of the forward pass and that is not claimed to be what Project does.
+- **Whether Primavera's data date is an implicit floor under unstarted work is
+  open.** Microsoft Project does not floor it — rescheduling uncompleted work is
+  a command a planner runs — and the corpus declares no floor either, so none is
+  applied. Settling it needs `DEP-P6-FILE`.
 - **Criticality on a progressed schedule is not the threshold rule.** On the
   un-progressed BOILER snapshot `total float <= threshold` reproduces the flag
   Microsoft Project stored for every activity in the file; on both progressed

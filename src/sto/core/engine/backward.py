@@ -43,9 +43,28 @@ it changes where an activity is placed, not only its slack -- so it is carried
 through to :attr:`BackwardPass.deferred_constraints` exactly as the forward pass
 carried it here, and is not silently treated as ASAP.
 
+Progress. Work that has happened cannot be scheduled later, so a **complete**
+activity's late dates are its actual dates and no successor pulls them anywhere.
+That is measured rather than assumed: in the two files Microsoft Project itself
+recalculated after progress was entered, every completed activity's stored late
+start and late finish equal its actual ones, with a stored total slack of zero.
+An **in-progress** activity is not pinned. What this pass places for it is its
+*remaining* duration, exactly as the forward pass does, so ``late_start`` is the
+latest its unfinished work could begin rather than the latest it could have
+started -- which is a question about the past and has no answer. Placing the
+whole duration instead is not merely wrong but unschedulable: a corpus case with
+eight units of duration and three remaining has no room to fit eight units
+before its own late finish, and the pass would refuse a schedule it had just
+computed a forward answer for.
+
+Whether Microsoft Project agrees is **not settled here**: no file in this estate
+carries a Project-recalculated late date for an activity that had started and
+not finished, so there is nothing to measure the rule against, and
+``docs/goals/ACTIVE.md`` records it as owed to the first file that does.
+
 What this pass does not do: no float and no criticality, which are arithmetic
 over this pass and the forward one and live in
-:mod:`sto.core.engine.criticality`; no progress or status date; no rollup.
+:mod:`sto.core.engine.criticality`; no rollup.
 """
 
 from __future__ import annotations
@@ -71,12 +90,15 @@ from .network import (
     PlannedRelationship,
     unshift_lag,
 )
+from .progress import ProgressState, state_of
 
 #: Why an activity's late span sits where it does. The mirror of the forward
 #: pass's sources, and deliberately the same strings for the two that coincide.
 FROM_PROJECT_FINISH = "project_finish"
 FROM_RELATIONSHIP = "relationship"
 FROM_CONSTRAINT = "constraint"
+#: A complete activity sits on its reported dates in this direction too.
+FROM_ACTUALS = "actuals"
 
 #: Named on the fingerprint so a stored answer says which pass produced it.
 BACKWARD_PASS_PROFILE = "sto-backward-pass-v1"
@@ -215,6 +237,29 @@ def backward_pass(
 
     for uid in reversed(forward.order):
         activity = by_uid[uid]
+        if state_of(activity) is ProgressState.COMPLETE:
+            # Work that has happened cannot be scheduled later, so its late
+            # dates are its actual dates. Measured, not assumed: in the two
+            # files Microsoft Project itself recalculated after progress was
+            # entered, every completed activity carries a late start and a late
+            # finish equal to its actual ones and a stored total slack of zero.
+            # The day-5 candidate disagrees -- its completed rows keep late
+            # dates three weeks after their actuals -- because it was written by
+            # tooling rather than recalculated by Project, which is why it is an
+            # oracle for actual and early dates and not for late ones.
+            if activity.actual_start is None or activity.actual_finish is None:
+                raise BackwardPassError(
+                    "SCHEDULE_ACTUAL_FINISH_WITHOUT_START", activity.uid
+                )
+            placed[uid] = ActivityLateTimes(
+                uid,
+                activity.actual_start,
+                activity.actual_finish,
+                None,
+                FROM_ACTUALS,
+            )
+            continue
+
         start_bound, finish_bound, start_driver, finish_driver = _bounds(
             activity, outgoing[uid], placed, late_finish, calendars
         )
@@ -238,6 +283,7 @@ def backward_pass(
 
         start, finish = _place(
             activity,
+            activity.remaining,
             start_bound,
             finish_bound,
             snap_milestones,
@@ -251,6 +297,7 @@ def backward_pass(
         else:
             driver = _driver(
                 activity,
+                activity.remaining,
                 start_bound,
                 finish_bound,
                 start_driver,
@@ -273,6 +320,7 @@ def backward_pass(
 
 def _place(
     activity: PlannedActivity,
+    duration: int,
     start_bound: int,
     finish_bound: int,
     snap_milestones: bool,
@@ -290,6 +338,7 @@ def _place(
     """
 
     calendar = activity.calendar
+    is_milestone = duration == 0
     floor = calendar.first if calendar.first is not None else 0
 
     if pinned is not None:
@@ -302,8 +351,8 @@ def _place(
         if pinned == "start":
             finish = (
                 coordinate
-                if activity.is_milestone
-                else add_working(calendar, coordinate, activity.duration)
+                if is_milestone
+                else add_working(calendar, coordinate, duration)
             )
             if finish is None or coordinate < floor:
                 raise BackwardPassError(
@@ -312,8 +361,8 @@ def _place(
             return coordinate, finish
         start = (
             coordinate
-            if activity.is_milestone
-            else sub_working(calendar, coordinate, activity.duration)
+            if is_milestone
+            else sub_working(calendar, coordinate, duration)
         )
         if start is None or start < floor:
             raise BackwardPassError(
@@ -321,7 +370,7 @@ def _place(
             )
         return start, coordinate
 
-    if activity.is_milestone:
+    if is_milestone:
         moment = min(start_bound, finish_bound)
         if snap_milestones:
             # A milestone is a coordinate that work starts at, not one work
@@ -337,18 +386,19 @@ def _place(
             raise BackwardPassError("SCHEDULE_FLOOR_EXCEEDED", activity.uid, "milestone")
         return moment, moment
 
-    span = latest_span(calendar, start_bound, finish_bound, activity.duration, floor)
+    span = latest_span(calendar, start_bound, finish_bound, duration, floor)
     if span is None:
         raise BackwardPassError(
             "SCHEDULE_FLOOR_EXCEEDED",
             activity.uid,
-            f"duration {activity.duration} back from {finish_bound}",
+            f"duration {duration} back from {finish_bound}",
         )
     return span
 
 
 def _driver(
     activity: PlannedActivity,
+    duration: int,
     start_bound: int,
     finish_bound: int,
     start_driver: UUID | None,
@@ -369,7 +419,7 @@ def _driver(
         return start_driver
     floor = activity.calendar.first if activity.calendar.first is not None else 0
     without_start = latest_span(
-        activity.calendar, project_late_finish, finish_bound, activity.duration, floor
+        activity.calendar, project_late_finish, finish_bound, duration, floor
     )
     if without_start is not None and without_start[0] <= start_bound:
         return finish_driver

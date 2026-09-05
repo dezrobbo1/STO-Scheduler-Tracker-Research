@@ -73,13 +73,13 @@
     },
     {
       "id": "DEP-DAY5-BACKUP",
-      "what": "A durable off-machine copy of the day-5 candidate schedule, the only progress oracle",
+      "what": "A durable off-machine copy of the day-5 candidate schedule, the only file carrying an activity that has started and not finished",
       "status": "at_risk",
       "needed_by": [
         "S5",
         "P1-G2"
       ],
-      "note": "Two copies now exist on this machine and both are read-only, but they share one filesystem and the file has no upstream. If it is lost, S5 loses its verification with nothing to restore from.",
+      "note": "Two copies now exist on this machine and both are read-only, but they share one filesystem and the file has no upstream. S5 measured what it is and is not evidence for: its early dates are its actuals, so it is an oracle for reported work, but its late dates were never recalculated by Project and its slack describes a plan that no longer exists. The criticality rules rest on boiler-after-native-progress.xml and boiler-roundtrip-project-saved-task43.xml instead, and both are recoverable from Shutdown-Tracker-Claude. What would be lost with this file is the estate's only in-progress row and its only eight-row progressed cohort.",
       "asked_on": null
     }
   ],
@@ -164,8 +164,8 @@
         {
           "id": "P1-G1",
           "text": "The 47 executable conformance cases pass, byte-identically across three processes",
-          "met": false,
-          "evidence": null
+          "met": true,
+          "evidence": "tests/test_conformance_determinism.py"
         },
         {
           "id": "P1-G2",
@@ -415,7 +415,7 @@
       "id": "S5",
       "title": "Status date, actuals and progress policies",
       "phase": "P1",
-      "status": "not_started",
+      "status": "done",
       "days": 4
     },
     {

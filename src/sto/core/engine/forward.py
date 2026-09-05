@@ -37,8 +37,19 @@ next working coordinate. Rather than choose, the pass reads
 exists in the canonical model for exactly this question and defaults to not
 snapping. Both behaviours are reachable and neither is assumed.
 
+Progress. An activity that reports an actual date is not scheduled from its
+duration. A **complete** one keeps its two actual dates exactly -- nothing
+recomputes them -- and an **in progress** one keeps its actual start while its
+*remaining* duration is placed as a fresh span from the status date. Successors
+read the resulting forecast finish, so an activity that started late drags its
+chain behind it. Which bound that remaining span obeys when work began out of
+sequence is the project's progress policy; the three states and the policy both
+live in :mod:`sto.core.engine.progress`, and this pass asks that module where
+remaining work may begin and then places it exactly as it places everything
+else.
+
 What this pass does not do, and does not pretend to: no backward pass, no float,
-no criticality, no progress or status date, and no rollup to summary tasks.
+no criticality, and no rollup to summary tasks.
 Constraints that cannot pull an early date earlier -- ALAP, SNLT, FNLT -- are
 carried through to :attr:`ForwardPass.deferred_constraints` rather than silently
 treated as ASAP, so the backward-pass slice receives them instead of
@@ -58,7 +69,7 @@ from sto.core.calendar.arithmetic import (
     sub_working,
 )
 from sto.core.hashing import canonical_sha256
-from sto.core.model.enums import ConstraintType
+from sto.core.model.enums import ConstraintType, ProgressPolicy
 
 from .network import (
     DEFERRED_CONSTRAINTS,
@@ -68,25 +79,44 @@ from .network import (
     PlannedRelationship,
     shift_lag,
 )
+from .progress import ProgressState, remaining_bound, require_supported, state_of
 
 #: Why an activity's start sits where it does.
 FROM_PROJECT_START = "project_start"
 FROM_RELATIONSHIP = "relationship"
 FROM_CONSTRAINT = "constraint"
+#: A complete activity sits on its reported dates and on nothing else.
+FROM_ACTUALS = "actuals"
+#: Remaining work held at the status date rather than by any predecessor.
+FROM_STATUS_TIME = "status_time"
 
 #: Named on the fingerprint so a stored answer says which pass produced it.
-FORWARD_PASS_PROFILE = "sto-forward-pass-v1"
+#: Version two carries the remaining start, so a progressed schedule's answer
+#: cannot hash the same as the unprogressed one it was computed from.
+FORWARD_PASS_PROFILE = "sto-forward-pass-v2"
 
 
 @dataclass(frozen=True, slots=True)
 class ActivityTimes:
-    """One activity's earliest span and what put it there."""
+    """One activity's earliest span and what put it there.
+
+    ``remaining_start`` is where the *unfinished* part of the work begins, and
+    is set only for an activity that has started and not finished -- the one
+    state in which a span has two beginnings, the one the work actually had and
+    the one its remaining work will have. It is ``None`` everywhere else, which
+    is the corpus's own convention: the status cases declare a
+    ``remaining_start`` for exactly the in-progress activities and omit it for
+    the rest, so a disagreement about the state fails as loudly as a
+    disagreement about a date.
+    """
 
     uid: UUID
     early_start: int
     early_finish: int
     driving_relationship_uid: UUID | None = None
     source: str = FROM_PROJECT_START
+    state: ProgressState = ProgressState.NOT_STARTED
+    remaining_start: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -136,6 +166,21 @@ class ForwardPass:
             if uid is not None and uid not in seen:
                 seen.append(uid)
         return tuple(seen)
+
+    def by_state(self) -> dict[ProgressState, tuple[UUID, ...]]:
+        """The activities in each progress state, in topological order."""
+
+        grouped: dict[ProgressState, list[UUID]] = {state: [] for state in ProgressState}
+        for row in self.times:
+            grouped[row.state].append(row.uid)
+        return {state: tuple(uids) for state, uids in grouped.items()}
+
+    def complete_activities(self) -> frozenset[UUID]:
+        """The activities reported finished -- what criticality has to exclude."""
+
+        return frozenset(
+            row.uid for row in self.times if row.state is ProgressState.COMPLETE
+        )
 
 
 def _topological_order(network: Network) -> tuple[UUID, ...]:
@@ -223,15 +268,27 @@ def _bounds(
     return start_bound, finish_bound, start_driver, finish_driver
 
 
-def forward_pass(network: Network, *, snap_milestones: bool = False) -> ForwardPass:
+def forward_pass(
+    network: Network,
+    *,
+    snap_milestones: bool = False,
+    progress_policy: ProgressPolicy = ProgressPolicy.RETAINED_LOGIC,
+) -> ForwardPass:
     """Earliest start and finish for every activity in ``network``.
 
     ``snap_milestones`` carries the project's milestone snap policy: when false
     a zero-duration activity keeps the exact coordinate its logic gives it, and
     when true it moves to the next working coordinate on its own calendar.
+
+    ``progress_policy`` carries the project's out-of-sequence rule. It matters
+    only for an activity that has started and not finished, and only when a
+    predecessor of it is unfinished; on a schedule with no actual dates every
+    policy gives the same answer. ``actual_dates`` is refused rather than
+    guessed at -- see :mod:`sto.core.engine.progress`.
     """
 
     network.validate()
+    require_supported(progress_policy, network.is_progressed)
     order = _topological_order(network)
     by_uid = network.activity_by_uid()
     incoming = network.predecessors()
@@ -249,10 +306,32 @@ def forward_pass(network: Network, *, snap_milestones: bool = False) -> ForwardP
 
         constraint = activity.constraint_type
         coordinate = activity.constraint_coordinate
+        state = state_of(activity)
+        if constraint in DEFERRED_CONSTRAINTS:
+            deferred.append(DeferredConstraint(uid, constraint))
+
+        if state is not ProgressState.NOT_STARTED:
+            # An actual date is a fact and a constraint is an intention, so
+            # reported work is placed on what happened. A deferred constraint is
+            # still recorded above, so a file that carries one is never silently
+            # dropped -- it is reported as not having been applied.
+            placed[uid] = _place_reported(
+                activity,
+                state,
+                start_bound,
+                finish_bound,
+                start_driver,
+                finish_driver,
+                network,
+                snap_milestones,
+                progress_policy,
+            )
+            continue
+
         pinned: str | None = None
         constrained = False
         if constraint in DEFERRED_CONSTRAINTS:
-            deferred.append(DeferredConstraint(uid, constraint))
+            pass
         elif constraint is ConstraintType.SNET and coordinate is not None:
             if coordinate > start_bound:
                 start_bound, start_driver, constrained = coordinate, None, True
@@ -266,6 +345,7 @@ def forward_pass(network: Network, *, snap_milestones: bool = False) -> ForwardP
 
         start, finish = _place(
             activity,
+            activity.remaining,
             start_bound,
             finish_bound,
             network.horizon,
@@ -286,6 +366,7 @@ def forward_pass(network: Network, *, snap_milestones: bool = False) -> ForwardP
         else:
             driver = _driver(
                 activity,
+                activity.remaining,
                 start_bound,
                 finish_bound,
                 start_driver,
@@ -295,7 +376,7 @@ def forward_pass(network: Network, *, snap_milestones: bool = False) -> ForwardP
             )
             source = FROM_RELATIONSHIP if driver is not None else FROM_PROJECT_START
 
-        placed[uid] = ActivityTimes(uid, start, finish, driver, source)
+        placed[uid] = ActivityTimes(uid, start, finish, driver, source, state)
 
     times = tuple(placed[uid] for uid in order)
     project_finish = max((row.early_finish for row in times), default=network.project_start)
@@ -312,6 +393,7 @@ def forward_pass(network: Network, *, snap_milestones: bool = False) -> ForwardP
 
 def _place(
     activity: PlannedActivity,
+    duration: int,
     start_bound: int,
     finish_bound: int,
     horizon: int,
@@ -319,9 +401,17 @@ def _place(
     pinned: str | None,
     coordinate: int | None,
 ) -> tuple[int, int]:
-    """The activity's span, or a refusal by code when the horizon cannot hold it."""
+    """A span of ``duration``, or a refusal by code when the horizon cannot hold it.
+
+    ``duration`` is passed rather than read off the activity because the pass
+    places two different lengths: the whole duration of work nobody has touched,
+    and the *remaining* duration of work already under way. A zero-length span
+    is a coordinate either way, which is why the milestone rule reads the length
+    being placed rather than the activity's declared duration.
+    """
 
     calendar = activity.calendar
+    is_milestone = duration == 0
 
     if pinned is not None:
         if coordinate is None:
@@ -333,8 +423,8 @@ def _place(
         if pinned == "start":
             finish = (
                 coordinate
-                if activity.is_milestone
-                else add_working(calendar, coordinate, activity.duration)
+                if is_milestone
+                else add_working(calendar, coordinate, duration)
             )
             if finish is None or finish > horizon:
                 raise ForwardPassError(
@@ -343,8 +433,8 @@ def _place(
             return coordinate, finish
         start = (
             coordinate
-            if activity.is_milestone
-            else sub_working(calendar, coordinate, activity.duration)
+            if is_milestone
+            else sub_working(calendar, coordinate, duration)
         )
         if start is None or coordinate > horizon:
             raise ForwardPassError(
@@ -352,7 +442,7 @@ def _place(
             )
         return start, coordinate
 
-    if activity.is_milestone:
+    if is_milestone:
         moment = max(start_bound, finish_bound)
         if snap_milestones:
             snapped = next_working(calendar, moment)
@@ -365,18 +455,19 @@ def _place(
             raise ForwardPassError("SCHEDULE_HORIZON_EXCEEDED", activity.uid, "milestone")
         return moment, moment
 
-    span = earliest_span(calendar, start_bound, finish_bound, activity.duration, horizon)
+    span = earliest_span(calendar, start_bound, finish_bound, duration, horizon)
     if span is None:
         raise ForwardPassError(
             "SCHEDULE_HORIZON_EXCEEDED",
             activity.uid,
-            f"duration {activity.duration} from {start_bound}",
+            f"duration {duration} from {start_bound}",
         )
     return span
 
 
 def _driver(
     activity: PlannedActivity,
+    duration: int,
     start_bound: int,
     finish_bound: int,
     start_driver: UUID | None,
@@ -396,11 +487,101 @@ def _driver(
     if start_driver is None:
         return finish_driver
     without_finish = earliest_span(
-        activity.calendar, start_bound, project_start, activity.duration, horizon
+        activity.calendar, start_bound, project_start, duration, horizon
     )
     if without_finish is not None and without_finish[1] >= finish_bound:
         return start_driver
     return finish_driver
+
+
+def _place_reported(
+    activity: PlannedActivity,
+    state: ProgressState,
+    start_bound: int,
+    finish_bound: int,
+    start_driver: UUID | None,
+    finish_driver: UUID | None,
+    network: Network,
+    snap_milestones: bool,
+    progress_policy: ProgressPolicy,
+) -> ActivityTimes:
+    """Where an activity that has reported work sits, and what put it there.
+
+    A complete activity is its two actual dates and nothing else: no placement,
+    no calendar, no predecessors. An in-progress one keeps its actual start and
+    has its remaining duration placed as a fresh span, bounded by whatever
+    :func:`~sto.core.engine.progress.remaining_bound` allows under the project's
+    policy.
+
+    A relationship is reported as driving that span only when it actually held
+    it: under ``progress_override`` nothing does, and under retained logic a
+    predecessor overtaken by the status date did not drive anything. Saying
+    otherwise would put an edge in the driving set that a planner cannot act on.
+    """
+
+    if state is ProgressState.COMPLETE:
+        if activity.actual_start is None or activity.actual_finish is None:
+            raise ForwardPassError("SCHEDULE_ACTUAL_FINISH_WITHOUT_START", activity.uid)
+        return ActivityTimes(
+            activity.uid,
+            activity.actual_start,
+            activity.actual_finish,
+            None,
+            FROM_ACTUALS,
+            state,
+            None,
+        )
+
+    if activity.actual_start is None:
+        raise ForwardPassError("SCHEDULE_ACTUALS_INCOHERENT", activity.uid)
+    status_time = network.status_time
+    start_floor = remaining_bound(state, progress_policy, start_bound, status_time)
+    finish_floor = remaining_bound(state, progress_policy, finish_bound, status_time)
+
+    if progress_policy is ProgressPolicy.PROGRESS_OVERRIDE:
+        start_driver = finish_driver = None
+    elif status_time is not None:
+        if status_time > start_bound:
+            start_driver = None
+        if status_time > finish_bound:
+            finish_driver = None
+
+    remaining = activity.remaining
+    remaining_start, finish = _place(
+        activity,
+        remaining,
+        start_floor,
+        finish_floor,
+        network.horizon,
+        snap_milestones,
+        None,
+        None,
+    )
+    driver = _driver(
+        activity,
+        remaining,
+        start_floor,
+        finish_floor,
+        start_driver,
+        finish_driver,
+        network.project_start,
+        network.horizon,
+    )
+    if driver is not None:
+        source = FROM_RELATIONSHIP
+    elif status_time is not None:
+        source = FROM_STATUS_TIME
+    else:
+        source = FROM_PROJECT_START
+    return ActivityTimes(
+        activity.uid,
+        activity.actual_start,
+        finish,
+        driver,
+        source,
+        state,
+        remaining_start,
+    )
 
 
 def _fingerprint(
@@ -414,7 +595,8 @@ def _fingerprint(
             "project_start": project_start,
             "project_finish": project_finish,
             "times": sorted(
-                [str(row.uid), row.early_start, row.early_finish] for row in times
+                [str(row.uid), row.early_start, row.early_finish, row.remaining_start]
+                for row in times
             ),
         }
     )
