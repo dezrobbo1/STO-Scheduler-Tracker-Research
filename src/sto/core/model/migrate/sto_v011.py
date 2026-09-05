@@ -527,6 +527,33 @@ def migrate(
         )
 
     # --- activities ------------------------------------------------------
+    extension_by_id = {
+        item["id"]: item for item in document.get("vendor_extensions", [])
+    }
+
+    def source_fields_for(row: dict[str, Any], duration: Duration | None) -> dict[str, str]:
+        """Source facts the engine reads that have no canonical field of their own.
+
+        ``IgnoreResourceCalendar`` decides which calendar Microsoft Project
+        schedules a task on -- see :func:`sto.core.engine.plan.build_plan` --
+        and is carried here, as the milestone flag already is, rather than
+        widening the canonical model for one vendor's switch. Only a set flag is
+        recorded; an absent or clear one leaves the row as it was.
+        """
+
+        fields: dict[str, str] = {}
+        if row.get("milestone_source") and duration is not None and duration.seconds != 0:
+            fields["milestone_source"] = "true"
+        values = [
+            extension_by_id[ref].get("payload", {}).get("text")
+            for ref in row.get("extension_refs", [])
+            if ref in extension_by_id
+            and extension_by_id[ref].get("payload", {}).get("name") == "IgnoreResourceCalendar"
+        ]
+        if len(values) == 1 and values[0] == "1":
+            fields["ignore_resource_calendar_source"] = "1"
+        return fields
+
     activity_uid_by_ref: dict[str, UUID] = {}
     activities: list[Activity] = []
     for row in document.get("activities", []):
@@ -562,9 +589,7 @@ def migrate(
                 notes=row.get("notes"),
                 external_refs=(_ref(system, row, snapshot_sha),),
                 source_observations=_observations(row),
-                source_fields={"milestone_source": "true"}
-                if row.get("milestone_source") and duration is not None and duration.seconds != 0
-                else {},
+                source_fields=source_fields_for(row, duration),
             )
         )
 

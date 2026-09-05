@@ -95,7 +95,9 @@ class _Loaded:
             self.backward,
             threshold=self.plan.critical_float_threshold,
         )
-        self.calendars = {a.uid: a.calendar for a in self.network.activities}
+        # Floats are measured on the task's own or the project's calendar, not
+        # the resource's the work is placed on (ADR-010).
+        self.calendars = {a.uid: a.float_calendar for a in self.network.activities}
         self.observations = {
             a.uid: a.source_observations
             for a in self.schedule.activities
@@ -205,8 +207,11 @@ class BackwardPassRunsTests(unittest.TestCase):
 
     def test_every_late_span_is_as_long_as_the_early_span_it_mirrors(self):
         early = self.boiler.forward.by_uid()
+        # Span length is working time on the calendar the work was *placed*
+        # on, which is not the calendar a float is measured in (ADR-010).
+        placed_on = {a.uid: a.calendar for a in self.boiler.network.activities}
         for row in self.boiler.backward.times:
-            calendar = self.boiler.calendars[row.uid]
+            calendar = placed_on[row.uid]
             self.assertEqual(
                 working_between(calendar, row.late_start, row.late_finish),
                 working_between(
@@ -360,12 +365,13 @@ class CriticalityRuleTests(unittest.TestCase):
 
 @unittest.skipUnless(PRESENT, SKIP_REASON)
 class NotClaimedTests(unittest.TestCase):
-    """What the engine does *not* reproduce, pinned so it cannot be forgotten.
+    """What the engine does and does not reproduce, pinned so it cannot drift.
 
-    Our late dates inherit the forward pass's disagreement with Project. Pinning
-    the count at what it is means that fixing the forward pass will fail these
-    assertions and force the numbers -- and the history entry behind them -- to
-    be updated deliberately.
+    Our late dates inherit whatever the forward pass still gets wrong. Pinning
+    the counts at what they are means that moving the forward pass will fail
+    these assertions and force the numbers -- and the history entry behind
+    them -- to be updated deliberately. They were 0 and 19 until the residue
+    was diagnosed (ADR-010) and are the numbers below since.
     """
 
     @classmethod
@@ -386,7 +392,7 @@ class NotClaimedTests(unittest.TestCase):
             ):
                 exact += 1
         self.assertEqual(compared, 451)
-        self.assertEqual(exact, 0, "the forward pass's difference has been closed")
+        self.assertEqual(exact, 409, "the forward pass's remaining difference has moved")
 
     def test_our_own_float_agrees_with_the_file_on_a_minority_of_rows(self):
         """A local quantity survives a global misplacement better than a date does.
@@ -407,8 +413,8 @@ class NotClaimedTests(unittest.TestCase):
             total += ours[uid].total_float == row.total_float_seconds
             free += ours[uid].free_float == row.free_float_seconds
         self.assertEqual(compared, 451)
-        self.assertEqual(total, 19)
-        self.assertEqual(free, 351)
+        self.assertEqual(total, 380)
+        self.assertEqual(free, 435)
 
 
 if __name__ == "__main__":

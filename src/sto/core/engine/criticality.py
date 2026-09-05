@@ -9,6 +9,13 @@ float is, and when a float makes an activity critical -- and all three were
 measured against the real schedules rather than chosen.
 
 **A float is working time on the activity's own calendar**, not the difference
+between two coordinates -- and "own" means the calendar the *task* carries or
+the project's, not the resource's the work was placed on. Microsoft Project
+places work on the resource's calendar and measures slack on the task's, which
+is why :class:`~sto.core.engine.network.PlannedActivity` carries the two apart:
+read off Project's stored dates on the resource calendar the rule below
+reproduces the stored ``TotalSlack`` for a quarter of BOILER's activities, and on
+the task calendar for all but two (ADR-010). A float is not the difference
 between two coordinates. Every other duration in this engine is productive time
 on a calendar -- that is what ``PlannedActivity.duration`` means, and what a lag
 means -- so a float, which answers "how much longer could this take", has to be
@@ -250,7 +257,7 @@ def float_analysis(
     early = forward.by_uid()
     late = backward.by_uid()
 
-    calendars = {activity.uid: activity.calendar for activity in network.activities}
+    calendars = {activity.uid: activity.float_calendar for activity in network.activities}
     released = frozenset(backward.overridden_relationships)
     outgoing = {
         uid: tuple(edge for edge in edges if edge.uid not in released)

@@ -106,11 +106,15 @@ lag; zero lag does not snap because placement already does; milestones read
 `MilestoneSnapPolicy` instead of picking. Every corpus case a forward pass
 alone can answer passes exactly. The corpus itself is now in the package,
 `src/sto/conformance/`, byte-pinned to the commit its manifest names and
-hash-checked on every read, so it runs in CI with nothing to set. Not claimed:
-against the dates Microsoft Project stored in the BOILER file the pass agrees
-on one activity, and the cause is recorded undiagnosed in
-`docs/history/2026-09-03-forward-pass.md` rather than guessed at — it is the
-backward pass's and the status date's to close as much as this one's.
+hash-checked on every read, so it runs in CI with nothing to set. Against the
+dates Microsoft Project stored in the BOILER file the pass first agreed on one
+activity, recorded undiagnosed in `docs/history/2026-09-03-forward-pass.md`;
+the diagnosis (`docs/history/2026-09-05-forward-pass-residue-diagnosed.md`,
+ADR-010) found four rules of Project's — the resource calendar places the
+work, the task or project calendar measures lags and slack, and the project
+start bounds only a task with no predecessors — and the pass now agrees on
+384 of BOILER's 451, 247 of KILN's 417 and 1,645 of CALCINER's 1,763, with
+what remains named per row and pinned in `tests/test_forward_pass_boiler.py`.
 
 **Backward pass, float and criticality (S4).** `sto.core.engine.backward` is the
 forward pass transposed — the four types read the opposite end of the opposite
@@ -188,8 +192,11 @@ present. Phase 1 is the engine, the sidecar, and real authentication, in this
 order:
 
 1. ~~Calendars~~ — done.
-2. ~~Forward pass~~ — done against the corpus; the BOILER file-oracle
-   differences are recorded, not yet classified.
+2. ~~Forward pass~~ — done against the corpus. The BOILER file-oracle
+   difference is diagnosed (ADR-010): four Microsoft Project rules measured
+   on three real files take the pass from one activity agreeing with the
+   stored dates to 384 of 451, and what remains is twenty rows across three
+   files, each in a named class.
 3. ~~Backward pass, float and criticality~~ — done. The float and criticality
    *rules* are settled against the real files (ADR-008); the *dates* still
    carry the forward pass's difference, which is the status date's to close as
@@ -267,10 +274,34 @@ until the parity checklist passes.
   counts matched rows whose GUID moved, which is how the next path gets
   measured. The fallback that does hold here is the work-order and operation
   pair — see the business-key gap below.
-- **Lag calendar for Microsoft files** is an assumption: `ProjectSettings`
-  records `lag_calendar_policy = successor` because Microsoft Project exposes no
-  such setting. It is written down so it can be falsified by a file with a
-  positive working-day lag; BOILER has only zero and elapsed lags.
+- **Lag calendar for Microsoft files — measured, and the assumption was
+  wrong.** `ProjectSettings` still records `lag_calendar_policy = successor`,
+  but the plan now resolves it to the successor's own *task* calendar or the
+  project's, never a resource's: every one of the fifty-seven working-time lags
+  in KILN and CALCINER that any calendar explains is explained by that, and the
+  successor's effective calendar explained a third of KILN's (ADR-010). Both
+  project calendars in the estate are twenty-four hours, so a lag on the
+  project calendar and an elapsed lag cannot be told apart here; the plan uses
+  the project calendar and that choice is unmeasured.
+- **Tasks whose resources are on several calendars are scheduled on the union
+  of those calendars, as an assumption** (`ACTIVITY_RESOURCE_CALENDARS_UNITED`
+  on `Plan.assumed`). Project's stored span for such a task is the envelope of
+  its stored per-assignment spans on every such row in BOILER and KILN and all
+  but three of CALCINER's; scheduling assignments is not built, and these rows
+  are most of what the pass still gets wrong on CALCINER.
+- **The successor of an inactive task follows no rule the files agree on.**
+  Some sit where the inactive task's own predecessors would put them, some
+  where their other predecessors do, some where nothing measured does. The edge
+  is dropped and the row labelled `ACTIVITY_SUCCESSOR_OF_INACTIVE`; on the
+  progressed BOILER files, which carry twenty-one inactive rows, this is the
+  largest remaining class.
+- **Two CALCINER rows with `IgnoreResourceCalendar` set and a task calendar of
+  their own, and one KILN row Project placed continuously on a resource
+  calendar that compiles here as a day shift, are unexplained.** Named in
+  `docs/history/2026-09-05-forward-pass-residue-diagnosed.md`.
+- **KILN's late dates agree with Project on none of its rows** because its
+  project finish is set by a tail that is still inherited-wrong; it closes with
+  the first mismatches above, not separately.
 - **No Primavera file exists anywhere in the estate.** Until one arrives the XER
   and P6 XML paths have no oracle and every P6 writer stays `diagnostic`.
 - **`MsSummaryProjection` is populated but nothing writes it back yet**; it

@@ -249,12 +249,19 @@ def _bounds(
     """Lower bounds on start and finish from precedence, and what drove each.
 
     ``base`` is where the bounds begin before any predecessor is read: the
-    project start for work nobody has touched, and the **actual start** for
-    work already under way. The project start is a bound on where unstarted
-    work may begin, and work that has begun is past it -- the one in-progress
-    row in the estate started five weeks before its project start, and
-    Microsoft Project placed its remaining work from the actual start, not
-    from the project's. A predecessor that reaches back before the base did not
+    project start for untouched work with **no predecessors**, the **actual
+    start** for work already under way, and ``None`` -- no floor at all -- for
+    untouched work that has predecessors, whose bounds come from them alone.
+    Both halves are what the real files show. The project start is where
+    Microsoft Project puts a task nothing else places; a task with a
+    predecessor is placed by that predecessor even when a lead puts it
+    *before* the project start, and the un-progressed BOILER snapshot carries
+    fifty-six such rows, the earliest four weeks early on a twenty-eight-day
+    lead. Flooring them at the project start moved every one of them and the
+    chains behind them by exactly that lead. Work that has begun is past the
+    project start in the same way: the one in-progress row in the estate
+    started five weeks before it, and Project placed its remaining work from
+    the actual start. A predecessor that reaches back before the base did not
     hold this activity and is not reported as its driver.
 
     A relationship becomes the driver when it raises its bound, or when it is
@@ -262,8 +269,8 @@ def _bounds(
     displace an earlier claim, so the answer follows declaration order.
     """
 
-    start_bound = base
-    finish_bound = base
+    start_bound: int | None = base
+    finish_bound: int | None = base
     start_driver: UUID | None = None
     finish_driver: UUID | None = None
 
@@ -287,11 +294,27 @@ def _bounds(
                 f"lag {relationship.lag} from {anchor} leaves the calendar",
             )
         if relationship.bounds_successor_start:
-            if shifted > start_bound or (start_driver is None and shifted == start_bound):
+            if (
+                start_bound is None
+                or shifted > start_bound
+                or (start_driver is None and shifted == start_bound)
+            ):
                 start_bound, start_driver = shifted, relationship.uid
-        elif shifted > finish_bound or (finish_driver is None and shifted == finish_bound):
+        elif (
+            finish_bound is None
+            or shifted > finish_bound
+            or (finish_driver is None and shifted == finish_bound)
+        ):
             finish_bound, finish_driver = shifted, relationship.uid
 
+    # With predecessors, one side may have gone unbounded -- every edge bounded
+    # the other end. That side is then bounded by the calendar alone, which is
+    # the same floor the backward pass uses in the other direction.
+    floor = activity.calendar.first if activity.calendar.first is not None else 0
+    if start_bound is None:
+        start_bound = floor
+    if finish_bound is None:
+        finish_bound = floor
     return start_bound, finish_bound, start_driver, finish_driver
 
 
@@ -327,11 +350,12 @@ def forward_pass(
     for uid in order:
         activity = by_uid[uid]
         state = state_of(activity)
-        base = (
-            network.project_start
-            if state is ProgressState.NOT_STARTED
-            else activity.actual_start
-        )
+        if state is not ProgressState.NOT_STARTED:
+            base = activity.actual_start
+        elif incoming[uid]:
+            base = None
+        else:
+            base = network.project_start
         start_bound, finish_bound, start_driver, finish_driver = _bounds(
             activity, incoming[uid], placed, base
         )
