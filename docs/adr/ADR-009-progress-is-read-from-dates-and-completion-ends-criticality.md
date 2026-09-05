@@ -139,3 +139,19 @@ Two questions are left open rather than answered, and both are recorded in
 Whether Primavera's data date is an implicit floor under unstarted work is a
 third open question, and it stays open until `DEP-P6-FILE` is met: no Primavera
 file exists anywhere in this estate to measure.
+
+## Amendment, 2026-09-05
+
+Two rules the decision above left implicit, settled by the one in-progress row
+in the estate and recorded in `docs/history/2026-09-05-post-s5-review.md`:
+
+- **The remaining span begins no earlier than the actual start, and the project
+  start is not a bound on work that has begun.** The row starts five weeks
+  before its project start with a status date too stale to use; Microsoft
+  Project placed its remaining work from the actual start on the task calendar,
+  and the pass now reproduces that finish exactly. The floor is the actual
+  start and not the end of the work already done, which the row cannot
+  distinguish and which stays open.
+- **The out-of-sequence policy reaches the backward pass and the free float.**
+  An edge that `progress_override` releases going forward is released going
+  back, or the backward pass refuses a schedule the forward pass has answered.

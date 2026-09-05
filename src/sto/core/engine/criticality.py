@@ -50,6 +50,12 @@ The two reasons an activity is not critical are kept apart on the row:
 ``complete`` says which one applies, so "no slack but already done" never looks
 like "has slack".
 
+An edge the progress policy released is released here too: the backward pass
+reports them on ``overridden_relationships`` and the free float does not read
+them, so an activity whose only successor continues from the status date under
+``progress_override`` is measured against the project late finish rather than
+against work it no longer holds.
+
 What this module does *not* claim is that our own dates reproduce Project's --
 they do not, and the forward pass says so in
 ``docs/history/2026-09-03-forward-pass.md``.
@@ -65,10 +71,22 @@ from sto.core.hashing import canonical_sha256
 
 from .backward import BackwardPass
 from .forward import ForwardPass
-from .network import Network, PlannedRelationship, shift_lag
+from .network import Network, NetworkError, PlannedRelationship, shift_lag
 
 #: Named on the fingerprint so a stored answer says which rule produced it.
-CRITICALITY_PROFILE = "sto-criticality-v1"
+#: Version two hashes the two component floats as well as their minimum, so
+#: two analyses whose spans straddle the calendar differently do not match.
+CRITICALITY_PROFILE = "sto-criticality-v2"
+
+
+class CriticalityError(NetworkError):
+    """A float that cannot be computed, and why, by code.
+
+    Raised for inputs that do not belong together -- a forward and a backward
+    pass over different networks -- and for an edge the forward pass could not
+    have accepted, which reaching here would mean the passes were run over
+    different networks after all.
+    """
 
 
 @dataclass(frozen=True, slots=True)
@@ -168,7 +186,8 @@ def _free_float(
     activity's finish for FS and FF and its start for SS and SF, the lag is
     consumed on the relationship's own lag calendar, and what the edge bounds is
     the successor's early start for FS and SS and its early finish for FF and
-    SF. The remaining gap is measured on **this** activity's calendar, because
+    SF -- the start of its *remaining* work when the successor is under way.
+    The remaining gap is measured on **this** activity's calendar, because
     it is this activity that would consume it by slipping. Read off Project's
     own dates that rule reproduces the stored ``FreeSlack`` for about
     ninety-eight in a hundred activities of every real schedule here.
@@ -190,7 +209,11 @@ def _free_float(
         if required is None:
             # The forward pass already refused this edge; reaching it here would
             # mean the two passes were run over different networks.
-            raise ValueError(f"lag {relationship.lag} from {anchor} leaves the calendar")
+            raise CriticalityError(
+                "SCHEDULE_LAG_UNREACHABLE",
+                relationship.uid,
+                f"lag {relationship.lag} from {anchor} leaves the calendar",
+            )
         successor_start, successor_finish = early[relationship.successor_uid]
         available = (
             successor_start if relationship.bounds_successor_start else successor_finish
@@ -214,15 +237,35 @@ def float_analysis(
     "critical means no slack" rule.
     """
 
+    network_fingerprint = network.fingerprint()
+    if (
+        forward.network_fingerprint != network_fingerprint
+        or backward.network_fingerprint != network_fingerprint
+    ):
+        raise CriticalityError(
+            "SCHEDULE_PASS_MISMATCH",
+            None,
+            "a pass was computed over a different network",
+        )
     early = forward.by_uid()
     late = backward.by_uid()
-    missing = sorted(str(a.uid) for a in network.activities if a.uid not in late)
-    if missing:
-        raise ValueError(f"{len(missing)} activities have no late dates: {missing[:3]}")
 
     calendars = {activity.uid: activity.calendar for activity in network.activities}
-    outgoing = network.successors()
-    early_spans = {uid: (row.early_start, row.early_finish) for uid, row in early.items()}
+    released = frozenset(backward.overridden_relationships)
+    outgoing = {
+        uid: tuple(edge for edge in edges if edge.uid not in released)
+        for uid, edges in network.successors().items()
+    }
+    # What an edge into work already under way bounds is the *remaining* span,
+    # so that is the start a predecessor's free float is measured against --
+    # not the actual start, which happened and which no predecessor can move.
+    early_spans = {
+        uid: (
+            row.early_start if row.remaining_start is None else row.remaining_start,
+            row.early_finish,
+        )
+        for uid, row in early.items()
+    }
 
     complete = forward.complete_activities()
 
@@ -282,7 +325,14 @@ def _fingerprint(
             "threshold": threshold,
             "project_late_finish": project_late_finish,
             "rows": sorted(
-                [str(row.uid), row.total_float, row.free_float, row.critical]
+                [
+                    str(row.uid),
+                    row.total_float,
+                    row.free_float,
+                    row.critical,
+                    row.start_float,
+                    row.finish_float,
+                ]
                 for row in rows
             ),
         }

@@ -51,8 +51,11 @@ elapsed reading for 20. That is not a close call.
 The same measurement showed that neither component reproduces the file on its
 own: the start side gets 316 and the finish side 361. Taking the smaller of the
 two gets 449 of 451, and then 417 of 417 on KILN and 1,763 of 1,763 on CALCINER
-— 3,076 activities across four schedules, sixteen of which the rule does not
-explain, all of them counted.
+— 2,631 activities across three schedules, two of which the rule does not
+explain, both of them counted. *(This paragraph originally said 3,076 across
+four with sixteen unexplained; the pinned assertions in
+`tests/test_backward_pass_boiler.py` say otherwise and the automated review of
+PR #31 caught it. Corrected 2026-09-05.)*
 
 It is obvious in hindsight and invisible in continuous time: an activity's early
 and late spans can straddle a calendar's gaps differently, so the two floats are

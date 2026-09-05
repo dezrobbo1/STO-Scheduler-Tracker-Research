@@ -62,6 +62,24 @@ carries a Project-recalculated late date for an activity that had started and
 not finished, so there is nothing to measure the rule against, and
 ``docs/goals/ACTIVE.md`` records it as owed to the first file that does.
 
+The progress policy reaches this pass too. Under ``progress_override`` with a
+status time the forward pass releases every predecessor's hold over an
+in-progress successor's remaining work; this pass releases the same edges, or
+it would bound a predecessor's late finish by work the policy says it does not
+hold, and could refuse -- ``SCHEDULE_FLOOR_EXCEEDED`` -- a schedule the forward
+pass had just answered. Which edges are released is decided once, by
+:func:`~sto.core.engine.progress.relationship_binds`, and reported on
+:attr:`BackwardPass.overridden_relationships` so the float can drop them too.
+
+Two refusals guard the inputs. A ``project_late_finish`` past the compiled
+horizon is refused rather than snapped back onto the last interval, because the
+calendars carry no information about the range beyond it and a float measured
+against it would silently treat that range as non-working. And a forward pass
+computed over a different network is refused by
+:meth:`~sto.core.engine.network.Network.fingerprint` -- the same activity
+identities with a changed duration or edge would otherwise pair old early dates
+with new late ones and report the difference as float.
+
 What this pass does not do: no float and no criticality, which are arithmetic
 over this pass and the forward one and live in
 :mod:`sto.core.engine.criticality`; no rollup.
@@ -80,7 +98,7 @@ from sto.core.calendar.arithmetic import (
     sub_working,
 )
 from sto.core.hashing import canonical_sha256
-from sto.core.model.enums import ConstraintType
+from sto.core.model.enums import ConstraintType, ProgressPolicy
 
 from .forward import ForwardPass
 from .network import (
@@ -90,7 +108,7 @@ from .network import (
     PlannedRelationship,
     unshift_lag,
 )
-from .progress import ProgressState, state_of
+from .progress import ProgressState, relationship_binds, state_of
 
 #: Why an activity's late span sits where it does. The mirror of the forward
 #: pass's sources, and deliberately the same strings for the two that coincide.
@@ -101,7 +119,8 @@ FROM_CONSTRAINT = "constraint"
 FROM_ACTUALS = "actuals"
 
 #: Named on the fingerprint so a stored answer says which pass produced it.
-BACKWARD_PASS_PROFILE = "sto-backward-pass-v1"
+#: Version two releases the edges the progress policy releases.
+BACKWARD_PASS_PROFILE = "sto-backward-pass-v2"
 
 
 @dataclass(frozen=True, slots=True)
@@ -132,6 +151,12 @@ class BackwardPass:
     project_late_finish: int
     deferred_constraints: tuple[DeferredLateConstraint, ...] = ()
     fingerprint: str = ""
+    #: The edges the progress policy released, in declaration order. The
+    #: forward pass did not let them bound the successor and this pass did not
+    #: let them bound the predecessor; the float drops them from free float.
+    overridden_relationships: tuple[UUID, ...] = ()
+    #: :meth:`Network.fingerprint` of the network this was computed over.
+    network_fingerprint: str = ""
 
     def by_uid(self) -> dict[UUID, ActivityLateTimes]:
         return {row.uid: row for row in self.times}
@@ -153,8 +178,12 @@ def _bounds(
     placed: dict[UUID, ActivityLateTimes],
     project_late_finish: int,
     calendars: dict[UUID, CompiledIntervals],
+    released: frozenset[UUID],
 ) -> tuple[int, int, UUID | None, UUID | None]:
     """Upper bounds on start and finish from precedence, and what drove each.
+
+    ``released`` names the edges the progress policy does not let bind; they
+    are skipped here exactly as the forward pass skipped them.
 
     A relationship becomes the driver when it lowers its bound, or when it is
     the first to reach a bound nothing else has claimed -- the mirror of the
@@ -174,6 +203,8 @@ def _bounds(
     finish_driver: UUID | None = None
 
     for relationship in outgoing:
+        if relationship.uid in released:
+            continue
         successor = placed[relationship.successor_uid]
         anchor = (
             successor.late_start
@@ -207,6 +238,7 @@ def backward_pass(
     *,
     snap_milestones: bool = False,
     project_late_finish: int | None = None,
+    progress_policy: ProgressPolicy = ProgressPolicy.RETAINED_LOGIC,
 ) -> BackwardPass:
     """Latest start and finish for every activity in ``network``.
 
@@ -214,15 +246,20 @@ def backward_pass(
     cannot disagree about the topology -- and the default project late finish.
     ``project_late_finish`` overrides that with a required end date, which moves
     every activity's float by the difference and is the only way a schedule
-    reports float against a contractual date rather than against itself.
+    reports float against a contractual date rather than against itself. It
+    must lie within the compiled horizon.
+
+    ``progress_policy`` is the same policy the forward pass ran under, so the
+    edges it released are released here too.
     """
 
     network.validate()
-    if set(forward.order) != {activity.uid for activity in network.activities}:
+    network_fingerprint = network.fingerprint()
+    if forward.network_fingerprint != network_fingerprint:
         raise BackwardPassError(
             "SCHEDULE_PASS_MISMATCH",
             None,
-            "the forward pass covers a different set of activities",
+            "the forward pass was computed over a different network",
         )
 
     by_uid = network.activity_by_uid()
@@ -230,14 +267,30 @@ def backward_pass(
     late_finish = (
         forward.project_finish if project_late_finish is None else project_late_finish
     )
+    if late_finish > network.horizon:
+        raise BackwardPassError(
+            "SCHEDULE_HORIZON_EXCEEDED",
+            None,
+            f"project late finish {late_finish} lies beyond the compiled "
+            f"horizon {network.horizon}",
+        )
     calendars = {activity.uid: activity.calendar for activity in network.activities}
+    states = {activity.uid: state_of(activity) for activity in network.activities}
+    overridden = tuple(
+        relationship.uid
+        for relationship in network.relationships
+        if not relationship_binds(
+            progress_policy, states[relationship.successor_uid], network.status_time
+        )
+    )
+    released = frozenset(overridden)
 
     placed: dict[UUID, ActivityLateTimes] = {}
     deferred: list[DeferredLateConstraint] = []
 
     for uid in reversed(forward.order):
         activity = by_uid[uid]
-        if state_of(activity) is ProgressState.COMPLETE:
+        if states[uid] is ProgressState.COMPLETE:
             # Work that has happened cannot be scheduled later, so its late
             # dates are its actual dates. Measured, not assumed: in the two
             # files Microsoft Project itself recalculated after progress was
@@ -261,7 +314,7 @@ def backward_pass(
             continue
 
         start_bound, finish_bound, start_driver, finish_driver = _bounds(
-            activity, outgoing[uid], placed, late_finish, calendars
+            activity, outgoing[uid], placed, late_finish, calendars, released
         )
 
         constraint = activity.constraint_type
@@ -315,6 +368,8 @@ def backward_pass(
         project_late_finish=late_finish,
         deferred_constraints=tuple(deferred),
         fingerprint=_fingerprint(times, late_finish),
+        overridden_relationships=overridden,
+        network_fingerprint=network_fingerprint,
     )
 
 

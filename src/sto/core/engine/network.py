@@ -35,6 +35,15 @@ Every refusal is a code, never a guess, in the manner of
     An actual finish before its own actual start.
 ``SCHEDULE_REMAINING_NEGATIVE``
     A remaining duration below zero, which has no forward meaning.
+``SCHEDULE_REMAINING_UNKNOWN``
+    Work that has started with no remaining duration reported. An untouched
+    activity has all of its duration left; one under way may have consumed any
+    part of it, and scheduling the whole duration again would invent a
+    forecast. Every real file and every corpus case that reports a start
+    reports what is left, so the case is refused rather than guessed.
+``SCHEDULE_PASS_MISMATCH``
+    A forward pass handed to the backward pass or the float was computed over
+    a different network -- bound by :meth:`Network.fingerprint`.
 ``SCHEDULE_STATUS_TIME_INVALID``
     A status time outside the window the network is scheduled in.
 """
@@ -45,6 +54,7 @@ from dataclasses import dataclass
 from uuid import UUID
 
 from sto.core.calendar.arithmetic import CompiledIntervals, add_working, sub_working
+from sto.core.hashing import canonical_sha256
 from sto.core.model.enums import ConstraintType, RelationshipType
 
 #: Constraints the forward pass acts on. SNET and FNET raise a bound; MSO and
@@ -136,6 +146,8 @@ class PlannedActivity:
     ``remaining_duration`` of ``None`` means the source said nothing, which is
     not the same as saying zero: an activity nobody has touched has all of its
     duration left, and :meth:`remaining` is where that default is applied once.
+    For work that has started the default would be a guess, so
+    :meth:`Network.validate` refuses it (``SCHEDULE_REMAINING_UNKNOWN``).
     """
 
     uid: UUID
@@ -242,6 +254,59 @@ class Network:
     def activity_by_uid(self) -> dict[UUID, PlannedActivity]:
         return {activity.uid: activity for activity in self.activities}
 
+    def fingerprint(self) -> str:
+        """A hash of every input the passes read.
+
+        A pass result carries this so that the backward pass and the float can
+        refuse a forward pass computed over some other network -- one that
+        happens to share every activity identity with this one but not its
+        durations, calendars or edges. Calendars are hashed by content, once
+        per distinct interval set, so the cost is the number of calendars and
+        not the number of activities that share them.
+        """
+
+        digests: dict[tuple, str] = {}
+
+        def calendar_digest(calendar: CompiledIntervals | None) -> str | None:
+            if calendar is None:
+                return None
+            key = calendar.intervals
+            if key not in digests:
+                digests[key] = canonical_sha256([list(pair) for pair in key])
+            return digests[key]
+
+        return canonical_sha256(
+            {
+                "project_start": self.project_start,
+                "horizon": self.horizon,
+                "status_time": self.status_time,
+                "activities": [
+                    [
+                        str(a.uid),
+                        a.duration,
+                        calendar_digest(a.calendar),
+                        a.constraint_type.value,
+                        a.constraint_coordinate,
+                        a.actual_start,
+                        a.actual_finish,
+                        a.remaining_duration,
+                    ]
+                    for a in self.activities
+                ],
+                "relationships": [
+                    [
+                        str(r.uid),
+                        str(r.predecessor_uid),
+                        str(r.successor_uid),
+                        r.type.value,
+                        r.lag,
+                        calendar_digest(r.lag_calendar),
+                    ]
+                    for r in self.relationships
+                ],
+            }
+        )
+
     def predecessors(self) -> dict[UUID, tuple[PlannedRelationship, ...]]:
         """Incoming edges per activity, in declaration order."""
 
@@ -312,6 +377,16 @@ class Network:
             if activity.actual_finish is not None and activity.actual_start is None:
                 raise ForwardPassError(
                     "SCHEDULE_ACTUAL_FINISH_WITHOUT_START", activity.uid
+                )
+            if (
+                activity.has_started
+                and not activity.is_complete
+                and activity.remaining_duration is None
+            ):
+                raise ForwardPassError(
+                    "SCHEDULE_REMAINING_UNKNOWN",
+                    activity.uid,
+                    "work has started and the source does not say what is left",
                 )
             if (
                 activity.actual_start is not None

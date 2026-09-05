@@ -23,6 +23,7 @@ from sto.core.engine import (
     FROM_STATUS_TIME,
     ForwardPassError,
     Network,
+    NetworkError,
     PlannedActivity,
     PlannedRelationship,
     ProgressError,
@@ -30,6 +31,7 @@ from sto.core.engine import (
     backward_pass,
     float_analysis,
     forward_pass,
+    relationship_binds,
     remaining_bound,
     state_of,
 )
@@ -157,6 +159,46 @@ class RemainingBoundTests(unittest.TestCase):
                     remaining_bound(ProgressState.IN_PROGRESS, policy, 40, None), 40
                 )
 
+    def test_the_actual_start_is_a_floor_under_every_policy(self):
+        # Logic at 40, status at 90, work begun at 500: the remaining work
+        # cannot begin before the work did, whatever else holds it.
+        for policy in ProgressPolicy:
+            if policy is ProgressPolicy.ACTUAL_DATES:
+                continue
+            with self.subTest(policy):
+                self.assertEqual(
+                    remaining_bound(ProgressState.IN_PROGRESS, policy, 40, 90, 500), 500
+                )
+                self.assertEqual(
+                    remaining_bound(ProgressState.IN_PROGRESS, policy, 40, None, 500), 500
+                )
+
+    def test_but_it_does_not_lower_a_later_bound(self):
+        self.assertEqual(
+            remaining_bound(
+                ProgressState.IN_PROGRESS, ProgressPolicy.RETAINED_LOGIC, 40, 90, 10
+            ),
+            90,
+        )
+
+
+class ReleasedEdgeTests(unittest.TestCase):
+    """Which edges the progress policy releases, asked directly."""
+
+    def test_only_override_with_a_status_time_releases_anything(self):
+        for policy in (ProgressPolicy.NONE, ProgressPolicy.RETAINED_LOGIC):
+            with self.subTest(policy):
+                self.assertTrue(relationship_binds(policy, ProgressState.IN_PROGRESS, 100))
+        self.assertTrue(
+            relationship_binds(ProgressPolicy.PROGRESS_OVERRIDE, ProgressState.IN_PROGRESS, None)
+        )
+
+    def test_and_only_for_a_successor_that_is_under_way(self):
+        policy = ProgressPolicy.PROGRESS_OVERRIDE
+        self.assertFalse(relationship_binds(policy, ProgressState.IN_PROGRESS, 100))
+        self.assertTrue(relationship_binds(policy, ProgressState.NOT_STARTED, 100))
+        self.assertTrue(relationship_binds(policy, ProgressState.COMPLETE, 100))
+
 
 class RemainingWorkOnAWorkingCalendarTests(unittest.TestCase):
     """Remaining work is working time, which only a calendar with gaps shows."""
@@ -216,6 +258,66 @@ class RemainingWorkOnAWorkingCalendarTests(unittest.TestCase):
         )
         self.assertEqual(span(result, "A"), (0, 5 * DAY + 3600))
         self.assertEqual(result.by_uid()[uid("A")].source, FROM_ACTUALS)
+
+
+class ActualStartFloorTests(unittest.TestCase):
+    """Remaining work never begins before the work did.
+
+    The shape of the one in-progress row in the estate: a status date too
+    stale to use, an actual start weeks before the project start, and a logic
+    bound -- the project start itself -- that would otherwise place the
+    remaining span three weeks after the work began. Microsoft Project placed
+    that row's remaining work from its actual start, and so does this pass.
+    """
+
+    def test_with_no_status_date_the_remaining_work_follows_the_actual_start(self):
+        result = forward_pass(
+            network(activity("A", 40, actual_start=500, remaining=10))
+        )
+        row = result.by_uid()[uid("A")]
+        self.assertEqual((row.early_start, row.remaining_start, row.early_finish), (500, 500, 510))
+        self.assertEqual(row.source, FROM_ACTUALS)
+
+    def test_a_status_date_before_the_actual_start_does_not_pull_it_back(self):
+        result = forward_pass(
+            network(activity("A", 40, actual_start=500, remaining=10), status_time=100)
+        )
+        row = result.by_uid()[uid("A")]
+        self.assertEqual((row.remaining_start, row.early_finish), (500, 510))
+        self.assertEqual(row.source, FROM_ACTUALS)
+
+    def test_a_project_start_after_the_actual_start_is_not_a_bound_on_started_work(self):
+        net = Network(
+            activities=(activity("A", 40, actual_start=500, remaining=10),),
+            project_start=2000,
+            horizon=100 * DAY,
+        )
+        row = forward_pass(net).by_uid()[uid("A")]
+        self.assertEqual((row.remaining_start, row.early_finish), (500, 510))
+
+    def test_a_predecessor_that_finished_before_the_work_began_did_not_hold_it(self):
+        result = forward_pass(
+            network(
+                activity("A", 100),
+                activity("B", 40, actual_start=500, remaining=10),
+                relationships=(link("R1", "A", "B"),),
+            )
+        )
+        row = result.by_uid()[uid("B")]
+        self.assertEqual(row.remaining_start, 500)
+        self.assertIsNone(row.driving_relationship_uid)
+        self.assertEqual(result.driving_relationships(), ())
+
+    def test_successors_read_a_forecast_finish_that_is_after_the_actual_start(self):
+        result = forward_pass(
+            network(
+                activity("A", 40, actual_start=500, remaining=10),
+                activity("B", 5),
+                relationships=(link("R1", "A", "B"),),
+                status_time=100,
+            )
+        )
+        self.assertEqual(span(result, "B"), (510, 515))
 
 
 class SourceTests(unittest.TestCase):
@@ -300,6 +402,17 @@ class RefusalTests(unittest.TestCase):
     def test_a_negative_remaining_duration(self):
         self._refuses("SCHEDULE_REMAINING_NEGATIVE", remaining=-1)
 
+    def test_started_work_that_does_not_say_what_is_left(self):
+        # An untouched activity has all of its duration left; one under way
+        # may have consumed any part of it, and the whole duration again would
+        # be a forecast nobody reported. Every real file and every corpus case
+        # that reports a start reports what is left, so this is refused.
+        self._refuses("SCHEDULE_REMAINING_UNKNOWN", actual_start=5)
+
+    def test_but_untouched_work_still_has_its_whole_duration_left(self):
+        result = forward_pass(network(activity("A", 10)))
+        self.assertEqual(span(result, "A"), (0, 10))
+
     def test_a_status_date_outside_the_window(self):
         with self.assertRaises(ForwardPassError) as raised:
             forward_pass(network(activity("A", 10), status_time=-5))
@@ -321,6 +434,99 @@ class RefusalTests(unittest.TestCase):
             progress_policy=ProgressPolicy.ACTUAL_DATES,
         )
         self.assertEqual(span(result, "A"), (0, 10))
+
+
+class ConstraintsOnStartedWorkTests(unittest.TestCase):
+    """A constraint on work that has begun is reported, not applied."""
+
+    def _deferred(self, constraint, **kwargs):
+        result = forward_pass(
+            network(
+                activity("A", 10, constraint=constraint, coordinate=50, **kwargs),
+                status_time=10,
+            )
+        )
+        return result, [
+            row.type for row in result.deferred_constraints if row.activity_uid == uid("A")
+        ]
+
+    def test_a_finish_constraint_on_in_progress_work_is_carried_not_applied(self):
+        for constraint in (ConstraintType.FNET, ConstraintType.MFO):
+            with self.subTest(constraint):
+                result, deferred = self._deferred(
+                    constraint, actual_start=1, remaining=10
+                )
+                self.assertEqual(deferred, [constraint])
+                # Placed on its actuals and the status date, not the intention.
+                self.assertEqual(result.by_uid()[uid("A")].early_finish, 20)
+
+    def test_a_start_constraint_on_complete_work_is_carried_too(self):
+        _, deferred = self._deferred(
+            ConstraintType.MSO, actual_start=1, actual_finish=8
+        )
+        self.assertEqual(deferred, [ConstraintType.MSO])
+
+    def test_an_as_soon_as_possible_row_reports_nothing(self):
+        _, deferred = self._deferred(ConstraintType.ASAP, actual_start=1, remaining=10)
+        self.assertEqual(deferred, [])
+
+
+class OverrideReachesTheBackwardPassTests(unittest.TestCase):
+    """An edge the forward pass released is released going back and in the float.
+
+    A two-hundred-unit predecessor of work already under way from the status
+    date. Under progress override the successor's remaining ten units run from
+    one hundred and the project finishes at two hundred; if the backward pass
+    still walked the edge it would want the predecessor finished by one
+    hundred and ninety, which the calendar cannot hold, and refuse a schedule
+    the forward pass had just answered.
+    """
+
+    def _network(self):
+        return network(
+            activity("A", 200),
+            activity("B", 40, actual_start=50, remaining=10),
+            relationships=(link("R1", "A", "B"),),
+            status_time=100,
+        )
+
+    def _passes(self, policy):
+        net = self._network()
+        forward = forward_pass(net, progress_policy=policy)
+        backward = backward_pass(net, forward, progress_policy=policy)
+        return forward, backward, float_analysis(net, forward, backward)
+
+    def test_under_override_the_edge_is_released_in_both_directions(self):
+        forward, backward, floats = self._passes(ProgressPolicy.PROGRESS_OVERRIDE)
+        self.assertEqual(span(forward, "B"), (50, 110))
+        self.assertEqual(forward.project_finish, 200)
+        self.assertEqual(backward.overridden_relationships, (uid("R1"),))
+        late = backward.by_uid()[uid("A")]
+        self.assertEqual((late.late_start, late.late_finish), (0, 200))
+        self.assertEqual(floats.by_uid()[uid("A")].total_float, 0)
+        # Free float is measured against the project finish, not the successor
+        # the policy says this activity no longer holds.
+        self.assertEqual(floats.by_uid()[uid("A")].free_float, 0)
+        self.assertEqual(floats.by_uid()[uid("B")].total_float, 90)
+
+    def test_under_retained_logic_the_edge_binds_in_both_directions(self):
+        forward, backward, floats = self._passes(ProgressPolicy.RETAINED_LOGIC)
+        self.assertEqual(span(forward, "B"), (50, 210))
+        self.assertEqual(backward.overridden_relationships, ())
+        late = backward.by_uid()[uid("A")]
+        self.assertEqual((late.late_start, late.late_finish), (0, 200))
+        self.assertEqual(floats.by_uid()[uid("A")].free_float, 0)
+
+    def test_a_backward_pass_that_still_walked_the_edge_would_refuse(self):
+        # The defect this class exists to prevent, reproduced: the forward pass
+        # released the edge and a backward pass under the other policy walks
+        # it, wants the predecessor done by one hundred and ninety, and the
+        # calendar cannot hold that. The caller passes one policy to both.
+        net = self._network()
+        forward = forward_pass(net, progress_policy=ProgressPolicy.PROGRESS_OVERRIDE)
+        with self.assertRaises(NetworkError) as raised:
+            backward_pass(net, forward, progress_policy=ProgressPolicy.RETAINED_LOGIC)
+        self.assertEqual(raised.exception.code, "SCHEDULE_FLOOR_EXCEEDED")
 
 
 class CompletedWorkAndCriticalityTests(unittest.TestCase):
@@ -386,6 +592,14 @@ class DeterminismTests(unittest.TestCase):
             self._network(), progress_policy=ProgressPolicy.PROGRESS_OVERRIDE
         )
         self.assertNotEqual(retained.fingerprint, override.fingerprint)
+
+    def test_the_state_changes_the_fingerprint(self):
+        # The same two dates, once as a plan and once as a fact. Criticality
+        # treats them differently, so the fingerprint must too.
+        planned = forward_pass(network(activity("A", 10)))
+        done = forward_pass(network(activity("A", 10, actual_start=0, actual_finish=10)))
+        self.assertEqual(span(planned, "A"), span(done, "A"))
+        self.assertNotEqual(planned.fingerprint, done.fingerprint)
 
 
 if __name__ == "__main__":

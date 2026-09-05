@@ -289,6 +289,25 @@ until the parity checklist passes.
   carries a Project-recalculated late date for an activity that had started and
   not finished, so the backward pass places its remaining duration as the mirror
   of the forward pass and that is not claimed to be what Project does.
+- **Remaining work is floored at the actual start, not at the end of the work
+  already done.** The one in-progress row in the estate settles that started
+  work is placed from its actual start rather than the project start — its
+  forecast finish now reproduces Project's exactly — but it reports no actual
+  duration and no resume date, so the two floors coincide on it. A row that has
+  consumed part of its duration, or carries a Project `Stop`/`Resume` pair,
+  would need the remaining span to begin after the completed portion, and that
+  is unmeasured. `tests/test_progress_boiler.py` pins the row's zero actual
+  duration so the first file that differs asks the question.
+- **A constraint on an activity that has started is reported, not applied.**
+  What a finish-side constraint should do to the remaining span of work already
+  under way has no corpus case and no real file to measure on, so the forward
+  pass carries it on `deferred_constraints` rather than scheduling the row as
+  if it were unconstrained or guessing what Project would do.
+- **Field reports will arrive as percentages, and the engine reads dates and
+  remaining durations.** That is ADR-009's decision and it holds; what it
+  implies is that the execution layer (S7) owes a conversion at the API edge —
+  a reported percentage into a remaining duration, with the rule written down —
+  and the engine is not the place for it.
 - **Whether Primavera's data date is an implicit floor under unstarted work is
   open.** Microsoft Project does not floor it — rescheduling uncompleted work is
   a command a planner runs — and the corpus declares no floor either, so none is
@@ -301,6 +320,22 @@ until the parity checklist passes.
 - **Two BOILER rows have a stored total slack larger than either of their own
   date differences**, so the rule that explains the other 449 does not explain
   them. Counted in `tests/test_backward_pass_boiler.py` rather than absorbed.
+
+### Carried from the PR #31 and #32 reviews
+
+Neither review was answered on its pull request: #31's six findings were merged
+past, and #32 merged before its review ran. Both were answered on 2026-09-05 in
+one change (`docs/history/2026-09-05-post-s5-review.md`). Fixed: remaining
+work floored at the actual start, with the project start no longer a bound on
+started work; the progress policy reaching the backward pass and the free
+float; work that has started with no remaining duration refused; constraints on
+started work reported rather than dropped; the progress state and the two
+component floats hashed into the fingerprints; a project late finish past the
+horizon refused; the two passes bound to the network by fingerprint; the float's
+refusals coded; and the false aggregate in the S4 history entry. Rejected with a
+measurement: the negative-lag inversion, which holds from every coordinate a
+placed date can occupy and departs only inside a gap by zero working time,
+pinned in `tests/test_backward_pass.py`.
 
 ### Carried from the PR #22 review, against the slice that owns each
 

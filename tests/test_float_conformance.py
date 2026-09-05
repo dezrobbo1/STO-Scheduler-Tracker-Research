@@ -7,11 +7,10 @@ free float and total float genuinely differ. Both declare start, finish, total
 float and free float for every activity, so the assertion is the whole row and
 not a chosen field.
 
-With these two the corpus's executable subset is complete for everything but
-progress and levelling: forty of the fifty cases now run against the real
-engine, and what is left out is still left out for a reason -- eight status
-cases need actuals and a status date (S5), and two determinism cases arrive with
-levelling.
+They are the float cases; the forward and status cases have modules of their
+own, and ``tests/test_conformance_determinism.py`` holds the three modules
+together to exactly the corpus's own executable subset, so no count of cases
+is written here to drift.
 
 Both cases are declared on a continuous calendar, so they cannot tell a
 working-time float from an elapsed one. That question is settled in
