@@ -1,0 +1,135 @@
+{
+  "case_id": "SEM-CAL-023",
+  "title": "Duration spans weekend",
+  "category": "calendar",
+  "purpose": "Verify Friday-to-Monday working-time arithmetic.",
+  "schedule": {
+    "schema_version": "0.1.3",
+    "schedule_id": "SEM-CAL-023",
+    "name": "SEM-CAL-023",
+    "semantic_profile": "reference-v0.3",
+    "source_system": null,
+    "source_snapshot_id": null,
+    "time_axis": {
+      "unit": "hour",
+      "origin": "2026-01-05T08:00:00+08:00",
+      "horizon": 400
+    },
+    "project": {
+      "project_start": 0,
+      "status_time": null,
+      "required_finish": null,
+      "progress_policy": "none"
+    },
+    "calendars": [
+      {
+        "id": "CAL-DAY",
+        "working_intervals": [
+          [
+            0,
+            4
+          ],
+          [
+            5,
+            9
+          ],
+          [
+            24,
+            28
+          ],
+          [
+            29,
+            33
+          ],
+          [
+            48,
+            52
+          ],
+          [
+            53,
+            57
+          ],
+          [
+            72,
+            76
+          ],
+          [
+            77,
+            81
+          ],
+          [
+            96,
+            100
+          ],
+          [
+            101,
+            105
+          ],
+          [
+            168,
+            172
+          ],
+          [
+            173,
+            177
+          ],
+          [
+            192,
+            196
+          ],
+          [
+            197,
+            201
+          ]
+        ]
+      }
+    ],
+    "resources": [],
+    "activities": [
+      {
+        "id": "A",
+        "name": "A",
+        "kind": "task",
+        "duration": 10,
+        "remaining_duration": null,
+        "calendar_id": "CAL-DAY",
+        "actual_start": null,
+        "actual_finish": null,
+        "constraints": [
+          {
+            "id": "C-A-01",
+            "type": "start_no_earlier_than",
+            "value": 96
+          }
+        ],
+        "assignments": [],
+        "milestone_priority": 0,
+        "due_time": null,
+        "source_fields": {}
+      }
+    ],
+    "relationships": [],
+    "operational_constraints": [],
+    "governance": {}
+  },
+  "expected": {
+    "reference_status": "declared",
+    "activity_times": {
+      "A": {
+        "start": 96,
+        "finish": 170
+      }
+    },
+    "project_finish": 170,
+    "driving_relationships": [],
+    "resource_order": [],
+    "assertions": [
+      "Eight units execute Friday; two execute Monday."
+    ]
+  },
+  "native_validation": {
+    "p6": "required",
+    "microsoft_project": "required"
+  },
+  "notes": ""
+}

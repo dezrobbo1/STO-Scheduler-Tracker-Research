@@ -1,0 +1,107 @@
+{
+  "case_id": "SEM-REL-005",
+  "title": "FS positive lag",
+  "category": "relationship",
+  "purpose": "Verify positive FS lag.",
+  "schedule": {
+    "schema_version": "0.1.3",
+    "schedule_id": "SEM-REL-005",
+    "name": "SEM-REL-005",
+    "semantic_profile": "reference-v0.3",
+    "source_system": null,
+    "source_snapshot_id": null,
+    "time_axis": {
+      "unit": "hour",
+      "origin": "2026-01-05T08:00:00+08:00",
+      "horizon": 400
+    },
+    "project": {
+      "project_start": 0,
+      "status_time": null,
+      "required_finish": null,
+      "progress_policy": "none"
+    },
+    "calendars": [
+      {
+        "id": "CAL-24X7",
+        "working_intervals": [
+          [
+            0,
+            400
+          ]
+        ]
+      }
+    ],
+    "resources": [],
+    "activities": [
+      {
+        "id": "A",
+        "name": "A",
+        "kind": "task",
+        "duration": 4,
+        "remaining_duration": null,
+        "calendar_id": "CAL-24X7",
+        "actual_start": null,
+        "actual_finish": null,
+        "constraints": [],
+        "assignments": [],
+        "milestone_priority": 0,
+        "due_time": null,
+        "source_fields": {}
+      },
+      {
+        "id": "B",
+        "name": "B",
+        "kind": "task",
+        "duration": 3,
+        "remaining_duration": null,
+        "calendar_id": "CAL-24X7",
+        "actual_start": null,
+        "actual_finish": null,
+        "constraints": [],
+        "assignments": [],
+        "milestone_priority": 0,
+        "due_time": null,
+        "source_fields": {}
+      }
+    ],
+    "relationships": [
+      {
+        "id": "R1",
+        "predecessor_id": "A",
+        "successor_id": "B",
+        "type": "FS",
+        "lag": 2,
+        "lag_calendar": null
+      }
+    ],
+    "operational_constraints": [],
+    "governance": {}
+  },
+  "expected": {
+    "reference_status": "declared",
+    "activity_times": {
+      "A": {
+        "start": 0,
+        "finish": 4
+      },
+      "B": {
+        "start": 6,
+        "finish": 9
+      }
+    },
+    "project_finish": 9,
+    "driving_relationships": [
+      "R1"
+    ],
+    "resource_order": [],
+    "assertions": [
+      "Two time units separate A finish and B start."
+    ]
+  },
+  "native_validation": {
+    "p6": "required",
+    "microsoft_project": "required"
+  },
+  "notes": ""
+}

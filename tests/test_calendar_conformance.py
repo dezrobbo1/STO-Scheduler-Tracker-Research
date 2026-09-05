@@ -1,9 +1,7 @@
 """The calendar cases of the semantic corpus, on the compiled arithmetic alone.
 
-The corpus lives in ``dezrobbo1/PM-Software`` at the commit pinned in
-``docs/history/``; until the conformance suite arrives (S3, when the corpus is
-copied in with SHA-256 pins) these cases are read from a clone named by
-``STO_PM_SOFTWARE_DIR``. ``STO_REQUIRE_PM=1`` turns its absence into a failure.
+The cases are the pinned copy in :mod:`sto.conformance`, hash-checked as they
+are read; :mod:`tests.test_conformance_corpus` guards the pins.
 
 Only the cases a calendar can answer by itself are here: one activity, or
 one activity and a resource calendar. The cases with relationships are the
@@ -12,11 +10,9 @@ forward pass's, and are left for it.
 
 from __future__ import annotations
 
-import json
-import os
 import unittest
-from pathlib import Path
 
+from sto import conformance
 from sto.core.calendar.arithmetic import (
     CompiledIntervals,
     add_working,
@@ -24,19 +20,12 @@ from sto.core.calendar.arithmetic import (
     next_working,
 )
 
-PM_DIR = Path(os.environ.get("STO_PM_SOFTWARE_DIR", "/home/dez/PM-Software"))
-CASES = PM_DIR / "benchmarks" / "semantic" / "cases"
-REQUIRE = os.environ.get("STO_REQUIRE_PM") == "1"
-if REQUIRE and not CASES.is_dir():
-    raise RuntimeError(f"STO_REQUIRE_PM=1 but {CASES} is not there")
-
 CALENDAR_ONLY = ("sem-cal-021", "sem-cal-022", "sem-cal-023", "sem-cal-026", "sem-cal-027", "sem-cal-028")
 
 
-@unittest.skipUnless(CASES.is_dir(), "PM-Software clone not present; set STO_REQUIRE_PM=1 to fail")
 class CalendarCaseTests(unittest.TestCase):
     def _run(self, case_id: str):
-        case = json.loads((CASES / f"{case_id}.json").read_text(encoding="utf-8"))
+        case = conformance.load_case(case_id)
         schedule = case["schedule"]
         calendars = {c["id"]: tuple(tuple(i) for i in c["working_intervals"]) for c in schedule["calendars"]}
         resources = {r["id"]: r for r in schedule.get("resources", [])}

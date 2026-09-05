@@ -99,6 +99,19 @@ template — so the exception test compiles over 2025 to exercise them. Six of
 the corpus's ten calendar cases pass on the arithmetic alone; the four with
 relationships belong to the forward pass.
 
+**Forward pass (S3).** `sto.core.engine` takes integer coordinates and compiled
+intervals, never a schedule, so the corpus — declared in hours — drives the
+real engine rather than a copy of it. All four relationship types with signed
+lag; zero lag does not snap because placement already does; milestones read
+`MilestoneSnapPolicy` instead of picking. Every corpus case a forward pass
+alone can answer passes exactly. The corpus itself is now in the package,
+`src/sto/conformance/`, byte-pinned to the commit its manifest names and
+hash-checked on every read, so it runs in CI with nothing to set. Not claimed:
+against the dates Microsoft Project stored in the BOILER file the pass agrees
+on one activity, and the cause is recorded undiagnosed in
+`docs/history/2026-09-03-forward-pass.md` rather than guessed at — it is the
+backward pass's and the status date's to close as much as this one's.
+
 ## Now: the engine and interchange spine
 
 Phase 0 passed on 2026-09-03 with every criterion crossed on its inputs
@@ -106,9 +119,8 @@ present. Phase 1 is the engine, the sidecar, and real authentication, in this
 order:
 
 1. ~~Calendars~~ — done.
-2. **Forward pass** over all four relationship types with signed lag, run
-   against the corpus and the BOILER file oracle with every difference
-   classified.
+2. ~~Forward pass~~ — done against the corpus; the BOILER file-oracle
+   differences are recorded, not yet classified.
 3. **Backward pass, float and criticality**, against the stored late dates and
    slack of both BOILER snapshots.
 4. **Status date and progress** — retained logic and progress override —
@@ -155,7 +167,7 @@ asks for the rule to be promoted, so none of this depends on anyone remembering.
 |---|---|---|---|
 | `PR-core-stdlib-only` | S1 | live | `tests/test_core_is_stdlib_only.py` |
 | `PR-no-schedule-content` | S1 | live | `tests/test_docs_carry_no_schedule_content.py` |
-| `PR-conformance-suite` | S3 | pending | src/sto/conformance exists |
+| `PR-conformance-suite` | S3 | live | `tests/test_conformance_corpus.py` |
 | `PR-evidence-register` | I13 | pending | docs/evidence/register.json exists |
 | `PR-approved-forecast` | PL6 | pending | sto.execution.review imports |
 | `PR-migrations` | PL1 | live | `tests/test_migrations_are_immutable.py` |

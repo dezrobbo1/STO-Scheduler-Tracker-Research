@@ -1,0 +1,111 @@
+{
+  "case_id": "SEM-CON-037",
+  "title": "Constraint dominates logic",
+  "category": "milestone_constraint",
+  "purpose": "Verify the maximum of logic and date constraint.",
+  "schedule": {
+    "schema_version": "0.1.3",
+    "schedule_id": "SEM-CON-037",
+    "name": "SEM-CON-037",
+    "semantic_profile": "reference-v0.3",
+    "source_system": null,
+    "source_snapshot_id": null,
+    "time_axis": {
+      "unit": "hour",
+      "origin": "2026-01-05T08:00:00+08:00",
+      "horizon": 400
+    },
+    "project": {
+      "project_start": 0,
+      "status_time": null,
+      "required_finish": null,
+      "progress_policy": "none"
+    },
+    "calendars": [
+      {
+        "id": "CAL-24X7",
+        "working_intervals": [
+          [
+            0,
+            400
+          ]
+        ]
+      }
+    ],
+    "resources": [],
+    "activities": [
+      {
+        "id": "A",
+        "name": "A",
+        "kind": "task",
+        "duration": 2,
+        "remaining_duration": null,
+        "calendar_id": "CAL-24X7",
+        "actual_start": null,
+        "actual_finish": null,
+        "constraints": [],
+        "assignments": [],
+        "milestone_priority": 0,
+        "due_time": null,
+        "source_fields": {}
+      },
+      {
+        "id": "B",
+        "name": "B",
+        "kind": "task",
+        "duration": 3,
+        "remaining_duration": null,
+        "calendar_id": "CAL-24X7",
+        "actual_start": null,
+        "actual_finish": null,
+        "constraints": [
+          {
+            "id": "C-B-01",
+            "type": "start_no_earlier_than",
+            "value": 6
+          }
+        ],
+        "assignments": [],
+        "milestone_priority": 0,
+        "due_time": null,
+        "source_fields": {}
+      }
+    ],
+    "relationships": [
+      {
+        "id": "R1",
+        "predecessor_id": "A",
+        "successor_id": "B",
+        "type": "FS",
+        "lag": 0,
+        "lag_calendar": null
+      }
+    ],
+    "operational_constraints": [],
+    "governance": {}
+  },
+  "expected": {
+    "reference_status": "declared",
+    "activity_times": {
+      "A": {
+        "start": 0,
+        "finish": 2
+      },
+      "B": {
+        "start": 6,
+        "finish": 9
+      }
+    },
+    "project_finish": 9,
+    "driving_relationships": [],
+    "resource_order": [],
+    "assertions": [
+      "B's SNET constraint dominates the FS bound."
+    ]
+  },
+  "native_validation": {
+    "p6": "required",
+    "microsoft_project": "required"
+  },
+  "notes": ""
+}

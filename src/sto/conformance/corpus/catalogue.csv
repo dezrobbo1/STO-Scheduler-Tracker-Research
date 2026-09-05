@@ -1,0 +1,51 @@
+case_id,category,title,reference_status,project_finish,p6_validation,microsoft_project_validation
+SEM-REL-001,relationship,FS zero lag,declared,7,required,required
+SEM-REL-002,relationship,SS zero lag,declared,4,required,required
+SEM-REL-003,relationship,FF zero lag,declared,4,required,required
+SEM-REL-004,relationship,SF zero lag,declared,8,required,required
+SEM-REL-005,relationship,FS positive lag,declared,9,required,required
+SEM-REL-006,relationship,SS positive lag,declared,5,required,required
+SEM-REL-007,relationship,FF positive lag,declared,6,required,required
+SEM-REL-008,relationship,SF positive lag,declared,8,required,required
+SEM-REL-009,relationship,FS negative lag,declared,9,required,required
+SEM-REL-010,relationship,SS negative lag,declared,8,required,required
+SEM-REL-011,relationship,FF negative lag,declared,8,required,required
+SEM-REL-012,relationship,SF negative lag,declared,12,required,required
+SEM-NET-013,network,Two FS predecessors,declared,6,required,required
+SEM-NET-014,network,Mixed FS and SS bounds,declared,8,required,required
+SEM-NET-015,network,"One predecessor, two successors",declared,7,required,required
+SEM-NET-016,network,Three-activity chain,declared,9,required,required
+SEM-NET-017,network,Diamond network,declared,8,required,required
+SEM-NET-018,network,Convergence with lag,declared,6,required,required
+SEM-NET-019,network,Redundant non-driving predecessor,declared,7,required,required
+SEM-NET-020,network,Mixed relationship driving,declared,9,required,required
+SEM-CAL-021,calendar,Duration spans lunch break,declared,7,required,required
+SEM-CAL-022,calendar,Duration spans overnight,declared,26,required,required
+SEM-CAL-023,calendar,Duration spans weekend,declared,170,required,required
+SEM-CAL-024,calendar,FS lag on successor calendar,declared,9,required,required
+SEM-CAL-025,calendar,Successor snaps to next working interval,declared,26,required,required
+SEM-CAL-026,calendar,Activity calendars produce different finishes,declared,9,required,required
+SEM-CAL-027,calendar,Resource calendar delays work,declared,8,required,required
+SEM-CAL-028,calendar,Holiday exception,declared,50,required,required
+SEM-CAL-029,calendar,SS lag across lunch,declared,9,required,required
+SEM-CAL-030,calendar,Negative FS lag across lunch,declared,9,required,required
+SEM-MIL-031,milestone_constraint,Start milestone at project start,declared,0,required,required
+SEM-MIL-032,milestone_constraint,Finish milestone after task,declared,4,required,required
+SEM-MIL-033,milestone_constraint,Milestone predecessor,declared,7,required,required
+SEM-MIL-034,milestone_constraint,FF relationship into milestone,declared,4,required,required
+SEM-CON-035,milestone_constraint,Start no earlier than,declared,8,required,required
+SEM-CON-036,milestone_constraint,Finish no earlier than,declared,7,required,required
+SEM-CON-037,milestone_constraint,Constraint dominates logic,declared,9,required,required
+SEM-CON-038,milestone_constraint,Redundant constraint,declared,5,required,required
+SEM-STA-039,status_progress,Completed actuals are immutable,declared,6,required,required
+SEM-STA-040,status_progress,In-progress remaining work,declared,8,required,required
+SEM-STA-041,status_progress,Late actual start drives successor,declared,9,required,required
+SEM-STA-042,status_progress,Actual finish drives downstream lag,declared,9,required,required
+SEM-STA-043,status_progress,Out-of-sequence retained logic,declared,10,required,required
+SEM-STA-044,status_progress,Out-of-sequence progress override,declared,8,required,required
+SEM-STA-045,status_progress,Actual-dates native validation case,native_validation_only,,required,required
+SEM-STA-046,status_progress,Emergent activity after status,declared,8,required,required
+SEM-FLT-047,float,Parallel paths total float,declared,5,required,required
+SEM-FLT-048,float,Free float differs from total float,declared,5,required,required
+SEM-DET-049,resource_determinism,Exclusive-resource canonical tie,declared,8,not_applicable,not_applicable
+SEM-DET-050,resource_determinism,Mandatory milestone priority breaks resource tie,declared,8,not_applicable,not_applicable

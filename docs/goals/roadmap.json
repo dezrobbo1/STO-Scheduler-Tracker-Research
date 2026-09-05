@@ -8,6 +8,8 @@
   ],
   "conformance": {
     "source": "dezrobbo1/PM-Software benchmarks/semantic at 7a58a4f",
+    "commit": "7a58a4f31b74f561c92b8e8534ec698bf6007d12",
+    "manifest": "src/sto/conformance/MANIFEST.json",
     "cases_total": 50,
     "native_validation_only": 1,
     "levelling_only": 2,
@@ -398,7 +400,7 @@
       "id": "S3",
       "title": "Forward pass over four relationship types",
       "phase": "P1",
-      "status": "not_started",
+      "status": "done",
       "days": 4
     },
     {
@@ -639,12 +641,12 @@
       "id": "PR-conformance-suite",
       "summary": "Engine claims are bounded by the semantic conformance corpus as well as by the file oracle; the corpus and its executable subset are counted in the conformance block, never in prose",
       "owed_to": "S3",
-      "status": "pending",
+      "status": "live",
       "live_when": {
         "kind": "path_exists",
         "path": "src/sto/conformance"
       },
-      "enforced_by": null
+      "enforced_by": "tests/test_conformance_corpus.py"
     },
     {
       "id": "PR-evidence-register",
