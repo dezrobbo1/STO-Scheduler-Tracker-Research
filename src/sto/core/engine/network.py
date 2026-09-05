@@ -158,6 +158,19 @@ class PlannedActivity:
     actual_start: int | None = None
     actual_finish: int | None = None
     remaining_duration: int | None = None
+    #: The calendar a *float* on this activity is measured in, when it is not
+    #: the one the work is placed on. Microsoft Project places work on the
+    #: resource's calendar and measures slack on the task's own or the
+    #: project's -- the same calendar it consumes a lag on -- and the two are
+    #: routinely different shifts. ``None`` means the scheduling calendar, which
+    #: is what the corpus declares and what an activity with no resource has.
+    measure_calendar: CompiledIntervals | None = None
+
+    @property
+    def float_calendar(self) -> CompiledIntervals:
+        """The calendar a float on this activity is measured in."""
+
+        return self.calendar if self.measure_calendar is None else self.measure_calendar
 
     @property
     def is_milestone(self) -> bool:
@@ -290,6 +303,7 @@ class Network:
                         a.actual_start,
                         a.actual_finish,
                         a.remaining_duration,
+                        calendar_digest(a.measure_calendar),
                     ]
                     for a in self.activities
                 ],
