@@ -102,6 +102,17 @@ continuous calendar, where all three readings agree. Only the file oracle
 distinguishes them, so the counts above are the regression test, which is why
 they are pinned rather than described.
 
+**Negative float is bounded by the compiled window, not by the project start.**
+Reporting a float below zero means putting late dates before the project start,
+so there has to be calendar below the project start to put them at. A horizon
+that begins where the project does has none, and the pass says so with a code
+naming the window rather than guessing a coordinate that does not exist. This is
+the one place the mirror is asymmetric: running out of horizon means the
+schedule does not fit, but running out of calendar underneath means we did not
+compile enough of it. A schedule with no late constraint and no required finish
+cannot go negative and needs no room, which is why a tight horizon stays legal
+rather than being refused up front.
+
 **Criticality on a progressed schedule is not settled by this ADR.** The rule
 reproduces the un-progressed snapshot exactly and the progressed ones do not
 follow it: a complete activity is not critical whatever its slack. That belongs

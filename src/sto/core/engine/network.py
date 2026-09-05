@@ -103,9 +103,14 @@ class BackwardPassError(NetworkError):
     """A network that cannot be scheduled backward.
 
     Separate from :class:`ForwardPassError` because the two passes fail for
-    different reasons on the same network: a forward pass runs out of horizon,
-    a backward pass runs out of floor, and a caller that catches one should not
-    silently swallow the other.
+    different reasons on the same network: a forward pass runs out of horizon
+    and a backward pass runs out of calendar beneath it.
+
+    A defect in the network itself belongs to neither, and :meth:`Network.validate`
+    raises the base :class:`NetworkError` for exactly that reason -- both passes
+    call it, so a caller catching only one subclass would miss every validation
+    failure of the other. **Catch :class:`NetworkError` unless you specifically
+    mean one direction.**
     """
 
 
@@ -202,7 +207,7 @@ class Network:
         """
 
         if self.horizon <= self.project_start:
-            raise ForwardPassError(
+            raise NetworkError(
                 "SCHEDULE_HORIZON_INVALID",
                 None,
                 f"horizon {self.horizon} does not follow project start {self.project_start}",
@@ -211,19 +216,19 @@ class Network:
         seen: set[UUID] = set()
         for activity in self.activities:
             if activity.uid in seen:
-                raise ForwardPassError("SCHEDULE_DUPLICATE_ACTIVITY", activity.uid)
+                raise NetworkError("SCHEDULE_DUPLICATE_ACTIVITY", activity.uid)
             seen.add(activity.uid)
             if activity.duration < 0:
-                raise ForwardPassError(
+                raise NetworkError(
                     "SCHEDULE_DURATION_NEGATIVE", activity.uid, str(activity.duration)
                 )
             if not activity.calendar.intervals:
-                raise ForwardPassError("SCHEDULE_CALENDAR_EMPTY", activity.uid)
+                raise NetworkError("SCHEDULE_CALENDAR_EMPTY", activity.uid)
             if (
                 activity.constraint_type in _DATED_CONSTRAINTS
                 and activity.constraint_coordinate is None
             ):
-                raise ForwardPassError(
+                raise NetworkError(
                     "SCHEDULE_CONSTRAINT_INCOMPLETE",
                     activity.uid,
                     activity.constraint_type.value,
@@ -232,15 +237,15 @@ class Network:
         edges: set[UUID] = set()
         for relationship in self.relationships:
             if relationship.uid in edges:
-                raise ForwardPassError("SCHEDULE_DUPLICATE_RELATIONSHIP", relationship.uid)
+                raise NetworkError("SCHEDULE_DUPLICATE_RELATIONSHIP", relationship.uid)
             edges.add(relationship.uid)
             for endpoint in (relationship.predecessor_uid, relationship.successor_uid):
                 if endpoint not in seen:
-                    raise ForwardPassError(
+                    raise NetworkError(
                         "SCHEDULE_UNKNOWN_ACTIVITY", relationship.uid, str(endpoint)
                     )
             if relationship.predecessor_uid == relationship.successor_uid:
-                raise ForwardPassError("SCHEDULE_SELF_RELATIONSHIP", relationship.uid)
+                raise NetworkError("SCHEDULE_SELF_RELATIONSHIP", relationship.uid)
 
 
 def shift_lag(calendar: CompiledIntervals, anchor: int, lag: int) -> int | None:

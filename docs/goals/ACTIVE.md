@@ -120,7 +120,10 @@ generated networks rather than checking a value in one direction. Two bugs came
 out of exactly those: a milestone snapped backwards took the finish-side answer
 when a milestone is a coordinate work *starts* at, and the pass refused a late
 date before the project start when that is precisely what an over-committed
-schedule has to be able to report. A late constraint now earns negative float,
+schedule has to be able to report. How deep that report can go is bounded by the
+compiled window rather than by the project start — review caught that claimed
+more widely than the code delivered, so the horizon is documented as two-sided
+and the refusal names the window it ran out of. A late constraint now earns negative float,
 as the forward pass promised it would; ALAP is carried through both passes
 rather than guessed at.
 

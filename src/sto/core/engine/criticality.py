@@ -55,7 +55,7 @@ from sto.core.hashing import canonical_sha256
 
 from .backward import BackwardPass
 from .forward import ForwardPass
-from .network import Network, PlannedRelationship, shift_lag
+from .network import Network, NetworkError, PlannedRelationship, shift_lag
 
 #: Named on the fingerprint so a stored answer says which rule produced it.
 CRITICALITY_PROFILE = "sto-criticality-v1"
@@ -173,9 +173,14 @@ def _free_float(
         )
         required = shift_lag(lag_calendar, anchor, relationship.lag)
         if required is None:
-            # The forward pass already refused this edge; reaching it here would
-            # mean the two passes were run over different networks.
-            raise ValueError(f"lag {relationship.lag} from {anchor} leaves the calendar")
+            # The forward pass already refused this edge, so reaching it here
+            # means the two passes were run over different networks. Reported by
+            # code against the edge, like every other engine refusal.
+            raise NetworkError(
+                "SCHEDULE_LAG_UNREACHABLE",
+                relationship.uid,
+                f"lag {relationship.lag} from {anchor} leaves the calendar",
+            )
         successor_start, successor_finish = early[relationship.successor_uid]
         available = (
             successor_start if relationship.bounds_successor_start else successor_finish
@@ -201,9 +206,17 @@ def float_analysis(
 
     early = forward.by_uid()
     late = backward.by_uid()
-    missing = sorted(str(a.uid) for a in network.activities if a.uid not in late)
-    if missing:
-        raise ValueError(f"{len(missing)} activities have no late dates: {missing[:3]}")
+    # Both directions, because a pass carrying a uid the network does not would
+    # otherwise die on a raw KeyError below rather than say what was wrong.
+    scheduled = {activity.uid for activity in network.activities}
+    for name, covered in (("forward", set(early)), ("backward", set(late))):
+        if covered != scheduled:
+            raise NetworkError(
+                "SCHEDULE_PASS_MISMATCH",
+                None,
+                f"the {name} pass covers a different set of activities "
+                f"({len(covered - scheduled)} extra, {len(scheduled - covered)} missing)",
+            )
 
     calendars = {activity.uid: activity.calendar for activity in network.activities}
     outgoing = network.successors()

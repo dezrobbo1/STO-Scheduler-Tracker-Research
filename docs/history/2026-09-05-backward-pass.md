@@ -32,7 +32,9 @@ mirror. A forward pass running past the horizon has nowhere to put the activity
 because the calendar stops; a backward pass reaching below the project start has
 somewhere to put it and is telling you the schedule is over-committed. Refusing
 turns the report into a crash. The floor is now where the **calendar** runs out,
-and an unmeetable constraint produces negative float.
+and an unmeetable constraint produces negative float — as deep as the window was
+compiled, which is a real limit and is where the review caught the claim being
+wider than the code (below).
 
 ## What unit is a float in? The files said working time, loudly
 
@@ -111,6 +113,47 @@ logic is right, which is what the forward-pass entry suspected and could not
 show. Both counts are pinned in `tests/test_backward_pass_boiler.py`, so closing
 the forward-pass difference will fail those assertions and force this entry to
 be corrected deliberately.
+
+## The review pass, and the one finding that was not cosmetic
+
+Four findings, all confirmed against the code before anything was changed, and
+all four fixed rather than deferred because all four are in surface this slice
+introduced.
+
+The one that mattered: **the promise that negative float is reported rather than
+refused only held because every test padded its calendar below the project
+start.** `build_plan` compiles over the horizon it is given, so a caller passing
+the natural window — beginning at the project start — got
+`SCHEDULE_FLOOR_EXCEEDED` for the whole schedule instead of negative float on
+the affected chain, and `backward_pass(project_late_finish=X)` worked only for
+an `X` at or after the computed finish, which is exactly when the parameter does
+nothing. Measured both ways on a 20+20 chain: on a padded window a required
+finish of 35, 20 and 10 gives −5, −20 and −30; on a tight one all three raise.
+
+The refusal itself is right — there is no coordinate below the window to return
+— so the fix was not to the arithmetic. The claim was narrowed to what the code
+does, the error now names the window and says to widen the horizon, `build_plan`
+documents that its horizon is two-sided and why, and both halves are pinned in
+`tests/test_backward_pass.py` so no later test can hide the difference behind a
+pad again.
+
+The other three were contract defects rather than wrong answers.
+`BackwardPass.order` was reverse-topological while `times` was topological, so
+`zip(order, times)` was silently right on `ForwardPass` and silently wrong here;
+`order` now indexes `times` the same way and `traversal_order()` is the reverse
+for anyone who wants it. `sto.core.engine.criticality` raised bare uncoded
+`ValueError`s that a caller catching the engine's own error type would never
+see, and its cross-pass check ran in one direction only, so a pass carrying an
+extra activity died on a raw `KeyError`. And `Network.validate` — which *both*
+passes call — raised `ForwardPassError`, so a caller following the new
+`BackwardPassError` docstring's own advice would have missed every validation
+failure; validation is a property of the network, so it now raises the neutral
+`NetworkError` that both subclass.
+
+The review also differentially fuzzed `latest_span` against a brute-force scan,
+and the floats against a "delay it and see what moves" oracle — twenty thousand
+and twenty-three thousand trials, no mismatches. That is the part of the slice
+its own tests could not have established.
 
 ## Housekeeping
 

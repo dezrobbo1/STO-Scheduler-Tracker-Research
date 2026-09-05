@@ -37,7 +37,7 @@ from sto.core.calendar.arithmetic import (
 )
 from sto.core.engine import (
     ForwardPass,
-    ForwardPassError,
+    NetworkError,
     Network,
     PlannedActivity,
     PlannedRelationship,
@@ -179,7 +179,7 @@ class LagTests(unittest.TestCase):
             project_start=0,
             horizon=400,
         )
-        with self.assertRaises(ForwardPassError) as caught:
+        with self.assertRaises(NetworkError) as caught:
             forward_pass(network)
         self.assertEqual(caught.exception.code, "SCHEDULE_LAG_UNREACHABLE")
 
@@ -300,13 +300,21 @@ class ConstraintTests(unittest.TestCase):
             project_start=0,
             horizon=400,
         )
-        with self.assertRaises(ForwardPassError) as caught:
+        with self.assertRaises(NetworkError) as caught:
             forward_pass(network)
         self.assertEqual(caught.exception.code, "SCHEDULE_CONSTRAINT_INCOMPLETE")
 
 
 class RefusalTests(unittest.TestCase):
-    """A network the pass cannot schedule is refused by code, never guessed at."""
+    """A network the pass cannot schedule is refused by code, never guessed at.
+
+    Asserted against ``NetworkError``, the base both passes' errors share, and
+    on the code rather than the class. Which subclass is raised says *which
+    direction* failed -- a defect in the network itself belongs to neither, so
+    ``Network.validate`` raises the base -- and that split has its own test in
+    ``tests/test_backward_pass.py``. Pinning it again here would only assert
+    that a refusal came from the pass the test happens to call.
+    """
 
     def test_a_cycle_is_refused(self):
         network = Network(
@@ -315,7 +323,7 @@ class RefusalTests(unittest.TestCase):
             project_start=0,
             horizon=400,
         )
-        with self.assertRaises(ForwardPassError) as caught:
+        with self.assertRaises(NetworkError) as caught:
             forward_pass(network)
         self.assertEqual(caught.exception.code, "SCHEDULE_CYCLE")
 
@@ -326,7 +334,7 @@ class RefusalTests(unittest.TestCase):
             project_start=0,
             horizon=400,
         )
-        with self.assertRaises(ForwardPassError) as caught:
+        with self.assertRaises(NetworkError) as caught:
             forward_pass(network)
         self.assertEqual(caught.exception.code, "SCHEDULE_UNKNOWN_ACTIVITY")
 
@@ -337,7 +345,7 @@ class RefusalTests(unittest.TestCase):
             project_start=0,
             horizon=400,
         )
-        with self.assertRaises(ForwardPassError) as caught:
+        with self.assertRaises(NetworkError) as caught:
             forward_pass(network)
         self.assertEqual(caught.exception.code, "SCHEDULE_SELF_RELATIONSHIP")
 
@@ -345,13 +353,13 @@ class RefusalTests(unittest.TestCase):
         network = Network(
             activities=(activity("A", 1), activity("A", 2)), project_start=0, horizon=400
         )
-        with self.assertRaises(ForwardPassError) as caught:
+        with self.assertRaises(NetworkError) as caught:
             forward_pass(network)
         self.assertEqual(caught.exception.code, "SCHEDULE_DUPLICATE_ACTIVITY")
 
     def test_a_negative_duration_is_refused(self):
         network = Network(activities=(activity("A", -1),), project_start=0, horizon=400)
-        with self.assertRaises(ForwardPassError) as caught:
+        with self.assertRaises(NetworkError) as caught:
             forward_pass(network)
         self.assertEqual(caught.exception.code, "SCHEDULE_DURATION_NEGATIVE")
 
@@ -361,19 +369,19 @@ class RefusalTests(unittest.TestCase):
             project_start=0,
             horizon=400,
         )
-        with self.assertRaises(ForwardPassError) as caught:
+        with self.assertRaises(NetworkError) as caught:
             forward_pass(network)
         self.assertEqual(caught.exception.code, "SCHEDULE_CALENDAR_EMPTY")
 
     def test_beyond_the_horizon_is_a_refusal_not_a_guess(self):
         network = Network(activities=(activity("A", 500),), project_start=0, horizon=400)
-        with self.assertRaises(ForwardPassError) as caught:
+        with self.assertRaises(NetworkError) as caught:
             forward_pass(network)
         self.assertEqual(caught.exception.code, "SCHEDULE_HORIZON_EXCEEDED")
 
     def test_a_horizon_that_does_not_follow_the_start_is_refused(self):
         network = Network(activities=(activity("A", 1),), project_start=10, horizon=10)
-        with self.assertRaises(ForwardPassError) as caught:
+        with self.assertRaises(NetworkError) as caught:
             forward_pass(network)
         self.assertEqual(caught.exception.code, "SCHEDULE_HORIZON_INVALID")
 
@@ -527,7 +535,7 @@ class ReferenceDifferentialTests(unittest.TestCase):
                 expected = _reference_forward(network)
             except _Unplaceable:
                 # The reference could not place it; the engine must refuse too.
-                with self.assertRaises(ForwardPassError, msg=f"trial {trial}"):
+                with self.assertRaises(NetworkError, msg=f"trial {trial}"):
                     forward_pass(network)
                 continue
             result = forward_pass(network)

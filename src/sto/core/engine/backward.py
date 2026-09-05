@@ -34,6 +34,14 @@ defaults to the forward pass's project finish -- the convention that makes the
 longest path's total float zero. A caller with a contractual end date passes it
 instead, and every activity's float moves by the difference.
 
+**A required finish earlier than the computed one, or a late constraint that
+cannot be met, produces negative float rather than a refusal -- but only as far
+down as the calendar was compiled.** Late dates then run before the project
+start, and a window that begins at the project start has no room to put them in.
+There is no coordinate to return, so that is a refusal naming the window rather
+than a guess; :func:`~sto.core.engine.plan.build_plan` says what the horizon has
+to allow for.
+
 Constraints. SNLT and FNLT lower a late date, which is exactly how a late
 constraint earns negative float rather than dragging an early date backwards;
 the forward pass promised this and carried them here. MSO and MFO pin the late
@@ -106,6 +114,12 @@ class BackwardPass:
     """Latest dates for every activity, and the evidence for them."""
 
     times: tuple[ActivityLateTimes, ...]
+    #: The forward pass's topological order, so ``order[i]`` is ``times[i].uid``
+    #: exactly as it is on :class:`~sto.core.engine.forward.ForwardPass` and the
+    #: two passes' rows line up. The traversal ran the other way --
+    #: :meth:`traversal_order` is that -- but a result whose two tuples disagreed
+    #: about their order would make ``zip(order, times)`` quietly wrong on one
+    #: class and right on the other.
     order: tuple[UUID, ...]
     project_late_finish: int
     deferred_constraints: tuple[DeferredLateConstraint, ...] = ()
@@ -114,8 +128,13 @@ class BackwardPass:
     def by_uid(self) -> dict[UUID, ActivityLateTimes]:
         return {row.uid: row for row in self.times}
 
+    def traversal_order(self) -> tuple[UUID, ...]:
+        """The order the pass actually visited activities in: reverse topological."""
+
+        return tuple(reversed(self.order))
+
     def driving_relationships(self) -> tuple[UUID, ...]:
-        """Every relationship that held an activity back, in traversal order."""
+        """Every relationship that held an activity back, in :attr:`order`."""
 
         seen: list[UUID] = []
         for row in self.times:
@@ -264,7 +283,7 @@ def backward_pass(
     times = tuple(placed[uid] for uid in forward.order)
     return BackwardPass(
         times=times,
-        order=tuple(reversed(forward.order)),
+        order=forward.order,
         project_late_finish=late_finish,
         deferred_constraints=tuple(deferred),
         fingerprint=_fingerprint(times, late_finish),
@@ -283,10 +302,16 @@ def _place(
 
     The floor is where the **calendar** ends, not where the project starts. A
     late date before the project start is not an error: it is what an
-    over-constrained schedule looks like, and the negative float it produces is
-    the report. Only when there is no working time left to place the span in at
-    all -- the mirror of the forward pass running out of horizon -- is there
-    nothing to answer, and that is a refusal by code.
+    over-committed schedule looks like, and the negative float it produces is
+    the report.
+
+    That report is only as deep as the compiled window, though, and this is the
+    one place where the mirror is not symmetric. The forward pass running out of
+    horizon means the schedule genuinely does not fit; the backward pass running
+    out of calendar means *we did not compile enough of it*, because there is no
+    coordinate below the window to name. So the refusal says where the window
+    starts, and :func:`~sto.core.engine.plan.build_plan` documents that the
+    horizon's lower end is what bounds how much negative float can be expressed.
     """
 
     calendar = activity.calendar
@@ -342,7 +367,9 @@ def _place(
         raise BackwardPassError(
             "SCHEDULE_FLOOR_EXCEEDED",
             activity.uid,
-            f"duration {activity.duration} back from {finish_bound}",
+            f"duration {activity.duration} back from {finish_bound} needs working time "
+            f"below the compiled window, which starts at {floor}; widen the horizon "
+            f"to express float this negative",
         )
     return span
 

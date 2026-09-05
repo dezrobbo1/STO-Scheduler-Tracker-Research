@@ -27,6 +27,7 @@ from sto.core.calendar.arithmetic import CompiledIntervals
 from sto.core.engine import (
     BackwardPassError,
     Network,
+    NetworkError,
     PlannedActivity,
     PlannedRelationship,
     backward_pass,
@@ -377,6 +378,123 @@ class ProjectLateFinishTests(unittest.TestCase):
         )
         self.assertEqual(floats.by_uid()[uid("A")].total_float, -2)
         self.assertTrue(floats.by_uid()[uid("A")].negative)
+
+
+class CompiledWindowTests(unittest.TestCase):
+    """How far down negative float can be expressed, and what happens past it.
+
+    The backward pass reports negative float by putting late dates before the
+    project start, so it needs calendar below the project start to put them in.
+    A window that begins exactly at the project start has none, which is legal
+    and fine until something actually goes negative. Both halves are pinned here
+    because the difference is invisible in every other test in this file: they
+    all use a calendar padded below their project start.
+    """
+
+    #: The same chain twice: once on a window that starts where the project
+    #: does, once on one padded beneath it.
+    TIGHT = CompiledIntervals.of([(0, 200)])
+    PADDED = CompiledIntervals.of([(-200, 200)])
+
+    def _chain(self, calendar):
+        return network(
+            [activity("A", 20, calendar=calendar), activity("B", 20, calendar=calendar)],
+            [edge("R", "A", "B")],
+            project_start=0,
+            horizon=200,
+        )
+
+    def test_a_padded_window_reports_negative_float_for_a_required_finish(self):
+        net = self._chain(self.PADDED)
+        forward = forward_pass(net)
+        self.assertEqual(forward.project_finish, 40)
+        for required, expected in ((40, 0), (35, -5), (20, -20), (10, -30)):
+            floats = float_analysis(
+                net, forward, backward_pass(net, forward, project_late_finish=required)
+            )
+            self.assertEqual(
+                [row.total_float for row in floats.rows],
+                [expected, expected],
+                f"required finish {required}",
+            )
+
+    def test_a_window_starting_at_the_project_start_refuses_and_says_why(self):
+        """Not a wrong answer -- there is no coordinate below the window to name."""
+
+        net = self._chain(self.TIGHT)
+        forward = forward_pass(net)
+        with self.assertRaises(BackwardPassError) as caught:
+            backward_pass(net, forward, project_late_finish=35)
+        self.assertEqual(caught.exception.code, "SCHEDULE_FLOOR_EXCEEDED")
+        self.assertIn("compiled window, which starts at 0", caught.exception.detail)
+        self.assertIn("widen the horizon", caught.exception.detail)
+
+    def test_a_tight_window_is_fine_when_nothing_goes_negative(self):
+        """Which is why a horizon without room beneath it is legal, not refused."""
+
+        net = self._chain(self.TIGHT)
+        forward = forward_pass(net)
+        floats = float_analysis(net, forward, backward_pass(net, forward))
+        self.assertEqual([row.total_float for row in floats.rows], [0, 0])
+
+
+class ResultShapeTests(unittest.TestCase):
+    """The two passes' results are shaped the same way, so they can be zipped."""
+
+    def _net(self):
+        return network(
+            [activity("A", 2), activity("B", 3), activity("C", 1)],
+            [edge("R", "A", "B")],
+        )
+
+    def test_order_indexes_times_exactly_as_it_does_on_the_forward_pass(self):
+        net = self._net()
+        forward = forward_pass(net)
+        backward = backward_pass(net, forward)
+        self.assertEqual(list(forward.order), [row.uid for row in forward.times])
+        self.assertEqual(list(backward.order), [row.uid for row in backward.times])
+        self.assertEqual(backward.order, forward.order)
+
+    def test_the_traversal_order_is_available_and_is_the_reverse(self):
+        net = self._net()
+        forward = forward_pass(net)
+        backward = backward_pass(net, forward)
+        self.assertEqual(backward.traversal_order(), tuple(reversed(forward.order)))
+
+
+class ErrorContractTests(unittest.TestCase):
+    """Every refusal is a coded NetworkError, whichever direction raised it."""
+
+    def test_a_network_defect_raises_the_neutral_base_from_either_pass(self):
+        """validate() belongs to the network, so it names neither direction."""
+
+        duplicate = network([activity("A", 2), activity("A", 2)])
+        for run in (lambda: forward_pass(duplicate),
+                    lambda: backward_pass(duplicate, forward_pass(network([activity("A", 2)])))):
+            with self.assertRaises(NetworkError) as caught:
+                run()
+            self.assertEqual(caught.exception.code, "SCHEDULE_DUPLICATE_ACTIVITY")
+
+    def test_a_float_over_mismatched_passes_is_coded_not_bare(self):
+        one = network([activity("A", 2)])
+        other = network([activity("B", 2)])
+        forward = forward_pass(one)
+        backward = backward_pass(one, forward)
+        with self.assertRaises(NetworkError) as caught:
+            float_analysis(other, forward, backward)
+        self.assertEqual(caught.exception.code, "SCHEDULE_PASS_MISMATCH")
+
+    def test_every_engine_refusal_is_catchable_as_one_type(self):
+        """The contract a caller wrapping the engine actually needs."""
+
+        self.assertTrue(issubclass(BackwardPassError, NetworkError))
+        cycle = network(
+            [activity("A", 1), activity("B", 1)],
+            [edge("R1", "A", "B"), edge("R2", "B", "A")],
+        )
+        with self.assertRaises(NetworkError) as caught:
+            forward_pass(cycle)
+        self.assertEqual(caught.exception.code, "SCHEDULE_CYCLE")
 
 
 class FloatTests(unittest.TestCase):

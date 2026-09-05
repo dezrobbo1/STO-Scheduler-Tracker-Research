@@ -23,6 +23,16 @@ The forward pass works in whatever unit the calendars were compiled in --
 integer seconds from a shared epoch, here -- so :meth:`Plan.to_datetime` is how
 a coordinate becomes a wall-clock moment again. The epoch is shared across every
 calendar in the plan, because coordinates from two epochs cannot be compared.
+
+**The horizon is two-sided.** Its upper end bounds how late an activity may
+finish, which is the forward pass's limit. Its lower end bounds how *early* a
+late date may be, which is the backward pass's: an over-committed schedule puts
+late dates before the project start, and a window beginning at the project start
+has no coordinate to put them at. A horizon that does not reach below the
+project start is legal and is right for a schedule with no late constraints and
+no required finish -- neither of which can produce negative float -- but any
+caller that may hit either needs room down there, and gets
+``SCHEDULE_FLOOR_EXCEEDED`` naming the window if it does not.
 """
 
 from __future__ import annotations
