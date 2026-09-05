@@ -249,6 +249,31 @@ def _observations(row: dict[str, Any]) -> SourceObservations | None:
     return observations if observations != SourceObservations() else None
 
 
+#: MSPDI's own default when a file omits ``MinutesPerDay``.
+_DEFAULT_MINUTES_PER_DAY = 480
+
+
+def _critical_threshold(project_row: dict[str, Any]) -> int:
+    """``CriticalSlackLimit`` in seconds: days of the project's own working day.
+
+    Microsoft Project stores the limit as a whole number of days and means
+    *working* days of ``MinutesPerDay``, not calendar days. Measured, not
+    assumed: the CALCINER schedule is the one file in this estate that sets the
+    limit -- it declares six against a 480-minute day -- and at 172,800 seconds
+    the rule ``total float <= threshold`` reproduces the ``Critical`` flag
+    Project stored for all 1,763 of its activities, where ignoring the limit
+    reproduces 1,478 and reading the six as calendar days reproduces 1,623. The
+    file's own flags bracket the threshold to [156,600, 201,600) seconds, which
+    contains the working-day reading and excludes both others.
+    """
+
+    limit = project_row.get("critical_slack_limit_source")
+    if limit is None:
+        return 0
+    minutes = project_row.get("minutes_per_day") or _DEFAULT_MINUTES_PER_DAY
+    return int(limit) * int(minutes) * 60
+
+
 def _lag_calendar(lag_format: Any) -> LagCalendar:
     if lag_format is not None and int(lag_format) in _MS_ELAPSED_LAG_FORMATS:
         return LagCalendar.ELAPSED_24H
@@ -702,6 +727,7 @@ def migrate(
         default_calendar_uid=calendar_uid_by_ref.get(str(default_calendar_ref))
         if default_calendar_ref
         else None,
+        critical_float_threshold_seconds=_critical_threshold(project_row),
         minutes_per_day=project_row.get("minutes_per_day"),
         minutes_per_week=project_row.get("minutes_per_week"),
         days_per_month=project_row.get("days_per_month"),

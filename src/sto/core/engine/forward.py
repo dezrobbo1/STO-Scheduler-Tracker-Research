@@ -52,7 +52,6 @@ from dataclasses import dataclass
 from uuid import UUID
 
 from sto.core.calendar.arithmetic import (
-    CompiledIntervals,
     add_working,
     earliest_span,
     next_working,
@@ -67,6 +66,7 @@ from .network import (
     Network,
     PlannedActivity,
     PlannedRelationship,
+    shift_lag,
 )
 
 #: Why an activity's start sits where it does.
@@ -138,21 +138,6 @@ class ForwardPass:
         return tuple(seen)
 
 
-def _shift(calendar: CompiledIntervals, anchor: int, lag: int) -> int | None:
-    """Signed productive lag from ``anchor``; zero keeps the exact coordinate.
-
-    Equal to :func:`~sto.core.calendar.arithmetic.shift_working_time` on every
-    input, which the calendar slice proved over ten thousand random trials in
-    each direction.
-    """
-
-    if lag == 0:
-        return anchor
-    if lag > 0:
-        return add_working(calendar, anchor, lag)
-    return sub_working(calendar, anchor, -lag)
-
-
 def _topological_order(network: Network) -> tuple[UUID, ...]:
     """Kahn's algorithm, ties broken by declaration order, cycles refused by code."""
 
@@ -222,7 +207,7 @@ def _bounds(
             if relationship.lag_calendar is not None
             else activity.calendar
         )
-        shifted = _shift(calendar, anchor, relationship.lag)
+        shifted = shift_lag(calendar, anchor, relationship.lag)
         if shifted is None:
             raise ForwardPassError(
                 "SCHEDULE_LAG_UNREACHABLE",

@@ -337,3 +337,80 @@ def earliest_span(
     if finish > horizon:
         return None
     return start, finish
+
+
+def latest_span(
+    calendar: CompiledIntervals,
+    start_upper_bound: int,
+    finish_upper_bound: int,
+    duration: int,
+    floor: int,
+) -> tuple[int, int] | None:
+    """The latest span with start ≤ one bound and finish ≤ the other.
+
+    The mirror of :func:`earliest_span`, argument for argument, and what the
+    backward pass places a late span with: a successor bounds a predecessor's
+    late start or its late finish exactly as a predecessor bounds a successor's
+    early start or early finish, and ``floor`` is the earliest coordinate the
+    answer may occupy, as ``horizon`` is the latest there.
+
+    Monotonicity runs the same way in reverse: the start is non-decreasing in
+    the finish, so the answer is the latest finish whose start still respects
+    ``start_upper_bound``, if the plain latest finish does not already.
+    """
+
+    if duration < 0:
+        return None
+    if duration == 0:
+        # A zero duration is placed, not ended, so it takes the start-side
+        # answer -- the mirror of ``earliest_span``, which uses ``next_working``.
+        moment = prev_working_start(calendar, min(start_upper_bound, finish_upper_bound))
+        if moment is None or moment < floor:
+            return None
+        return moment, moment
+    finish = prev_working(calendar, finish_upper_bound)
+    if finish is None:
+        return None
+    start = sub_working(calendar, finish, duration)
+    if start is None:
+        return None
+    if start > start_upper_bound:
+        # The largest achievable start at or below the bound: the bound itself
+        # when it lies in some [start, finish), else one second inside the end
+        # of the preceding interval -- a start can only land inside an interval.
+        reach = prev_working_start(calendar, start_upper_bound)
+        if reach is None:
+            return None
+        start = reach
+        # Pulling the start earlier can only pull the finish earlier, so the
+        # finish bound that already held still holds.
+        moved = add_working(calendar, start, duration)
+        if moved is None:
+            return None
+        finish = moved
+    if start < floor:
+        return None
+    return start, finish
+
+
+def prev_working_start(calendar: CompiledIntervals, bound: int) -> int | None:
+    """The largest coordinate at or before ``bound`` at which work can start.
+
+    The true mirror of :func:`next_working`, and **not** the same question as
+    :func:`prev_working`. A start lies in ``[start, finish)`` of some interval
+    and a finish lies in ``(start, finish]``, so the two edges of an interval
+    answer oppositely: an interval's start edge is a valid start and not a valid
+    finish, and its finish edge is a valid finish and not a valid start. Going
+    backwards from a coordinate in a gap, the finish-side answer is the previous
+    interval's closing edge and the start-side answer is one second inside it.
+
+    Anything that is placed rather than ended -- a span's start, and a milestone,
+    which is a coordinate rather than a span -- takes this one.
+    """
+
+    if calendar.index_at(bound) >= 0:
+        return bound
+    i = bisect_right(calendar.starts, bound) - 1
+    if i < 0:
+        return None
+    return calendar.finishes[i] - 1

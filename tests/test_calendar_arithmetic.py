@@ -18,6 +18,7 @@ from sto.core.calendar.arithmetic import (
     consume_duration,
     contains_coordinate,
     earliest_span,
+    latest_span,
     next_working,
     prev_working,
     productive_segments,
@@ -39,6 +40,26 @@ def _reference_earliest_span(start_lb, finish_lb, duration, intervals, horizon):
         ):
             return candidate_start, candidate_finish
     return None
+
+
+def _reference_latest_span(start_ub, finish_ub, duration, intervals, floor):
+    """The mirror scan: the latest real span inside both upper bounds.
+
+    Only defined for a positive duration. A zero duration has no span to place,
+    only a coordinate, and the two implementations answer a different question
+    about which coordinate a zero-length event may occupy -- that case is a hand
+    case below rather than a differential one.
+    """
+
+    best = None
+    for start in range(max(0, floor), max(start_ub, finish_ub) + 1):
+        if not contains_coordinate(start, intervals):
+            continue
+        finish = consume_duration(start, duration, intervals)
+        if finish is None or finish > finish_ub or start > start_ub:
+            continue
+        best = (start, finish)
+    return best
 
 
 def _random_intervals(rng: random.Random, span: int) -> tuple[tuple[int, int], ...]:
@@ -91,6 +112,41 @@ class HandCases(unittest.TestCase):
         self.assertEqual(earliest_span(self.c, 0, 8, 2, 400), (6, 8))
         self.assertEqual(earliest_span(self.c, 0, 0, 0, 400), (0, 0))
         self.assertEqual(earliest_span(self.c, 4, 4, 0, 400), (5, 5))
+
+    def test_latest_span_respects_both_bounds(self):
+        """The mirror of the earliest-span cases, read from the other end."""
+
+        # The whole calendar is 4 on, 1 off, 4 on, a night, then the same again.
+        # Six units back from 33 spends four in (29, 33) and two in (24, 28).
+        self.assertEqual(latest_span(self.c, 400, 33, 6, 0), (26, 33))
+        # A finish bound inside the first day pulls the span back into it.
+        self.assertEqual(latest_span(self.c, 400, 9, 6, 0), (2, 9))
+        # A start bound below the finish-driven start is what actually binds.
+        self.assertEqual(latest_span(self.c, 1, 9, 6, 0), (1, 8))
+        # A zero duration is a coordinate that work *starts* at, so it takes
+        # the start-side answer: 33 closes the last interval and is a valid
+        # finish but not a valid start, exactly as earliest_span refuses 4.
+        self.assertEqual(latest_span(self.c, 400, 33, 0, 0), (32, 32))
+        self.assertEqual(earliest_span(self.c, 4, 4, 0, 400), (5, 5))
+        self.assertEqual(latest_span(self.c, 4, 400, 0, 0), (3, 3))
+
+    def test_latest_span_refuses_rather_than_crossing_the_floor(self):
+        self.assertIsNone(latest_span(self.c, 400, 9, 6, 5))
+        self.assertIsNone(latest_span(self.c, 400, 2, 6, 0))
+
+    def test_latest_span_inverts_earliest_span_on_an_unconstrained_window(self):
+        """Place a span as early as possible, then as late as it can go back.
+
+        The two answers coincide exactly when the earliest span was already the
+        latest one the same bounds allow, which is the property the backward
+        pass leans on when nothing but the project finish holds an activity.
+        """
+
+        for duration in (1, 3, 6, 9):
+            early = earliest_span(self.c, 0, 0, duration, 400)
+            self.assertIsNotNone(early)
+            late = latest_span(self.c, 400, early[1], duration, 0)
+            self.assertEqual(late, early, f"duration {duration}")
 
     def test_negative_duration_is_an_error_here_and_none_there(self):
         with self.assertRaises(ValueError):
@@ -162,6 +218,30 @@ class ReferenceDifferentialTests(unittest.TestCase):
             other = anchor + self.rng.randint(0, 60)
             expected = sum(f - s for s, f in productive_segments(anchor, other, intervals))
             self.assertEqual(working_between(c, anchor, other), expected)
+
+    def test_latest_span_agrees_with_the_mirror_scan(self):
+        for c, intervals, anchor in self._cases():
+            finish_ub = anchor + self.rng.randint(0, 30)
+            start_ub = anchor + self.rng.randint(-10, 30)
+            duration = self.rng.randint(1, 25)
+            self.assertEqual(
+                latest_span(c, start_ub, finish_ub, duration, 0),
+                _reference_latest_span(start_ub, finish_ub, duration, intervals, 0),
+                f"span sub={start_ub} fub={finish_ub} d={duration} on {intervals}",
+            )
+
+    def test_latest_span_returns_a_span_that_is_really_that_long(self):
+        """Whatever it returns consumes exactly the duration on the calendar."""
+
+        for c, intervals, anchor in self._cases():
+            duration = self.rng.randint(1, 25)
+            span = latest_span(c, anchor + 30, anchor + 30, duration, 0)
+            if span is None:
+                continue
+            start, finish = span
+            self.assertEqual(working_between(c, start, finish), duration)
+            self.assertTrue(contains_coordinate(start, intervals))
+            self.assertEqual(add_working(c, start, duration), finish)
 
     def test_earliest_span_agrees_with_the_scan(self):
         for c, intervals, anchor in self._cases():

@@ -36,7 +36,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from uuid import UUID
 
-from sto.core.calendar.arithmetic import CompiledIntervals
+from sto.core.calendar.arithmetic import CompiledIntervals, add_working, sub_working
 from sto.core.model.enums import ConstraintType, RelationshipType
 
 #: Constraints the forward pass acts on. SNET and FNET raise a bound; MSO and
@@ -53,9 +53,11 @@ FORWARD_CONSTRAINTS = frozenset(
 
 #: Constraints that are recognised and carried, but cannot move an early date.
 #: A late constraint does not pull a forward pass earlier -- it produces
-#: negative float in the backward pass -- and ALAP is a backward-pass rule.
-#: They are reported on the result so S4 receives them rather than rediscovers
-#: them, and so a file that carries one is never silently treated as ASAP.
+#: negative float in the backward pass, which is where SNLT and FNLT are
+#: applied. ALAP is answered by neither pass: it moves where an activity sits,
+#: not only how much slack it has, and is carried through both rather than
+#: guessed at. Reporting them here is what stops a file that carries one from
+#: being silently treated as ASAP.
 DEFERRED_CONSTRAINTS = frozenset(
     {
         ConstraintType.ALAP,
@@ -64,18 +66,47 @@ DEFERRED_CONSTRAINTS = frozenset(
     }
 )
 
+#: Constraints the backward pass acts on. SNLT and FNLT lower a late date --
+#: which is how a late constraint produces negative float rather than pulling an
+#: early date earlier -- and MSO and MFO pin the late coordinate to the same
+#: place they pinned the early one, so a hard-constrained activity has no float.
+#: ALAP is in neither set: it changes where an activity is *placed*, not only
+#: how much slack it has, so a backward pass cannot answer it and says so.
+BACKWARD_CONSTRAINTS = frozenset(
+    {
+        ConstraintType.SNLT,
+        ConstraintType.FNLT,
+        ConstraintType.MSO,
+        ConstraintType.MFO,
+    }
+)
+
 #: The dated constraints: meaningless without a coordinate.
 _DATED_CONSTRAINTS = FORWARD_CONSTRAINTS | {ConstraintType.SNLT, ConstraintType.FNLT}
 
 
-class ForwardPassError(ValueError):
-    """A network that cannot be scheduled forward, and why, by code."""
+class NetworkError(ValueError):
+    """A network that cannot be scheduled, and why, by code."""
 
     def __init__(self, code: str, uid: UUID | None = None, detail: str = "") -> None:
         self.code = code
         self.uid = uid
         self.detail = detail
         super().__init__(f"{code} {uid}{': ' + detail if detail else ''}")
+
+
+class ForwardPassError(NetworkError):
+    """A network that cannot be scheduled forward."""
+
+
+class BackwardPassError(NetworkError):
+    """A network that cannot be scheduled backward.
+
+    Separate from :class:`ForwardPassError` because the two passes fail for
+    different reasons on the same network: a forward pass runs out of horizon,
+    a backward pass runs out of floor, and a caller that catches one should not
+    silently swallow the other.
+    """
 
 
 @dataclass(frozen=True, slots=True)
@@ -210,3 +241,34 @@ class Network:
                     )
             if relationship.predecessor_uid == relationship.successor_uid:
                 raise ForwardPassError("SCHEDULE_SELF_RELATIONSHIP", relationship.uid)
+
+
+def shift_lag(calendar: CompiledIntervals, anchor: int, lag: int) -> int | None:
+    """Signed productive lag forward from ``anchor``; zero keeps the exact coordinate.
+
+    Equal to :func:`~sto.core.calendar.arithmetic.shift_working_time` on every
+    input, which the calendar slice proved over ten thousand random trials in
+    each direction. **Zero returns the anchor untouched even when it lies in a
+    gap**: snapping is a property of placement, and doing it here as well moves
+    an activity a whole interval too far.
+    """
+
+    if lag == 0:
+        return anchor
+    if lag > 0:
+        return add_working(calendar, anchor, lag)
+    return sub_working(calendar, anchor, -lag)
+
+
+def unshift_lag(calendar: CompiledIntervals, anchor: int, lag: int) -> int | None:
+    """Signed productive lag backward from ``anchor``: the inverse of :func:`shift_lag`.
+
+    A positive lag that pushed a successor forward pulls its predecessor back by
+    the same productive amount, and a negative lag does the reverse.
+    """
+
+    if lag == 0:
+        return anchor
+    if lag > 0:
+        return sub_working(calendar, anchor, lag)
+    return add_working(calendar, anchor, -lag)

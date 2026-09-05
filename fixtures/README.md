@@ -18,12 +18,18 @@ Point the tests at the files with:
 export STO_BOILER_BEFORE=/path/to/boiler-before-no-progress.xml
 export STO_BOILER_DAY5=/path/to/BOILER-WG110-day5-candidate.mspdi.xml
 export STO_BOILER_UNTOUCHED=/path/to/boiler-untouched-source.xml   # the GUID control
+export STO_KILN=/path/to/kiln-wg047k-source.xml                    # the float rule
+export STO_CALCINER=/path/to/calciner-wg050-source.xml             # the float rule, and the
+                                                                   # only declared slack limit
 PYTHONPATH=src python3 -m unittest discover -s tests
 ```
 
 The defaults in the test module point at this machine's copies. Add
 `STO_REQUIRE_BOILER=1` and a missing file fails the run instead of skipping it —
-use that whenever a gate criterion is being crossed on these cases.
+use that whenever a gate criterion is being crossed on these cases. It is one
+switch for all of them: the float and criticality rules in ADR-008 are evidence
+from KILN and CALCINER as much as from BOILER, so their absence has to fail the
+same way.
 
 ## The BOILER family: at least four distinct files
 
