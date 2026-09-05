@@ -39,6 +39,7 @@ from sto.core.model.enums import (
     ConstraintType,
     LagCalendar,
     MilestoneSnapPolicy,
+    ProgressPolicy,
 )
 
 from .network import Network, PlannedActivity, PlannedRelationship
@@ -86,6 +87,15 @@ class Plan:
     #: caller running the passes never has to reach back into the schedule for
     #: the one number criticality depends on.
     critical_float_threshold: int = 0
+    #: The project's out-of-sequence progress rule, carried for the same reason.
+    #: Microsoft Project has no field for it and the migration writes retained
+    #: logic, which is what Project does; a Primavera file will carry its own.
+    progress_policy: ProgressPolicy = ProgressPolicy.RETAINED_LOGIC
+    #: The file declared a status date that falls outside the compiled window,
+    #: so the network carries none. Reported rather than dropped silently,
+    #: because a schedule that loses its status date schedules its remaining
+    #: work from its logic and looks like an ordinary un-progressed plan.
+    status_time_outside_window: bool = False
 
     def to_datetime(self, coordinate: int) -> datetime:
         return self.epoch + timedelta(seconds=coordinate)
@@ -106,6 +116,20 @@ def _duration_seconds(activity: Activity) -> int:
     if activity.planned_duration is None:
         return 0
     return activity.planned_duration.seconds
+
+
+def _remaining_seconds(activity: Activity) -> int | None:
+    """The remaining duration in seconds, or ``None`` when the file said nothing.
+
+    The distinction is load-bearing: an activity nobody has touched has all of
+    its duration left, and one reported as having none left has zero. Collapsing
+    the two would either finish untouched work instantly or give completed work
+    its whole duration back.
+    """
+
+    if activity.remaining_duration is None:
+        return None
+    return activity.remaining_duration.seconds
 
 
 def build_plan(
@@ -238,6 +262,15 @@ def build_plan(
                 Excluded(activity.uid, "activity", "ACTIVITY_DURATION_ELAPSED")
             )
             continue
+        if activity.remaining_duration is not None and activity.remaining_duration.elapsed:
+            # Same reason as the planned duration above: elapsed time is
+            # wall-clock and does not belong on the activity's calendar. Kept as
+            # its own code because a file could carry a working planned duration
+            # and an elapsed remaining one, and that is worth seeing.
+            excluded.append(
+                Excluded(activity.uid, "activity", "ACTIVITY_REMAINING_ELAPSED")
+            )
+            continue
 
         calendar, code, detail = effective_calendar(activity)
         if calendar is None:
@@ -281,6 +314,15 @@ def build_plan(
                 calendar=calendar,
                 constraint_type=constraint_type,
                 constraint_coordinate=coordinate,
+                actual_start=(
+                    None if activity.actual_start is None
+                    else to_seconds(activity.actual_start)
+                ),
+                actual_finish=(
+                    None if activity.actual_finish is None
+                    else to_seconds(activity.actual_finish)
+                ),
+                remaining_duration=_remaining_seconds(activity),
             )
         )
         scheduled.add(activity.uid)
@@ -353,11 +395,21 @@ def build_plan(
         )
 
     project_start = to_seconds(project.start) if project.start is not None else window[0]
+    status_time: int | None = None
+    status_outside = False
+    if project.status_date is not None:
+        candidate = to_seconds(project.status_date)
+        if project_start <= candidate <= window[1]:
+            status_time = candidate
+        else:
+            status_outside = True
+
     network = Network(
         activities=tuple(activities),
         relationships=tuple(relationships),
         project_start=project_start,
         horizon=window[1],
+        status_time=status_time,
     )
     return Plan(
         network=network,
@@ -366,4 +418,6 @@ def build_plan(
         excluded=tuple(excluded),
         snap_milestones=project.milestone_snap_policy is MilestoneSnapPolicy.NEXT_WORKING,
         critical_float_threshold=project.critical_float_threshold_seconds,
+        progress_policy=project.progress_policy,
+        status_time_outside_window=status_outside,
     )
