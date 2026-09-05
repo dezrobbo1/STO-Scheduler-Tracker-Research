@@ -33,14 +33,16 @@ hash-recorded file* is different: it is evidence, it belongs in an ADR or
   is no local clone any more, and the one there was predated its 2026-08-27
   reset.
 - `dezrobbo1/PM-Software` continues as independent proof-of-concept research.
-  Its semantic conformance corpus is taken at the commit pinned in
-  `docs/history/`; it is not maintained there and is not folded in.
+  Its semantic conformance corpus is copied into `src/sto/conformance/` at the
+  commit `src/sto/conformance/MANIFEST.json` names, every file pinned by
+  SHA-256; the copy is moved only by `scripts/conformance/pin-corpus.py`, never
+  by editing a case. The rest of that repository is not folded in.
 
 ## The boundaries that matter
 
 **STO calculates the schedule** (ADR-001, reversing the frozen repositories).
 Engine claims are bounded by evidence — the file oracle over real schedules, and
-the conformance suite **(pending — PR-conformance-suite)**. Outside those bounds,
+the pinned conformance corpus (PR-conformance-suite). Outside those bounds,
 label; never guess.
 
 **Imported sources are immutable; every export is a separate candidate.** What
@@ -173,6 +175,11 @@ STO_REQUIRE_DB=1 PYTHONPATH=src .venv/bin/python -m unittest discover -s tests
 
 They create and drop their own database on the server named by
 `STO_TEST_ADMIN_URL` (default: the local loopback instance on 5433).
+
+The conformance corpus needs nothing: it is in the package and every run checks
+it against its pins. One test additionally compares the copy with the pinned
+commit in a `dezrobbo1/PM-Software` clone named by `STO_PM_SOFTWARE_DIR`, and
+skips without one; `STO_REQUIRE_PM=1` makes that absence a failure.
 
 Manual native verification in Microsoft Project or P6 is required for handoff
 milestones and cannot be replaced by a smoke script.

@@ -1,0 +1,109 @@
+{
+  "case_id": "SEM-STA-043",
+  "title": "Out-of-sequence retained logic",
+  "category": "status_progress",
+  "purpose": "Verify remaining successor work waits for unfinished predecessor work.",
+  "schedule": {
+    "schema_version": "0.1.3",
+    "schedule_id": "SEM-STA-043",
+    "name": "SEM-STA-043",
+    "semantic_profile": "reference-v0.3",
+    "source_system": null,
+    "source_snapshot_id": null,
+    "time_axis": {
+      "unit": "hour",
+      "origin": "2026-01-05T08:00:00+08:00",
+      "horizon": 400
+    },
+    "project": {
+      "project_start": 0,
+      "status_time": 5,
+      "required_finish": null,
+      "progress_policy": "retained_logic"
+    },
+    "calendars": [
+      {
+        "id": "CAL-24X7",
+        "working_intervals": [
+          [
+            0,
+            400
+          ]
+        ]
+      }
+    ],
+    "resources": [],
+    "activities": [
+      {
+        "id": "A",
+        "name": "A",
+        "kind": "task",
+        "duration": 8,
+        "remaining_duration": 3,
+        "calendar_id": "CAL-24X7",
+        "actual_start": 0,
+        "actual_finish": null,
+        "constraints": [],
+        "assignments": [],
+        "milestone_priority": 0,
+        "due_time": null,
+        "source_fields": {}
+      },
+      {
+        "id": "B",
+        "name": "B",
+        "kind": "task",
+        "duration": 6,
+        "remaining_duration": 2,
+        "calendar_id": "CAL-24X7",
+        "actual_start": 4,
+        "actual_finish": null,
+        "constraints": [],
+        "assignments": [],
+        "milestone_priority": 0,
+        "due_time": null,
+        "source_fields": {}
+      }
+    ],
+    "relationships": [
+      {
+        "id": "R1",
+        "predecessor_id": "A",
+        "successor_id": "B",
+        "type": "FS",
+        "lag": 0,
+        "lag_calendar": null
+      }
+    ],
+    "operational_constraints": [],
+    "governance": {}
+  },
+  "expected": {
+    "reference_status": "declared",
+    "activity_times": {
+      "A": {
+        "start": 0,
+        "remaining_start": 5,
+        "finish": 8
+      },
+      "B": {
+        "start": 4,
+        "remaining_start": 8,
+        "finish": 10
+      }
+    },
+    "project_finish": 10,
+    "driving_relationships": [
+      "R1"
+    ],
+    "resource_order": [],
+    "assertions": [
+      "B's actual start is preserved; remaining work waits until A forecast finish."
+    ]
+  },
+  "native_validation": {
+    "p6": "required",
+    "microsoft_project": "required"
+  },
+  "notes": ""
+}

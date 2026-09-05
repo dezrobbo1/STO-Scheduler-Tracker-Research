@@ -7,3 +7,4 @@ dist/
 .external-fixtures/
 .external-results/
 results/local/
+.claude/

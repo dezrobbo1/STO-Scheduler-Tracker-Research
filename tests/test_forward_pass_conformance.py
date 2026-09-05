@@ -12,10 +12,9 @@ origin -- and the engine takes whatever unit its calendars were compiled in, so
 the cases feed it directly with no conversion. That is the point of the engine
 taking compiled intervals rather than a schedule.
 
-The corpus lives in ``dezrobbo1/PM-Software`` at the commit pinned in
-``docs/history/``; as in :mod:`tests.test_calendar_conformance` it is read from
-a clone named by ``STO_PM_SOFTWARE_DIR``, and ``STO_REQUIRE_PM=1`` turns its
-absence into a failure rather than a skip.
+The corpus is the pinned copy in :mod:`sto.conformance`; every case is
+hash-checked as it is read, so a drifted case fails rather than passing against
+a different oracle. :mod:`tests.test_conformance_corpus` guards the pins.
 
 Dates and the project finish are the corpus's own pass criterion and are
 asserted per case. Which relationship *drove* each activity is checked
@@ -25,21 +24,13 @@ never mistaken for a wrong date.
 
 from __future__ import annotations
 
-import json
-import os
 import unittest
-from pathlib import Path
 from uuid import NAMESPACE_URL, UUID, uuid5
 
+from sto import conformance
 from sto.core.calendar.arithmetic import CompiledIntervals, intersect_intervals
 from sto.core.engine import Network, PlannedActivity, PlannedRelationship, forward_pass
 from sto.core.model.enums import ConstraintType, RelationshipType
-
-PM_DIR = Path(os.environ.get("STO_PM_SOFTWARE_DIR", "/home/dez/PM-Software"))
-CASES = PM_DIR / "benchmarks" / "semantic" / "cases"
-REQUIRE = os.environ.get("STO_REQUIRE_PM") == "1"
-if REQUIRE and not CASES.is_dir():
-    raise RuntimeError(f"STO_REQUIRE_PM=1 but {CASES} is not there")
 
 #: The corpus names constraints in words; the canonical model names them in the
 #: vendors' initials. Anything not here is refused rather than guessed at.
@@ -70,7 +61,7 @@ def _uid(case_id: str, local_id: str) -> UUID:
 
 
 def _load(case_id: str) -> dict:
-    return json.loads((CASES / f"{case_id}.json").read_text(encoding="utf-8"))
+    return conformance.load_case(case_id)
 
 
 def _build_network(case_id: str, case: dict) -> tuple[Network, dict[str, UUID]]:
@@ -145,7 +136,6 @@ def _build_network(case_id: str, case: dict) -> tuple[Network, dict[str, UUID]]:
     return network, uid_by_id
 
 
-@unittest.skipUnless(CASES.is_dir(), "PM-Software clone not present; set STO_REQUIRE_PM=1 to fail")
 class ForwardCaseTests(unittest.TestCase):
     """One method per case, so a failure names the semantics that broke."""
 
@@ -296,7 +286,6 @@ class ForwardCaseTests(unittest.TestCase):
         self._run("sem-con-038")
 
 
-@unittest.skipUnless(CASES.is_dir(), "PM-Software clone not present; set STO_REQUIRE_PM=1 to fail")
 class CoverageTests(unittest.TestCase):
     """The corpus is only a bound on the engine's claims if it actually ran."""
 
@@ -310,11 +299,10 @@ class CoverageTests(unittest.TestCase):
         self.assertEqual(missing, [], "corpus cases with no test method")
 
     def test_every_forward_case_file_is_present(self):
-        missing = [c for c in FORWARD_CASES if not (CASES / f"{c}.json").is_file()]
+        missing = [c for c in FORWARD_CASES if c not in conformance.case_ids()]
         self.assertEqual(missing, [], "declared forward cases absent from the corpus")
 
 
-@unittest.skipUnless(CASES.is_dir(), "PM-Software clone not present; set STO_REQUIRE_PM=1 to fail")
 class DrivingRelationshipTests(unittest.TestCase):
     """Which edge placed each activity, checked apart from whether the dates are right.
 

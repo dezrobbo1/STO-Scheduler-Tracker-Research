@@ -1,0 +1,172 @@
+{
+  "case_id": "SEM-DET-050",
+  "title": "Mandatory milestone priority breaks resource tie",
+  "category": "resource_determinism",
+  "purpose": "Verify milestone objective outranks the stable ID tie-break.",
+  "schedule": {
+    "schema_version": "0.1.3",
+    "schedule_id": "SEM-DET-050",
+    "name": "SEM-DET-050",
+    "semantic_profile": "reference-v0.3",
+    "source_system": null,
+    "source_snapshot_id": null,
+    "time_axis": {
+      "unit": "hour",
+      "origin": "2026-01-05T08:00:00+08:00",
+      "horizon": 400
+    },
+    "project": {
+      "project_start": 0,
+      "status_time": null,
+      "required_finish": null,
+      "progress_policy": "none"
+    },
+    "calendars": [
+      {
+        "id": "CAL-24X7",
+        "working_intervals": [
+          [
+            0,
+            400
+          ]
+        ]
+      }
+    ],
+    "resources": [
+      {
+        "id": "R1",
+        "type": "exclusive",
+        "capacity": 1,
+        "calendar_id": "CAL-24X7",
+        "skills": []
+      }
+    ],
+    "activities": [
+      {
+        "id": "A",
+        "name": "A",
+        "kind": "task",
+        "duration": 4,
+        "remaining_duration": null,
+        "calendar_id": "CAL-24X7",
+        "actual_start": null,
+        "actual_finish": null,
+        "constraints": [],
+        "assignments": [
+          {
+            "resource_id": "R1",
+            "demand": 1
+          }
+        ],
+        "milestone_priority": 0,
+        "due_time": null,
+        "source_fields": {}
+      },
+      {
+        "id": "B",
+        "name": "B",
+        "kind": "task",
+        "duration": 4,
+        "remaining_duration": null,
+        "calendar_id": "CAL-24X7",
+        "actual_start": null,
+        "actual_finish": null,
+        "constraints": [],
+        "assignments": [
+          {
+            "resource_id": "R1",
+            "demand": 1
+          }
+        ],
+        "milestone_priority": 0,
+        "due_time": null,
+        "source_fields": {}
+      },
+      {
+        "id": "MA",
+        "name": "MA",
+        "kind": "finish_milestone",
+        "duration": 0,
+        "remaining_duration": null,
+        "calendar_id": "CAL-24X7",
+        "actual_start": null,
+        "actual_finish": null,
+        "constraints": [],
+        "assignments": [],
+        "milestone_priority": 1,
+        "due_time": 4,
+        "source_fields": {}
+      },
+      {
+        "id": "MB",
+        "name": "MB",
+        "kind": "finish_milestone",
+        "duration": 0,
+        "remaining_duration": null,
+        "calendar_id": "CAL-24X7",
+        "actual_start": null,
+        "actual_finish": null,
+        "constraints": [],
+        "assignments": [],
+        "milestone_priority": 10,
+        "due_time": 4,
+        "source_fields": {}
+      }
+    ],
+    "relationships": [
+      {
+        "id": "R1",
+        "predecessor_id": "A",
+        "successor_id": "MA",
+        "type": "FS",
+        "lag": 0,
+        "lag_calendar": null
+      },
+      {
+        "id": "R2",
+        "predecessor_id": "B",
+        "successor_id": "MB",
+        "type": "FS",
+        "lag": 0,
+        "lag_calendar": null
+      }
+    ],
+    "operational_constraints": [],
+    "governance": {}
+  },
+  "expected": {
+    "reference_status": "declared",
+    "activity_times": {
+      "A": {
+        "start": 4,
+        "finish": 8
+      },
+      "B": {
+        "start": 0,
+        "finish": 4
+      },
+      "MA": {
+        "start": 8,
+        "finish": 8
+      },
+      "MB": {
+        "start": 4,
+        "finish": 4
+      }
+    },
+    "project_finish": 8,
+    "driving_relationships": [],
+    "resource_order": [
+      "B",
+      "A"
+    ],
+    "assertions": [
+      "B is scheduled first because MB has the higher mandatory milestone priority; ID tie-break does not apply at a higher objective difference."
+    ]
+  },
+  "native_validation": {
+    "p6": "not_applicable",
+    "microsoft_project": "not_applicable"
+  },
+  "notes": ""
+}

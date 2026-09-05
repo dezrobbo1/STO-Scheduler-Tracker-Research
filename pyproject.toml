@@ -37,6 +37,7 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 "sto.legacy" = ["workspace_static/*.html", "workspace_static/*.css", "workspace_static/*.js"]
+"sto.conformance" = ["MANIFEST.json", "corpus/README.md", "corpus/catalogue.csv", "corpus/cases/*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
