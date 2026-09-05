@@ -34,6 +34,23 @@ dates alone rather than from a percentage:
     forecast finish, which is what makes SEM-STA-041 place its successor at
     seven rather than at the original planned finish.
 
+    **The remaining work never begins before the actual start.** The bound
+    below is raised by the status date and by the predecessors, and neither is
+    guaranteed to lie after the date the work is reported to have begun: a
+    schedule with no usable status date, or one whose status date is older
+    than its actuals, has a logic bound that may sit weeks before the actual
+    start, and placing the remaining span there forecasts a finish before the
+    work began. The one in-progress row in the estate is exactly that shape --
+    a status date sixteen months stale, an actual start five weeks before the
+    project start -- and Microsoft Project placed its remaining eight hours
+    from the actual start on the task's calendar. So the actual start is a
+    floor under the remaining span as well as a fact about the past. What the
+    floor is *not* is the end of the work already done: Project carries a
+    resume date and an actual duration for that, and the one row here has
+    neither, so a remaining span that should begin after a completed portion
+    is not measured and is recorded in ``docs/goals/ACTIVE.md`` rather than
+    guessed.
+
 ``NOT_STARTED``
     Neither date. Scheduled exactly as it was before this slice, on its
     remaining duration -- which defaults to its whole duration when the source
@@ -74,6 +91,14 @@ Only an activity that has started is subject to the policy at all. A
 not-started activity obeys its logic under every policy, so ``progress_override``
 is not a licence to ignore precedence generally -- it is a rule about work
 already under way, and that is the bound of what these two cases prove.
+
+An edge the override releases is released in **every** direction. The forward
+pass drops a predecessor's hold over an in-progress successor's remaining work;
+if the backward pass still walked that edge it would bound the predecessor's
+late finish by work the policy says it does not hold, and could refuse --
+``SCHEDULE_FLOOR_EXCEEDED`` -- a schedule the forward pass had just answered.
+:func:`relationship_binds` is the one place that says which edges the policy
+releases, and the backward pass and the free float both ask it.
 """
 
 from __future__ import annotations
@@ -142,22 +167,51 @@ def remaining_bound(
     policy: ProgressPolicy,
     logic_bound: int,
     status_time: int | None,
+    actual_start: int | None = None,
 ) -> int:
     """The earliest coordinate an activity's remaining work may begin at.
 
     ``logic_bound`` is what the predecessors alone require -- whatever the
     forward pass computed before progress was considered. The status time
     raises it for work already under way, and ``progress_override`` replaces it
-    for that same work.
+    for that same work. The actual start is a floor under all of that: work
+    that has begun does not have remaining work before it began.
 
-    A schedule with no status time gets no floor: nothing is invented, so an
-    in-progress activity's remaining work simply follows its logic. That is the
-    honest answer to a file that reports actuals without saying what they are
-    reported as at.
+    A schedule with no status time gets no status floor: nothing is invented,
+    so an in-progress activity's remaining work follows its logic and its
+    actual start. That is the honest answer to a file that reports actuals
+    without saying what they are reported as at.
     """
 
-    if state is not ProgressState.IN_PROGRESS or status_time is None:
+    if state is not ProgressState.IN_PROGRESS:
         return logic_bound
-    if policy is ProgressPolicy.PROGRESS_OVERRIDE:
-        return status_time
-    return max(logic_bound, status_time)
+    if status_time is None:
+        bound = logic_bound
+    elif policy is ProgressPolicy.PROGRESS_OVERRIDE:
+        bound = status_time
+    else:
+        bound = max(logic_bound, status_time)
+    if actual_start is not None:
+        bound = max(bound, actual_start)
+    return bound
+
+
+def relationship_binds(
+    policy: ProgressPolicy,
+    successor_state: ProgressState,
+    status_time: int | None,
+) -> bool:
+    """Whether a relationship into ``successor`` still holds its remaining work.
+
+    Under ``progress_override`` with a status time, an in-progress successor's
+    remaining work continues from the status date and its predecessors do not
+    hold it. The forward pass drops such an edge from the successor's bound;
+    the backward pass and the free float drop the same edge, so the three
+    never disagree about whether one edge exists. Every other edge binds: a
+    not-started successor obeys its logic under every policy, and a schedule
+    with no status time has nothing to override with.
+    """
+
+    if policy is not ProgressPolicy.PROGRESS_OVERRIDE or status_time is None:
+        return True
+    return successor_state is not ProgressState.IN_PROGRESS

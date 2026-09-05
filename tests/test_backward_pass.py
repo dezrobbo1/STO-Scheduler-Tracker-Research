@@ -24,14 +24,18 @@ import unittest
 from uuid import NAMESPACE_URL, UUID, uuid5
 
 from sto.core.calendar.arithmetic import CompiledIntervals
+from sto.core.calendar.arithmetic import working_between
 from sto.core.engine import (
     BackwardPassError,
+    CriticalityError,
     Network,
     PlannedActivity,
     PlannedRelationship,
     backward_pass,
     float_analysis,
     forward_pass,
+    shift_lag,
+    unshift_lag,
 )
 from sto.core.model.enums import ConstraintType, RelationshipType
 
@@ -563,7 +567,92 @@ class MirrorPropertyTests(unittest.TestCase):
             )
 
 
+class LagInversionTests(unittest.TestCase):
+    """``unshift_lag`` undoes ``shift_lag`` wherever a placed date can be.
+
+    The backward pass walks a lag back with the inverse calendar operation,
+    which is only an inverse where the calendar is continuous. Measured over
+    the broken calendar, for both signs of lag: from a coordinate strictly
+    inside a working interval the round trip returns to the anchor exactly;
+    from an interval's edge, or from inside a gap -- which only a non-snapped
+    milestone can occupy -- it may land on the other edge of a gap, and the
+    distance is always zero working time, which is what a float is measured
+    in. So the artefact cannot reach a float, and is pinned here as a bound
+    rather than corrected: a correction would move coordinates that no float
+    can see.
+    """
+
+    LAGS = (-3, -2, -1, 1, 2, 3)
+
+    def _interior_anchors(self):
+        for start, finish in BROKEN.intervals:
+            yield from range(start + 1, finish)
+
+    def _every_anchor(self):
+        first, last = BROKEN.first, BROKEN.last
+        yield from range(first, last + 1)
+
+    def test_from_inside_an_interval_the_round_trip_returns_exactly(self):
+        for lag in self.LAGS:
+            for anchor in self._interior_anchors():
+                back = unshift_lag(BROKEN, anchor, lag)
+                if back is None:
+                    continue
+                with self.subTest(lag=lag, anchor=anchor):
+                    self.assertEqual(shift_lag(BROKEN, back, lag), anchor)
+
+    def test_from_anywhere_the_round_trip_costs_no_working_time(self):
+        seen = 0
+        for lag in self.LAGS:
+            for anchor in self._every_anchor():
+                back = unshift_lag(BROKEN, anchor, lag)
+                if back is None:
+                    continue
+                again = shift_lag(BROKEN, back, lag)
+                with self.subTest(lag=lag, anchor=anchor):
+                    self.assertIsNotNone(again)
+                    lo, hi = sorted((anchor, again))
+                    self.assertEqual(working_between(BROKEN, lo, hi), 0)
+                seen += 1
+        self.assertGreater(seen, 0)
+
+
 class RefusalTests(unittest.TestCase):
+    def test_a_late_finish_beyond_the_compiled_horizon_is_refused(self):
+        # The calendars know nothing past the horizon, so a late finish there
+        # would be measured against a range silently treated as non-working.
+        net = network([activity("A", 2)])
+        forward = forward_pass(net)
+        with self.assertRaises(BackwardPassError) as raised:
+            backward_pass(net, forward, project_late_finish=HORIZON + 1)
+        self.assertEqual(raised.exception.code, "SCHEDULE_HORIZON_EXCEEDED")
+        self.assertEqual(
+            backward_pass(net, forward, project_late_finish=HORIZON).project_late_finish,
+            HORIZON,
+        )
+
+    def test_a_forward_pass_over_the_same_identities_but_a_changed_input_is_refused(self):
+        # Same activity, same identity, one unit longer: old early dates paired
+        # with new late ones would report the difference as float.
+        forward = forward_pass(network([activity("A", 2)]))
+        changed = network([activity("A", 3)])
+        with self.assertRaises(BackwardPassError) as raised:
+            backward_pass(changed, forward)
+        self.assertEqual(raised.exception.code, "SCHEDULE_PASS_MISMATCH")
+        rewired = network([activity("A", 2), activity("B", 1)], [edge("R", "A", "B")])
+        forward_two = forward_pass(network([activity("A", 2), activity("B", 1)]))
+        with self.assertRaises(BackwardPassError):
+            backward_pass(rewired, forward_two)
+
+    def test_the_float_refuses_passes_from_different_networks_by_code(self):
+        net = network([activity("A", 2)])
+        forward = forward_pass(net)
+        backward = backward_pass(net, forward)
+        other = network([activity("A", 3)])
+        with self.assertRaises(CriticalityError) as raised:
+            float_analysis(other, forward_pass(other), backward)
+        self.assertEqual(raised.exception.code, "SCHEDULE_PASS_MISMATCH")
+
     def test_a_forward_pass_over_a_different_network_is_refused(self):
         one = network([activity("A", 2)])
         other = network([activity("B", 2)])

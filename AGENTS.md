@@ -151,9 +151,11 @@ python3 -m compileall -q src
 git diff --check
 ```
 
-One class in `tests/test_canonical_model.py` exercises real schedules and
-**skips silently** when they are absent, so a green run does not by itself mean
-the file oracle ran. Gate criteria rest on it. To include them:
+The tests that exercise real schedules — one class in
+`tests/test_canonical_model.py` and the engine's file-oracle modules beside it,
+named for the schedules they read — **skip silently** when the files are
+absent, so a green run does not by itself mean the file oracle ran. Gate
+criteria rest on them. To include them:
 
 ```bash
 export STO_BOILER_BEFORE=/path/to/boiler-before-no-progress.xml

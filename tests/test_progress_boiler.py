@@ -4,11 +4,17 @@ Four questions, kept apart, because the four files answer different ones and
 running them together is how a weak oracle borrows a strong one's authority.
 
 **Does the pass reproduce the dates Project stored for work that has happened?**
-Yes, and trivially so: an actual date is a fact and the pass places it
-unchanged. Asserted anyway, because it is the one part of the engine that
-*should* agree exactly with the file, and a regression that stopped it agreeing
-would otherwise be invisible next to the forward pass's known disagreement about
-everything else.
+Yes. For completed work trivially so: an actual date is a fact and the pass
+places it unchanged. For the one activity under way it is not trivial at all:
+its status date is sixteen months stale and it started five weeks before its
+own project start, so where its remaining eight hours go is a rule, and the
+rule the file shows is *from the actual start, on the task calendar* --
+finishing on the following Monday, exactly where Project put it. Both are
+asserted, because this is the one part of the engine that *should* agree
+exactly with the file, and a regression that stopped it agreeing would
+otherwise be invisible next to the forward pass's known disagreement about
+everything else. Until this assertion covered the forecast finish, the row was
+placed three weeks late and nothing said so.
 
 **Is a completed activity critical?** No, and this is where the estate's files
 disagree with each other in a way that matters. The two files Microsoft Project
@@ -112,7 +118,10 @@ def _load(name: str):
             progress_policy=plan.progress_policy,
         )
         backward = backward_pass(
-            plan.network, forward, snap_milestones=plan.snap_milestones
+            plan.network,
+            forward,
+            snap_milestones=plan.snap_milestones,
+            progress_policy=plan.progress_policy,
         )
         floats = float_analysis(
             plan.network,
@@ -162,13 +171,41 @@ class ReportedWorkTests(unittest.TestCase):
                         observations.start,
                         f"{name}: {activity.code or activity.name} start",
                     )
-                    if activity.actual_finish is not None:
-                        self.assertEqual(
-                            plan.to_datetime(row.early_finish),
-                            observations.finish,
-                            f"{name}: {activity.code or activity.name} finish",
-                        )
+                    # The finish too -- an actual finish for completed work,
+                    # and for work under way the forecast finish Project
+                    # itself computed from the actual start and what is left.
+                    self.assertEqual(
+                        plan.to_datetime(row.early_finish),
+                        observations.finish,
+                        f"{name}: {activity.code or activity.name} finish",
+                    )
                 self.assertGreater(checked, 0, f"{name} carries no reported work")
+
+    def test_the_in_progress_row_is_placed_from_its_actual_start_not_the_project_start(self):
+        """The rule the one in-progress row in the estate settles.
+
+        Its actual start is weeks before the project start, and Project's own
+        forecast finish is the remaining duration consumed from the actual
+        start on the task calendar. A pass that floored started work at the
+        project start put this row three weeks late; the row is pinned here so
+        that it cannot again.
+        """
+
+        schedule, plan, forward, _, _ = _load("day5")
+        rows = [row for row in forward.times if row.state is ProgressState.IN_PROGRESS]
+        self.assertEqual(len(rows), 1)
+        row = rows[0]
+        activity = next(a for a in schedule.activities if a.uid == row.uid)
+        self.assertLess(activity.actual_start, schedule.project.start)
+        self.assertEqual(plan.to_datetime(row.remaining_start), activity.actual_start)
+        self.assertEqual(
+            plan.to_datetime(row.early_finish), activity.source_observations.finish
+        )
+        # The floor is the actual start and not the end of work already done:
+        # this row reports none done, so the two coincide and the second is
+        # not measured. A row with an actual duration would tell them apart.
+        self.assertEqual(activity.actual_duration.seconds, 0)
+        self.assertIsNone(activity.resume)
 
     def test_the_day_five_candidate_carries_the_progress_the_register_records(self):
         schedule, plan, forward, _, _ = _load("day5")

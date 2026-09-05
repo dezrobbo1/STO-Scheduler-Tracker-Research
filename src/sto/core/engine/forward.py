@@ -40,13 +40,21 @@ snapping. Both behaviours are reachable and neither is assumed.
 Progress. An activity that reports an actual date is not scheduled from its
 duration. A **complete** one keeps its two actual dates exactly -- nothing
 recomputes them -- and an **in progress** one keeps its actual start while its
-*remaining* duration is placed as a fresh span from the status date. Successors
-read the resulting forecast finish, so an activity that started late drags its
-chain behind it. Which bound that remaining span obeys when work began out of
-sequence is the project's progress policy; the three states and the policy both
-live in :mod:`sto.core.engine.progress`, and this pass asks that module where
-remaining work may begin and then places it exactly as it places everything
-else.
+*remaining* duration is placed as a fresh span from the status date, and never
+from before the actual start. Successors read the resulting forecast finish, so
+an activity that started late drags its chain behind it. Which bound that
+remaining span obeys when work began out of sequence is the project's progress
+policy; the three states and the policy both live in
+:mod:`sto.core.engine.progress`, and this pass asks that module where remaining
+work may begin and then places it exactly as it places everything else.
+
+A constraint on an activity that has started is **reported, not applied**. An
+actual date is a fact and a constraint is an intention, and what a finish-side
+constraint should do to the remaining span of work already under way has no
+corpus case and no real file to measure it on. Rather than treat such a row as
+unconstrained, the constraint is carried to
+:attr:`ForwardPass.deferred_constraints` so that a file carrying one is never
+silently scheduled as if it did not.
 
 What this pass does not do, and does not pretend to: no backward pass, no float,
 no criticality, and no rollup to summary tasks.
@@ -91,9 +99,11 @@ FROM_ACTUALS = "actuals"
 FROM_STATUS_TIME = "status_time"
 
 #: Named on the fingerprint so a stored answer says which pass produced it.
-#: Version two carries the remaining start, so a progressed schedule's answer
-#: cannot hash the same as the unprogressed one it was computed from.
-FORWARD_PASS_PROFILE = "sto-forward-pass-v2"
+#: Version two carried the remaining start, so a progressed schedule's answer
+#: cannot hash the same as the unprogressed one it was computed from; version
+#: three carries the progress state too, so an activity completed on exactly
+#: its planned dates does not hash the same as one that has not begun.
+FORWARD_PASS_PROFILE = "sto-forward-pass-v3"
 
 
 @dataclass(frozen=True, slots=True)
@@ -121,7 +131,12 @@ class ActivityTimes:
 
 @dataclass(frozen=True, slots=True)
 class DeferredConstraint:
-    """A constraint recognised, carried, and deliberately not applied here."""
+    """A constraint recognised, carried, and deliberately not applied here.
+
+    Either a type this pass cannot act on -- ALAP, SNLT, FNLT -- or any dated
+    constraint on an activity that has already started, whose remaining span
+    is placed on its actuals and its logic rather than on an intention.
+    """
 
     activity_uid: UUID
     type: ConstraintType
@@ -153,6 +168,9 @@ class ForwardPass:
     deferred_constraints: tuple[DeferredConstraint, ...] = ()
     constraint_violations: tuple[ConstraintViolation, ...] = ()
     fingerprint: str = ""
+    #: :meth:`Network.fingerprint` of the network this was computed over, so
+    #: the backward pass and the float can refuse a result from another one.
+    network_fingerprint: str = ""
 
     def by_uid(self) -> dict[UUID, ActivityTimes]:
         return {row.uid: row for row in self.times}
@@ -226,17 +244,26 @@ def _bounds(
     activity: PlannedActivity,
     incoming: tuple[PlannedRelationship, ...],
     placed: dict[UUID, ActivityTimes],
-    project_start: int,
+    base: int,
 ) -> tuple[int, int, UUID | None, UUID | None]:
     """Lower bounds on start and finish from precedence, and what drove each.
+
+    ``base`` is where the bounds begin before any predecessor is read: the
+    project start for work nobody has touched, and the **actual start** for
+    work already under way. The project start is a bound on where unstarted
+    work may begin, and work that has begun is past it -- the one in-progress
+    row in the estate started five weeks before its project start, and
+    Microsoft Project placed its remaining work from the actual start, not
+    from the project's. A predecessor that reaches back before the base did not
+    hold this activity and is not reported as its driver.
 
     A relationship becomes the driver when it raises its bound, or when it is
     the first to reach a bound nothing else has claimed. A later tie does not
     displace an earlier claim, so the answer follows declaration order.
     """
 
-    start_bound = project_start
-    finish_bound = project_start
+    start_bound = base
+    finish_bound = base
     start_driver: UUID | None = None
     finish_driver: UUID | None = None
 
@@ -299,22 +326,28 @@ def forward_pass(
 
     for uid in order:
         activity = by_uid[uid]
+        state = state_of(activity)
+        base = (
+            network.project_start
+            if state is ProgressState.NOT_STARTED
+            else activity.actual_start
+        )
         start_bound, finish_bound, start_driver, finish_driver = _bounds(
-            activity, incoming[uid], placed, network.project_start
+            activity, incoming[uid], placed, base
         )
         logic_start, logic_finish = start_bound, finish_bound
 
         constraint = activity.constraint_type
         coordinate = activity.constraint_coordinate
-        state = state_of(activity)
-        if constraint in DEFERRED_CONSTRAINTS:
-            deferred.append(DeferredConstraint(uid, constraint))
 
         if state is not ProgressState.NOT_STARTED:
             # An actual date is a fact and a constraint is an intention, so
-            # reported work is placed on what happened. A deferred constraint is
-            # still recorded above, so a file that carries one is never silently
-            # dropped -- it is reported as not having been applied.
+            # reported work is placed on what happened. Every constraint the
+            # row carries is recorded as not applied -- not only the types this
+            # pass never applies -- so a file that constrains work already
+            # under way is never silently scheduled as if it did not.
+            if constraint is not ConstraintType.ASAP:
+                deferred.append(DeferredConstraint(uid, constraint))
             placed[uid] = _place_reported(
                 activity,
                 state,
@@ -327,6 +360,9 @@ def forward_pass(
                 progress_policy,
             )
             continue
+
+        if constraint in DEFERRED_CONSTRAINTS:
+            deferred.append(DeferredConstraint(uid, constraint))
 
         pinned: str | None = None
         constrained = False
@@ -388,6 +424,7 @@ def forward_pass(
         deferred_constraints=tuple(deferred),
         constraint_violations=tuple(violations),
         fingerprint=_fingerprint(times, network.project_start, project_finish),
+        network_fingerprint=network.fingerprint(),
     )
 
 
@@ -517,6 +554,9 @@ def _place_reported(
     it: under ``progress_override`` nothing does, and under retained logic a
     predecessor overtaken by the status date did not drive anything. Saying
     otherwise would put an edge in the driving set that a planner cannot act on.
+    When nothing held the remaining work but the status date, the source says
+    so; when nothing held it but the actual start itself, the source is the
+    actuals, the same word a complete activity uses.
     """
 
     if state is ProgressState.COMPLETE:
@@ -535,8 +575,12 @@ def _place_reported(
     if activity.actual_start is None:
         raise ForwardPassError("SCHEDULE_ACTUALS_INCOHERENT", activity.uid)
     status_time = network.status_time
-    start_floor = remaining_bound(state, progress_policy, start_bound, status_time)
-    finish_floor = remaining_bound(state, progress_policy, finish_bound, status_time)
+    start_floor = remaining_bound(
+        state, progress_policy, start_bound, status_time, activity.actual_start
+    )
+    finish_floor = remaining_bound(
+        state, progress_policy, finish_bound, status_time, activity.actual_start
+    )
 
     if progress_policy is ProgressPolicy.PROGRESS_OVERRIDE:
         start_driver = finish_driver = None
@@ -564,15 +608,15 @@ def _place_reported(
         finish_floor,
         start_driver,
         finish_driver,
-        network.project_start,
+        activity.actual_start,
         network.horizon,
     )
     if driver is not None:
         source = FROM_RELATIONSHIP
-    elif status_time is not None:
+    elif status_time is not None and status_time >= activity.actual_start:
         source = FROM_STATUS_TIME
     else:
-        source = FROM_PROJECT_START
+        source = FROM_ACTUALS
     return ActivityTimes(
         activity.uid,
         activity.actual_start,
@@ -595,7 +639,13 @@ def _fingerprint(
             "project_start": project_start,
             "project_finish": project_finish,
             "times": sorted(
-                [str(row.uid), row.early_start, row.early_finish, row.remaining_start]
+                [
+                    str(row.uid),
+                    row.early_start,
+                    row.early_finish,
+                    row.remaining_start,
+                    row.state.value,
+                ]
                 for row in times
             ),
         }
