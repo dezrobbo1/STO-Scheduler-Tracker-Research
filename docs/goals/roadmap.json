@@ -153,6 +153,7 @@
         "S4",
         "S5",
         "S6",
+        "PL3",
         "I1",
         "I2",
         "I3",
@@ -407,7 +408,7 @@
       "id": "S4",
       "title": "Backward pass, float and criticality",
       "phase": "P1",
-      "status": "not_started",
+      "status": "done",
       "days": 4
     },
     {
@@ -423,6 +424,13 @@
       "phase": "P1",
       "status": "not_started",
       "days": 3
+    },
+    {
+      "id": "PL3",
+      "title": "Per-activity result projection",
+      "phase": "P1",
+      "status": "not_started",
+      "days": 2
     },
     {
       "id": "I1",

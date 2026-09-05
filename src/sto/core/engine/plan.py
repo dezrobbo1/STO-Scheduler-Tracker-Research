@@ -82,6 +82,10 @@ class Plan:
     calendars: dict[UUID, CompiledCalendar]
     excluded: tuple[Excluded, ...] = ()
     snap_milestones: bool = False
+    #: The project's critical-float threshold in seconds, carried here so a
+    #: caller running the passes never has to reach back into the schedule for
+    #: the one number criticality depends on.
+    critical_float_threshold: int = 0
 
     def to_datetime(self, coordinate: int) -> datetime:
         return self.epoch + timedelta(seconds=coordinate)
@@ -361,4 +365,5 @@ def build_plan(
         calendars=calendars,
         excluded=tuple(excluded),
         snap_milestones=project.milestone_snap_policy is MilestoneSnapPolicy.NEXT_WORKING,
+        critical_float_threshold=project.critical_float_threshold_seconds,
     )

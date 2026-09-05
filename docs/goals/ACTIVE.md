@@ -112,6 +112,41 @@ on one activity, and the cause is recorded undiagnosed in
 `docs/history/2026-09-03-forward-pass.md` rather than guessed at — it is the
 backward pass's and the status date's to close as much as this one's.
 
+**Backward pass, float and criticality (S4).** `sto.core.engine.backward` is the
+forward pass transposed — the four types read the opposite end of the opposite
+activity, `latest_span` mirrors `earliest_span`, and lag is walked back — so
+most of its suite states a relation between the two passes and checks it over
+generated networks rather than checking a value in one direction. Two bugs came
+out of exactly those: a milestone snapped backwards took the finish-side answer
+when a milestone is a coordinate work *starts* at, and the pass refused a late
+date before the project start when that is precisely what an over-committed
+schedule has to be able to report. A late constraint now earns negative float,
+as the forward pass promised it would; ALAP is carried through both passes
+rather than guessed at.
+
+Float and criticality are `sto.core.engine.criticality`, and their three open
+questions were settled against the real files rather than argued (ADR-008).
+Measured on Microsoft Project's own stored dates, so our forward pass's
+disagreement could not contaminate the answer: a float is **working time on the
+activity's calendar**, which reproduces the slack BOILER stores where the
+elapsed reading does not; a total float is **the smaller of the start float and
+the finish float**, which reproduces every activity of KILN and of CALCINER
+where neither component alone does. Free float is measured against the
+successors' early dates and reproduces the stored free slack on about
+ninety-eight rows in a hundred of every real schedule here. Criticality is
+`total float <= threshold` — and the threshold turned out to be measurable
+after all, because CALCINER is the one file in the estate that declares a
+`CriticalSlackLimit`, which reads as working days of the project's own day.
+That closes the importer gap this slice was carrying.
+
+Not claimed: our own late dates reproduce Project's on none of the file's
+activities and our own total float on nineteen, both inherited from the forward
+pass. Our *free* float agrees on three hundred and fifty-one, which is what a
+local quantity does when a global one is misplaced — the first evidence that
+what remains is placement rather than logic. Every count is pinned in
+`tests/test_backward_pass_boiler.py`, so closing the forward-pass difference
+fails those assertions rather than passing unnoticed.
+
 ## Now: the engine and interchange spine
 
 Phase 0 passed on 2026-09-03 with every criterion crossed on its inputs
@@ -121,18 +156,20 @@ order:
 1. ~~Calendars~~ — done.
 2. ~~Forward pass~~ — done against the corpus; the BOILER file-oracle
    differences are recorded, not yet classified.
-3. **Backward pass, float and criticality**, against the stored late dates and
-   slack of both BOILER snapshots.
+3. ~~Backward pass, float and criticality~~ — done. The float and criticality
+   *rules* are settled against the real files (ADR-008); the *dates* still
+   carry the forward pass's difference, which is the status date's to close as
+   much as this slice's.
 4. **Status date and progress** — retained logic and progress override —
    against the day-5 candidate and the genuine Project-recalculation pair.
 5. **WBS rollup, the eligibility re-partition and an independent validator.**
-6. **The MPXJ sidecar** carried from the frozen repository, widened to emit the
+6. **The per-activity result projection**, which ADR-006 deferred until its
+   columns had meanings and a result type to mirror. They do now.
+7. **The MPXJ sidecar** carried from the frozen repository, widened to emit the
    full canonical document, cross-checked against the Python importer on every
    fixture — and the first native `.mpp` import, for which a file now exists.
-7. **Real authentication.** Password with TOTP, server sessions, device tokens
+8. **Real authentication.** Password with TOTP, server sessions, device tokens
    for the field app. No route accepts a trusted actor header.
-
-The criticality-threshold gap below is paid in the third slice.
 
 ## Next: the rest of the roadmap
 
@@ -202,6 +239,14 @@ until the parity checklist passes.
   and P6 XML paths have no oracle and every P6 writer stays `diagnostic`.
 - **`MsSummaryProjection` is populated but nothing writes it back yet**; it
   becomes load-bearing when the MSPDI writer lands.
+- **Criticality on a progressed schedule is not the threshold rule.** On the
+  un-progressed BOILER snapshot `total float <= threshold` reproduces the flag
+  Microsoft Project stored for every activity in the file; on both progressed
+  snapshots it does not, because a complete activity is not critical whatever
+  its slack. Measured, not guessed, and owed to S5 with the status date.
+- **Two BOILER rows have a stored total slack larger than either of their own
+  date differences**, so the rule that explains the other 449 does not explain
+  them. Counted in `tests/test_backward_pass_boiler.py` rather than absorbed.
 
 ### Carried from the PR #22 review, against the slice that owns each
 
@@ -213,7 +258,6 @@ here so they are not rediscovered as surprises:
 |---|---|
 | `DurationFormat` is preserved by the importer only as a vendor extension, so `Duration.unit` and `source_format_code` are always empty. The field exists precisely to stop an imported `8h` being written back as `1d`. | S8, MSPDI writer |
 | `Assignment.timephased_ref` is never populated, so resource curves and exports cannot find the retained source payload. | S8 |
-| `ProjectSettings.critical_float_threshold_seconds` stays zero even when the file sets `CriticalSlackLimit`. | S4, criticality |
 | `is_null_source` is dropped, so a null placeholder task looks ordinary. | S6, eligibility |
 | An unresolved task `CalendarUID` becomes `None`, indistinguishable from inheriting the project calendar. | S2/S3 |
 | Summary-task constraints, deadlines, calendars, priority and custom fields are not retained on `WbsNode`. | S8, writeback |
@@ -234,9 +278,11 @@ case none of our files produce. Recorded rather than built.
 PYTHONPATH=src python3 -m unittest discover -s tests
 ```
 
-The BOILER cases skip unless the real schedules are present; point
-`STO_BOILER_BEFORE` and `STO_BOILER_DAY5` at them to run the file oracle. Two
-gate criteria rest on those cases, so cross a gate with `STO_REQUIRE_BOILER=1`
-set — their absence then fails instead of skipping quietly.
+The file-oracle cases skip unless the real schedules are present; point
+`STO_BOILER_BEFORE`, `STO_BOILER_DAY5`, `STO_KILN` and `STO_CALCINER` at them to
+run them. Two gate criteria rest on those cases, so cross a gate with
+`STO_REQUIRE_BOILER=1` set — their absence then fails instead of skipping
+quietly. The float and criticality rules are evidence from KILN and CALCINER as
+much as from BOILER, which is why those two now have variables of their own.
 `fixtures/README.md` records every file's hash, what it proves and how to
 recover it — including two that cannot be recovered and need backing up.
