@@ -44,6 +44,10 @@ Every refusal is a code, never a guess, in the manner of
 ``SCHEDULE_PASS_MISMATCH``
     A forward pass handed to the backward pass or the float was computed over
     a different network -- bound by :meth:`Network.fingerprint`.
+``SCHEDULE_POLICY_MISMATCH``
+    A backward pass asked for under a progress policy other than the one its
+    forward pass ran under. The policy travels on the forward pass; naming it
+    again is allowed, naming a different one is not.
 ``SCHEDULE_STATUS_TIME_INVALID``
     A status time outside the window the network is scheduled in.
 """

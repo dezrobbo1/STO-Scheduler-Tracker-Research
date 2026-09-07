@@ -422,19 +422,25 @@ def build_plan(
 
     activity_calendars = {row.uid: row.calendar for row in activities}
 
-    def lag_calendar_of(activity_uid: UUID) -> CompiledIntervals | None:
+    def lag_calendar_of(activity_uid: UUID) -> tuple[CompiledIntervals | None, bool]:
         """The calendar Project consumes a working lag on: the successor's own
         task calendar when it has one, otherwise the project's. A resource
         calendar never applies to a lag, which is the half of the rule the
-        forward-pass slice did not have."""
+        forward-pass slice did not have. The second value says the project's
+        calendar was the answer -- a choice the estate cannot tell from elapsed
+        time (ADR-010), so the caller labels it."""
 
         activity = activities_by_uid[activity_uid]
-        uid = activity.calendar_uid or project.default_calendar_uid
+        own = activity.calendar_uid
+        uid = own or project.default_calendar_uid
         compiled = calendars.get(uid) if uid is not None else None
-        return None if compiled is None else compiled.intervals
+        return (None if compiled is None else compiled.intervals), own is None
 
     relationships: list[PlannedRelationship] = []
     inactive = {row.uid for row in excluded if row.code == "ACTIVITY_INACTIVE"}
+    # ``Plan.assumed`` counts rows, so a successor with several inactive
+    # predecessors is labelled once, not once per edge.
+    labelled_successors: set[UUID] = set()
     for relationship in schedule.relationships:
         if (
             relationship.predecessor_uid not in scheduled
@@ -446,7 +452,9 @@ def build_plan(
             if (
                 relationship.predecessor_uid in inactive
                 and relationship.successor_uid in scheduled
+                and relationship.successor_uid not in labelled_successors
             ):
+                labelled_successors.add(relationship.successor_uid)
                 # What Microsoft Project does with the successor of an
                 # inactive task is not one rule on the files here: of the
                 # successors measured across the BOILER family and KILN, some
@@ -480,7 +488,7 @@ def build_plan(
         elif policy is LagCalendar.ELAPSED_24H:
             lag_calendar = continuous
         elif policy is LagCalendar.SUCCESSOR:
-            lag_calendar = lag_calendar_of(relationship.successor_uid)
+            lag_calendar, on_project_calendar = lag_calendar_of(relationship.successor_uid)
             if lag_calendar is None:
                 excluded.append(
                     Excluded(
@@ -491,6 +499,21 @@ def build_plan(
                     )
                 )
                 continue
+            if on_project_calendar:
+                # Every measured lag is explained by the successor's task
+                # calendar or the project's, but every project calendar in the
+                # estate runs twenty-four hours, so "project calendar" and
+                # "elapsed" have never been told apart. The choice is labelled
+                # rather than presented as measured.
+                assumed.append(
+                    Assumed(
+                        relationship.uid,
+                        "relationship",
+                        "RELATIONSHIP_LAG_ON_PROJECT_CALENDAR",
+                        "successor has no task calendar; project calendar and "
+                        "elapsed time are not distinguishable on this estate",
+                    )
+                )
         elif policy is LagCalendar.PREDECESSOR:
             lag_calendar = activity_calendars[relationship.predecessor_uid]
         elif policy is LagCalendar.PROJECT:

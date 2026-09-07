@@ -171,6 +171,11 @@ class ForwardPass:
     #: :meth:`Network.fingerprint` of the network this was computed over, so
     #: the backward pass and the float can refuse a result from another one.
     network_fingerprint: str = ""
+    #: The progress policy this pass ran under. The network fingerprint does
+    #: not carry it -- the policy is an argument, not a fact about the network
+    #: -- so the backward pass reads it from here rather than defaulting it a
+    #: second time, and refuses a caller who names a different one.
+    progress_policy: ProgressPolicy = ProgressPolicy.RETAINED_LOGIC
 
     def by_uid(self) -> dict[UUID, ActivityTimes]:
         return {row.uid: row for row in self.times}
@@ -310,12 +315,18 @@ def _bounds(
     # With predecessors, one side may have gone unbounded -- every edge bounded
     # the other end. That side is then bounded by the calendar alone, which is
     # the same floor the backward pass uses in the other direction.
-    floor = activity.calendar.first if activity.calendar.first is not None else 0
+    floor = _calendar_floor(activity)
     if start_bound is None:
         start_bound = floor
     if finish_bound is None:
         finish_bound = floor
     return start_bound, finish_bound, start_driver, finish_driver
+
+
+def _calendar_floor(activity: PlannedActivity) -> int:
+    """Where the calendar begins: the floor for a bound nothing else set."""
+
+    return activity.calendar.first if activity.calendar.first is not None else 0
 
 
 def forward_pass(
@@ -359,6 +370,9 @@ def forward_pass(
         start_bound, finish_bound, start_driver, finish_driver = _bounds(
             activity, incoming[uid], placed, base
         )
+        # The floor the bounds rested on when no edge reached one end, and so
+        # the floor the driver replay must use too.
+        floor = base if base is not None else _calendar_floor(activity)
         logic_start, logic_finish = start_bound, finish_bound
 
         constraint = activity.constraint_type
@@ -431,7 +445,7 @@ def forward_pass(
                 finish_bound,
                 start_driver,
                 finish_driver,
-                network.project_start,
+                floor,
                 network.horizon,
             )
             source = FROM_RELATIONSHIP if driver is not None else FROM_PROJECT_START
@@ -449,6 +463,7 @@ def forward_pass(
         constraint_violations=tuple(violations),
         fingerprint=_fingerprint(times, network.project_start, project_finish),
         network_fingerprint=network.fingerprint(),
+        progress_policy=progress_policy,
     )
 
 
@@ -533,14 +548,19 @@ def _driver(
     finish_bound: int,
     start_driver: UUID | None,
     finish_driver: UUID | None,
-    project_start: int,
+    floor: int,
     horizon: int,
 ) -> UUID | None:
     """Which bound actually placed the activity.
 
     The finish bound drove only when the start bound alone could not reach it.
     Answered by placing the activity a second time without the finish bound,
-    rather than by reasoning about where the calendar's gaps fall.
+    rather than by reasoning about where the calendar's gaps fall. ``floor`` is
+    what stands in for the finish bound in that replay: the same floor the
+    bounds rested on. For a task with predecessors that is the calendar's
+    start, not the project's -- a lead can place such a task before the
+    project start, and replaying it against the project start would make a
+    finish bound that really moved it look satisfied by the start bound alone.
     """
 
     if finish_driver is None:
@@ -548,7 +568,7 @@ def _driver(
     if start_driver is None:
         return finish_driver
     without_finish = earliest_span(
-        activity.calendar, start_bound, project_start, duration, horizon
+        activity.calendar, start_bound, floor, duration, horizon
     )
     if without_finish is not None and without_finish[1] >= finish_bound:
         return start_driver

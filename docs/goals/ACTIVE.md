@@ -282,7 +282,10 @@ until the parity checklist passes.
   successor's effective calendar explained a third of KILN's (ADR-010). Both
   project calendars in the estate are twenty-four hours, so a lag on the
   project calendar and an elapsed lag cannot be told apart here; the plan uses
-  the project calendar and that choice is unmeasured.
+  the project calendar and labels each such edge
+  (`RELATIONSHIP_LAG_ON_PROJECT_CALENDAR` on `Plan.assumed`: 14 in KILN, 41 in
+  CALCINER, none in BOILER), so the choice is carried as an assumption rather
+  than presented as measured.
 - **Tasks whose resources are on several calendars are scheduled on the union
   of those calendars, as an assumption** (`ACTIVITY_RESOURCE_CALENDARS_UNITED`
   on `Plan.assumed`). Project's stored span for such a task is the envelope of
@@ -292,9 +295,9 @@ until the parity checklist passes.
 - **The successor of an inactive task follows no rule the files agree on.**
   Some sit where the inactive task's own predecessors would put them, some
   where their other predecessors do, some where nothing measured does. The edge
-  is dropped and the row labelled `ACTIVITY_SUCCESSOR_OF_INACTIVE`; on the
-  progressed BOILER files, which carry twenty-one inactive rows, this is the
-  largest remaining class.
+  is dropped and the row labelled `ACTIVITY_SUCCESSOR_OF_INACTIVE` once,
+  however many inactive predecessors it has; on the progressed BOILER files,
+  which carry twenty-one inactive rows, this is the largest remaining class.
 - **Two CALCINER rows with `IgnoreResourceCalendar` set and a task calendar of
   their own, and one KILN row Project placed continuously on a resource
   calendar that compiles here as a day shift, are unexplained.** Named in
@@ -367,6 +370,25 @@ refusals coded; and the false aggregate in the S4 history entry. Rejected with a
 measurement: the negative-lag inversion, which holds from every coordinate a
 placed date can occupy and departs only inside a gap by zero working time,
 pinned in `tests/test_backward_pass.py`.
+
+### Carried from the PR #33 and #34 reviews
+
+PR #33 merged five minutes before its review landed, so its three findings
+joined PR #34's five and all eight were answered on the residue branch
+(`docs/history/2026-09-07-post-residue-review.md`), one test each in
+`tests/test_post_residue_review.py`. Fixed: the progress policy travels on the
+forward pass and the backward pass reads it there, refusing a different one
+by name (`SCHEDULE_POLICY_MISMATCH`) — the corpus digest had been attesting
+SEM-STA-044 with its two passes under different policies; the released edges
+are hashed into the backward fingerprint (`sto-backward-pass-v3`); an SS or SF
+edge out of started work is anchored on the actual start in the free float, as
+the forward pass anchored it; a lag with no calendar of its own falls back to
+the successor's scheduling calendar in the float, not its measuring calendar;
+the driver replay floors where the bounds did, so a lead-placed task before
+the project start reports the edge that moved it; the project-calendar lag
+choice is labelled; a successor of several inactive tasks is labelled once;
+and `IgnoreResourceCalendar` is recognised in both spellings `xsd:boolean`
+allows. No agreement count moved.
 
 ### Carried from the PR #22 review, against the slice that owns each
 

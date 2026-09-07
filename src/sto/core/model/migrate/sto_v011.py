@@ -531,6 +531,18 @@ def migrate(
         item["id"]: item for item in document.get("vendor_extensions", [])
     }
 
+    def _flag_is_set(text: Any) -> bool:
+        """An MSPDI boolean, in either spelling the schema allows.
+
+        Every file in the estate writes ``0`` or ``1``, but the schema type is
+        ``xsd:boolean`` and ``true`` is as valid; the importer preserves the
+        text as written, so both are recognised here rather than letting a
+        valid spelling drop the flag and move the task onto its resource's
+        calendar without a word.
+        """
+
+        return isinstance(text, str) and text.strip().lower() in {"1", "true"}
+
     def source_fields_for(row: dict[str, Any], duration: Duration | None) -> dict[str, str]:
         """Source facts the engine reads that have no canonical field of their own.
 
@@ -550,7 +562,7 @@ def migrate(
             if ref in extension_by_id
             and extension_by_id[ref].get("payload", {}).get("name") == "IgnoreResourceCalendar"
         ]
-        if len(values) == 1 and values[0] == "1":
+        if len(values) == 1 and _flag_is_set(values[0]):
             fields["ignore_resource_calendar_source"] = "1"
         return fields
 

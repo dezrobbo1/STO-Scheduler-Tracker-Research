@@ -70,6 +70,10 @@ hold, and could refuse -- ``SCHEDULE_FLOOR_EXCEEDED`` -- a schedule the forward
 pass had just answered. Which edges are released is decided once, by
 :func:`~sto.core.engine.progress.relationship_binds`, and reported on
 :attr:`BackwardPass.overridden_relationships` so the float can drop them too.
+The policy itself is read from the forward pass, which carries it: the network
+fingerprint binds the two passes to one network but says nothing about the
+policy, and a backward pass that defaulted it on its own would compute late
+dates under retained logic for a forward pass that ran under override.
 
 Two refusals guard the inputs. A ``project_late_finish`` past the compiled
 horizon is refused rather than snapped back onto the last interval, because the
@@ -119,8 +123,10 @@ FROM_CONSTRAINT = "constraint"
 FROM_ACTUALS = "actuals"
 
 #: Named on the fingerprint so a stored answer says which pass produced it.
-#: Version two releases the edges the progress policy releases.
-BACKWARD_PASS_PROFILE = "sto-backward-pass-v2"
+#: Version two releases the edges the progress policy releases; version three
+#: names them in the hash, so releasing an edge that moved no late date -- one
+#: already redundant -- still changes the answer's digest.
+BACKWARD_PASS_PROFILE = "sto-backward-pass-v3"
 
 
 @dataclass(frozen=True, slots=True)
@@ -238,7 +244,7 @@ def backward_pass(
     *,
     snap_milestones: bool = False,
     project_late_finish: int | None = None,
-    progress_policy: ProgressPolicy = ProgressPolicy.RETAINED_LOGIC,
+    progress_policy: ProgressPolicy | None = None,
 ) -> BackwardPass:
     """Latest start and finish for every activity in ``network``.
 
@@ -249,8 +255,11 @@ def backward_pass(
     reports float against a contractual date rather than against itself. It
     must lie within the compiled horizon.
 
-    ``progress_policy`` is the same policy the forward pass ran under, so the
-    edges it released are released here too.
+    The progress policy is the one the forward pass ran under -- read from
+    ``forward`` so the two passes cannot default it separately. ``progress_policy``
+    may name it again, and a different name is refused (``SCHEDULE_POLICY_MISMATCH``)
+    rather than walking edges the forward pass released or releasing ones it
+    walked.
     """
 
     network.validate()
@@ -260,6 +269,15 @@ def backward_pass(
             "SCHEDULE_PASS_MISMATCH",
             None,
             "the forward pass was computed over a different network",
+        )
+    if progress_policy is None:
+        progress_policy = forward.progress_policy
+    elif progress_policy is not forward.progress_policy:
+        raise BackwardPassError(
+            "SCHEDULE_POLICY_MISMATCH",
+            None,
+            f"the forward pass ran under {forward.progress_policy.value}, "
+            f"not {progress_policy.value}",
         )
 
     by_uid = network.activity_by_uid()
@@ -367,7 +385,7 @@ def backward_pass(
         order=tuple(reversed(forward.order)),
         project_late_finish=late_finish,
         deferred_constraints=tuple(deferred),
-        fingerprint=_fingerprint(times, late_finish),
+        fingerprint=_fingerprint(times, late_finish, overridden),
         overridden_relationships=overridden,
         network_fingerprint=network_fingerprint,
     )
@@ -481,13 +499,24 @@ def _driver(
     return start_driver
 
 
-def _fingerprint(times: tuple[ActivityLateTimes, ...], project_late_finish: int) -> str:
-    """A hash of the answer, so two runs are compared without comparing objects."""
+def _fingerprint(
+    times: tuple[ActivityLateTimes, ...],
+    project_late_finish: int,
+    overridden: tuple[UUID, ...],
+) -> str:
+    """A hash of the answer, so two runs are compared without comparing objects.
+
+    The released edges are part of the answer: under ``progress_override`` a
+    redundant edge can be released without moving a single late date, and a
+    digest over the dates alone would neither attest that nor notice when the
+    pass stopped reporting it.
+    """
 
     return canonical_sha256(
         {
             "profile": BACKWARD_PASS_PROFILE,
             "project_late_finish": project_late_finish,
+            "overridden_relationships": sorted(str(uid) for uid in overridden),
             "times": sorted(
                 [str(row.uid), row.late_start, row.late_finish] for row in times
             ),

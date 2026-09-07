@@ -517,16 +517,19 @@ class OverrideReachesTheBackwardPassTests(unittest.TestCase):
         self.assertEqual((late.late_start, late.late_finish), (0, 200))
         self.assertEqual(floats.by_uid()[uid("A")].free_float, 0)
 
-    def test_a_backward_pass_that_still_walked_the_edge_would_refuse(self):
-        # The defect this class exists to prevent, reproduced: the forward pass
-        # released the edge and a backward pass under the other policy walks
-        # it, wants the predecessor done by one hundred and ninety, and the
-        # calendar cannot hold that. The caller passes one policy to both.
+    def test_a_backward_pass_under_the_other_policy_is_refused_before_it_walks(self):
+        # The defect this class exists to prevent: the forward pass released
+        # the edge and a backward pass under the other policy would walk it,
+        # want the predecessor done by one hundred and ninety, and find the
+        # calendar cannot hold that. The policy now travels on the forward
+        # pass, so the mismatch is refused by name before any edge is walked.
         net = self._network()
         forward = forward_pass(net, progress_policy=ProgressPolicy.PROGRESS_OVERRIDE)
         with self.assertRaises(NetworkError) as raised:
             backward_pass(net, forward, progress_policy=ProgressPolicy.RETAINED_LOGIC)
-        self.assertEqual(raised.exception.code, "SCHEDULE_FLOOR_EXCEEDED")
+        self.assertEqual(raised.exception.code, "SCHEDULE_POLICY_MISMATCH")
+        # And the default is the forward pass's own policy, not retained logic.
+        self.assertEqual(backward_pass(net, forward).overridden_relationships, (uid("R1"),))
 
 
 class CompletedWorkAndCriticalityTests(unittest.TestCase):

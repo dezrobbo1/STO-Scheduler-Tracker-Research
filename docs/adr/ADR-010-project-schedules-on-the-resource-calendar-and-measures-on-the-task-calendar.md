@@ -36,7 +36,11 @@ envelope of its per-assignment spans, which this engine does not compute.
 it has none** — never on a resource calendar. This replaces the assumption
 `docs/goals/ACTIVE.md` carried since PR #22, that a Microsoft lag is consumed on
 the successor's effective calendar, and it is what the plan now resolves
-`LagCalendar.SUCCESSOR` to for a Microsoft file.
+`LagCalendar.SUCCESSOR` to for a Microsoft file. The project-calendar half is a
+choice the estate cannot check — every project calendar here is twenty-four
+hours, so it cannot be told from elapsed time — and each edge resolved that way
+is labelled `RELATIONSHIP_LAG_ON_PROJECT_CALENDAR` on `Plan.assumed` rather
+than presented as measured.
 
 **Slack is measured on the same calendar a lag is consumed on** — the task's
 own or the project's — even when the work was placed on a resource's.
@@ -114,8 +118,10 @@ those successors and the multi-resource rows.
 ## Consequences
 
 `build_plan(resource_calendars_apply=)` defaults on. `Plan` carries `assumed`
-beside `excluded`, so a claim about a schedule names the rows it rests on.
-`Network.fingerprint` hashes the measuring calendar.
+beside `excluded`, so a claim about a schedule names the rows it rests on —
+one entry per row, not per edge. `Network.fingerprint` hashes the measuring
+calendar. The float measures on the measuring calendar but consumes a lag that
+names no calendar on the successor's scheduling calendar, as both passes do.
 
 What remains unexplained is named, per row, and small: the envelope rule for
 tasks with several resource calendars, the successor of an inactive task, two
