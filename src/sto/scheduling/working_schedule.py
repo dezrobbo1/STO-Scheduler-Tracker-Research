@@ -182,7 +182,13 @@ class Workspace:
         on the bytes the row actually holds.
         """
 
-        cached = None if refresh else self._resident.get(project_id)
+        if refresh:
+            # Dropped before the read, not after it. Leaving the old entry in
+            # place while the new one is verified meant a failed verification
+            # raised once and then every ordinary load went on serving the
+            # stale schedule -- the opposite of quarantining the project.
+            self._resident.pop(project_id, None)
+        cached = self._resident.get(project_id)
         if cached is not None:
             return cached
         with self.connect() as conn:
@@ -312,6 +318,14 @@ class Workspace:
                 header = repo.get_latest_calculation(conn, version_id=head["id"])
             else:
                 header = repo.get_calculation(conn, calculation_id=calculation_id)
+                if header is not None and header["project_id"] != project_id:
+                    # Addressed by identifier, but read on behalf of a project.
+                    # Returning another project's calculation under this
+                    # project's identifier would misattribute it as well as
+                    # disclose it.
+                    raise UnknownProject(
+                        f"calculation {calculation_id} does not belong to project {project_id}"
+                    )
             if header is None:
                 return None
             rows = repo.get_activity_results(conn, calculation_id=header["id"])
@@ -498,6 +512,9 @@ def _rebuild_result(
             state=row["progress_state"],
             placed_by=row["placed_by"],
             driving_relationship_uid=row["driving_relationship_uid"],
+            late_placed_by=row["late_placed_by"],
+            late_driving_relationship_uid=row["late_driving_relationship_uid"],
+            constraint_override=row["constraint_override"],
             exclusion_code=row["exclusion_code"],
             assumptions=tuple(row["assumptions"]),
         )

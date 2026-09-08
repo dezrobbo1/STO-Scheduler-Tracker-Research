@@ -87,6 +87,9 @@ CREATE TABLE activity_results (
   progress_state TEXT,
   placed_by TEXT,
   driving_relationship_uid UUID,
+  late_placed_by TEXT,
+  late_driving_relationship_uid UUID,
+  constraint_override TEXT,
   exclusion_code TEXT,
   assumptions TEXT[] NOT NULL DEFAULT '{}',
   PRIMARY KEY (calculation_id, activity_uid),
@@ -136,6 +139,10 @@ COMMENT ON COLUMN activity_results.remaining_start IS
   'Where the unfinished part of work under way begins. Set for exactly the in-progress rows.';
 COMMENT ON COLUMN activity_results.placed_by IS
   'What put the activity where it is: a predecessor, the project start, a constraint, its actuals, or the status date.';
+COMMENT ON COLUMN activity_results.late_placed_by IS
+  'What bounded the late span. In a chain this is a successor, not the predecessor that bounded the early one.';
+COMMENT ON COLUMN activity_results.constraint_override IS
+  'A hard constraint that overrode precedence, and the coordinate the logic required instead. NULL when none did.';
 COMMENT ON COLUMN activity_results.assumptions IS
   'Codes from Plan.assumed: the rules this row rests on that are labelled rather than measured.';
 

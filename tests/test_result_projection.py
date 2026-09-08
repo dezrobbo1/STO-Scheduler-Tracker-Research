@@ -242,6 +242,111 @@ class WhatElseDecidedTheseDatesTests(unittest.TestCase):
         )
 
 
+    def test_a_late_span_says_what_bounded_it(self):
+        """Four dates, and until now the cause of only two of them.
+
+        In a chain the late span is bounded by a successor while the early one
+        is bounded by a predecessor, so copying the forward pass's driver onto
+        both left half the stored row unexplained.
+        """
+
+        document = _document([_task(1), _task(2)], relationships=[_relationship(1, 1, 2)])
+        _, result = _projected_document(document)
+        rows = [row for row in result.activities if row.disposition == SCHEDULED]
+        self.assertTrue(rows)
+        for row in rows:
+            with self.subTest(str(row.uid)):
+                self.assertIsNotNone(row.late_placed_by)
+        driven = [row for row in rows if row.late_driving_relationship_uid is not None]
+        self.assertTrue(driven, "no row reports a late driver; this would pass vacuously")
+        self.assertNotEqual(
+            [(row.driving_relationship_uid, row.late_driving_relationship_uid) for row in driven],
+            [(row.late_driving_relationship_uid, row.late_driving_relationship_uid)
+             for row in driven],
+            "the late driver is a copy of the early one",
+        )
+
+    def test_a_constraint_that_overrode_its_logic_is_carried(self):
+        """A hard constraint wins against a predecessor, and says what it broke."""
+
+        first, first_ext = _task(1)
+        second, second_ext = _task(2)
+        second["constraint_type_source"] = 2  # must start on
+        second["constraint_date_source"] = "2026-01-05T08:00:00"
+        document = _document(
+            [(first, first_ext), (second, second_ext)],
+            relationships=[_relationship(1, 1, 2)],
+        )
+        schedule, _, _ = migrate(document)
+        plan, result = _projected_schedule(schedule)
+        forward = forward_pass(
+            plan.network,
+            snap_milestones=plan.snap_milestones,
+            progress_policy=plan.progress_policy,
+        )
+        self.assertTrue(
+            forward.constraint_violations, "the fixture no longer overrides its logic"
+        )
+        overridden = {
+            row.uid for row in result.activities if row.constraint_override is not None
+        }
+        self.assertEqual(
+            overridden, {row.activity_uid for row in forward.constraint_violations}
+        )
+
+    def test_a_start_nothing_bounds_is_labelled(self):
+        """The project-start fallback is a rule with no file evidence.
+
+        The forward pass records a row only when that fallback *decided* where
+        it went, and on every real schedule here it decides nothing -- so a
+        test built from a file would assert two empty sets and prove nothing.
+        The pass's own report is set directly instead, which is the thing the
+        projection was dropping.
+        """
+
+        document = _document([_task(1), _task(2)])
+        schedule, _, _ = migrate(document)
+        start = schedule.project.start
+        horizon = (start - timedelta(days=90), start + timedelta(days=365))
+        plan = build_plan(schedule, horizon)
+        forward = forward_pass(
+            plan.network,
+            snap_milestones=plan.snap_milestones,
+            progress_policy=plan.progress_policy,
+        )
+        self.assertEqual(forward.unbounded_starts, (), "the fixture now triggers it for real")
+        backward = backward_pass(plan.network, forward, snap_milestones=plan.snap_milestones)
+        floats = float_analysis(
+            plan.network, forward, backward, threshold=plan.critical_float_threshold
+        )
+        rollup = roll_up(
+            plan.wbs_children,
+            {uid: (row.early_start, row.early_finish) for uid, row in forward.by_uid().items()},
+        )
+
+        def project(pass_):
+            return project_result(
+                plan,
+                pass_,
+                backward,
+                floats,
+                rollup,
+                canonical_hash=canonical_sha256(encode_schedule(schedule)),
+                horizon=horizon,
+            )
+
+        named = plan.network.activities[0].uid
+        reported = replace(forward, unbounded_starts=(named,))
+        labelled = {
+            row.uid
+            for row in project(reported).activities
+            if "ACTIVITY_START_NOT_BOUNDED" in row.assumptions
+        }
+        self.assertEqual(labelled, {named})
+        # And it is part of what the result hashes to, so a stored calculation
+        # that rests on the fallback cannot pass for one that does not.
+        self.assertNotEqual(project(reported).fingerprint, project(forward).fingerprint)
+
 class TheProjectionAnswersForEveryRowTests(unittest.TestCase):
     """No database needed: the assembly itself."""
 
@@ -516,6 +621,47 @@ class AStoredCalculationComesBackTests(unittest.TestCase):
         self.assertIn("progress", header["profiles"])
         self.assertIsInstance(header["relationship_dispositions"], list)
 
+
+    def test_a_calculation_is_read_on_behalf_of_its_own_project(self):
+        """Addressed by identifier, but read for a project."""
+
+        # Imported here, not at module scope: this module runs in the bare
+        # suite too, and reaching the workspace pulls in psycopg.
+        from sto.persistence import repositories as repo
+        from sto.scheduling.working_schedule import UnknownProject
+
+        workspace, project_id = self._imported()
+        stored = workspace.calculate(project_id)
+        with self.connect() as conn:
+            other = repo.create_project(conn, name="somebody else")
+            conn.commit()
+        with self.assertRaises(UnknownProject):
+            workspace.read_calculation(other["id"], calculation_id=stored.calculation_id)
+
+    def test_a_head_that_fails_verification_is_evicted_not_kept(self):
+        """A failed refresh must not leave the old copy answering."""
+
+        from sto.scheduling.working_schedule import IntegrityError
+
+        workspace, project_id = self._imported()
+        self.assertIsNotNone(workspace.load(project_id))
+        with self.connect() as conn:
+            conn.execute(
+                """
+                UPDATE schedule_versions
+                SET document = jsonb_set(document, '{project,name}', '"tampered"')
+                WHERE id = (SELECT version_id FROM schedule_heads
+                            WHERE project_id = %s AND kind = 'baseline')
+                """,
+                (project_id,),
+            )
+            conn.commit()
+        with self.assertRaises(IntegrityError):
+            workspace.calculate(project_id)
+        # The ordinary load afterwards must not serve the copy from before.
+        with self.assertRaises(IntegrityError):
+            workspace.load(project_id)
+        self.assertIn(project_id, workspace.integrity_failures)
 
 if __name__ == "__main__":
     unittest.main()

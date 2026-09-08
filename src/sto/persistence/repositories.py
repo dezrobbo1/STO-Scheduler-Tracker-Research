@@ -291,8 +291,11 @@ def insert_calculation(
               (calculation_id, activity_uid, disposition, early_start, early_finish,
                late_start, late_finish, remaining_start, total_float_seconds,
                free_float_seconds, critical, progress_state, placed_by,
-               driving_relationship_uid, exclusion_code, assumptions)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+               driving_relationship_uid, late_placed_by,
+               late_driving_relationship_uid, constraint_override,
+               exclusion_code, assumptions)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                    %s, %s, %s, %s)
             """,
             [
                 (
@@ -310,6 +313,9 @@ def insert_calculation(
                     activity.state,
                     activity.placed_by,
                     activity.driving_relationship_uid,
+                    activity.late_placed_by,
+                    activity.late_driving_relationship_uid,
+                    activity.constraint_override,
                     activity.exclusion_code,
                     list(activity.assumptions),
                 )

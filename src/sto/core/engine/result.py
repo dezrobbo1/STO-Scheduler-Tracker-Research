@@ -131,6 +131,17 @@ class ActivityResult:
     placed_by: str | None = None
     #: The relationship that drove it, when one did.
     driving_relationship_uid: UUID | None = None
+    #: What bounded the late span, which in a chain is a different edge from
+    #: what bounded the early one -- a successor rather than a predecessor. A
+    #: result that stored four dates and the cause of two of them could not
+    #: explain the other two.
+    late_placed_by: str | None = None
+    late_driving_relationship_uid: UUID | None = None
+    #: A hard constraint that overrode precedence, and the coordinate the logic
+    #: required instead. The forward pass reports these rather than losing
+    #: them, and a stored calculation that dropped the report would present a
+    #: schedule whose retained logic is not honoured as an ordinary one.
+    constraint_override: str | None = None
     #: The code the plan excluded it under, and the assumptions it rests on.
     exclusion_code: str | None = None
     assumptions: tuple[str, ...] = ()
@@ -225,6 +236,27 @@ def project_result(
         if dropped.kind != "activity":
             edges.append(RelationshipResult(dropped.uid, EXCLUDED, dropped.code, dropped.detail))
 
+    # Two things the passes report and the plan does not know about. Both
+    # describe a placement that rests on something other than measured file
+    # evidence, so a stored row that dropped them would look ordinary.
+    overrides = {
+        violation.activity_uid: (
+            f"{violation.type.value}: pinned to {violation.coordinate}, "
+            f"logic required {violation.logic_required}"
+        )
+        for violation in forward.constraint_violations
+    }
+    unbounded = frozenset(forward.unbounded_starts)
+
+    def row_assumptions(uid: UUID) -> tuple[str, ...]:
+        codes = list(assumptions.get(uid, ()))
+        if uid in unbounded:
+            # The forward pass places these by the project start because no
+            # edge bounds their start, and records them because that rule has
+            # no supporting evidence in any file here.
+            codes.append("ACTIVITY_START_NOT_BOUNDED")
+        return tuple(codes)
+
     rows: list[ActivityResult] = []
     for activity in plan.network.activities:
         uid = activity.uid
@@ -250,7 +282,10 @@ def project_result(
                 state=placed.state.value,
                 placed_by=placed.source,
                 driving_relationship_uid=placed.driving_relationship_uid,
-                assumptions=tuple(assumptions.get(uid, ())),
+                late_placed_by=late_row.source,
+                late_driving_relationship_uid=late_row.driving_relationship_uid,
+                constraint_override=overrides.get(uid),
+                assumptions=tuple(row_assumptions(uid)),
             )
         )
 
@@ -262,7 +297,7 @@ def project_result(
                 uid=excluded.uid,
                 disposition=EXCLUDED,
                 exclusion_code=excluded.code,
-                assumptions=tuple(assumptions.get(excluded.uid, ())),
+                assumptions=tuple(row_assumptions(excluded.uid)),
             )
         )
 
@@ -314,6 +349,11 @@ def fingerprint_result(result: ScheduleResult) -> str:
                     row.state,
                     row.placed_by,
                     None if row.driving_relationship_uid is None else str(row.driving_relationship_uid),
+                    row.late_placed_by,
+                    None
+                    if row.late_driving_relationship_uid is None
+                    else str(row.late_driving_relationship_uid),
+                    row.constraint_override,
                     row.exclusion_code,
                     list(row.assumptions),
                 ]
