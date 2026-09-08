@@ -345,7 +345,20 @@ def backward_pass(
         coordinate = activity.constraint_coordinate
         pinned: str | None = None
         constrained = False
-        if constraint is ConstraintType.ALAP:
+        if states[uid] is not ProgressState.NOT_STARTED:
+            # The forward pass places work already under way on what happened
+            # and records every constraint it carries as not applied: an
+            # actual date is a fact and a constraint is an intention. This
+            # pass has to make the same judgement or the two disagree about
+            # one row. It did not, and the disagreement invented float out of
+            # nothing: an activity started at one with five units left, a
+            # status date of fifty and a must-start-on of twenty had its
+            # remaining work placed at 50-55 going forward and pinned at 20-25
+            # coming back -- minus thirty of total float, from a constraint
+            # one pass had already set aside.
+            if constraint is not ConstraintType.ASAP:
+                deferred.append(DeferredLateConstraint(uid, constraint))
+        elif constraint is ConstraintType.ALAP:
             deferred.append(DeferredLateConstraint(uid, constraint))
         elif constraint is ConstraintType.SNLT and coordinate is not None:
             if coordinate < start_bound:

@@ -87,7 +87,13 @@ from .network import (
     PlannedRelationship,
     shift_lag,
 )
-from .progress import ProgressState, remaining_bound, require_supported, state_of
+from .progress import (
+    ProgressState,
+    relationship_binds,
+    remaining_bound,
+    require_supported,
+    state_of,
+)
 
 #: Why an activity's start sits where it does.
 FROM_PROJECT_START = "project_start"
@@ -402,9 +408,27 @@ def forward_pass(
             base = None
         else:
             base = network.project_start
+        # Whether this activity's predecessors hold it at all is the policy's
+        # question, and it has to be asked *before* their bounds are computed.
+        # Under progress override an in-progress successor's remaining work
+        # runs from the status date and no predecessor holds it -- but the
+        # bounds were built first, so a lag that leaves the calendar refused
+        # the whole schedule over a coordinate the policy had already
+        # discarded. Continuous horizon 0-100, an eighty-unit predecessor, a
+        # successor started at ten with one unit left, status date fifty and a
+        # thirty-unit lag: both rows fit, and the pass raised
+        # ``SCHEDULE_LAG_UNREACHABLE``.
+        # A complete activity is its two actual dates and reads no bound at
+        # all, so computing its predecessors' bounds can only refuse a
+        # schedule over a coordinate nothing will look at -- the same defect
+        # one state along.
+        holds = state is not ProgressState.COMPLETE and relationship_binds(
+            progress_policy, state, network.status_time
+        )
+        binding = incoming[uid] if holds else ()
         unbounded_floor = base if base is not None else network.project_start
         start_bound, finish_bound, start_driver, finish_driver = _bounds(
-            activity, incoming[uid], placed, base, unbounded_floor
+            activity, binding, placed, base, unbounded_floor
         )
         # The floor the bounds rested on when no edge reached one end, and so
         # the floor the driver replay must use too.
@@ -417,7 +441,7 @@ def forward_pass(
         # "constraint" without moving the start, and only a constraint that
         # actually takes over the start side displaces the fallback.
         rests_on_fallback = (
-            bool(incoming[uid])
+            bool(binding)
             and state is ProgressState.NOT_STARTED
             and start_driver is None
             and start_bound == network.project_start
