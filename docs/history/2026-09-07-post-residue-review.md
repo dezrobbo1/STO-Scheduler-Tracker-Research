@@ -163,3 +163,20 @@ say that. KILN's and CALCINER's late-date and float counts are pinned in
 row in `fixtures/README.md` says what it is and is not an oracle for, and the
 four tests on Project's own recalculation no longer skip when the unrelated
 candidate is absent.
+
+## A third pass, and a defect it caught
+
+The reviewer ran once more on the commit above and raised one finding, which
+was real and was a blocker: the multi-resource assumption had been added to
+every return of `effective_calendar` except the branch for an activity naming
+a calendar the file does not carry, so that branch returned four values where
+the caller unpacks five. One broken calendar reference raised `ValueError` and
+aborted the plan for the whole schedule instead of excluding one row.
+
+Nothing in the suite reached it. No schedule in the estate carries a broken
+calendar reference, and the migration turns an unresolved source reference
+into "no calendar" before the plan can see one — which is the comprehensive
+review's F01, and is why the regression test sets the broken reference on the
+canonical row rather than in the XML. The distinction between an unresolved
+calendar and an absent one is the reason that branch exists at all, and until
+C1 connects the importer to it, the plan's half of it is what can be tested.

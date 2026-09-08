@@ -261,6 +261,7 @@ def build_plan(
                     None,
                     unresolved,
                     f"activity calendar {activity.calendar_uid} is not in the file",
+                    None,
                 )
             own = compiled.intervals
         elif project.default_calendar_uid is not None:

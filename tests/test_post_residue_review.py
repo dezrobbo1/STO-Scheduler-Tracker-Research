@@ -358,6 +358,32 @@ class ExplicitLagPolicyIsPreservedTests(unittest.TestCase):
         self.assertNotIn("RELATIONSHIP_LAG_ON_PROJECT_CALENDAR", plan.assumed_by_code())
 
 
+class UnresolvedCalendarStillExcludesOneRowTests(unittest.TestCase):
+    """Third pass: a broken calendar reference excludes a row, not the schedule.
+
+    The exclusion this asserts is the reason the plan distinguishes an
+    unresolved calendar from an absent one at all, and no file in the estate
+    carries one, so nothing exercised the branch until the assumption value
+    was added to every other return and not to this one.
+    """
+
+    def test_one_broken_reference_excludes_its_row_and_leaves_the_rest(self):
+        # The migration still turns an unresolved source reference into "no
+        # calendar" (the review's F01, owed to C1), so the broken reference is
+        # set on the canonical row here: it is the plan's distinction being
+        # tested, not the importer's.
+        schedule, _, _ = migrate(_document([_hour_task(1, 9), _hour_task(2, 10)]))
+        missing = uid("absent-calendar")
+        broken = replace(schedule.activities[1], calendar_uid=missing)
+        schedule = replace(schedule, activities=(schedule.activities[0], broken))
+        start = datetime(2026, 1, 5)
+        plan = build_plan(schedule, (start - timedelta(days=7), start + timedelta(days=60)))
+        self.assertEqual(plan.excluded_by_code(), {"ACTIVITY_CALENDAR_UNRESOLVED": 1})
+        self.assertEqual(plan.excluded[0].uid, broken.uid)
+        self.assertIn(str(missing), plan.excluded[0].detail)
+        self.assertEqual([row.uid for row in plan.network.activities], [schedule.activities[0].uid])
+
+
 class EmptyMeasuringCalendarIsRefusedTests(unittest.TestCase):
     """Second pass, finding four: slack cannot be measured on no working time."""
 
