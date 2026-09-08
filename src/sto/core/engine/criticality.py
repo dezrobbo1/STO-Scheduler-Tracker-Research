@@ -57,9 +57,11 @@ The two reasons an activity is not critical are kept apart on the row:
 ``complete`` says which one applies, so "no slack but already done" never looks
 like "has slack".
 
-An edge the progress policy released is released here too: the backward pass
-reports them on ``overridden_relationships`` and the free float does not read
-them, so an activity whose only successor continues from the status date under
+An edge that holds nothing is dropped here too -- released by the progress
+policy, or running into work already complete, which sits on its actual dates
+and consults no predecessor. The backward pass reports them on
+``overridden_relationships`` and the free float does not read them, so an
+activity whose only successor continues from the status date under
 ``progress_override`` is measured against the project late finish rather than
 against work it no longer holds.
 
@@ -78,7 +80,13 @@ from sto.core.hashing import canonical_sha256
 
 from .backward import BackwardPass
 from .forward import ActivityTimes, ForwardPass
-from .network import Network, NetworkError, PlannedRelationship, unshift_lag
+from .network import (
+    Network,
+    NetworkError,
+    PlannedRelationship,
+    lag_calendar_for,
+    unshift_lag,
+)
 
 #: Named on the fingerprint so a stored answer says which rule produced it.
 #: Version two hashes the two component floats as well as their minimum, so
@@ -215,10 +223,8 @@ def _free_float(
     slacks: list[int] = []
     for relationship in outgoing:
         anchor = early_finish if relationship.anchors_predecessor_finish else early_start
-        lag_calendar = (
-            relationship.lag_calendar
-            if relationship.lag_calendar is not None
-            else lag_calendars[relationship.successor_uid]
+        lag_calendar = lag_calendar_for(
+            relationship, lag_calendars[relationship.successor_uid]
         )
         successor_start, successor_finish = available_spans[relationship.successor_uid]
         available = (

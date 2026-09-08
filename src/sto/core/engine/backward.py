@@ -106,6 +106,7 @@ from sto.core.model.enums import ConstraintType, ProgressPolicy
 
 from .forward import ForwardPass
 from .network import (
+    lag_calendar_for,
     BackwardPassError,
     Network,
     PlannedActivity,
@@ -157,9 +158,12 @@ class BackwardPass:
     project_late_finish: int
     deferred_constraints: tuple[DeferredLateConstraint, ...] = ()
     fingerprint: str = ""
-    #: The edges the progress policy released, in declaration order. The
-    #: forward pass did not let them bound the successor and this pass did not
-    #: let them bound the predecessor; the float drops them from free float.
+    #: The edges that hold nothing, and so were walked by none of the three
+    #: calculations: released by the progress policy, or running into work
+    #: already complete, which is placed on its actual dates and consults no
+    #: predecessor. The forward pass did not let them bound the successor,
+    #: this pass did not let them bound the predecessor, and the float drops
+    #: them from free float.
     overridden_relationships: tuple[UUID, ...] = ()
     #: :meth:`Network.fingerprint` of the network this was computed over.
     network_fingerprint: str = ""
@@ -191,6 +195,7 @@ def _bounds(
     project_late_finish: int,
     calendars: dict[UUID, CompiledIntervals],
     released: frozenset[UUID],
+    horizon: int,
 ) -> tuple[int, int, UUID | None, UUID | None]:
     """Upper bounds on start and finish from precedence, and what drove each.
 
@@ -223,12 +228,8 @@ def _bounds(
             if relationship.bounds_successor_start
             else successor.late_finish
         )
-        calendar = (
-            relationship.lag_calendar
-            if relationship.lag_calendar is not None
-            else calendars[relationship.successor_uid]
-        )
-        shifted = unshift_lag(calendar, anchor, relationship.lag)
+        calendar = lag_calendar_for(relationship, calendars[relationship.successor_uid])
+        shifted = unshift_lag(calendar, anchor, relationship.lag, ceiling=horizon)
         if shifted is None:
             raise BackwardPassError(
                 "SCHEDULE_LAG_UNREACHABLE",
@@ -314,15 +315,21 @@ def backward_pass(
 
     for uid in reversed(forward.order):
         activity = by_uid[uid]
-        if (
-            states[uid] is not ProgressState.NOT_STARTED
-            and activity.constraint_type is not ConstraintType.ASAP
-        ):
-            # Recorded before the completed row returns, not after: work that
-            # has happened carries its constraints unapplied in *both* passes,
-            # and a completed activity leaves this loop immediately.
+        state = states[uid]
+        # An actual date is a fact and a constraint is an intention, so work
+        # that has happened applies none of the constraints it carries and
+        # records every one of them as deferred -- in *both* passes, or the
+        # two disagree about one row and the disagreement becomes float. An
+        # activity started at one with five units left, a status date of fifty
+        # and a must-start-on of twenty had its remaining work placed at 50-55
+        # going forward and pinned at 20-25 coming back: minus thirty of total
+        # float, out of a constraint the forward pass had already set aside.
+        # Recorded before the completed row returns, because it leaves this
+        # loop immediately.
+        progressed = state is not ProgressState.NOT_STARTED
+        if progressed and activity.constraint_type is not ConstraintType.ASAP:
             deferred.append(DeferredLateConstraint(uid, activity.constraint_type))
-        if states[uid] is ProgressState.COMPLETE:
+        if state is ProgressState.COMPLETE:
             # Work that has happened cannot be scheduled later, so its late
             # dates are its actual dates. Measured, not assumed: in the two
             # files Microsoft Project itself recalculated after progress was
@@ -346,38 +353,29 @@ def backward_pass(
             continue
 
         start_bound, finish_bound, start_driver, finish_driver = _bounds(
-            activity, outgoing[uid], placed, late_finish, calendars, released
+            activity, outgoing[uid], placed, late_finish, calendars, released, network.horizon
         )
 
         constraint = activity.constraint_type
         coordinate = activity.constraint_coordinate
         pinned: str | None = None
         constrained = False
-        if states[uid] is not ProgressState.NOT_STARTED:
-            # The forward pass places work already under way on what happened
-            # and records every constraint it carries as not applied: an
-            # actual date is a fact and a constraint is an intention. This
-            # pass has to make the same judgement or the two disagree about
-            # one row. It did not, and the disagreement invented float out of
-            # nothing: an activity started at one with five units left, a
-            # status date of fifty and a must-start-on of twenty had its
-            # remaining work placed at 50-55 going forward and pinned at 20-25
-            # coming back -- minus thirty of total float, from a constraint
-            # one pass had already set aside. The deferral itself is recorded
-            # above, before a completed row leaves the loop.
-            pass
-        elif constraint is ConstraintType.ALAP:
-            deferred.append(DeferredLateConstraint(uid, constraint))
-        elif constraint is ConstraintType.SNLT and coordinate is not None:
-            if coordinate < start_bound:
-                start_bound, start_driver, constrained = coordinate, None, True
-        elif constraint is ConstraintType.FNLT and coordinate is not None:
-            if coordinate < finish_bound:
-                finish_bound, finish_driver, constrained = coordinate, None, True
-        elif constraint is ConstraintType.MSO and coordinate is not None:
-            pinned = "start"
-        elif constraint is ConstraintType.MFO and coordinate is not None:
-            pinned = "finish"
+        # Guarded rather than headed by a do-nothing arm, so that reshaping
+        # this chain cannot quietly drop the rule above and pin an in-progress
+        # row at its constraint again.
+        if not progressed:
+            if constraint is ConstraintType.ALAP:
+                deferred.append(DeferredLateConstraint(uid, constraint))
+            elif constraint is ConstraintType.SNLT and coordinate is not None:
+                if coordinate < start_bound:
+                    start_bound, start_driver, constrained = coordinate, None, True
+            elif constraint is ConstraintType.FNLT and coordinate is not None:
+                if coordinate < finish_bound:
+                    finish_bound, finish_driver, constrained = coordinate, None, True
+            elif constraint is ConstraintType.MSO and coordinate is not None:
+                pinned = "start"
+            elif constraint is ConstraintType.MFO and coordinate is not None:
+                pinned = "finish"
 
         start, finish = _place(
             activity,

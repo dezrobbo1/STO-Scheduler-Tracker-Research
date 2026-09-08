@@ -146,6 +146,27 @@ class TheLagInverseIsDefinedByItsInequalityTests(unittest.TestCase):
         self.assertGreater(checked, 0, "the scan reached no coordinate")
 
 
+class TheInverseAnswersTheCallerNotTheCalendarTests(unittest.TestCase):
+    """Two ways the closed form reached past the question it was asked."""
+
+    def test_a_lead_that_runs_off_the_calendar_is_bounded_by_the_horizon(self):
+        # Every coordinate from fifty on lands in the same place, so the lag
+        # stops binding there; answering fifty would pull a predecessor on a
+        # longer calendar earlier than it needs to be and understate its float.
+        calendar = CompiledIntervals.of(((0, 50),))
+        self.assertEqual(shift_lag(calendar, 90, -10), shift_lag(calendar, 200, -10))
+        self.assertEqual(unshift_lag(calendar, 90, -10), 50)
+        self.assertEqual(unshift_lag(calendar, 90, -10, ceiling=200), 200)
+
+    def test_coordinate_zero_is_a_coordinate(self):
+        # A calendar whose second interval opens exactly at zero: the answer is
+        # zero, and a truthiness test read it as no answer at all.
+        calendar = CompiledIntervals.of(((-10, -5), (0, 10)))
+        answer = unshift_lag(calendar, -10, -5)
+        self.assertEqual(answer, 0)
+        self.assertEqual(shift_lag(calendar, answer, -5), -10)
+
+
 class AReleasedEdgeCannotRefuseTheScheduleTests(unittest.TestCase):
     """F12. The policy decides before the bound is computed."""
 
