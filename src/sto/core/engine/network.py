@@ -57,7 +57,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from uuid import UUID
 
-from sto.core.calendar.arithmetic import CompiledIntervals, add_working, sub_working
+from sto.core.calendar.arithmetic import (
+    CompiledIntervals,
+    add_working,
+    next_working,
+    prev_working_start,
+    sub_working,
+)
 from sto.core.hashing import canonical_sha256
 from sto.core.model.enums import ConstraintType, RelationshipType
 
@@ -436,6 +442,25 @@ class Network:
                 raise ForwardPassError("SCHEDULE_SELF_RELATIONSHIP", relationship.uid)
 
 
+def lag_calendar_for(
+    relationship: PlannedRelationship, successor_calendar: CompiledIntervals
+) -> CompiledIntervals:
+    """The calendar a relationship's lag is consumed on.
+
+    The edge's own when it names one, and otherwise the calendar the successor
+    is scheduled on. One line, in one place, because the forward pass, the
+    backward pass and the float all have to consume the same lag on the same
+    calendar: a lag that means eight hours going forward and eight *working*
+    hours coming back is two different edges, and unlike the progress policy or
+    the network itself there is no fingerprint behind this one to catch the
+    divergence. The three read it here instead of resolving it apiece.
+    """
+
+    if relationship.lag_calendar is not None:
+        return relationship.lag_calendar
+    return successor_calendar
+
+
 def shift_lag(calendar: CompiledIntervals, anchor: int, lag: int) -> int | None:
     """Signed productive lag forward from ``anchor``; zero keeps the exact coordinate.
 
@@ -453,7 +478,9 @@ def shift_lag(calendar: CompiledIntervals, anchor: int, lag: int) -> int | None:
     return sub_working(calendar, anchor, -lag)
 
 
-def unshift_lag(calendar: CompiledIntervals, anchor: int, lag: int) -> int | None:
+def unshift_lag(
+    calendar: CompiledIntervals, anchor: int, lag: int, *, ceiling: int | None = None
+) -> int | None:
     """The **greatest** coordinate whose lag lands at or before ``anchor``.
 
     The inverse of :func:`shift_lag`, defined by the inequality it has to
@@ -469,6 +496,16 @@ def unshift_lag(calendar: CompiledIntervals, anchor: int, lag: int) -> int | Non
     that shape, and both the backward pass and the free float read this
     function, so each was placing a bound the schedule cannot honour.
 
+    ``ceiling`` is the greatest coordinate the caller can use -- its horizon.
+    It matters when the lead runs past the end of the *lag* calendar: every
+    coordinate beyond that point shifts back to the same landing, so the
+    constraint stops binding and the answer is bounded by the caller rather
+    than by this calendar. With lag intervals ``(0, 50)``, an anchor of ninety
+    and a lead of ten, both ninety and a hundred land on forty; answering
+    fifty would pull a predecessor on a longer calendar earlier than it needs
+    to be and understate its float. Defaults to this calendar's end, which is
+    what a caller that shares one calendar means anyway.
+
     ``None`` when no coordinate satisfies it -- the calendar runs out.
     """
 
@@ -480,58 +517,28 @@ def unshift_lag(calendar: CompiledIntervals, anchor: int, lag: int) -> int | Non
         # bounded by where it came from.
         return sub_working(calendar, anchor, lag)
 
-    candidate = add_working(calendar, anchor, -lag)
-
-    def lands_in_time(coordinate: int) -> bool:
-        landing = shift_lag(calendar, coordinate, lag)
-        return landing is not None and landing <= anchor
-
-    ceiling = calendar.intervals[-1][1] if calendar.intervals else anchor
-
-    # The anchor itself need not work. Walking a negative lag back from it can
-    # run off the beginning of the calendar while a *later* coordinate has the
-    # room: on a continuous 0-100 calendar a lead of one from an anchor of zero
-    # is unreachable at zero and reachable at one, and the forward pass places
-    # exactly that schedule. Requiring the anchor to be feasible refused it.
-    def reachable(coordinate: int) -> bool:
-        return shift_lag(calendar, coordinate, lag) is not None
-
-    # Walking a negative lag back needs working time behind the coordinate, so
-    # reachability only ever turns on as the coordinate rises: the first
-    # coordinate that has the room is found by halving, not by stepping, or
-    # the search walks past it.
-    if not reachable(ceiling):
+    # A negative lag walks back over working time, so every coordinate it can
+    # land on is one at which work can start -- which is the question
+    # :func:`~sto.core.calendar.arithmetic.prev_working_start` exists to
+    # answer, and where the interval-versus-gap asymmetry is already worked
+    # out. The greatest landing at or before the anchor, walked forward again
+    # by the lead and carried across any gap it ends in, *is* the answer, so
+    # there is nothing here to search for.
+    lead = -lag
+    if lead > calendar.total_work:
         return None
-    if reachable(anchor):
-        low = anchor
-    else:
-        below, above = anchor, ceiling
-        while above - below > 1:
-            middle = (below + above) // 2
-            if reachable(middle):
-                above = middle
-            else:
-                below = middle
-        low = above
-    if not lands_in_time(low):
-        # The first coordinate with the room already lands after the anchor,
-        # and a later one only lands later still.
+    landing = prev_working_start(calendar, anchor)
+    if landing is None:
         return None
-
-    # ``shift_lag`` does not decrease as its anchor rises, so the answer is the
-    # last coordinate before it stops landing in time. Walk the upper end out
-    # until it does stop -- across a gap, a whole run of coordinates shifts
-    # back to the same place, so the first candidate is not always the last one
-    # -- then halve the interval.
-    high = max(low + 1, anchor + 1 if candidate is None else candidate)
-    while lands_in_time(high) and high < ceiling:
-        low, high = high, min(high * 2 - low + 1, ceiling)
-    if lands_in_time(high):
-        return high
-    while high - low > 1:
-        middle = (low + high) // 2
-        if lands_in_time(middle):
-            low = middle
-        else:
-            high = middle
-    return low
+    limit = calendar.last if ceiling is None else ceiling
+    moved = add_working(calendar, landing, lead)
+    if moved is None:
+        # The lead reaches past the end of this calendar, so every coordinate
+        # from there on lands in the same place and the caller's horizon is
+        # what bounds the answer.
+        return limit
+    opened = next_working(calendar, moved)
+    # ``next_working`` can legitimately answer zero, which is a coordinate and
+    # not an absence.
+    answer = moved if opened is None else opened
+    return min(answer, limit) if limit is not None else answer
