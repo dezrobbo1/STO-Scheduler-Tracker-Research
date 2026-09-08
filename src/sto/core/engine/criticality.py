@@ -199,8 +199,9 @@ def _free_float(
     early: dict[UUID, ActivityTimes],
     available_spans: dict[UUID, tuple[int, int]],
     calendar: CompiledIntervals,
-    lag_calendars: dict[UUID, CompiledIntervals],
+    scheduling_calendars: dict[UUID, CompiledIntervals],
     movement_limits: dict[UUID, tuple[int, int]],
+    snapped_zero_spans: frozenset[UUID],
     project_late_finish: int,
 ) -> int:
     """Slack against the successors' *early* dates, not the project's late finish.
@@ -219,8 +220,8 @@ def _free_float(
     SF edge out of it was measured from that start, not from where its remaining
     work resumes. ``available_spans`` substitutes the remaining start on the
     *successor* side only. The lag falls back to the successor's scheduling
-    calendar (``lag_calendars``) when the edge names none, again as the passes
-    did; the measuring calendar is not the scheduling one on a real file.
+    calendar (``scheduling_calendars``) when the edge names none, again as the
+    passes did; the measuring calendar is not the scheduling one on a real file.
     The remaining gap is measured on **this** activity's calendar, because
     it is this activity that would consume it by slipping. Read off Project's
     own dates that rule reproduces the stored ``FreeSlack`` for about
@@ -244,7 +245,7 @@ def _free_float(
     for relationship in outgoing:
         anchor = early_finish if relationship.anchors_predecessor_finish else early_start
         lag_calendar = lag_calendar_for(
-            relationship, lag_calendars[relationship.successor_uid]
+            relationship, scheduling_calendars[relationship.successor_uid]
         )
         successor_start, successor_finish = available_spans[relationship.successor_uid]
         available = (
@@ -279,6 +280,22 @@ def _free_float(
                 relationship.uid,
                 f"lag {relationship.lag} back from {available} leaves the calendar",
             )
+        if uid in snapped_zero_spans:
+            # The inverse answers in the lag calendar's coordinate domain. A
+            # zero-length predecessor under milestone snapping has a stricter
+            # placement domain: a coordinate in a scheduling-calendar gap is
+            # moved by ``next_working`` and can therefore break the successor
+            # bound the inverse just proved. Pull the answer back to the latest
+            # coordinate the predecessor can actually occupy without snapping
+            # forward past ``permitted``.
+            snapped = prev_working_start(scheduling_calendars[uid], permitted)
+            if snapped is None:
+                raise CriticalityError(
+                    "SCHEDULE_LAG_UNREACHABLE",
+                    relationship.uid,
+                    "no snapped predecessor coordinate satisfies the relationship",
+                )
+            permitted = snapped
         slacks.append(signed_working(calendar, anchor, permitted))
     return min(slacks)
 
@@ -325,7 +342,16 @@ def float_analysis(
     # The calendar a lag falls back to when an edge names none is the one the
     # passes consumed it on -- the successor's scheduling calendar -- not the
     # one slack is measured on; on a real file the two differ (ADR-010).
-    lag_calendars = {activity.uid: activity.calendar for activity in network.activities}
+    scheduling_calendars = {
+        activity.uid: activity.calendar for activity in network.activities
+    }
+    snapped_zero_spans = frozenset(
+        activity.uid
+        for activity in network.activities
+        if forward.snap_milestones
+        and activity.remaining == 0
+        and early[activity.uid].state is not ProgressState.COMPLETE
+    )
     movement_limits: dict[UUID, tuple[int, int]] = {}
     for activity in network.activities:
         if activity.remaining == 0:
@@ -336,10 +362,7 @@ def float_analysis(
             # the latest working start at or before the horizon. In particular,
             # an interval's exclusive finish is not a valid snapped milestone.
             limit = network.horizon
-            if (
-                forward.snap_milestones
-                and early[activity.uid].state is not ProgressState.COMPLETE
-            ):
+            if activity.uid in snapped_zero_spans:
                 snapped_limit = prev_working_start(activity.calendar, limit)
                 if snapped_limit is None:
                     raise CriticalityError(
@@ -415,8 +438,9 @@ def float_analysis(
             early,
             available_spans,
             calendar,
-            lag_calendars,
+            scheduling_calendars,
             movement_limits,
+            snapped_zero_spans,
             backward.project_late_finish,
         )
         rows.append(

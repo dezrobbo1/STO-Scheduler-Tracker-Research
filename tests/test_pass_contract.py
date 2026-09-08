@@ -404,6 +404,52 @@ class CalendarTailSchedulingConsequencesTests(unittest.TestCase):
                 snap_milestones=True,
             )
 
+    def test_snapped_milestone_inverse_does_not_stop_inside_a_calendar_gap(self):
+        scheduling = CompiledIntervals.of(((0, 5), (10, 15)))
+        successor_calendar = CompiledIntervals.of(((0, 20),))
+        net = network(
+            activity("P", 0, scheduling),
+            activity(
+                "S",
+                0,
+                successor_calendar,
+                constraint_type=ConstraintType.SNET,
+                constraint_coordinate=7,
+            ),
+            relationships=(
+                link(
+                    "R1",
+                    "P",
+                    "S",
+                    RelationshipType.SS,
+                    0,
+                    successor_calendar,
+                ),
+            ),
+            horizon=20,
+        )
+        forward = forward_pass(net, snap_milestones=True)
+        predecessor = float_analysis(
+            net,
+            forward,
+            backward_pass(net, forward, snap_milestones=True),
+        ).by_uid()[uid("P")]
+
+        self.assertEqual(forward.by_uid()[uid("P")].early_start, 0)
+        # Coordinate seven is inside the 5-10 gap. A snapped milestone bound
+        # there would move to ten and delay S, so only the four productive
+        # units through coordinate four are free.
+        self.assertEqual(predecessor.free_float, 4)
+
+    def test_milestone_snap_policy_is_part_of_the_forward_fingerprint(self):
+        scheduling = CompiledIntervals.of(((0, 5), (10, 15)))
+        net = network(activity("P", 0, scheduling), horizon=20)
+        unsnapped = forward_pass(net, snap_milestones=False)
+        snapped = forward_pass(net, snap_milestones=True)
+
+        self.assertEqual(unsnapped.times, snapped.times)
+        self.assertNotEqual(unsnapped.fingerprint, snapped.fingerprint)
+
     def test_every_relationship_type_and_lag_sign_uses_the_same_bounded_contract(self):
         scheduling = CompiledIntervals.of(((0, 20),))
         lag_calendar = CompiledIntervals.of(((0, 12),))
