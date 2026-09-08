@@ -208,6 +208,18 @@ def list_versions(conn: psycopg.Connection, *, project_id: uuid.UUID) -> list[di
     ).fetchall()
 
 
+def get_version(
+    conn: psycopg.Connection, *, version_id: uuid.UUID, with_document: bool
+) -> dict[str, Any] | None:
+    """One version by identifier, whatever head points at it."""
+
+    columns = _VERSION_SUMMARY + (", v.document, v.identity_map" if with_document else "")
+    return conn.execute(
+        f"SELECT {columns} FROM schedule_versions v WHERE v.id = %s",
+        (version_id,),
+    ).fetchone()
+
+
 def heads_for_all_projects(conn: psycopg.Connection) -> list[dict[str, Any]]:
     return conn.execute(
         f"""
@@ -290,12 +302,13 @@ def insert_calculation(
             INSERT INTO activity_results
               (calculation_id, activity_uid, disposition, early_start, early_finish,
                late_start, late_finish, remaining_start, total_float_seconds,
-               free_float_seconds, critical, progress_state, placed_by,
+               free_float_seconds, start_float_seconds, finish_float_seconds,
+               critical, progress_state, placed_by,
                driving_relationship_uid, late_placed_by,
                late_driving_relationship_uid, constraint_override,
                exclusion_code, assumptions)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                    %s, %s, %s, %s)
+                    %s, %s, %s, %s, %s, %s)
             """,
             [
                 (
@@ -309,6 +322,8 @@ def insert_calculation(
                     activity.remaining_start,
                     activity.total_float,
                     activity.free_float,
+                    activity.start_float,
+                    activity.finish_float,
                     activity.critical,
                     activity.state,
                     activity.placed_by,

@@ -32,6 +32,7 @@ from sto.core.engine import (
 )
 from sto.core.engine.result import (
     EXCLUDED,
+    RELEASED,
     SCHEDULED,
     fingerprint_result,
     project_result,
@@ -346,6 +347,76 @@ class WhatElseDecidedTheseDatesTests(unittest.TestCase):
         # And it is part of what the result hashes to, so a stored calculation
         # that rests on the fallback cannot pass for one that does not.
         self.assertNotEqual(project(reported).fingerprint, project(forward).fingerprint)
+
+    def test_an_edge_the_passes_released_is_recorded(self):
+        """The plan kept it; progress meant the passes did not walk it.
+
+        Neither an exclusion nor an ordinary scheduled edge: it took no part in
+        the late dates or the float, and a result that recorded only the plan's
+        dispositions showed a retained edge taking part in dates it did not.
+        """
+
+        first, first_ext = _task(1)
+        first["actual_start_source"] = "2026-01-05T09:00:00"
+        first["actual_finish_source"] = "2026-01-05T10:00:00"
+        first["percent_complete_source"] = 100
+        second, second_ext = _task(2, hour=11)
+        second["actual_start_source"] = "2026-01-05T11:00:00"
+        second["actual_finish_source"] = "2026-01-05T12:00:00"
+        second["percent_complete_source"] = 100
+        document = _document(
+            [(first, first_ext), (second, second_ext)],
+            relationships=[_relationship(1, 1, 2)],
+        )
+        document["project"]["status_date"] = "2026-01-06T08:00:00"
+        schedule, _, _ = migrate(document)
+        plan, result = _projected_schedule(schedule)
+        backward = backward_pass(
+            plan.network,
+            forward_pass(
+                plan.network,
+                snap_milestones=plan.snap_milestones,
+                progress_policy=plan.progress_policy,
+            ),
+            snap_milestones=plan.snap_milestones,
+        )
+        self.assertTrue(
+            backward.overridden_relationships, "the fixture no longer releases an edge"
+        )
+        released = {
+            edge.uid for edge in result.relationships if edge.disposition == RELEASED
+        }
+        self.assertEqual(released, set(backward.overridden_relationships))
+
+    def test_both_float_components_reach_the_row(self):
+        """Total float is the smaller of two readings; the other is kept."""
+
+        _, result = _projected(FIXTURE)
+        placed = [row for row in result.activities if row.disposition == SCHEDULED]
+        self.assertTrue(placed)
+        for row in placed:
+            with self.subTest(str(row.uid)):
+                self.assertIsNotNone(row.start_float)
+                self.assertIsNotNone(row.finish_float)
+                self.assertEqual(row.total_float, min(row.start_float, row.finish_float))
+
+    def test_a_component_change_moves_the_fingerprint(self):
+        """The half a stored minimum could not notice."""
+
+        _, result = _projected(FIXTURE)
+        rows = list(result.activities)
+        index = next(
+            i for i, row in enumerate(rows) if row.disposition == SCHEDULED
+        )
+        # Raise only the larger component: the minimum, and so total float,
+        # is unchanged.
+        row = rows[index]
+        larger = "start_float" if row.start_float > row.finish_float else "finish_float"
+        rows[index] = replace(row, **{larger: max(row.start_float, row.finish_float) + 60})
+        self.assertNotEqual(
+            fingerprint_result(result),
+            fingerprint_result(replace(result, activities=tuple(rows))),
+        )
 
 class TheProjectionAnswersForEveryRowTests(unittest.TestCase):
     """No database needed: the assembly itself."""
@@ -662,6 +733,41 @@ class AStoredCalculationComesBackTests(unittest.TestCase):
         with self.assertRaises(IntegrityError):
             workspace.load(project_id)
         self.assertIn(project_id, workspace.integrity_failures)
+
+    def test_a_calculation_whose_version_was_repointed_is_refused(self):
+        """The fingerprint says nothing about the document it was computed from."""
+
+        from sto.scheduling.working_schedule import IntegrityError
+
+        workspace, project_id = self._imported()
+        stored = workspace.calculate(project_id)
+        self.assertIsNotNone(workspace.read_calculation(project_id))
+        with self.connect() as conn:
+            conn.execute(
+                """
+                UPDATE schedule_versions
+                SET document = jsonb_set(document, '{project,name}', '"altered under it"')
+                WHERE id = %s
+                """,
+                (stored.version_id,),
+            )
+            conn.commit()
+        with self.assertRaises(IntegrityError):
+            workspace.read_calculation(project_id)
+
+    def test_a_calculation_that_names_the_wrong_hash_is_refused(self):
+        from sto.scheduling.working_schedule import IntegrityError
+
+        workspace, project_id = self._imported()
+        stored = workspace.calculate(project_id)
+        with self.connect() as conn:
+            conn.execute(
+                "UPDATE schedule_calculations SET canonical_hash = %s WHERE id = %s",
+                ("f" * 64, stored.calculation_id),
+            )
+            conn.commit()
+        with self.assertRaises(IntegrityError):
+            workspace.read_calculation(project_id)
 
 if __name__ == "__main__":
     unittest.main()

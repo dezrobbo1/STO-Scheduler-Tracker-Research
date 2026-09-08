@@ -83,6 +83,8 @@ CREATE TABLE activity_results (
   remaining_start TIMESTAMP,
   total_float_seconds BIGINT,
   free_float_seconds BIGINT,
+  start_float_seconds BIGINT,
+  finish_float_seconds BIGINT,
   critical BOOLEAN,
   progress_state TEXT,
   placed_by TEXT,
@@ -104,6 +106,8 @@ CREATE TABLE activity_results (
       AND early_start IS NOT NULL AND early_finish IS NOT NULL
       AND late_start IS NOT NULL AND late_finish IS NOT NULL
       AND total_float_seconds IS NOT NULL AND free_float_seconds IS NOT NULL
+      AND start_float_seconds IS NOT NULL AND finish_float_seconds IS NOT NULL
+      AND total_float_seconds = least(start_float_seconds, finish_float_seconds)
       AND critical IS NOT NULL AND progress_state IS NOT NULL
       AND exclusion_code IS NULL)
     OR
@@ -112,6 +116,7 @@ CREATE TABLE activity_results (
       AND late_start IS NULL AND late_finish IS NULL
       AND remaining_start IS NULL
       AND total_float_seconds IS NULL AND free_float_seconds IS NULL
+      AND start_float_seconds IS NULL AND finish_float_seconds IS NULL
       AND critical IS NULL AND progress_state IS NULL
       AND exclusion_code IS NOT NULL)
   ),
@@ -135,6 +140,8 @@ CREATE TABLE activity_results (
 
 COMMENT ON TABLE activity_results IS
   'One row per activity of one calculation: the answer, or the coded reason there is none.';
+COMMENT ON COLUMN activity_results.start_float_seconds IS
+  'One of the two readings total float is the smaller of. They differ when the early and late spans straddle a calendar gap differently.';
 COMMENT ON COLUMN activity_results.remaining_start IS
   'Where the unfinished part of work under way begins. Set for exactly the in-progress rows.';
 COMMENT ON COLUMN activity_results.placed_by IS

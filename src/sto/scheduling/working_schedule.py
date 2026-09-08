@@ -330,6 +330,31 @@ class Workspace:
                 return None
             rows = repo.get_activity_results(conn, calculation_id=header["id"])
             spans = repo.get_summary_results(conn, calculation_id=header["id"])
+            version = repo.get_version(
+                conn, version_id=header["version_id"], with_document=True
+            )
+        if version is None:
+            raise IntegrityError(
+                f"calculation {header['id']} names version {header['version_id']}, "
+                "which is not in the database"
+            )
+        # The calculation's own fingerprint says nothing about the document it
+        # was computed from -- so a version_id repointed after the insert, or a
+        # stored document altered under it, left the result verifiable and its
+        # input not. The named version is verified here, and it has to be this
+        # project's and the one the header says it hashed.
+        named = _verify(version["project_id"], version)
+        if named.project_id != project_id:
+            raise IntegrityError(
+                f"calculation {header['id']} for project {project_id} names version "
+                f"{named.version_id}, which belongs to project {named.project_id}"
+            )
+        if named.canonical_hash != header["canonical_hash"]:
+            raise IntegrityError(
+                f"calculation {header['id']} says it was computed from "
+                f"{header['canonical_hash']}, but version {named.version_id} holds "
+                f"{named.canonical_hash}"
+            )
 
         result = _rebuild_result(header, rows, spans)
         recomputed = fingerprint_result(result)
@@ -507,6 +532,12 @@ def _rebuild_result(
             ),
             free_float=(
                 None if row["free_float_seconds"] is None else int(row["free_float_seconds"])
+            ),
+            start_float=(
+                None if row["start_float_seconds"] is None else int(row["start_float_seconds"])
+            ),
+            finish_float=(
+                None if row["finish_float_seconds"] is None else int(row["finish_float_seconds"])
             ),
             critical=row["critical"],
             state=row["progress_state"],

@@ -41,6 +41,7 @@ __all__ = [
     "RESULT_PROFILE",
     "ActivityResult",
     "Provenance",
+    "RELEASED",
     "RelationshipResult",
     "ScheduleResult",
     "SummaryResult",
@@ -55,6 +56,10 @@ RESULT_PROFILE = "sto-result-v1"
 SCHEDULED = "scheduled"
 #: A row the plan would not schedule, carrying the code that says why.
 EXCLUDED = "excluded"
+#: An edge the plan kept and the passes did not walk, because progress released
+#: it. Not an exclusion -- the plan scheduled it -- and not an ordinary
+#: scheduled edge either, since it took no part in the late dates or the float.
+RELEASED = "released"
 
 
 @dataclass(frozen=True, slots=True)
@@ -124,6 +129,13 @@ class ActivityResult:
     remaining_start: datetime | None = None
     total_float: int | None = None
     free_float: int | None = None
+    #: The two readings total float is the smaller of. They differ when the
+    #: early and late spans straddle a calendar gap differently, and the
+    #: criticality model keeps them rather than collapsing them -- a stored row
+    #: that kept only the minimum could not say which side controls it, nor
+    #: notice a change confined to the other one.
+    start_float: int | None = None
+    finish_float: int | None = None
     critical: bool | None = None
     state: str | None = None
     #: What put the activity where it is: a predecessor, the project start, a
@@ -235,6 +247,20 @@ def project_result(
     for dropped in plan.excluded:
         if dropped.kind != "activity":
             edges.append(RelationshipResult(dropped.uid, EXCLUDED, dropped.code, dropped.detail))
+    # Edges the *passes* released, which the plan knows nothing about: a
+    # successor already finished, or one under way with the override policy in
+    # force. The backward pass did not walk them and the float did not measure
+    # across them, so a result that recorded only the plan's dispositions
+    # showed a retained edge taking part in dates it took no part in.
+    for released in backward.overridden_relationships:
+        edges.append(
+            RelationshipResult(
+                released,
+                RELEASED,
+                "RELATIONSHIP_RELEASED_BY_PROGRESS",
+                plan.progress_policy.value,
+            )
+        )
 
     # Two things the passes report and the plan does not know about. Both
     # describe a placement that rests on something other than measured file
@@ -278,6 +304,8 @@ def project_result(
                 ),
                 total_float=float_row.total_float,
                 free_float=float_row.free_float,
+                start_float=float_row.start_float,
+                finish_float=float_row.finish_float,
                 critical=float_row.critical,
                 state=placed.state.value,
                 placed_by=placed.source,
@@ -345,6 +373,8 @@ def fingerprint_result(result: ScheduleResult) -> str:
                     moment(row.remaining_start),
                     row.total_float,
                     row.free_float,
+                    row.start_float,
+                    row.finish_float,
                     row.critical,
                     row.state,
                     row.placed_by,
