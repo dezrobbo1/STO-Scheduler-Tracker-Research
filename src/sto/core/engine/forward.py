@@ -80,6 +80,7 @@ from sto.core.hashing import canonical_sha256
 from sto.core.model.enums import ConstraintType, ProgressPolicy
 
 from .network import (
+    lag_calendar_for,
     DEFERRED_CONSTRAINTS,
     ForwardPassError,
     Network,
@@ -301,11 +302,7 @@ def _bounds(
             if relationship.anchors_predecessor_finish
             else predecessor.early_start
         )
-        calendar = (
-            relationship.lag_calendar
-            if relationship.lag_calendar is not None
-            else activity.calendar
-        )
+        calendar = lag_calendar_for(relationship, activity.calendar)
         shifted = shift_lag(calendar, anchor, relationship.lag)
         if shifted is None:
             raise ForwardPassError(
@@ -418,8 +415,11 @@ def forward_pass(
         # successor started at ten with one unit left, status date fifty and a
         # thirty-unit lag: both rows fit, and the pass raised
         # ``SCHEDULE_LAG_UNREACHABLE``.
-        holds = relationship_binds(progress_policy, state, network.status_time)
-        binding = incoming[uid] if holds else ()
+        binding = (
+            incoming[uid]
+            if relationship_binds(progress_policy, state, network.status_time)
+            else ()
+        )
         unbounded_floor = base if base is not None else network.project_start
         start_bound, finish_bound, start_driver, finish_driver = _bounds(
             activity, binding, placed, base, unbounded_floor
