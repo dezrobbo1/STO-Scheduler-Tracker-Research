@@ -126,7 +126,7 @@ FROM_ACTUALS = "actuals"
 #: Version two releases the edges the progress policy releases; version three
 #: names them in the hash, so releasing an edge that moved no late date -- one
 #: already redundant -- still changes the answer's digest.
-BACKWARD_PASS_PROFILE = "sto-backward-pass-v3"
+BACKWARD_PASS_PROFILE = "sto-backward-pass-v4"
 
 
 @dataclass(frozen=True, slots=True)
@@ -163,6 +163,12 @@ class BackwardPass:
     overridden_relationships: tuple[UUID, ...] = ()
     #: :meth:`Network.fingerprint` of the network this was computed over.
     network_fingerprint: str = ""
+    #: The progress policy this pass ran under -- the forward pass's own, which
+    #: :func:`backward_pass` refuses to differ from. Carried here so the float
+    #: can refuse a backward pass from one policy beside a forward pass from
+    #: another: the two can share a network fingerprint and even every late
+    #: date, and still disagree about which edges are released.
+    progress_policy: ProgressPolicy = ProgressPolicy.RETAINED_LOGIC
 
     def by_uid(self) -> dict[UUID, ActivityLateTimes]:
         return {row.uid: row for row in self.times}
@@ -385,9 +391,10 @@ def backward_pass(
         order=tuple(reversed(forward.order)),
         project_late_finish=late_finish,
         deferred_constraints=tuple(deferred),
-        fingerprint=_fingerprint(times, late_finish, overridden),
+        fingerprint=_fingerprint(times, late_finish, overridden, progress_policy),
         overridden_relationships=overridden,
         network_fingerprint=network_fingerprint,
+        progress_policy=progress_policy,
     )
 
 
@@ -503,18 +510,22 @@ def _fingerprint(
     times: tuple[ActivityLateTimes, ...],
     project_late_finish: int,
     overridden: tuple[UUID, ...],
+    progress_policy: ProgressPolicy,
 ) -> str:
     """A hash of the answer, so two runs are compared without comparing objects.
 
     The released edges are part of the answer: under ``progress_override`` a
     redundant edge can be released without moving a single late date, and a
     digest over the dates alone would neither attest that nor notice when the
-    pass stopped reporting it.
+    pass stopped reporting it. The policy is part of it for the same reason:
+    on an un-progressed network the two policies release nothing and place
+    every date alike, and a stored answer should still say which one it is.
     """
 
     return canonical_sha256(
         {
             "profile": BACKWARD_PASS_PROFILE,
+            "progress_policy": progress_policy.value,
             "project_late_finish": project_late_finish,
             "overridden_relationships": sorted(str(uid) for uid in overridden),
             "times": sorted(

@@ -61,20 +61,31 @@ agree on what Project does with it.
 
 ## Evidence
 
-Every count below is taken through `build_plan` and the two passes and pinned
-in `tests/test_forward_pass_boiler.py` and `tests/test_backward_pass_boiler.py`.
-"Exact" means start and finish both equal to the dates the file stores.
+Every count below is taken through `build_plan` and the two passes, over the
+horizon the tests use (sixty days before the project start to a year after),
+and pinned in `tests/test_forward_pass_boiler.py` and
+`tests/test_backward_pass_boiler.py`. "Exact" means start and finish both
+equal to the dates the file stores. "Before" is `main` at `0ad4bd7` — the
+forward-pass slice's engine with resource calendars off, its default — under
+that same horizon; the KILN and CALCINER "before" figures first recorded here
+(36 and 260) came from an intermediate configuration during the diagnosis that
+was not preserved, and were corrected on 2026-09-08 after the comprehensive
+review re-measured `main` at 29 and 130.
 
-| File | Activities | Exact before | Exact after | First mismatches | Inherited |
-|---|---|---|---|---|---|
-| BOILER, un-progressed | 451 | 1 | 384 | 8 | 59 |
-| KILN | 417 | 36 | 247 | 6 | 164 |
-| CALCINER | 1,763 | 260 | 1,645 | 6 | 112 |
+| File | Activities | Exact before | Exact after | Late dates | Total float | Free float | First mismatches | After a mismatch |
+|---|---|---|---|---|---|---|---|---|
+| BOILER, un-progressed | 451 | 1 | 384 | 409 | 380 | 435 | 8 | 59 |
+| KILN | 417 | 29 | 247 | 0 | 4 | 304 | 6 | 164 |
+| CALCINER | 1,763 | 130 | 1,645 | 1,572 | 1,488 | 1,689 | 6 | 112 |
 
 A *first mismatch* is a row that differs while every one of its predecessors
-agrees; every other difference is inherited from one. So the three files
-between them have twenty rows the rules above do not explain, and the rest of
-the difference is those twenty rows' descendants.
+agrees; a row *after a mismatch* differs and has at least one predecessor that
+does too. The first is a rule the engine does not have. The second is triage,
+not a causal claim: nothing has replayed those rows with their predecessors
+corrected, so "twenty rows the rules above do not explain" is the number of
+places to look next, not a proof that only twenty local defects remain. The
+multi-resource union alone stands under 11 BOILER, 133 KILN and 956 CALCINER
+rows, far more than twenty, and is an assumption on every one of them.
 
 **The calendar rule.** With it alone, BOILER went from 1 to 278 exact. The
 half-hour cluster was the project calendar's 07:30 against the resources'

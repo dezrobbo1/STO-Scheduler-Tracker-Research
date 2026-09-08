@@ -377,6 +377,11 @@ class Network:
                 )
             if not activity.calendar.intervals:
                 raise ForwardPassError("SCHEDULE_CALENDAR_EMPTY", activity.uid)
+            if not activity.float_calendar.intervals:
+                # Every difference measured on no working time is zero, which
+                # would read as zero slack and a critical row rather than as
+                # a float that cannot be measured.
+                raise ForwardPassError("SCHEDULE_MEASURE_CALENDAR_EMPTY", activity.uid)
             if (
                 activity.constraint_type in _DATED_CONSTRAINTS
                 and activity.constraint_coordinate is None

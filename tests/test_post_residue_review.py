@@ -11,19 +11,31 @@ free-float edge read differently from how the forward pass read it; two about
 a labelled assumption that was not labelled, or was labelled per edge instead
 of per row; one about a valid spelling of a source flag; and one about the
 driver replay flooring a lead-placed task at the project start.
+
+The second pass of the same reviewer, on the commit that answered the first,
+raised five more; the 2026-09-07 comprehensive review reproduced every one.
+They are the last five classes here: an explicit canonical lag policy that the
+Microsoft rule reinterpreted; a measuring calendar with no working time that
+measured every float as zero; a backward pass that did not carry its policy,
+so the float could combine two passes run under different ones; an assumption
+recorded for a row that was then excluded; and an edge below the calendar
+floor reported as the driver of a task it did not move.
 """
 
 from __future__ import annotations
 
 import unittest
+from dataclasses import replace
 from datetime import datetime, timedelta
 from uuid import NAMESPACE_URL, UUID, uuid5
 
-from calculation_fixture import _activity, _document, _relationship
+from calculation_fixture import _activity, _calendar, _document, _relationship
 
 from sto.core.calendar.arithmetic import CompiledIntervals
 from sto.core.engine import (
     BackwardPassError,
+    CriticalityError,
+    ForwardPassError,
     Network,
     PlannedActivity,
     PlannedRelationship,
@@ -32,7 +44,7 @@ from sto.core.engine import (
     float_analysis,
     forward_pass,
 )
-from sto.core.model.enums import ProgressPolicy, RelationshipType
+from sto.core.model.enums import LagCalendar, ProgressPolicy, RelationshipType
 from sto.core.model.migrate.sto_v011 import migrate
 
 CONTINUOUS = CompiledIntervals.of(((0, 400),))
@@ -257,6 +269,242 @@ class IgnoreResourceCalendarSpellingsTests(unittest.TestCase):
     def test_neither_spelling_of_clear_is(self):
         self.assertIsNone(self._flag("0"))
         self.assertIsNone(self._flag("false"))
+
+
+def _resource(number, calendar):
+    return {
+        "id": f"resource:{number}",
+        "source_order": number,
+        "external_references": [],
+        "name": f"Sensitive resource {number}",
+        "calendar_ref": f"calendar:{calendar}",
+    }
+
+
+def _assignment(number, task, resource):
+    return {
+        "id": f"assignment:{number}",
+        "source_order": number,
+        "task_ref": f"task:{task}",
+        "resource_ref": f"resource:{resource}",
+        "units_source": 1,
+        "work_source": {"raw": "PT1H", "seconds": 3600, "parse_status": "parsed"},
+        "actual_work_source": {"raw": "PT0S", "seconds": 0, "parse_status": "parsed"},
+        "remaining_work_source": {"raw": "PT1H", "seconds": 3600, "parse_status": "parsed"},
+        "percent_work_complete_source": 0,
+        "work_contour_source": 0,
+        "extension_refs": [],
+    }
+
+
+def _hour_task(number, start_hour, **fields):
+    return _activity(
+        number,
+        start=f"2026-01-05T{start_hour:02d}:00:00",
+        finish=f"2026-01-05T{start_hour + 1:02d}:00:00",
+        duration_seconds=3600,
+        **fields,
+    )
+
+
+class ExplicitLagPolicyIsPreservedTests(unittest.TestCase):
+    """Second pass, finding one: the Microsoft rule applies to the inherited policy.
+
+    The project calendar runs 08:00-16:00 and the successor's resource 10:00-18:00.
+    The predecessor finishes at 09:00 with an hour of lag. Consumed on the project
+    calendar -- Microsoft Project's rule for a successor with no task calendar --
+    the lag ends at 10:00 and the successor starts then. A canonical schedule
+    that *explicitly* says the lag runs on the successor's calendar means the
+    calendar the successor is scheduled on, which opens at 10:00, so the lag
+    ends at 11:00. The plan applied the Microsoft rule to both.
+    """
+
+    def _schedule(self):
+        document = _document(
+            [_hour_task(1, 8), _hour_task(2, 10)],
+            relationships=[_relationship(1, 1, 2, lag=600)],
+            calendars=[
+                _calendar(1, [("08:00:00", "16:00:00")]),
+                _calendar(2, [("10:00:00", "18:00:00")]),
+            ],
+            resources=[_resource(1, 2)],
+            assignments=[_assignment(1, 2, 1)],
+        )
+        schedule, _, _ = migrate(document)
+        return schedule
+
+    def _successor_start(self, schedule):
+        start = datetime(2026, 1, 5)
+        plan = build_plan(schedule, (start - timedelta(days=7), start + timedelta(days=60)))
+        forward = forward_pass(plan.network)
+        successor = next(a.uid for a in schedule.activities if a.code == "2")
+        return plan, plan.to_datetime(forward.by_uid()[successor].early_start)
+
+    def test_the_inherited_policy_takes_the_project_calendar_and_is_labelled(self):
+        schedule = self._schedule()
+        self.assertIs(schedule.relationships[0].lag_calendar, LagCalendar.INHERIT_PROJECT_POLICY)
+        plan, start = self._successor_start(schedule)
+        self.assertEqual(start, datetime(2026, 1, 5, 10, 0))
+        self.assertEqual(plan.assumed_by_code().get("RELATIONSHIP_LAG_ON_PROJECT_CALENDAR"), 1)
+
+    def test_an_explicit_successor_policy_takes_the_successors_scheduling_calendar(self):
+        schedule = self._schedule()
+        explicit = replace(
+            schedule,
+            relationships=(replace(schedule.relationships[0], lag_calendar=LagCalendar.SUCCESSOR),),
+        )
+        plan, start = self._successor_start(explicit)
+        self.assertEqual(start, datetime(2026, 1, 5, 11, 0))
+        self.assertNotIn("RELATIONSHIP_LAG_ON_PROJECT_CALENDAR", plan.assumed_by_code())
+
+
+class EmptyMeasuringCalendarIsRefusedTests(unittest.TestCase):
+    """Second pass, finding four: slack cannot be measured on no working time."""
+
+    def test_the_plan_excludes_a_row_whose_measuring_calendar_is_empty(self):
+        # The project calendar has no working time at all; the task's resource
+        # does. The task was scheduled on the resource's calendar and its float
+        # measured on the project's, where every difference is zero working
+        # time -- zero total float, zero free float, critical.
+        empty = _calendar(1, [("08:00:00", "16:00:00")])
+        for day in empty["week_days"]:
+            day["working"] = False
+            day["working_times"] = []
+        schedule, plan = _plan(
+            _document(
+                [_hour_task(1, 10)],
+                calendars=[empty, _calendar(2, [("10:00:00", "18:00:00")])],
+                resources=[_resource(1, 2)],
+                assignments=[_assignment(1, 1, 1)],
+            )
+        )
+        self.assertEqual(plan.network.activities, ())
+        self.assertEqual(plan.excluded_by_code(), {"ACTIVITY_MEASURE_CALENDAR_EMPTY": 1})
+        self.assertEqual(plan.excluded[0].uid, schedule.activities[0].uid)
+
+    def test_a_directly_built_network_refuses_it_too(self):
+        net = network(activity("A", 10, measure_calendar=CompiledIntervals.of(())))
+        with self.assertRaises(ForwardPassError) as raised:
+            net.validate()
+        self.assertEqual(raised.exception.code, "SCHEDULE_MEASURE_CALENDAR_EMPTY")
+
+
+class TheBackwardPassCarriesItsPolicyTests(unittest.TestCase):
+    """Second pass, finding three: the float refuses passes under different policies.
+
+    The network from ``OverrideReachesTheBackwardPassTests``: a two-hundred-unit
+    predecessor of work under way from the status date. Under override the edge
+    is released; under retained logic it binds. A backward pass computed from
+    the retained-logic forward pass, handed to the float beside the override
+    forward pass, walked the released edge and reported minus one hundred of
+    free float on the predecessor. Both passes were over one network, so the
+    fingerprint check let it through.
+    """
+
+    def _network(self):
+        return network(
+            activity("A", 200),
+            activity("B", 40, actual_start=50, remaining_duration=10),
+            relationships=(link("R1", "A", "B"),),
+            status_time=100,
+        )
+
+    def test_the_policy_travels_on_the_backward_pass_and_into_its_fingerprint(self):
+        net = self._network()
+        retained = backward_pass(net, forward_pass(net, progress_policy=ProgressPolicy.RETAINED_LOGIC))
+        override = backward_pass(net, forward_pass(net, progress_policy=ProgressPolicy.PROGRESS_OVERRIDE))
+        self.assertIs(retained.progress_policy, ProgressPolicy.RETAINED_LOGIC)
+        self.assertIs(override.progress_policy, ProgressPolicy.PROGRESS_OVERRIDE)
+        self.assertNotEqual(retained.fingerprint, override.fingerprint)
+
+    def test_mixed_policy_passes_are_refused_by_the_float(self):
+        net = self._network()
+        retained_forward = forward_pass(net, progress_policy=ProgressPolicy.RETAINED_LOGIC)
+        retained_backward = backward_pass(net, retained_forward)
+        override_forward = forward_pass(net, progress_policy=ProgressPolicy.PROGRESS_OVERRIDE)
+        with self.assertRaises(CriticalityError) as raised:
+            float_analysis(net, override_forward, retained_backward)
+        self.assertEqual(raised.exception.code, "SCHEDULE_POLICY_MISMATCH")
+        # The consistent pair still answers, and A holds nothing under override.
+        consistent = float_analysis(net, override_forward, backward_pass(net, override_forward))
+        self.assertEqual(consistent.by_uid()[uid("A")].free_float, 0)
+
+
+class AssumptionsDescribeScheduledRowsOnlyTests(unittest.TestCase):
+    """Second pass, finding two: an excluded row rests on no assumption."""
+
+    def test_a_multi_resource_row_excluded_later_is_not_assumed(self):
+        # Two resources on two calendars would put the row on their union and
+        # label it; a start-no-earlier-than constraint with no date then
+        # excludes it. The label was appended before the exclusion and
+        # survived it, so ``assumed_by_code`` counted a row that was never
+        # scheduled.
+        row, extensions = _hour_task(1, 10)
+        row["constraint_type_source"] = 4
+        schedule, plan = _plan(
+            _document(
+                [(row, extensions)],
+                calendars=[
+                    _calendar(1, [("08:00:00", "16:00:00")]),
+                    _calendar(2, [("10:00:00", "18:00:00")]),
+                ],
+                resources=[_resource(1, 1), _resource(2, 2)],
+                assignments=[_assignment(1, 1, 1), _assignment(2, 1, 2)],
+            )
+        )
+        self.assertEqual(plan.excluded_by_code(), {"ACTIVITY_CONSTRAINT_INCOMPLETE": 1})
+        self.assertEqual(plan.assumed, ())
+
+    def test_a_multi_resource_row_that_is_scheduled_is_still_assumed(self):
+        schedule, plan = _plan(
+            _document(
+                [_hour_task(1, 10)],
+                calendars=[
+                    _calendar(1, [("08:00:00", "16:00:00")]),
+                    _calendar(2, [("10:00:00", "18:00:00")]),
+                ],
+                resources=[_resource(1, 1), _resource(2, 2)],
+                assignments=[_assignment(1, 1, 1), _assignment(2, 1, 2)],
+            )
+        )
+        self.assertEqual(plan.assumed_by_code(), {"ACTIVITY_RESOURCE_CALENDARS_UNITED": 1})
+        self.assertEqual(plan.assumed[0].uid, plan.network.activities[0].uid)
+
+
+class AnEdgeBelowTheFloorIsNotADriverTests(unittest.TestCase):
+    """Second pass, finding five: a bound the calendar overrides drove nothing."""
+
+    def test_a_lead_that_reaches_below_the_calendar_floor_is_cleared(self):
+        # A sits at the project start, 50-60. C's calendar opens at 100. The
+        # lead of 50 bounds C's start at 10, which is below C's floor, so C is
+        # placed at 100-110 exactly as it would be with no edge at all. The
+        # edge was still reported as its driver.
+        opens_late = CompiledIntervals.of(((100, 400),))
+        net = network(
+            activity("A", 10),
+            activity("C", 10, opens_late),
+            relationships=(
+                link("R1", "A", "C", RelationshipType.FS, lag=-50, lag_calendar=CONTINUOUS),
+            ),
+            project_start=50,
+        )
+        row = forward_pass(net).by_uid()[uid("C")]
+        self.assertEqual((row.early_start, row.early_finish), (100, 110))
+        self.assertIsNone(row.driving_relationship_uid)
+
+    def test_a_lead_that_stays_above_the_floor_still_drives(self):
+        opens_late = CompiledIntervals.of(((100, 400),))
+        net = network(
+            activity("A", 10),
+            activity("C", 10, opens_late),
+            relationships=(
+                link("R1", "A", "C", RelationshipType.FS, lag=50, lag_calendar=CONTINUOUS),
+            ),
+            project_start=50,
+        )
+        row = forward_pass(net).by_uid()[uid("C")]
+        self.assertEqual((row.early_start, row.early_finish), (110, 120))
+        self.assertEqual(row.driving_relationship_uid, uid("R1"))
 
 
 if __name__ == "__main__":

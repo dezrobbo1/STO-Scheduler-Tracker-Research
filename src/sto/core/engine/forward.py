@@ -315,11 +315,16 @@ def _bounds(
     # With predecessors, one side may have gone unbounded -- every edge bounded
     # the other end. That side is then bounded by the calendar alone, which is
     # the same floor the backward pass uses in the other direction.
+    # A bound below the floor is one the calendar overrides: the activity is
+    # placed at the floor whether or not the edge exists, so the edge did not
+    # drive it. Clearing the driver here is what keeps the replay in
+    # :func:`_driver` honest -- a lead that reaches back past the first
+    # working moment of the successor's calendar is a bound with no effect.
     floor = _calendar_floor(activity)
-    if start_bound is None:
-        start_bound = floor
-    if finish_bound is None:
-        finish_bound = floor
+    if start_bound is None or start_bound < floor:
+        start_bound, start_driver = floor, None
+    if finish_bound is None or finish_bound < floor:
+        finish_bound, finish_driver = floor, None
     return start_bound, finish_bound, start_driver, finish_driver
 
 

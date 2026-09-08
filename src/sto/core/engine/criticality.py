@@ -262,6 +262,16 @@ def float_analysis(
             None,
             "a pass was computed over a different network",
         )
+    if forward.progress_policy is not backward.progress_policy:
+        # One network, two policies: the passes agree on every coordinate of
+        # the network and disagree on which edges hold, and a free float read
+        # across a released edge is a number about no schedule.
+        raise CriticalityError(
+            "SCHEDULE_POLICY_MISMATCH",
+            None,
+            f"the forward pass ran under {forward.progress_policy.value}, "
+            f"the backward pass under {backward.progress_policy.value}",
+        )
     early = forward.by_uid()
     late = backward.by_uid()
 

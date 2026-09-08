@@ -106,6 +106,15 @@ mismatches a list rather than a mystery.
 Twenty first mismatches across three files, each in a named class. P1-G2 is
 still open — eight BOILER rows are unexplained — but it is now a list of rows.
 
+*Corrected 2026-09-08.* The KILN and CALCINER "before" figures above, 36 and
+260, do not describe `main` at `0ad4bd7` under the horizon the tests use: the
+comprehensive review re-measured it at 29 and 130, and that measurement was
+reproduced here. They came from an intermediate configuration during this
+diagnosis that was not preserved. ADR-010 carries the corrected table, with
+the late-date and float counts for all three files now pinned rather than
+recorded. And "inherited" above is triage — a row with a mismatching
+predecessor — not a demonstration that correcting the predecessor closes it.
+
 ## Rejected
 
 Backward scheduling (`ScheduleFromStart` is set on every file). A stale

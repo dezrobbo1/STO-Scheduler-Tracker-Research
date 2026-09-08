@@ -55,6 +55,7 @@ KNOWN_CODES = frozenset(
         "ACTIVITY_CALENDAR_UNRESOLVED",
         "ACTIVITY_MULTIPLE_RESOURCE_CALENDARS",
         "ACTIVITY_CALENDAR_EMPTY",
+        "ACTIVITY_MEASURE_CALENDAR_EMPTY",
         "ACTIVITY_CONSTRAINT_INCOMPLETE",
         "ACTIVITY_SECONDARY_CONSTRAINT_NOT_APPLIED",
         "RELATIONSHIP_ENDPOINT_NOT_SCHEDULED",
@@ -187,9 +188,12 @@ def _agreement(path: Path) -> dict:
     """How the pass agrees with the dates the file stores, and where it stops.
 
     A *first mismatch* is a row that differs while every predecessor agrees;
-    everything else that differs is inherited from one. The two are counted
-    apart because they are different claims: the first is a rule the engine
-    does not have, the second is that rule's shadow.
+    everything else that differs has a mismatching predecessor. The two are
+    counted apart because they are different claims: the first is a rule the
+    engine does not have, the second is a row that *may* be that rule's shadow.
+    The second count is triage, not causation -- nothing here replays a row
+    with its predecessors corrected to show the difference would close -- which
+    is why it is reported under the neutral key below and not as "explained".
     """
 
     schedule, _, _ = migrate(import_mspdi(str(path)))

@@ -416,6 +416,47 @@ class NotClaimedTests(unittest.TestCase):
         self.assertEqual(total, 380)
         self.assertEqual(free, 435)
 
+    def test_the_other_two_files_are_pinned_at_what_they_are(self):
+        """KILN and CALCINER, late dates and floats, so ADR-010's table is a pin.
+
+        KILN's late dates agree on no row because its project finish is set
+        by a tail the forward pass still places wrong; CALCINER's agree on
+        most. Recorded here rather than only in the ADR so that the numbers
+        cannot drift from the code that produces them.
+        """
+
+        expected = {
+            "kiln": (417, 0, 4, 304),
+            "calciner": (1763, 1572, 1488, 1689),
+        }
+        for name, (compared_expected, late_expected, total_expected, free_expected) in (
+            expected.items()
+        ):
+            with self.subTest(name):
+                loaded = _Loaded(FIXTURES[name])
+                late = loaded.backward.by_uid()
+                ours = loaded.floats.by_uid()
+                compared = late_exact = total = free = 0
+                for uid, row in loaded.observations.items():
+                    if None in (
+                        row.late_start,
+                        row.late_finish,
+                        row.total_float_seconds,
+                        row.free_float_seconds,
+                    ):
+                        continue
+                    compared += 1
+                    late_exact += (
+                        loaded.plan.to_datetime(late[uid].late_start) == row.late_start
+                        and loaded.plan.to_datetime(late[uid].late_finish) == row.late_finish
+                    )
+                    total += ours[uid].total_float == row.total_float_seconds
+                    free += ours[uid].free_float == row.free_float_seconds
+                self.assertEqual(
+                    (compared, late_exact, total, free),
+                    (compared_expected, late_expected, total_expected, free_expected),
+                )
+
 
 if __name__ == "__main__":
     unittest.main()

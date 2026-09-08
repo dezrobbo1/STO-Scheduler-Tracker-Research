@@ -46,7 +46,11 @@ could explain, that rule explains every one; the successor's effective
 calendar, which is what this plan assumed before, explains a third of KILN's.
 Both project calendars in the estate are twenty-four hours, so a lag on the
 project calendar and an elapsed lag cannot be told apart here, and the choice
-between them is labelled rather than claimed.
+between them is labelled rather than claimed. The rule is Microsoft Project's
+and is applied to relationships that *inherit* the project's lag policy, which
+is every relationship a Microsoft file carries; a canonical relationship that
+names the successor's calendar explicitly gets the calendar the successor is
+scheduled on, as the enum says.
 
 The forward pass works in whatever unit the calendars were compiled in --
 integer seconds from a shared epoch, here -- so :meth:`Plan.to_datetime` is how
@@ -228,7 +232,7 @@ def build_plan(
 
     def effective_calendar(
         activity: Activity,
-    ) -> tuple[CompiledIntervals | None, CompiledIntervals | None, str, str]:
+    ) -> tuple[CompiledIntervals | None, CompiledIntervals | None, str, str, Assumed | None]:
         """The calendar the activity is scheduled on, by Project's rule, and the
         one its float is measured on.
 
@@ -236,8 +240,10 @@ def build_plan(
         and detail saying why: the activity named a calendar the file does not
         carry, the activity named none and the project has no default to
         inherit, or a resource named a calendar that is not there. A union over
-        several resource calendars is returned with the assumption recorded on
-        the plan rather than refused.
+        several resource calendars is returned with the assumption as the last
+        value rather than refused -- *returned*, not recorded, because the
+        activity can still be excluded further down, and an assumption is a
+        statement about a row the plan scheduled.
 
         The measuring calendar is the task's own or the project's -- what
         Project consumes a lag on and measures slack in -- and is ``None`` when
@@ -260,20 +266,27 @@ def build_plan(
         elif project.default_calendar_uid is not None:
             compiled = calendars.get(project.default_calendar_uid)
             if compiled is None:
-                return None, None, unresolved, "the project default calendar is not in the file"
+                return (
+                    None,
+                    None,
+                    unresolved,
+                    "the project default calendar is not in the file",
+                    None,
+                )
         else:
             return (
                 None,
                 None,
                 unresolved,
                 "the activity names no calendar and the project has no default",
+                None,
             )
         fallback = own if own is not None else compiled.intervals
         measure = CompiledIntervals.of(fallback.intervals)
 
         ignore = activity.source_fields.get("ignore_resource_calendar_source") == "1"
         if not resource_calendars_apply or ignore:
-            return measure, None, "", ""
+            return measure, None, "", "", None
 
         resource_calendars: list[UUID] = []
         for resource_uid in assignments_by_activity.get(activity.uid, []):
@@ -283,7 +296,7 @@ def build_plan(
             if resource.calendar_uid not in resource_calendars:
                 resource_calendars.append(resource.calendar_uid)
         if not resource_calendars:
-            return measure, None, "", ""
+            return measure, None, "", "", None
 
         resolved: list[CompiledIntervals] = []
         for calendar_uid in resource_calendars:
@@ -294,6 +307,7 @@ def build_plan(
                     None,
                     unresolved,
                     f"resource calendar {calendar_uid} is not in the file",
+                    None,
                 )
             resolved.append(resource_calendar.intervals)
 
@@ -302,12 +316,13 @@ def build_plan(
                 # A task with no calendar of its own is scheduled on its
                 # resource's, not the project's -- the rule that closed the
                 # half-hour cluster on BOILER.
-                return CompiledIntervals.of(resolved[0].intervals), measure, "", ""
+                return CompiledIntervals.of(resolved[0].intervals), measure, "", "", None
             return (
                 CompiledIntervals.of(intersect_intervals(own.intervals, resolved[0].intervals)),
                 measure,
                 "",
                 "",
+                None,
             )
 
         # Several resource calendars: Project schedules each assignment on its
@@ -320,15 +335,13 @@ def build_plan(
         united = CompiledIntervals.of(normalise(merged))
         if own is not None:
             united = CompiledIntervals.of(intersect_intervals(own.intervals, united.intervals))
-        assumed.append(
-            Assumed(
-                activity.uid,
-                "activity",
-                "ACTIVITY_RESOURCE_CALENDARS_UNITED",
-                f"{len(resolved)} distinct resource calendars",
-            )
+        pending = Assumed(
+            activity.uid,
+            "activity",
+            "ACTIVITY_RESOURCE_CALENDARS_UNITED",
+            f"{len(resolved)} distinct resource calendars",
         )
-        return united, measure, "", ""
+        return united, measure, "", "", pending
 
     activities: list[PlannedActivity] = []
     activities_by_uid = {activity.uid: activity for activity in schedule.activities}
@@ -364,12 +377,19 @@ def build_plan(
             )
             continue
 
-        calendar, measure, code, detail = effective_calendar(activity)
+        calendar, measure, code, detail, pending_assumption = effective_calendar(activity)
         if calendar is None:
             excluded.append(Excluded(activity.uid, "activity", code, detail))
             continue
         if not calendar.intervals:
             excluded.append(Excluded(activity.uid, "activity", "ACTIVITY_CALENDAR_EMPTY"))
+            continue
+        if measure is not None and not measure.intervals:
+            # The work has somewhere to go -- a resource calendar -- but the
+            # calendar its slack is measured on has no working time, so every
+            # float would come out as zero and the row as critical. That is
+            # not a measurement; the row is excluded with its own code.
+            excluded.append(Excluded(activity.uid, "activity", "ACTIVITY_MEASURE_CALENDAR_EMPTY"))
             continue
 
         constraint_type = ConstraintType.ASAP
@@ -419,6 +439,8 @@ def build_plan(
             )
         )
         scheduled.add(activity.uid)
+        if pending_assumption is not None:
+            assumed.append(pending_assumption)
 
     activity_calendars = {row.uid: row.calendar for row in activities}
 
@@ -475,7 +497,14 @@ def build_plan(
         lag = relationship.lag
         lag_seconds = 0 if lag is None else lag.seconds
         policy = relationship.lag_calendar
-        if policy is LagCalendar.INHERIT_PROJECT_POLICY:
+        # The Microsoft rule -- task calendar, else project calendar, never a
+        # resource's -- was measured on files whose relationships all inherit
+        # the project's policy, and it is applied to exactly those. A canonical
+        # relationship that names the successor's calendar itself means the
+        # calendar the successor is scheduled on, which is what the enum says
+        # and what a Primavera file would mean by it.
+        inherited = policy is LagCalendar.INHERIT_PROJECT_POLICY
+        if inherited:
             policy = project.lag_calendar_policy
         if lag is not None and lag.elapsed:
             policy = LagCalendar.ELAPSED_24H
@@ -487,6 +516,8 @@ def build_plan(
             lag_calendar = None
         elif policy is LagCalendar.ELAPSED_24H:
             lag_calendar = continuous
+        elif policy is LagCalendar.SUCCESSOR and not inherited:
+            lag_calendar = activity_calendars[relationship.successor_uid]
         elif policy is LagCalendar.SUCCESSOR:
             lag_calendar, on_project_calendar = lag_calendar_of(relationship.successor_uid)
             if lag_calendar is None:
@@ -551,6 +582,15 @@ def build_plan(
                 lag_calendar=lag_calendar,
             )
         )
+
+    # An assumption is a statement about a row the plan scheduled. One about
+    # an excluded row would count in ``assumed_by_code`` against a calculation
+    # it took no part in, so the plan refuses to carry it rather than report it.
+    for row in assumed:
+        if row.kind == "activity" and row.uid not in scheduled:
+            raise ValueError(
+                f"assumption {row.code} names activity {row.uid}, which the plan did not schedule"
+            )
 
     project_start = to_seconds(project.start) if project.start is not None else window[0]
     status_time: int | None = None
