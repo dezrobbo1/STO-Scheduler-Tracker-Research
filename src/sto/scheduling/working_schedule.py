@@ -79,6 +79,14 @@ class UnknownProject(LookupError):
     pass
 
 
+class NoSchedule(LookupError):
+    """The project exists and has had no import, so there is nothing to compute.
+
+    Distinct from :class:`UnknownProject` because a caller told "no such
+    project" about one it can see in the list is told something false.
+    """
+
+
 @dataclass(frozen=True, slots=True)
 class WorkingSchedule:
     project_id: uuid.UUID
@@ -119,6 +127,10 @@ class StoredCalculation:
     calculation_id: uuid.UUID
     computed_at: datetime
     result: ScheduleResult
+    #: The document the calculation names, verified on the way out. Anything
+    #: reading source values beside these dates must read them from *this*,
+    #: not from whatever the project's head happens to be now.
+    schedule: Schedule | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -268,7 +280,7 @@ class Workspace:
 
         working = self.load(project_id, refresh=True)
         if working is None:
-            raise UnknownProject(str(project_id))
+            raise NoSchedule(str(project_id))
         schedule = working.schedule
         start = schedule.project.start
         if start is None:
@@ -425,6 +437,7 @@ class Workspace:
             calculation_id=header["id"],
             computed_at=header["computed_at"],
             result=replace(result, fingerprint=recomputed),
+            schedule=named.schedule,
         )
 
     def latest_calculation(self, project_id: uuid.UUID) -> dict[str, Any] | None:
@@ -440,16 +453,20 @@ class Workspace:
         drift from. They are read off the schedule the calculation names.
         """
 
-        working = self.load(project_id)
-        if working is None:
-            raise UnknownProject(str(project_id))
         stored = self.read_calculation(project_id)
         if stored is None:
             return None
 
         result = stored.result
         provenance = result.provenance
-        schedule = working.schedule
+        # The calculation's own document, not the project's current head. The
+        # head can move between the two reads -- a concurrent import is enough
+        # -- and looking one version's row identifiers up in another version's
+        # schedule puts stale names and stale imported dates beside a
+        # fingerprint-verified result, which is a false comparison, not a
+        # stale one.
+        schedule = stored.schedule
+        assert schedule is not None
         activities = {activity.uid: activity for activity in schedule.activities}
         nodes = {node.uid: node for node in schedule.wbs_nodes}
 
@@ -460,7 +477,14 @@ class Workspace:
             source_start = None if observed is None else observed.start
             source_finish = None if observed is None else observed.finish
             agrees = None
-            if row.early_start is not None and source_start is not None:
+            if (
+                row.early_start is not None
+                and source_start is not None
+                and source_finish is not None
+            ):
+                # Both source dates, or no verdict. Comparing a computed finish
+                # with an absent one made the row say the engine disagrees with
+                # the file about a value the file never gave.
                 agrees = row.early_start == source_start and row.early_finish == source_finish
             activity_rows.append(
                 {

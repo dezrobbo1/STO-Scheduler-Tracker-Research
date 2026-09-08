@@ -15,6 +15,7 @@ than a guess.
 from __future__ import annotations
 
 from datetime import datetime, time
+from math import isfinite
 from typing import Any
 from uuid import UUID
 
@@ -309,11 +310,24 @@ def _unsupported_fields(
 
 
 def _permille(value: Any) -> int:
-    """Percentages arrive as whole percent; per-mille keeps them integral."""
+    """Percentages arrive as whole percent; per-mille keeps them integral.
+
+    A value the parser accepted as a number can still be one that cannot be
+    converted -- ``NaN`` is a float and rounds to nothing, an empty or
+    malformed spelling raises. Both become coded refusals, because a bare
+    exception out of the migration escapes the failed-import path: no batch
+    recorded, and a server fault for a file the importer accepted.
+    """
 
     if value is None:
         return 0
-    return int(round(float(value) * 10))
+    try:
+        number = float(value)
+    except (TypeError, ValueError) as error:
+        raise MigrationError(f"source percentage is not a number: {value!r} ({error})") from None
+    if not isfinite(number):
+        raise MigrationError(f"source percentage is not a finite number: {value!r}")
+    return int(round(number * 10))
 
 
 def _ref(system: SourceSystem, row: dict[str, Any], snapshot_sha: str | None) -> ExternalRef:

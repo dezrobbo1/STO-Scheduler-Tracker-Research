@@ -120,13 +120,19 @@ function instant(value) {
 }
 
 function moments(result) {
+  // Only the rows the chart draws. An excluded row keeps its source dates, and
+  // one sitting far outside the calculated schedule -- a manual or inactive
+  // task the file put somewhere else -- stretched the scale without ever
+  // appearing, squeezing every drawn bar into a sliver of the track.
   const values = [];
   for (const row of result.activities) {
+    if (!row.early_start) continue;
     for (const key of ["early_start", "early_finish", "source_start", "source_finish"]) {
       if (row[key]) values.push(instant(row[key]));
     }
   }
   for (const row of result.summaries) {
+    if (!row.span_start) continue;
     for (const key of ["span_start", "span_finish", "source_start", "source_finish"]) {
       if (row[key]) values.push(instant(row[key]));
     }
@@ -306,9 +312,17 @@ calculate.addEventListener("click", async () => {
   say("Calculating…");
   try {
     await json(`/api/projects/${projectId}/calculations`, { method: "POST" });
+    if (projects.value !== projectId) {
+      // The selector stays live while a calculation runs, and `show` sets the
+      // guard itself -- so calling it here for a project the reader has since
+      // left would make the stale answer the newest one and render it under
+      // the new project's name.
+      say("Calculated. Select that project again to see it.");
+      return;
+    }
     await show(projectId);
   } catch (error) {
-    say(error.message, "error");
+    if (projects.value === projectId) say(error.message, "error");
   } finally {
     calculate.disabled = false;
   }

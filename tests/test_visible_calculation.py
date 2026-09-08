@@ -244,6 +244,42 @@ class VisibleCalculationTests(unittest.TestCase):
                 ).fetchall()
             self.assertTrue(failed, "no failed batch was recorded")
 
+
+    def test_a_project_with_no_import_is_told_what_is_missing(self):
+        """"No such project" about one the caller can see in the list is false."""
+
+        with self._client() as client:
+            project = client.post("/api/projects", json={"name": "empty"}).json()["id"]
+            listed = {row["id"] for row in client.get("/api/projects").json()}
+            self.assertIn(project, listed)
+            refused = client.post(f"/api/projects/{project}/calculations")
+            self.assertEqual(refused.status_code, 409, refused.text)
+            self.assertIn("no schedule yet", refused.json()["detail"])
+
+    def test_a_percentage_that_is_not_a_number_is_a_recorded_refusal(self):
+        """A value the parser accepts and the migration cannot convert."""
+
+        with self._client() as client:
+            project = self._imported(client)
+            payload = FIXTURE.read_bytes().replace(
+                b"<PercentComplete>0</PercentComplete>",
+                b"<PercentComplete>NaN</PercentComplete>",
+                1,
+            )
+            self.assertNotEqual(payload, FIXTURE.read_bytes(), "the fixture shape moved")
+            refused = client.post(
+                f"/api/projects/{project}/imports",
+                files={"file": ("nan.xml", payload, "application/xml")},
+            )
+            self.assertEqual(refused.status_code, 422, refused.text)
+            with self.connect() as conn:
+                failed = conn.execute(
+                    "SELECT count(*) AS n FROM import_batches"
+                    " WHERE project_id = %s AND status = 'failed'",
+                    (uuid.UUID(project),),
+                ).fetchone()
+            self.assertGreater(failed["n"], 0, "no failed batch was recorded")
+
     def test_an_oversized_upload_is_refused(self):
         from sto.api.app import MAX_UPLOAD_BYTES
 
@@ -255,6 +291,41 @@ class VisibleCalculationTests(unittest.TestCase):
                 files={"file": ("big.xml", oversized, "application/xml")},
             )
             self.assertEqual(response.status_code, 413, response.text)
+
+
+    def test_an_oversized_upload_that_declares_no_length_is_refused_too(self):
+        """The limit has to hold below the parser, not above it.
+
+        Multipart parsing consumes and spools the whole part before the
+        endpoint is entered, so a check on the resulting file object runs after
+        the bytes are already on disk. A client that streams its body sends no
+        `Content-Length` at all, which is the case the header check cannot
+        answer.
+        """
+
+        from sto.api.app import MAX_UPLOAD_BYTES
+
+        def streamed():
+            head = (
+                b'--BOUND\r\n'
+                b'Content-Disposition: form-data; name="file"; filename="big.xml"\r\n'
+                b"Content-Type: application/xml\r\n\r\n"
+            )
+            yield head
+            chunk = b"x" * (1024 * 1024)
+            for _ in range((MAX_UPLOAD_BYTES // len(chunk)) + 2):
+                yield chunk
+            yield b"\r\n--BOUND--\r\n"
+
+        with self._client() as client:
+            project = client.post("/api/projects", json={"name": "streamed"}).json()["id"]
+            response = client.post(
+                f"/api/projects/{project}/imports",
+                content=streamed(),
+                headers={"Content-Type": "multipart/form-data; boundary=BOUND"},
+            )
+            self.assertEqual(response.status_code, 413, response.text[:300])
+            self.assertNotIn("content-length", {k.lower() for k in response.request.headers})
 
     def test_one_unreadable_project_does_not_take_the_others_with_it(self):
         """The containment F17 asked for, asked of the boot rebuild."""

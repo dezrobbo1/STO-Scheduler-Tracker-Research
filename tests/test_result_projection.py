@@ -906,5 +906,47 @@ class AStoredCalculationComesBackTests(unittest.TestCase):
         with self.assertRaises(IntegrityError):
             workspace.read_calculation(project_id)
 
+    def test_the_page_reads_the_calculation_s_own_document(self):
+        """Not the project's current head, which can move underneath it.
+
+        A concurrent import is enough: the calculation is verified against
+        version B while the names and imported dates come from version A,
+        which is a false comparison rather than a stale one.
+        """
+
+        workspace, project_id = self._imported()
+        stored = workspace.calculate(project_id)
+        first_version = stored.version_id
+
+        # A second import moves the head; the calculation still names the first.
+        workspace.import_file(
+            project_id, filename="again.xml", data=FIXTURE.read_bytes().replace(
+                b"<Name>Workspace chain</Name>", b"<Name>Renamed after the run</Name>", 1
+            )
+        )
+        head = workspace.load(project_id, refresh=True)
+        self.assertNotEqual(head.version_id, first_version, "the fixture no longer re-imports")
+
+        read = workspace.read_calculation(project_id, calculation_id=stored.calculation_id)
+        self.assertEqual(read.version_id, first_version)
+        self.assertIsNotNone(read.schedule)
+        self.assertEqual(
+            canonical_sha256(encode_schedule(read.schedule)),
+            read.result.provenance.canonical_hash,
+            "the document served with the calculation is the one it names",
+        )
+
+    def test_agreement_is_unknown_when_the_file_gave_only_one_date(self):
+        workspace, project_id = self._imported()
+        workspace.calculate(project_id)
+        payload = workspace.latest_calculation(project_id)
+        for row in payload["activities"]:
+            with self.subTest(str(row["activity_uid"])):
+                if row["source_start"] is None or row["source_finish"] is None:
+                    self.assertIsNone(
+                        row["agrees_with_source"],
+                        "a verdict about a value the file never gave",
+                    )
+
 if __name__ == "__main__":
     unittest.main()

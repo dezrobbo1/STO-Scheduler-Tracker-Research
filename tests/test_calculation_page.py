@@ -86,6 +86,23 @@ class ThePageIsSelfConsistentTests(unittest.TestCase):
         self.assertIn("error.status === 404", self.script)
         self.assertIn("failure.status = response.status", self.script)
 
+    def test_it_does_not_show_a_calculation_for_a_project_left_behind(self):
+        """`show` sets the freshness guard itself, so calling it is not safe."""
+
+        self.assertIn("projects.value !== projectId", self.script)
+
+    def test_the_chart_scale_is_built_from_the_rows_it_draws(self):
+        """An excluded row far outside the schedule stretched the scale.
+
+        It never appeared, so every drawn bar was squeezed into a sliver of the
+        track by a row the reader could not see.
+        """
+
+        scale = self.script[self.script.index("function moments("):]
+        scale = scale[: scale.index("function band(")]
+        self.assertIn("if (!row.early_start) continue;", scale)
+        self.assertIn("if (!row.span_start) continue;", scale)
+
     def test_it_drops_a_response_for_a_project_no_longer_selected(self):
         """Two requests can finish out of order while the selector stays live."""
 

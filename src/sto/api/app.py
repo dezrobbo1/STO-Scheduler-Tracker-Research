@@ -7,6 +7,7 @@ reproduce what it stored, the process does not come up quietly.
 
 from __future__ import annotations
 
+import json
 import uuid
 from contextlib import asynccontextmanager
 from typing import Any
@@ -39,6 +40,7 @@ from sto.core.engine.network import NetworkError
 from sto.scheduling.working_schedule import (
     ImportRefused,
     IntegrityError,
+    NoSchedule,
     UnknownProject,
     Workspace,
 )
@@ -48,6 +50,82 @@ from . import schemas
 #: 8090 is the Java API until cut-over (frozen-repository deployment); the new
 #: stack is trialled beside it. The port swaps at PL12, not before.
 DEFAULT_PORT = 8092
+
+
+class BoundedBody:
+    """Count the body as it arrives and refuse it when it passes the limit.
+
+    A limit applied to the ``UploadFile`` is applied too late: multipart
+    parsing consumes and spools the whole part before the endpoint is entered,
+    so a client that omits or understates ``Content-Length`` has already
+    written an arbitrary number of bytes to temporary disk by then. This sits
+    below the parser, on the ASGI ``receive`` the parser reads from, which is
+    the only place in this process where bytes can be refused *as they arrive*.
+
+    The refusal is written here rather than raised. FastAPI turns any exception
+    out of the body stream into "there was an error parsing the body", which
+    would report a request that was deliberately cut off as a malformed one.
+    So the stream is ended and whatever the application answers with is
+    replaced by the 413 this middleware means.
+
+    A proxy in front of the service should carry a limit too. This is the one
+    that holds when nothing is in front of it.
+    """
+
+    def __init__(self, app, limit: int) -> None:
+        self.app = app
+        self.limit = limit
+
+    async def __call__(self, scope, receive, send):
+        if scope.get("type") != "http" or scope.get("method") not in {"POST", "PUT", "PATCH"}:
+            return await self.app(scope, receive, send)
+
+        seen = 0
+        tripped = False
+
+        async def bounded():
+            nonlocal seen, tripped
+            message = await receive()
+            if message.get("type") == "http.request":
+                seen += len(message.get("body", b""))
+                if seen > self.limit:
+                    tripped = True
+                    # Ending the stream, not raising: the parser sees a client
+                    # that stopped sending, which is what happened.
+                    return {"type": "http.disconnect"}
+            return message
+
+        answered = False
+
+        async def guarded(message):
+            nonlocal answered
+            if not tripped:
+                return await send(message)
+            if message["type"] == "http.response.start":
+                body = json.dumps(
+                    {
+                        "detail": f"the upload exceeds {self.limit} bytes; "
+                        f"it was stopped at {seen}"
+                    }
+                ).encode()
+                await send(
+                    {
+                        "type": "http.response.start",
+                        "status": 413,
+                        "headers": [
+                            (b"content-type", b"application/json"),
+                            (b"content-length", str(len(body)).encode()),
+                        ],
+                    }
+                )
+                await send({"type": "http.response.body", "body": body, "more_body": False})
+                answered = True
+                return
+            if message["type"] == "http.response.body" and answered:
+                return
+            await send(message)
+
+        return await self.app(scope, bounded, guarded)
 
 
 def _refuse_oversized_body(request: Request) -> None:
@@ -106,6 +184,10 @@ def create_app(workspace: Workspace | None = None) -> FastAPI:
 
     app = FastAPI(title="STO", version="0.1", lifespan=lifespan)
     app.state.workspace = workspace
+    # Below the multipart parser, so an oversized body is refused while it is
+    # arriving rather than after it has been spooled.
+    app.add_middleware(BoundedBody, limit=MAX_UPLOAD_BYTES + _MULTIPART_ALLOWANCE)
+
 
     def ws(request: Request) -> Workspace:
         return request.app.state.workspace
@@ -216,6 +298,10 @@ def create_app(workspace: Workspace | None = None) -> FastAPI:
 
         try:
             result = workspace.calculate(project_id)
+        except NoSchedule:
+            raise HTTPException(
+                409, "the project has no schedule yet; import one before calculating"
+            ) from None
         except UnknownProject:
             raise HTTPException(404, "no such project") from None
         except (NetworkError, CalendarCompileError) as error:
