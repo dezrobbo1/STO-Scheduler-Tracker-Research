@@ -57,7 +57,7 @@ from .network import (
     shift_lag,
     unshift_lag,
 )
-from .plan import SCHEDULED_KINDS, Excluded, Plan, build_plan
+from .plan import SCHEDULED_KINDS, Assumed, Excluded, Plan, build_plan
 from .progress import (
     PROGRESS_PROFILE,
     RETAINING_POLICIES,
@@ -88,6 +88,7 @@ __all__ = [
     "ActivityFloat",
     "ActivityLateTimes",
     "ActivityTimes",
+    "Assumed",
     "BackwardPass",
     "BackwardPassError",
     "ConstraintViolation",

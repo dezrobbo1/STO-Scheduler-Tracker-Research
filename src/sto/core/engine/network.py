@@ -44,6 +44,10 @@ Every refusal is a code, never a guess, in the manner of
 ``SCHEDULE_PASS_MISMATCH``
     A forward pass handed to the backward pass or the float was computed over
     a different network -- bound by :meth:`Network.fingerprint`.
+``SCHEDULE_POLICY_MISMATCH``
+    A backward pass asked for under a progress policy other than the one its
+    forward pass ran under. The policy travels on the forward pass; naming it
+    again is allowed, naming a different one is not.
 ``SCHEDULE_STATUS_TIME_INVALID``
     A status time outside the window the network is scheduled in.
 """
@@ -158,6 +162,19 @@ class PlannedActivity:
     actual_start: int | None = None
     actual_finish: int | None = None
     remaining_duration: int | None = None
+    #: The calendar a *float* on this activity is measured in, when it is not
+    #: the one the work is placed on. Microsoft Project places work on the
+    #: resource's calendar and measures slack on the task's own or the
+    #: project's -- the same calendar it consumes a lag on -- and the two are
+    #: routinely different shifts. ``None`` means the scheduling calendar, which
+    #: is what the corpus declares and what an activity with no resource has.
+    measure_calendar: CompiledIntervals | None = None
+
+    @property
+    def float_calendar(self) -> CompiledIntervals:
+        """The calendar a float on this activity is measured in."""
+
+        return self.calendar if self.measure_calendar is None else self.measure_calendar
 
     @property
     def is_milestone(self) -> bool:
@@ -290,6 +307,7 @@ class Network:
                         a.actual_start,
                         a.actual_finish,
                         a.remaining_duration,
+                        calendar_digest(a.measure_calendar),
                     ]
                     for a in self.activities
                 ],
@@ -359,6 +377,11 @@ class Network:
                 )
             if not activity.calendar.intervals:
                 raise ForwardPassError("SCHEDULE_CALENDAR_EMPTY", activity.uid)
+            if not activity.float_calendar.intervals:
+                # Every difference measured on no working time is zero, which
+                # would read as zero slack and a critical row rather than as
+                # a float that cannot be measured.
+                raise ForwardPassError("SCHEDULE_MEASURE_CALENDAR_EMPTY", activity.uid)
             if (
                 activity.constraint_type in _DATED_CONSTRAINTS
                 and activity.constraint_coordinate is None

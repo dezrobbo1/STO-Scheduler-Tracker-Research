@@ -9,6 +9,13 @@ float is, and when a float makes an activity critical -- and all three were
 measured against the real schedules rather than chosen.
 
 **A float is working time on the activity's own calendar**, not the difference
+between two coordinates -- and "own" means the calendar the *task* carries or
+the project's, not the resource's the work was placed on. Microsoft Project
+places work on the resource's calendar and measures slack on the task's, which
+is why :class:`~sto.core.engine.network.PlannedActivity` carries the two apart:
+read off Project's stored dates on the resource calendar the rule below
+reproduces the stored ``TotalSlack`` for a quarter of BOILER's activities, and on
+the task calendar for all but two (ADR-010). A float is not the difference
 between two coordinates. Every other duration in this engine is productive time
 on a calendar -- that is what ``PlannedActivity.duration`` means, and what a lag
 means -- so a float, which answers "how much longer could this take", has to be
@@ -70,7 +77,7 @@ from sto.core.calendar.arithmetic import CompiledIntervals, working_between
 from sto.core.hashing import canonical_sha256
 
 from .backward import BackwardPass
-from .forward import ForwardPass
+from .forward import ActivityTimes, ForwardPass
 from .network import Network, NetworkError, PlannedRelationship, shift_lag
 
 #: Named on the fingerprint so a stored answer says which rule produced it.
@@ -171,9 +178,10 @@ def span_float(early: int, late: int) -> int:
 def _free_float(
     uid: UUID,
     outgoing: tuple[PlannedRelationship, ...],
-    early: dict[UUID, tuple[int, int]],
+    early: dict[UUID, ActivityTimes],
+    available_spans: dict[UUID, tuple[int, int]],
     calendar: CompiledIntervals,
-    calendars: dict[UUID, CompiledIntervals],
+    lag_calendars: dict[UUID, CompiledIntervals],
     project_late_finish: int,
 ) -> int:
     """Slack against the successors' *early* dates, not the project's late finish.
@@ -187,13 +195,20 @@ def _free_float(
     consumed on the relationship's own lag calendar, and what the edge bounds is
     the successor's early start for FS and SS and its early finish for FF and
     SF -- the start of its *remaining* work when the successor is under way.
+    The anchor is this activity's **actual** early span, exactly as the forward
+    pass anchored the edge: work under way keeps its actual start, and an SS or
+    SF edge out of it was measured from that start, not from where its remaining
+    work resumes. ``available_spans`` substitutes the remaining start on the
+    *successor* side only. The lag falls back to the successor's scheduling
+    calendar (``lag_calendars``) when the edge names none, again as the passes
+    did; the measuring calendar is not the scheduling one on a real file.
     The remaining gap is measured on **this** activity's calendar, because
     it is this activity that would consume it by slipping. Read off Project's
     own dates that rule reproduces the stored ``FreeSlack`` for about
     ninety-eight in a hundred activities of every real schedule here.
     """
 
-    early_start, early_finish = early[uid]
+    early_start, early_finish = early[uid].early_start, early[uid].early_finish
     if not outgoing:
         return signed_working(calendar, early_finish, project_late_finish)
 
@@ -203,7 +218,7 @@ def _free_float(
         lag_calendar = (
             relationship.lag_calendar
             if relationship.lag_calendar is not None
-            else calendars[relationship.successor_uid]
+            else lag_calendars[relationship.successor_uid]
         )
         required = shift_lag(lag_calendar, anchor, relationship.lag)
         if required is None:
@@ -214,7 +229,7 @@ def _free_float(
                 relationship.uid,
                 f"lag {relationship.lag} from {anchor} leaves the calendar",
             )
-        successor_start, successor_finish = early[relationship.successor_uid]
+        successor_start, successor_finish = available_spans[relationship.successor_uid]
         available = (
             successor_start if relationship.bounds_successor_start else successor_finish
         )
@@ -247,10 +262,24 @@ def float_analysis(
             None,
             "a pass was computed over a different network",
         )
+    if forward.progress_policy is not backward.progress_policy:
+        # One network, two policies: the passes agree on every coordinate of
+        # the network and disagree on which edges hold, and a free float read
+        # across a released edge is a number about no schedule.
+        raise CriticalityError(
+            "SCHEDULE_POLICY_MISMATCH",
+            None,
+            f"the forward pass ran under {forward.progress_policy.value}, "
+            f"the backward pass under {backward.progress_policy.value}",
+        )
     early = forward.by_uid()
     late = backward.by_uid()
 
-    calendars = {activity.uid: activity.calendar for activity in network.activities}
+    calendars = {activity.uid: activity.float_calendar for activity in network.activities}
+    # The calendar a lag falls back to when an edge names none is the one the
+    # passes consumed it on -- the successor's scheduling calendar -- not the
+    # one slack is measured on; on a real file the two differ (ADR-010).
+    lag_calendars = {activity.uid: activity.calendar for activity in network.activities}
     released = frozenset(backward.overridden_relationships)
     outgoing = {
         uid: tuple(edge for edge in edges if edge.uid not in released)
@@ -259,7 +288,9 @@ def float_analysis(
     # What an edge into work already under way bounds is the *remaining* span,
     # so that is the start a predecessor's free float is measured against --
     # not the actual start, which happened and which no predecessor can move.
-    early_spans = {
+    # Successor side only: an edge *out of* such work is anchored where the
+    # forward pass anchored it, on the actual start.
+    available_spans = {
         uid: (
             row.early_start if row.remaining_start is None else row.remaining_start,
             row.early_finish,
@@ -289,9 +320,10 @@ def float_analysis(
         free = _free_float(
             uid,
             outgoing[uid],
-            early_spans,
+            early,
+            available_spans,
             calendar,
-            calendars,
+            lag_calendars,
             backward.project_late_finish,
         )
         rows.append(

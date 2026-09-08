@@ -95,7 +95,9 @@ class _Loaded:
             self.backward,
             threshold=self.plan.critical_float_threshold,
         )
-        self.calendars = {a.uid: a.calendar for a in self.network.activities}
+        # Floats are measured on the task's own or the project's calendar, not
+        # the resource's the work is placed on (ADR-010).
+        self.calendars = {a.uid: a.float_calendar for a in self.network.activities}
         self.observations = {
             a.uid: a.source_observations
             for a in self.schedule.activities
@@ -205,8 +207,11 @@ class BackwardPassRunsTests(unittest.TestCase):
 
     def test_every_late_span_is_as_long_as_the_early_span_it_mirrors(self):
         early = self.boiler.forward.by_uid()
+        # Span length is working time on the calendar the work was *placed*
+        # on, which is not the calendar a float is measured in (ADR-010).
+        placed_on = {a.uid: a.calendar for a in self.boiler.network.activities}
         for row in self.boiler.backward.times:
-            calendar = self.boiler.calendars[row.uid]
+            calendar = placed_on[row.uid]
             self.assertEqual(
                 working_between(calendar, row.late_start, row.late_finish),
                 working_between(
@@ -360,12 +365,13 @@ class CriticalityRuleTests(unittest.TestCase):
 
 @unittest.skipUnless(PRESENT, SKIP_REASON)
 class NotClaimedTests(unittest.TestCase):
-    """What the engine does *not* reproduce, pinned so it cannot be forgotten.
+    """What the engine does and does not reproduce, pinned so it cannot drift.
 
-    Our late dates inherit the forward pass's disagreement with Project. Pinning
-    the count at what it is means that fixing the forward pass will fail these
-    assertions and force the numbers -- and the history entry behind them -- to
-    be updated deliberately.
+    Our late dates inherit whatever the forward pass still gets wrong. Pinning
+    the counts at what they are means that moving the forward pass will fail
+    these assertions and force the numbers -- and the history entry behind
+    them -- to be updated deliberately. They were 0 and 19 until the residue
+    was diagnosed (ADR-010) and are the numbers below since.
     """
 
     @classmethod
@@ -386,7 +392,7 @@ class NotClaimedTests(unittest.TestCase):
             ):
                 exact += 1
         self.assertEqual(compared, 451)
-        self.assertEqual(exact, 0, "the forward pass's difference has been closed")
+        self.assertEqual(exact, 409, "the forward pass's remaining difference has moved")
 
     def test_our_own_float_agrees_with_the_file_on_a_minority_of_rows(self):
         """A local quantity survives a global misplacement better than a date does.
@@ -407,8 +413,49 @@ class NotClaimedTests(unittest.TestCase):
             total += ours[uid].total_float == row.total_float_seconds
             free += ours[uid].free_float == row.free_float_seconds
         self.assertEqual(compared, 451)
-        self.assertEqual(total, 19)
-        self.assertEqual(free, 351)
+        self.assertEqual(total, 380)
+        self.assertEqual(free, 435)
+
+    def test_the_other_two_files_are_pinned_at_what_they_are(self):
+        """KILN and CALCINER, late dates and floats, so ADR-010's table is a pin.
+
+        KILN's late dates agree on no row because its project finish is set
+        by a tail the forward pass still places wrong; CALCINER's agree on
+        most. Recorded here rather than only in the ADR so that the numbers
+        cannot drift from the code that produces them.
+        """
+
+        expected = {
+            "kiln": (417, 0, 4, 304),
+            "calciner": (1763, 1572, 1488, 1689),
+        }
+        for name, (compared_expected, late_expected, total_expected, free_expected) in (
+            expected.items()
+        ):
+            with self.subTest(name):
+                loaded = _Loaded(FIXTURES[name])
+                late = loaded.backward.by_uid()
+                ours = loaded.floats.by_uid()
+                compared = late_exact = total = free = 0
+                for uid, row in loaded.observations.items():
+                    if None in (
+                        row.late_start,
+                        row.late_finish,
+                        row.total_float_seconds,
+                        row.free_float_seconds,
+                    ):
+                        continue
+                    compared += 1
+                    late_exact += (
+                        loaded.plan.to_datetime(late[uid].late_start) == row.late_start
+                        and loaded.plan.to_datetime(late[uid].late_finish) == row.late_finish
+                    )
+                    total += ours[uid].total_float == row.total_float_seconds
+                    free += ours[uid].free_float == row.free_float_seconds
+                self.assertEqual(
+                    (compared, late_exact, total, free),
+                    (compared_expected, late_expected, total_expected, free_expected),
+                )
 
 
 if __name__ == "__main__":

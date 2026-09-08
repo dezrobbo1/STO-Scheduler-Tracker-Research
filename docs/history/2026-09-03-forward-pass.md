@@ -61,6 +61,11 @@ activity in the file that is active schedules.
 
 ## What the forward pass does not yet reproduce, stated plainly
 
+*Diagnosed on 2026-09-05 — see `2026-09-05-forward-pass-residue-diagnosed.md`
+and ADR-010. The seed was one twenty-eight-day lead the pass had floored at
+the project start; the half-hour cluster was the resources' calendar against
+the project's. What follows is left as it was written.*
+
 On `boiler-before-no-progress.xml`, 451 of 460 activities schedule — the nine
 that do not are inactive, and the fifteen dropped edges lost an endpoint to
 them. Against the dates Microsoft Project itself stored in the file, **one**

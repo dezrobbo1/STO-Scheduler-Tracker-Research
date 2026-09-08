@@ -101,6 +101,10 @@ if REQUIRE_BOILER:
             )
 
 _PRESENT = all(path.is_file() for path in FIXTURES.values())
+#: The tests on Project's own recalculation need only the two files Project
+#: recalculated; gating them on the candidate too would hide independent
+#: evidence whenever an unrelated file is absent.
+_NATIVE_PRESENT = all(FIXTURES[name].is_file() for name in NATIVELY_RECALCULATED)
 _LOADED: dict[str, tuple] = {}
 
 
@@ -247,8 +251,8 @@ class ReportedWorkTests(unittest.TestCase):
 
 
 @unittest.skipUnless(
-    _PRESENT,
-    "the real BOILER schedules are not present; set STO_REQUIRE_BOILER=1",
+    _NATIVE_PRESENT,
+    "the two Project-recalculated BOILER files are not present; set STO_REQUIRE_BOILER=1",
 )
 class NativeRecalculationTests(unittest.TestCase):
     """What Project itself did to completed work, and what that settles."""

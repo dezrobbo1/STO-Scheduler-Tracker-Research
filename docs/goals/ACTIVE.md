@@ -106,11 +106,15 @@ lag; zero lag does not snap because placement already does; milestones read
 `MilestoneSnapPolicy` instead of picking. Every corpus case a forward pass
 alone can answer passes exactly. The corpus itself is now in the package,
 `src/sto/conformance/`, byte-pinned to the commit its manifest names and
-hash-checked on every read, so it runs in CI with nothing to set. Not claimed:
-against the dates Microsoft Project stored in the BOILER file the pass agrees
-on one activity, and the cause is recorded undiagnosed in
-`docs/history/2026-09-03-forward-pass.md` rather than guessed at — it is the
-backward pass's and the status date's to close as much as this one's.
+hash-checked on every read, so it runs in CI with nothing to set. Against the
+dates Microsoft Project stored in the BOILER file the pass first agreed on one
+activity, recorded undiagnosed in `docs/history/2026-09-03-forward-pass.md`;
+the diagnosis (`docs/history/2026-09-05-forward-pass-residue-diagnosed.md`,
+ADR-010) found four rules of Project's — the resource calendar places the
+work, the task or project calendar measures lags and slack, and the project
+start bounds only a task with no predecessors — and the pass now agrees on
+384 of BOILER's 451, 247 of KILN's 417 and 1,645 of CALCINER's 1,763, with
+what remains named per row and pinned in `tests/test_forward_pass_boiler.py`.
 
 **Backward pass, float and criticality (S4).** `sto.core.engine.backward` is the
 forward pass transposed — the four types read the opposite end of the opposite
@@ -188,8 +192,12 @@ present. Phase 1 is the engine, the sidecar, and real authentication, in this
 order:
 
 1. ~~Calendars~~ — done.
-2. ~~Forward pass~~ — done against the corpus; the BOILER file-oracle
-   differences are recorded, not yet classified.
+2. ~~Forward pass~~ — done against the corpus. The BOILER file-oracle
+   difference is diagnosed (ADR-010): four Microsoft Project rules measured
+   on three real files take the pass from one activity agreeing with the
+   stored dates to 384 of 451, and what remains is twenty first mismatches
+   across three files, each in a named class, with the rows behind them
+   counted as triage rather than claimed as explained.
 3. ~~Backward pass, float and criticality~~ — done. The float and criticality
    *rules* are settled against the real files (ADR-008); the *dates* still
    carry the forward pass's difference, which is the status date's to close as
@@ -267,10 +275,37 @@ until the parity checklist passes.
   counts matched rows whose GUID moved, which is how the next path gets
   measured. The fallback that does hold here is the work-order and operation
   pair — see the business-key gap below.
-- **Lag calendar for Microsoft files** is an assumption: `ProjectSettings`
-  records `lag_calendar_policy = successor` because Microsoft Project exposes no
-  such setting. It is written down so it can be falsified by a file with a
-  positive working-day lag; BOILER has only zero and elapsed lags.
+- **Lag calendar for Microsoft files — measured, and the assumption was
+  wrong.** `ProjectSettings` still records `lag_calendar_policy = successor`,
+  but the plan now resolves it to the successor's own *task* calendar or the
+  project's, never a resource's: every one of the fifty-seven working-time lags
+  in KILN and CALCINER that any calendar explains is explained by that, and the
+  successor's effective calendar explained a third of KILN's (ADR-010). Both
+  project calendars in the estate are twenty-four hours, so a lag on the
+  project calendar and an elapsed lag cannot be told apart here; the plan uses
+  the project calendar and labels each such edge
+  (`RELATIONSHIP_LAG_ON_PROJECT_CALENDAR` on `Plan.assumed`: 14 in KILN, 41 in
+  CALCINER, none in BOILER), so the choice is carried as an assumption rather
+  than presented as measured.
+- **Tasks whose resources are on several calendars are scheduled on the union
+  of those calendars, as an assumption** (`ACTIVITY_RESOURCE_CALENDARS_UNITED`
+  on `Plan.assumed`). Project's stored span for such a task is the envelope of
+  its stored per-assignment spans on every such row in BOILER and KILN and all
+  but three of CALCINER's; scheduling assignments is not built, and these rows
+  are most of what the pass still gets wrong on CALCINER.
+- **The successor of an inactive task follows no rule the files agree on.**
+  Some sit where the inactive task's own predecessors would put them, some
+  where their other predecessors do, some where nothing measured does. The edge
+  is dropped and the row labelled `ACTIVITY_SUCCESSOR_OF_INACTIVE` once,
+  however many inactive predecessors it has; on the progressed BOILER files,
+  which carry twenty-one inactive rows, this is the largest remaining class.
+- **Two CALCINER rows with `IgnoreResourceCalendar` set and a task calendar of
+  their own, and one KILN row Project placed continuously on a resource
+  calendar that compiles here as a day shift, are unexplained.** Named in
+  `docs/history/2026-09-05-forward-pass-residue-diagnosed.md`.
+- **KILN's late dates agree with Project on none of its rows** because its
+  project finish is set by a tail that is still inherited-wrong; it closes with
+  the first mismatches above, not separately.
 - **No Primavera file exists anywhere in the estate.** Until one arrives the XER
   and P6 XML paths have no oracle and every P6 writer stays `diagnostic`.
 - **`MsSummaryProjection` is populated but nothing writes it back yet**; it
@@ -336,6 +371,46 @@ refusals coded; and the false aggregate in the S4 history entry. Rejected with a
 measurement: the negative-lag inversion, which holds from every coordinate a
 placed date can occupy and departs only inside a gap by zero working time,
 pinned in `tests/test_backward_pass.py`.
+
+### Carried from the PR #33 and #34 reviews
+
+PR #33 merged five minutes before its review landed, so its three findings
+joined PR #34's five and all eight were answered on the residue branch
+(`docs/history/2026-09-07-post-residue-review.md`), one test each in
+`tests/test_post_residue_review.py`. Fixed: the progress policy travels on the
+forward pass and the backward pass reads it there, refusing a different one
+by name (`SCHEDULE_POLICY_MISMATCH`) — the corpus digest had been attesting
+SEM-STA-044 with its two passes under different policies; the released edges
+are hashed into the backward fingerprint (`sto-backward-pass-v3`); an SS or SF
+edge out of started work is anchored on the actual start in the free float, as
+the forward pass anchored it; a lag with no calendar of its own falls back to
+the successor's scheduling calendar in the float, not its measuring calendar;
+the driver replay floors where the bounds did, so a lead-placed task before
+the project start reports the edge that moved it; the project-calendar lag
+choice is labelled; a successor of several inactive tasks is labelled once;
+and `IgnoreResourceCalendar` is recognised in both spellings `xsd:boolean`
+allows. No agreement count moved.
+
+The reviewer's second pass on that commit raised five more, and the
+comprehensive review of 2026-09-07 reproduced every one; all five are fixed
+on the same branch (`docs/history/2026-09-07-post-residue-review.md`, second
+section), one test each. Fixed: an explicit canonical `LagCalendar.SUCCESSOR`
+now means the successor's scheduling calendar, and the Microsoft task-or-project
+rule applies only to relationships that inherit the project's policy; a row
+whose measuring calendar has no working time is excluded
+(`ACTIVITY_MEASURE_CALENDAR_EMPTY`) rather than reported as zero float and
+critical, and a directly built network refuses it; the backward pass carries
+its progress policy and hashes it (`sto-backward-pass-v4`), and the float
+refuses a backward pass under one policy beside a forward pass under another
+(`SCHEDULE_POLICY_MISMATCH`); the multi-resource assumption is recorded only
+once the row is scheduled, and the plan refuses to carry an assumption about
+a row it excluded; and a relationship bound below the successor calendar's
+floor no longer counts as the driver of a task it did not move. No agreement
+count moved. The same change corrected ADR-010's "before" figures for KILN
+and CALCINER to what `main` actually produces under the test horizon (29 and
+130, not 36 and 260), pinned the late-date and float counts for all three
+files, and reworded "inherited" as what it is — a row with a mismatching
+predecessor, triage rather than a causal claim.
 
 ### Carried from the PR #22 review, against the slice that owns each
 
