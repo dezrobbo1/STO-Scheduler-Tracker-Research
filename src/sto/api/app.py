@@ -183,7 +183,11 @@ def create_app(workspace: Workspace | None = None) -> FastAPI:
         except UnknownProject:
             raise HTTPException(404, "no such project") from None
         except IntegrityError as error:
-            raise HTTPException(409, str(error)) from None
+            # Stored bytes that do not hash to what the row says. Nothing the
+            # caller sent conflicts with anything, so this is a 500 like the
+            # schedule route's, and the project is quarantined rather than
+            # served a wrong answer.
+            raise HTTPException(500, str(error)) from None
         except PlanError as error:
             raise HTTPException(422, f"the schedule cannot be planned: {error}") from None
         return schemas.CalculationSummary(
@@ -215,7 +219,11 @@ def create_app(workspace: Workspace | None = None) -> FastAPI:
         except UnknownProject:
             raise HTTPException(404, "no such project") from None
         except IntegrityError as error:
-            raise HTTPException(409, str(error)) from None
+            # Stored bytes that do not hash to what the row says. Nothing the
+            # caller sent conflicts with anything, so this is a 500 like the
+            # schedule route's, and the project is quarantined rather than
+            # served a wrong answer.
+            raise HTTPException(500, str(error)) from None
         if payload is None:
             raise HTTPException(404, "the project has no calculation yet")
         return schemas.CalculationResponse(**payload)

@@ -134,6 +134,21 @@ class SummaryRow(BaseModel):
     source_finish: datetime | None = None
 
 
+class RelationshipRow(BaseModel):
+    """An edge the plan dropped, or kept under a labelled rule.
+
+    An edge has no dates of its own, so it is not a row of the schedule. It is
+    here because it decided the dates that are: a reader looking at an activity
+    that did not move where they expected needs to see the edge that was
+    dropped, or the rule the lag was measured under.
+    """
+
+    relationship_uid: uuid.UUID
+    disposition: str
+    code: str
+    detail: str = ""
+
+
 class CalculationResponse(BaseModel):
     """A stored calculation, with every row as imported and as calculated."""
 
@@ -146,8 +161,14 @@ class CalculationResponse(BaseModel):
     horizon_finish: datetime
     progress_policy: str
     critical_float_threshold: int
+    #: The status date the passes used, and whether the file carried one that
+    #: fell outside the compiled window and was dropped. Without the second, a
+    #: run with discarded progress context reads as a run that never had any.
+    status_time: datetime | None = None
+    status_time_outside_window: bool = False
     profiles: dict[str, str]
     computed_at: datetime
     counts: dict[str, int]
+    relationships: list[RelationshipRow] = []
     activities: list[ActivityRow]
     summaries: list[SummaryRow]

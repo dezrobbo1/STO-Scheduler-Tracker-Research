@@ -17,6 +17,7 @@ import os
 import secrets
 import tempfile
 import unittest
+import uuid
 from pathlib import Path
 
 REQUIRE_DB = os.environ.get("STO_REQUIRE_DB") == "1"
@@ -131,6 +132,49 @@ class VisibleCalculationTests(unittest.TestCase):
             self.assertEqual(body["profiles"]["result"], "sto-result-v1")
             self.assertTrue(body["profiles"]["forward"].startswith("sto-forward-pass-"))
             self.assertLess(body["horizon_start"], body["horizon_finish"])
+
+    def test_the_answer_also_says_what_else_decided_it(self):
+        """Dates alone do not explain themselves.
+
+        A status date the plan discarded and an edge it dropped both moved the
+        dates on the page, and a reader looking at a row that did not land
+        where they expected has no other way to see either.
+        """
+
+        with self._client() as client:
+            project = self._imported(client)
+            client.post(f"/api/projects/{project}/calculations")
+            body = client.get(f"/api/projects/{project}/calculations/latest").json()
+
+            self.assertIn("status_time", body)
+            self.assertIn("status_time_outside_window", body)
+            self.assertFalse(body["status_time_outside_window"])
+            self.assertIn("relationships", body)
+            for edge in body["relationships"]:
+                with self.subTest(edge["relationship_uid"]):
+                    self.assertIn(edge["disposition"], {"scheduled", "excluded"})
+                    self.assertTrue(edge["code"])
+
+    def test_a_calculation_whose_rows_were_edited_is_not_served(self):
+        """The page reads through the fingerprint check, not around it."""
+
+        with self._client() as client:
+            project = self._imported(client)
+            created = client.post(f"/api/projects/{project}/calculations").json()
+            with self.connect() as conn:
+                changed = conn.execute(
+                    """
+                    UPDATE activity_results
+                    SET early_finish = early_finish + interval '1 day'
+                    WHERE calculation_id = %s AND disposition = 'scheduled'
+                    """,
+                    (uuid.UUID(created["calculation_id"]),),
+                ).rowcount
+                conn.commit()
+            self.assertGreater(changed, 0)
+            refused = client.get(f"/api/projects/{project}/calculations/latest")
+            self.assertEqual(refused.status_code, 500, refused.text)
+            self.assertIn("fingerprint", refused.json()["detail"])
 
     def test_a_restart_reproduces_the_same_result_from_the_same_input(self):
         """The half of `P1-G4` that a resident cache could hide."""
