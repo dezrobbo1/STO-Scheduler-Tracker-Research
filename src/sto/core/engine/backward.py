@@ -128,8 +128,9 @@ FROM_ACTUALS = "actuals"
 #: names them in the hash, so releasing an edge that moved no late date -- one
 #: already redundant -- still changes the answer's digest. Version four binds
 #: the progress policy itself; version five closes a feasible plateau after a
-#: finite lag calendar against the network horizon.
-BACKWARD_PASS_PROFILE = "sto-backward-pass-v5"
+#: finite lag calendar against the network horizon. Version six binds the
+#: milestone-snap policy inherited from the forward pass.
+BACKWARD_PASS_PROFILE = "sto-backward-pass-v6"
 
 
 @dataclass(frozen=True, slots=True)
@@ -175,6 +176,9 @@ class BackwardPass:
     #: another: the two can share a network fingerprint and even every late
     #: date, and still disagree about which edges are released.
     progress_policy: ProgressPolicy = ProgressPolicy.RETAINED_LOGIC
+    #: The forward pass's milestone placement policy. Kept on the result so
+    #: criticality can refuse two passes that used different placement domains.
+    snap_milestones: bool = False
 
     def by_uid(self) -> dict[UUID, ActivityLateTimes]:
         return {row.uid: row for row in self.times}
@@ -251,7 +255,7 @@ def backward_pass(
     network: Network,
     forward: ForwardPass,
     *,
-    snap_milestones: bool = False,
+    snap_milestones: bool | None = None,
     project_late_finish: int | None = None,
     progress_policy: ProgressPolicy | None = None,
 ) -> BackwardPass:
@@ -264,11 +268,10 @@ def backward_pass(
     reports float against a contractual date rather than against itself. It
     must lie within the compiled horizon.
 
-    The progress policy is the one the forward pass ran under -- read from
-    ``forward`` so the two passes cannot default it separately. ``progress_policy``
-    may name it again, and a different name is refused (``SCHEDULE_POLICY_MISMATCH``)
-    rather than walking edges the forward pass released or releasing ones it
-    walked.
+    The progress and milestone-snap policies are the ones the forward pass ran
+    under -- read from ``forward`` so the two passes cannot default them
+    separately. Either may be named again, and a different value is refused
+    (``SCHEDULE_POLICY_MISMATCH``) rather than calculating two placement domains.
     """
 
     network.validate()
@@ -287,6 +290,15 @@ def backward_pass(
             None,
             f"the forward pass ran under {forward.progress_policy.value}, "
             f"not {progress_policy.value}",
+        )
+    if snap_milestones is None:
+        snap_milestones = forward.snap_milestones
+    elif snap_milestones != forward.snap_milestones:
+        raise BackwardPassError(
+            "SCHEDULE_POLICY_MISMATCH",
+            None,
+            f"the forward pass used snap_milestones={forward.snap_milestones}, "
+            f"not {snap_milestones}",
         )
 
     by_uid = network.activity_by_uid()
@@ -412,10 +424,17 @@ def backward_pass(
         order=tuple(reversed(forward.order)),
         project_late_finish=late_finish,
         deferred_constraints=tuple(deferred),
-        fingerprint=_fingerprint(times, late_finish, overridden, progress_policy),
+        fingerprint=_fingerprint(
+            times,
+            late_finish,
+            overridden,
+            progress_policy,
+            snap_milestones,
+        ),
         overridden_relationships=overridden,
         network_fingerprint=network_fingerprint,
         progress_policy=progress_policy,
+        snap_milestones=snap_milestones,
     )
 
 
@@ -532,6 +551,7 @@ def _fingerprint(
     project_late_finish: int,
     overridden: tuple[UUID, ...],
     progress_policy: ProgressPolicy,
+    snap_milestones: bool,
 ) -> str:
     """A hash of the answer, so two runs are compared without comparing objects.
 
@@ -547,6 +567,7 @@ def _fingerprint(
         {
             "profile": BACKWARD_PASS_PROFILE,
             "progress_policy": progress_policy.value,
+            "snap_milestones": snap_milestones,
             "project_late_finish": project_late_finish,
             "overridden_relationships": sorted(str(uid) for uid in overridden),
             "times": sorted(

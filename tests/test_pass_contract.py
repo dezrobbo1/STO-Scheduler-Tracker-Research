@@ -15,6 +15,7 @@ from uuid import NAMESPACE_URL, UUID, uuid5
 
 from sto.core.calendar.arithmetic import CompiledIntervals
 from sto.core.engine import (
+    BackwardPassError,
     ForwardPassError,
     Network,
     PlannedActivity,
@@ -449,6 +450,117 @@ class CalendarTailSchedulingConsequencesTests(unittest.TestCase):
 
         self.assertEqual(unsnapped.times, snapped.times)
         self.assertNotEqual(unsnapped.fingerprint, snapped.fingerprint)
+
+    def test_nonzero_start_anchor_does_not_stop_inside_a_calendar_gap(self):
+        scheduling = CompiledIntervals.of(((0, 5), (10, 15)))
+        successor_calendar = CompiledIntervals.of(((0, 20),))
+        net = network(
+            activity("P", 2, scheduling),
+            activity(
+                "S",
+                0,
+                successor_calendar,
+                constraint_type=ConstraintType.SNET,
+                constraint_coordinate=7,
+            ),
+            relationships=(
+                link(
+                    "R1",
+                    "P",
+                    "S",
+                    RelationshipType.SS,
+                    0,
+                    successor_calendar,
+                ),
+            ),
+            horizon=20,
+        )
+        forward = forward_pass(net)
+        predecessor = float_analysis(
+            net,
+            forward,
+            backward_pass(net, forward),
+        ).by_uid()[uid("P")]
+
+        self.assertEqual(
+            (forward.by_uid()[uid("P")].early_start, forward.by_uid()[uid("P")].early_finish),
+            (0, 2),
+        )
+        self.assertEqual(predecessor.free_float, 4)
+
+    def test_backward_pass_inherits_and_binds_the_forward_snap_policy(self):
+        scheduling = CompiledIntervals.of(((0, 5), (10, 15)))
+        successor_calendar = CompiledIntervals.of(((0, 20),))
+        net = network(
+            activity("P", 0, scheduling),
+            activity(
+                "S",
+                0,
+                successor_calendar,
+                constraint_type=ConstraintType.SNET,
+                constraint_coordinate=7,
+            ),
+            relationships=(
+                link(
+                    "R1",
+                    "P",
+                    "S",
+                    RelationshipType.SS,
+                    0,
+                    successor_calendar,
+                ),
+            ),
+            horizon=20,
+        )
+        snapped_forward = forward_pass(net, snap_milestones=True)
+        inherited = backward_pass(net, snapped_forward)
+
+        self.assertTrue(inherited.snap_milestones)
+        self.assertEqual(inherited.by_uid()[uid("P")].late_start, 4)
+        with self.assertRaisesRegex(BackwardPassError, "SCHEDULE_POLICY_MISMATCH"):
+            backward_pass(net, snapped_forward, snap_milestones=False)
+
+        unsnapped_forward = forward_pass(net, snap_milestones=False)
+        unsnapped_backward = backward_pass(net, unsnapped_forward)
+        self.assertNotEqual(inherited.fingerprint, unsnapped_backward.fingerprint)
+
+    def test_exactly_pinned_milestone_is_not_reclassified_as_snapped(self):
+        scheduling = CompiledIntervals.of(((0, 5), (10, 15)))
+        successor_calendar = CompiledIntervals.of(((0, 20),))
+        net = network(
+            activity(
+                "P",
+                0,
+                scheduling,
+                constraint_type=ConstraintType.MSO,
+                constraint_coordinate=7,
+            ),
+            activity(
+                "S",
+                0,
+                successor_calendar,
+                constraint_type=ConstraintType.SNET,
+                constraint_coordinate=7,
+            ),
+            relationships=(
+                link(
+                    "R1",
+                    "P",
+                    "S",
+                    RelationshipType.SS,
+                    0,
+                    successor_calendar,
+                ),
+            ),
+            horizon=20,
+        )
+        forward = forward_pass(net, snap_milestones=True)
+        backward = backward_pass(net, forward, snap_milestones=True)
+        predecessor = float_analysis(net, forward, backward).by_uid()[uid("P")]
+
+        self.assertEqual(forward.by_uid()[uid("P")].early_start, 7)
+        self.assertEqual(backward.by_uid()[uid("P")].late_start, 7)
+        self.assertEqual(predecessor.free_float, 0)
 
     def test_every_relationship_type_and_lag_sign_uses_the_same_bounded_contract(self):
         scheduling = CompiledIntervals.of(((0, 20),))

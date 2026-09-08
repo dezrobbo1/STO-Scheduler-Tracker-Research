@@ -82,6 +82,7 @@ from sto.core.calendar.arithmetic import (
     working_between,
 )
 from sto.core.hashing import canonical_sha256
+from sto.core.model.enums import ConstraintType
 
 from .backward import BackwardPass
 from .forward import ActivityTimes, ForwardPass
@@ -202,6 +203,7 @@ def _free_float(
     scheduling_calendars: dict[UUID, CompiledIntervals],
     movement_limits: dict[UUID, tuple[int, int]],
     snapped_zero_spans: frozenset[UUID],
+    calendar_placed_starts: frozenset[UUID],
     project_late_finish: int,
 ) -> int:
     """Slack against the successors' *early* dates, not the project's late finish.
@@ -280,7 +282,13 @@ def _free_float(
                 relationship.uid,
                 f"lag {relationship.lag} back from {available} leaves the calendar",
             )
-        if uid in snapped_zero_spans:
+        if (
+            uid in snapped_zero_spans
+            or (
+                not relationship.anchors_predecessor_finish
+                and uid in calendar_placed_starts
+            )
+        ):
             # The inverse answers in the lag calendar's coordinate domain. A
             # zero-length predecessor under milestone snapping has a stricter
             # placement domain: a coordinate in a scheduling-calendar gap is
@@ -335,6 +343,13 @@ def float_analysis(
             f"the forward pass ran under {forward.progress_policy.value}, "
             f"the backward pass under {backward.progress_policy.value}",
         )
+    if forward.snap_milestones != backward.snap_milestones:
+        raise CriticalityError(
+            "SCHEDULE_POLICY_MISMATCH",
+            None,
+            f"the forward pass used snap_milestones={forward.snap_milestones}, "
+            f"the backward pass used snap_milestones={backward.snap_milestones}",
+        )
     early = forward.by_uid()
     late = backward.by_uid()
 
@@ -345,12 +360,26 @@ def float_analysis(
     scheduling_calendars = {
         activity.uid: activity.calendar for activity in network.activities
     }
+    exactly_pinned = frozenset(
+        activity.uid
+        for activity in network.activities
+        if early[activity.uid].state is ProgressState.NOT_STARTED
+        and activity.constraint_type in (ConstraintType.MSO, ConstraintType.MFO)
+    )
     snapped_zero_spans = frozenset(
         activity.uid
         for activity in network.activities
         if forward.snap_milestones
         and activity.remaining == 0
         and early[activity.uid].state is not ProgressState.COMPLETE
+        and activity.uid not in exactly_pinned
+    )
+    calendar_placed_starts = frozenset(
+        activity.uid
+        for activity in network.activities
+        if early[activity.uid].state is ProgressState.NOT_STARTED
+        and activity.uid not in exactly_pinned
+        and (activity.remaining > 0 or activity.uid in snapped_zero_spans)
     )
     movement_limits: dict[UUID, tuple[int, int]] = {}
     for activity in network.activities:
@@ -441,6 +470,7 @@ def float_analysis(
             scheduling_calendars,
             movement_limits,
             snapped_zero_spans,
+            calendar_placed_starts,
             backward.project_late_finish,
         )
         rows.append(
