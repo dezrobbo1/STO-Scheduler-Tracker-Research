@@ -7,7 +7,7 @@ question: given a result the engine has already produced, do the relations it
 
 The distinction is the whole point. A defect in the forward pass shows up in
 the forward pass's own answer and in anything that recomputes the answer the
-same way -- which is how a suite of five hundred passing tests sat above a
+same way -- which is how a suite that passed in full sat above a
 free float that overstated safe delay across calendars, a lag inverse that
 landed after its own bound, and a constraint one pass applied while the other
 set it aside. Each was found by reading the code rather than by running it.
@@ -27,11 +27,16 @@ Microsoft Project, which is what the real-file comparisons are for.
 
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass
 from uuid import UUID
 
 from sto.core.calendar.arithmetic import working_between
-from sto.core.model.enums import ProgressPolicy
+from sto.core.model.enums import ConstraintType, ProgressPolicy
+
+#: Constraints this check does not ask about: ASAP places nothing, and ALAP is
+#: carried through the passes rather than applied to an early date.
+_UNCHECKED_CONSTRAINTS = frozenset({ConstraintType.ASAP, ConstraintType.ALAP})
 
 from .backward import BackwardPass
 from .criticality import FloatAnalysis
@@ -60,7 +65,7 @@ def validate_result(
     backward: BackwardPass,
     floats: FloatAnalysis,
     *,
-    threshold: int = 0,
+    threshold: int | None = None,
     progress_policy: ProgressPolicy = ProgressPolicy.RETAINED_LOGIC,
     elapsed: frozenset[UUID] = frozenset(),
 ) -> tuple[Violation, ...]:
@@ -71,10 +76,18 @@ def validate_result(
     holds for them too, but the caller knows which they are and saying so keeps
     the rule visible rather than implied.
 
+    ``threshold`` defaults to the one the float analysis recorded, because that
+    is the threshold its own flags were computed under; passing a different one
+    asks a different question and is allowed, but defaulting to zero made the
+    validator disagree with every sound result on a file that declares a
+    threshold, which CALCINER does.
+
     An empty tuple is the answer for a sound result. Violations carry a code so
     a caller can act on the class rather than parse prose.
     """
 
+    if threshold is None:
+        threshold = floats.threshold
     violations: list[Violation] = []
     early = forward.by_uid()
     late = backward.by_uid()
@@ -83,6 +96,17 @@ def validate_result(
     states = {uid: state_of(activity) for uid, activity in activities.items()}
 
     # --- every row is answered exactly once, by all three ---------------
+    # Counted on the tuples the passes returned, not on the maps: ``by_uid``
+    # collapses a duplicated row silently, so a result carrying one twice
+    # would have satisfied an "exactly once" check built from the map.
+    for name, rows in (
+        ("FORWARD", [row.uid for row in forward.times]),
+        ("BACKWARD", [row.uid for row in backward.times]),
+        ("FLOAT", [row.uid for row in floats.rows]),
+    ):
+        for uid, count in Counter(rows).items():
+            if count > 1:
+                violations.append(Violation(f"{name}_DUPLICATE_ACTIVITY", uid, f"{count} rows"))
     for name, answered in (
         ("FORWARD", set(early)),
         ("BACKWARD", set(late)),
@@ -113,58 +137,116 @@ def validate_result(
                 )
             )
 
-        if state is ProgressState.COMPLETE:
-            # Reported dates are facts, not placements: they consume whatever
-            # they consume, and nothing recomputes them.
-            continue
+        # Only the *duration* checks are exempt for completed work: its
+        # reported dates are facts and consume whatever they consume. Its
+        # float, its criticality and the order of its spans are still claims
+        # this result makes, and skipping the whole row let a completed
+        # activity be marked critical with arbitrary float and pass.
+        if state is not ProgressState.COMPLETE:
+            expected = activity.remaining
+            begins = row.remaining_start if row.remaining_start is not None else row.early_start
+            consumed = working_between(activity.calendar, begins, row.early_finish)
+            if consumed != expected:
+                violations.append(
+                    Violation(
+                        "EARLY_SPAN_WRONG_LENGTH",
+                        uid,
+                        f"consumes {consumed}, duration {expected}",
+                    )
+                )
+            late_consumed = working_between(
+                activity.calendar, late_row.late_start, late_row.late_finish
+            )
+            if late_consumed != expected:
+                violations.append(
+                    Violation(
+                        "LATE_SPAN_WRONG_LENGTH",
+                        uid,
+                        f"consumes {late_consumed}, duration {expected}",
+                    )
+                )
 
-        expected = activity.remaining
-        begins = row.remaining_start if row.remaining_start is not None else row.early_start
-        consumed = working_between(activity.calendar, begins, row.early_finish)
-        if consumed != expected:
-            violations.append(
-                Violation(
-                    "EARLY_SPAN_WRONG_LENGTH",
-                    uid,
-                    f"consumes {consumed}, duration {expected}",
-                )
-            )
-        late_consumed = working_between(
-            activity.calendar, late_row.late_start, late_row.late_finish
-        )
-        if late_consumed != expected:
-            violations.append(
-                Violation(
-                    "LATE_SPAN_WRONG_LENGTH",
-                    uid,
-                    f"consumes {late_consumed}, duration {expected}",
-                )
-            )
+            # --- remaining work obeys the floor the policy gives it -------
+            if state is ProgressState.IN_PROGRESS and row.remaining_start is not None:
+                floor = activity.actual_start
+                if (
+                    network.status_time is not None
+                    and progress_policy is ProgressPolicy.PROGRESS_OVERRIDE
+                    and floor is not None
+                ):
+                    floor = max(floor, network.status_time)
+                if floor is not None and row.remaining_start < floor:
+                    violations.append(
+                        Violation(
+                            "REMAINING_START_BEFORE_ITS_FLOOR",
+                            uid,
+                            f"remaining start {row.remaining_start} < {floor}",
+                        )
+                    )
 
         # --- the late span is not earlier than the early one -------------
-        if late_row.late_start < row.early_start:
+        # Measured against the *remaining* start where there is one: for work
+        # under way the early start is the immovable actual one while the late
+        # dates describe the part that can still move, so comparing those two
+        # accepted a late span earlier than the remaining span it bounds.
+        early_side = row.remaining_start if row.remaining_start is not None else row.early_start
+        if late_row.late_start < early_side:
             violations.append(
                 Violation(
                     "LATE_BEFORE_EARLY",
                     uid,
-                    f"late start {late_row.late_start} < early start {row.early_start}",
+                    f"late start {late_row.late_start} < early start {early_side}",
                 )
             )
 
         # --- total float is the gap between them, on the float calendar --
-        measured = min(
-            _signed(activity.float_calendar, row.early_start, late_row.late_start),
-            _signed(activity.float_calendar, row.early_finish, late_row.late_finish),
-        )
-        reported = slack[uid].total_float
+        float_row = slack.get(uid)
+        if float_row is None:
+            # Already reported as missing above; indexing it here turned that
+            # report into a KeyError before it could be returned.
+            continue
+        start_gap = _signed(activity.float_calendar, early_side, late_row.late_start)
+        finish_gap = _signed(activity.float_calendar, row.early_finish, late_row.late_finish)
+        measured = min(start_gap, finish_gap)
+        reported = float_row.total_float
         if reported != measured:
             violations.append(
                 Violation("TOTAL_FLOAT_MISMATCH", uid, f"reported {reported}, measured {measured}")
             )
-        if slack[uid].critical != (reported <= threshold):
+        # The two components are separately reported and separately consumed,
+        # so checking only their minimum left either free to be anything.
+        if float_row.start_float != start_gap:
             violations.append(
-                Violation("CRITICALITY_MISMATCH", uid, f"float {reported}, threshold {threshold}")
+                Violation(
+                    "START_FLOAT_MISMATCH",
+                    uid,
+                    f"reported {float_row.start_float}, measured {start_gap}",
+                )
             )
+        if float_row.finish_float != finish_gap:
+            violations.append(
+                Violation(
+                    "FINISH_FLOAT_MISMATCH",
+                    uid,
+                    f"reported {float_row.finish_float}, measured {finish_gap}",
+                )
+            )
+        # Completed work is never critical whatever its slack (ADR-009,
+        # measured on the two files Project itself recalculated), so the
+        # threshold rule alone is the wrong question for it -- as the corpus's
+        # own status cases said the moment this check was written naively.
+        expected_critical = reported <= threshold and state is not ProgressState.COMPLETE
+        if float_row.critical != expected_critical:
+            violations.append(
+                Violation(
+                    "CRITICALITY_MISMATCH",
+                    uid,
+                    f"float {reported}, threshold {threshold}, state {state.value}",
+                )
+            )
+
+        # --- a constraint the result claims to honour ---------------------
+        violations.extend(_constraint_violations(activity, row, early_side))
 
     # --- free float against the theorem it has to obey -------------------
     # ADR-008 records that free float cannot exceed total float when every
@@ -194,6 +276,12 @@ def validate_result(
             outgoing[relationship.predecessor_uid].append(relationship)
     for uid, edges in outgoing.items():
         if not single_calendar or uid not in slack or not edges:
+            continue
+        if states.get(uid) is not ProgressState.NOT_STARTED:
+            # A completed row's late dates are pinned to its actuals, so its
+            # total float is zero whatever room sits in front of its
+            # successors; the theorem compares two quantities that are no
+            # longer about the same thing.
             continue
         binding = [
             edge
@@ -226,22 +314,26 @@ def validate_result(
         if not relationship_binds(
             progress_policy, states[relationship.successor_uid], network.status_time
         ):
-            continue
-        if states[relationship.successor_uid] is not ProgressState.NOT_STARTED:
-            # The successor's remaining work is placed by the policy, not by
-            # this edge; the pass reports which edges it released and this is
-            # not the place to second-guess the ones it kept.
+            # Released by the policy, or into completed work: the pass did not
+            # walk it and neither does this. Every edge it *kept* is checked,
+            # including those into work under way, which retained logic really
+            # does bound -- skipping them left the one relationship a corrupted
+            # in-progress span violates unexamined.
             continue
         anchor = (
             predecessor.early_finish
             if relationship.anchors_predecessor_finish
             else predecessor.early_start
         )
-        bound = (
-            successor.early_start
-            if relationship.bounds_successor_start
-            else successor.early_finish
+        # The successor side reads its remaining start where it has one, which
+        # is the coordinate the edge actually bounds and the one the float
+        # measures to.
+        successor_start = (
+            successor.remaining_start
+            if successor.remaining_start is not None
+            else successor.early_start
         )
+        bound = successor_start if relationship.bounds_successor_start else successor.early_finish
         calendar = (
             relationship.lag_calendar
             if relationship.lag_calendar is not None
@@ -255,7 +347,14 @@ def validate_result(
             if bound >= anchor
             else -working_between(calendar, bound, anchor)
         )
-        if between < relationship.lag:
+        honoured = between >= relationship.lag
+        if honoured and relationship.lag == 0 and bound < anchor:
+            # Working time is blind to order inside a gap: two coordinates in
+            # the same non-working stretch are zero apart whichever way round
+            # they are, so a successor pulled *before* its zero-lag anchor
+            # measured as satisfied. Zero lag is a coordinate comparison.
+            honoured = False
+        if not honoured:
             violations.append(
                 Violation(
                     "RELATIONSHIP_NOT_HONOURED",
@@ -265,6 +364,45 @@ def validate_result(
             )
 
     return tuple(violations)
+
+
+def _constraint_violations(activity, row, early_side: int) -> list[Violation]:
+    """A constraint the result claims to honour, checked against its dates.
+
+    The passes apply these; nothing here re-applies them. It asks only whether
+    the span that came back satisfies what the network said, because a result
+    can be internally well-shaped -- durations right, float consistent -- and
+    still sit somewhere its own constraint forbids.
+    """
+
+    constraint = activity.constraint_type
+    coordinate = activity.constraint_coordinate
+    if coordinate is None or constraint in _UNCHECKED_CONSTRAINTS:
+        return []
+    if activity.has_started:
+        # A constraint on work already under way is reported and not applied
+        # (ADR-009), so the dates are not claiming to honour it.
+        return []
+    checks = {
+        ConstraintType.SNET: (early_side >= coordinate, "starts before"),
+        ConstraintType.SNLT: (early_side <= coordinate, "starts after"),
+        ConstraintType.FNET: (row.early_finish >= coordinate, "finishes before"),
+        ConstraintType.FNLT: (row.early_finish <= coordinate, "finishes after"),
+        ConstraintType.MSO: (early_side == coordinate, "does not start on"),
+        ConstraintType.MFO: (row.early_finish == coordinate, "does not finish on"),
+    }
+    if constraint not in checks:
+        return []
+    holds, wording = checks[constraint]
+    if holds:
+        return []
+    return [
+        Violation(
+            "CONSTRAINT_NOT_HONOURED",
+            activity.uid,
+            f"{constraint.value}: the span {wording} {coordinate}",
+        )
+    ]
 
 
 def _signed(calendar, earlier: int, later: int) -> int:

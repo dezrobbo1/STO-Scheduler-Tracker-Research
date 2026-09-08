@@ -25,13 +25,27 @@ from sto.core.engine import (
     forward_pass,
 )
 from sto.core.engine.validate import validate_result
-from sto.core.model.enums import RelationshipType
+from sto.core.model.enums import ConstraintType, ProgressPolicy, RelationshipType
 
 CONTINUOUS = CompiledIntervals.of(((0, 400),))
 
 
 def uid(name: str) -> UUID:
     return uuid5(NAMESPACE_URL, f"sto-validator/{name}")
+
+
+def network(*activities, relationships=(), project_start=0, horizon=400, status_time=None):
+    return Network(
+        activities=tuple(activities),
+        relationships=tuple(relationships),
+        project_start=project_start,
+        horizon=horizon,
+        status_time=status_time,
+    )
+
+
+def activity(name, duration, calendar=CONTINUOUS, **fields):
+    return PlannedActivity(uid(name), duration, calendar, **fields)
 
 
 def _sound():
@@ -117,6 +131,123 @@ class ACorruptedResultIsCaughtTests(unittest.TestCase):
         rows[0] = replace(rows[0], free_float=rows[0].total_float + 30)
         self.assertIn(
             "FREE_FLOAT_EXCEEDS_TOTAL", self._codes(floats=replace(fl, rows=tuple(rows)))
+        )
+
+
+class TheChecksTheFirstVersionMissedTests(unittest.TestCase):
+    """One corruption per gap the slice's own review found."""
+
+    def _codes(self, net, forward, backward, floats, **kwargs):
+        return {row.code for row in validate_result(net, forward, backward, floats, **kwargs)}
+
+    def test_a_row_answered_twice_is_not_collapsed_into_one(self):
+        net, f, b, fl = _sound()
+        doubled = replace(f, times=f.times + (f.times[0],))
+        self.assertIn("FORWARD_DUPLICATE_ACTIVITY", self._codes(net, doubled, b, fl))
+
+    def test_a_missing_float_row_is_reported_rather_than_raised(self):
+        net, f, b, fl = _sound()
+        short = replace(fl, rows=fl.rows[1:])
+        codes = self._codes(net, f, b, short)
+        self.assertIn("FLOAT_MISSING_ACTIVITY", codes)
+
+    def test_a_completed_row_still_has_its_float_and_flag_checked(self):
+        """Only the duration exemption belongs to completed work."""
+
+        net = network(
+            activity("A", 10, actual_start=0, actual_finish=10),
+            status_time=20,
+        )
+        forward = forward_pass(net)
+        backward = backward_pass(net, forward)
+        floats = float_analysis(net, forward, backward)
+        self.assertEqual(validate_result(net, forward, backward, floats), ())
+        rows = list(floats.rows)
+        rows[0] = replace(rows[0], critical=True)
+        self.assertIn(
+            "CRITICALITY_MISMATCH",
+            self._codes(net, forward, backward, replace(floats, rows=tuple(rows))),
+        )
+
+    def test_the_threshold_comes_from_the_analysis_that_set_the_flags(self):
+        """A file with a declared threshold is sound, not a wall of mismatches."""
+
+        net, f, b, _ = _sound()
+        generous = float_analysis(net, f, b, threshold=3600)
+        self.assertEqual(validate_result(net, f, b, generous), ())
+
+    def test_a_component_float_can_not_be_anything_it_likes(self):
+        net, f, b, fl = _sound()
+        rows = list(fl.rows)
+        rows[0] = replace(rows[0], start_float=rows[0].start_float + 45)
+        self.assertIn(
+            "START_FLOAT_MISMATCH", self._codes(net, f, b, replace(fl, rows=tuple(rows)))
+        )
+
+    def test_a_span_that_ignores_its_own_constraint(self):
+        net = network(
+            activity(
+                "A",
+                10,
+                constraint_type=ConstraintType.SNET,
+                constraint_coordinate=100,
+            ),
+        )
+        forward = forward_pass(net)
+        backward = backward_pass(net, forward)
+        floats = float_analysis(net, forward, backward)
+        self.assertEqual(validate_result(net, forward, backward, floats), ())
+        times = list(forward.times)
+        times[0] = replace(times[0], early_start=0, early_finish=10)
+        moved = replace(forward, times=tuple(times))
+        self.assertIn("CONSTRAINT_NOT_HONOURED", self._codes(net, moved, backward, floats))
+
+    def test_a_successor_pulled_before_its_anchor_inside_a_gap(self):
+        """Working time is blind to order; a zero lag is a coordinate."""
+
+        gapped = CompiledIntervals.of(((0, 5), (20, 400)))
+        net = network(
+            activity("A", 5, gapped),
+            activity("M", 0, gapped),
+            relationships=(
+                PlannedRelationship(uid("R"), uid("A"), uid("M"), RelationshipType.FS, 0, gapped),
+            ),
+        )
+        forward = forward_pass(net, snap_milestones=False)
+        backward = backward_pass(net, forward, snap_milestones=False)
+        floats = float_analysis(net, forward, backward)
+        self.assertEqual(validate_result(net, forward, backward, floats), ())
+        times = list(forward.times)
+        moved = replace(times[1], early_start=times[0].early_finish - 1, early_finish=times[0].early_finish - 1)
+        times[1] = moved
+        self.assertIn(
+            "RELATIONSHIP_NOT_HONOURED",
+            self._codes(net, replace(forward, times=tuple(times)), backward, floats),
+        )
+
+    def test_remaining_work_moved_below_its_floor(self):
+        net = network(
+            activity("A", 20, actual_start=0, remaining_duration=5),
+            status_time=50,
+        )
+        forward = forward_pass(net, progress_policy=ProgressPolicy.PROGRESS_OVERRIDE)
+        backward = backward_pass(net, forward)
+        floats = float_analysis(net, forward, backward)
+        clean = validate_result(
+            net, forward, backward, floats, progress_policy=ProgressPolicy.PROGRESS_OVERRIDE
+        )
+        self.assertEqual(clean, ())
+        times = list(forward.times)
+        times[0] = replace(times[0], remaining_start=10, early_finish=15)
+        self.assertIn(
+            "REMAINING_START_BEFORE_ITS_FLOOR",
+            self._codes(
+                net,
+                replace(forward, times=tuple(times)),
+                backward,
+                floats,
+                progress_policy=ProgressPolicy.PROGRESS_OVERRIDE,
+            ),
         )
 
 

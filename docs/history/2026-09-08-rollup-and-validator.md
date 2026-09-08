@@ -45,7 +45,7 @@ Every other test asks the engine to compute something and compares the answer.
 The validator asks whether the relations a finished result *claims* actually
 hold — and that difference is the point of the slice. A defect in a pass shows
 up in that pass's answer and in anything that recomputes it the same way,
-which is how a suite of five hundred passing tests sat above a free float that
+which is how a fully passing suite sat above a free float that
 overstated safe delay across calendars, a lag inverse that landed after its
 own bound, and a constraint one pass applied while the other set it aside.
 Every one of those was found by reading the code.
