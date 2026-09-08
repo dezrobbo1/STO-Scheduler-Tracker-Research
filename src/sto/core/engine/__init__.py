@@ -58,6 +58,7 @@ from .network import (
     unshift_lag,
 )
 from .plan import SCHEDULED_KINDS, Assumed, Excluded, Plan, PlanError, build_plan
+from .rollup import ROLLUP_PROFILE, RolledUp, Rollup, roll_up
 from .progress import (
     PROGRESS_PROFILE,
     RETAINING_POLICIES,
@@ -83,6 +84,7 @@ __all__ = [
     "FROM_RELATIONSHIP",
     "FROM_STATUS_TIME",
     "PROGRESS_PROFILE",
+    "ROLLUP_PROFILE",
     "RETAINING_POLICIES",
     "SCHEDULED_KINDS",
     "ActivityFloat",
@@ -105,6 +107,8 @@ __all__ = [
     "PlanError",
     "PlannedActivity",
     "PlannedRelationship",
+    "RolledUp",
+    "Rollup",
     "ProgressError",
     "ProgressState",
     "backward_pass",
@@ -112,6 +116,7 @@ __all__ = [
     "float_analysis",
     "forward_pass",
     "relationship_binds",
+    "roll_up",
     "remaining_bound",
     "require_supported",
     "shift_lag",
