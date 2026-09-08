@@ -73,8 +73,19 @@ activities shared between the snapshots keep their identifiers while 18 new and
 13 departed rows are reported rather than conflated. `sto canonicalise` and
 `sto reconcile` expose it.
 
+**The calculated result (PL3).** `sto.core.engine.result` assembles one row per
+activity out of the passes, the float, the rollup and the plan's dispositions,
+and derives nothing a second time. A scheduled row carries four dates, two
+floats, its progress state and what placed it; an excluded row carries the code
+that says why and no dates at all. Schedule dates are stored as wall-clock
+without a time zone, because a Microsoft Project date carries no offset and
+attaching one would move the working day. `Workspace.calculate` runs the engine
+over a project's stored head and stores the answer, reading the document back
+through the hash check so nothing is computed over bytes that do not hash to
+what they claim.
+
 **Persistence and multi-project (PL1).** PostgreSQL on the existing loopback
-instance, a new `sto` database, and one migration: projects, source files,
+instance, a new `sto` database, and `V001`: projects, source files,
 import batches, and the schedule-version envelope — immutable versions with
 the full canonical document and identity map, a movable head per kind
 (ADR-007). FastAPI over it: create projects, upload a schedule, read the head.
@@ -240,8 +251,13 @@ the writers that need it live):
    removed reaches no row in the estate, so the disposition partition is
    enforced instead of rebuilt
    (`docs/history/2026-09-08-rollup-and-validator.md`).
-8. **The per-activity result projection** (`PL3`), which ADR-006 deferred
-   until its columns had meanings and a result type to mirror. They do now.
+8. ~~The per-activity result projection~~ (`PL3`) — done. ADR-006 deferred it
+   until its columns had meanings and a result type to mirror; S3 to S6 gave
+   them both. A result carries the document hash it was computed from, the
+   horizon, the policy, the threshold and every stage's profile, and hashes
+   them with the rows, so two results that agree say so before anyone compares
+   dates. `V002` stores a calculation the way a version is stored: immutably,
+   a recalculation being a new row rather than an edit.
 9. **The calculated schedule, persisted and visible** (`PL13`): stored
    baseline → plan and passes → a result bound to its input hash, engine
    profiles and dispositions → an API route → a task table and simple Gantt
