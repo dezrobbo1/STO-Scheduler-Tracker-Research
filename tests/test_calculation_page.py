@@ -42,7 +42,16 @@ class ThePageIsSelfConsistentTests(unittest.TestCase):
         self.parser.feed(self.html)
 
     def test_every_asset_it_asks_for_is_there(self):
-        for asset in self.parser.assets:
+        """A relative href is a file that must exist beside the page.
+
+        An inline ``data:`` URI asks the server for nothing -- the page uses one
+        to stop the browser's automatic favicon request becoming a 404 in the
+        console -- so it is not an asset and there is nothing to find.
+        """
+
+        requested = [asset for asset in self.parser.assets if not asset.startswith("data:")]
+        self.assertTrue(requested, "the page requests no assets; this would pass vacuously")
+        for asset in requested:
             with self.subTest(asset):
                 self.assertTrue((STATIC / asset).is_file(), f"{asset} is not in {STATIC}")
 

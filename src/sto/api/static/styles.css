@@ -3,7 +3,9 @@
    the planner's own surface arrives with the editing loop. */
 :root { color-scheme: light dark; --line: #8883; --warn: #b3261e; --ok: #1b6b3a; }
 * { box-sizing: border-box; }
-body { margin: 0 auto; padding: 1.5rem; max-width: 78rem;
+/* Wide enough for both sets of dates and the verdict beside them without a
+   horizontal scroll on a normal screen. The prose stays narrow on its own. */
+body { margin: 0 auto; padding: 1.5rem; max-width: 96rem;
        font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
 h1 { font-size: 1.4rem; margin: 0 0 .25rem; }
 h2 { font-size: 1rem; margin: 1.75rem 0 .5rem; }
@@ -23,6 +25,11 @@ th, td { text-align: left; padding: .3rem .5rem; border-bottom: 1px solid var(--
          white-space: nowrap; }
 th { position: sticky; top: 0; background: Canvas; }
 td.num { font-variant-numeric: tabular-nums; text-align: right; }
+/* An activity name runs to a full line of prose, and a column that grew to fit
+   one pushed every date off the side of the screen -- which is the one thing
+   this page exists to show. The name is clipped and carries its full text as a
+   tooltip; the dates stay where they can be compared. */
+td.name { max-width: 24rem; overflow: hidden; text-overflow: ellipsis; }
 tr[data-disposition="excluded"] { opacity: .65; font-style: italic; }
 td[data-agrees="false"] { color: var(--warn); }
 td[data-agrees="true"] { color: var(--ok); }

@@ -44,11 +44,14 @@ function describe(result) {
     ["Result", result.fingerprint.slice(0, 16) + "…"],
     ["Window", moment(result.horizon_start) + " → " + moment(result.horizon_finish)],
     ["Progress policy", result.progress_policy],
+    ["Status date", statusDate(result)],
     ["Engine", Object.entries(result.profiles).map(([k, v]) => k + " " + v).join(", ")],
     ["Activities", counts.activities + " (" + counts.scheduled + " scheduled)"],
     ["Summaries", String(counts.summaries)],
     ["Agreeing with the file", counts.agreeing_with_source + " of " + counts.compared_with_source],
   ];
+  const edges = edgeSummary(result.relationships);
+  if (edges) facts.push(["Relationships", edges]);
   for (const [term, value] of facts) {
     const dt = document.createElement("dt");
     dt.textContent = term;
@@ -59,6 +62,27 @@ function describe(result) {
   provenanceSection.hidden = false;
 }
 
+function statusDate(result) {
+  // A file whose status date fell outside the compiled window had it removed,
+  // so the passes ran without one. That is not the same as a file that never
+  // carried one, and a page showing only "none" would say it was.
+  if (result.status_time) return moment(result.status_time);
+  if (result.status_time_outside_window) {
+    return "discarded — the file's status date fell outside the compiled window";
+  }
+  return "none in the file";
+}
+
+function edgeSummary(edges) {
+  if (!edges || edges.length === 0) return "";
+  const perCode = new Map();
+  for (const edge of edges) perCode.set(edge.code, (perCode.get(edge.code) ?? 0) + 1);
+  return [...perCode]
+    .sort((a, b) => b[1] - a[1])
+    .map(([code, n]) => code + " ×" + n)
+    .join(", ");
+}
+
 function render(result) {
   describe(result);
   body.replaceChildren();
@@ -67,7 +91,7 @@ function render(result) {
     tr.dataset.disposition = row.disposition;
     const cells = [
       [row.code ?? "", ""],
-      [row.name ?? "", ""],
+      [row.name ?? "", "name"],
       [moment(row.source_start), ""],
       [moment(row.source_finish), ""],
       [row.disposition === "excluded" ? row.exclusion_code : moment(row.early_start), ""],
@@ -79,7 +103,8 @@ function render(result) {
     for (const [text, kind] of cells) {
       const td = document.createElement("td");
       td.textContent = text;
-      if (kind === "num") td.className = "num";
+      if (kind === "num" || kind === "name") td.className = kind;
+      if (kind === "name" && text) td.title = text;
       if (kind === "agrees" && row.agrees_with_source !== null) {
         td.dataset.agrees = String(row.agrees_with_source);
       }
