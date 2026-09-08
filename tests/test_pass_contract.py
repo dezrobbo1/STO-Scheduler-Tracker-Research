@@ -283,6 +283,62 @@ class CalendarTailSchedulingConsequencesTests(unittest.TestCase):
         self.assertEqual(predecessor.total_float, 1)
         self.assertEqual(predecessor.free_float, 110)
 
+    def test_start_anchored_float_reserves_room_for_the_predecessor_span(self):
+        scheduling = CompiledIntervals.of(((0, 20),))
+        lag_calendar = CompiledIntervals.of(((0, 12),))
+        net = network(
+            activity(
+                "P",
+                2,
+                scheduling,
+                constraint_type=ConstraintType.SNET,
+                constraint_coordinate=5,
+            ),
+            activity(
+                "S",
+                1,
+                scheduling,
+                constraint_type=ConstraintType.SNET,
+                constraint_coordinate=14,
+            ),
+            relationships=(
+                link("R1", "P", "S", RelationshipType.SS, -2, lag_calendar),
+            ),
+            horizon=20,
+        )
+        forward = forward_pass(net)
+        predecessor = float_analysis(
+            net,
+            forward,
+            backward_pass(net, forward),
+        ).by_uid()[uid("P")]
+        self.assertEqual(predecessor.free_float, 13)
+        self.assertEqual(
+            forward_pass(
+                network(
+                    activity(
+                        "P",
+                        2,
+                        scheduling,
+                        constraint_type=ConstraintType.SNET,
+                        constraint_coordinate=18,
+                    ),
+                    activity(
+                        "S",
+                        1,
+                        scheduling,
+                        constraint_type=ConstraintType.SNET,
+                        constraint_coordinate=14,
+                    ),
+                    relationships=(
+                        link("R1", "P", "S", RelationshipType.SS, -2, lag_calendar),
+                    ),
+                    horizon=20,
+                )
+            ).by_uid()[uid("P")].early_finish,
+            20,
+        )
+
     def test_every_relationship_type_and_lag_sign_uses_the_same_bounded_contract(self):
         scheduling = CompiledIntervals.of(((0, 20),))
         lag_calendar = CompiledIntervals.of(((0, 12),))
@@ -331,7 +387,11 @@ class CalendarTailSchedulingConsequencesTests(unittest.TestCase):
                     successor_bound,
                     lag,
                     floor=-5,
-                    ceiling=net.horizon,
+                    ceiling=(
+                        net.horizon
+                        if kind in (RelationshipType.FS, RelationshipType.FF)
+                        else net.horizon - 2
+                    ),
                 )
                 self.assertIsNotNone(permitted)
                 expected = signed_working(scheduling, predecessor_anchor, permitted)

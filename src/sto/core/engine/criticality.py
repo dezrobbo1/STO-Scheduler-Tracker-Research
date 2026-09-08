@@ -75,7 +75,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from uuid import UUID
 
-from sto.core.calendar.arithmetic import CompiledIntervals, working_between
+from sto.core.calendar.arithmetic import CompiledIntervals, latest_span, working_between
 from sto.core.hashing import canonical_sha256
 
 from .backward import BackwardPass
@@ -192,8 +192,8 @@ def _free_float(
     available_spans: dict[UUID, tuple[int, int]],
     calendar: CompiledIntervals,
     lag_calendars: dict[UUID, CompiledIntervals],
+    movement_limits: dict[UUID, tuple[int, int]],
     project_late_finish: int,
-    horizon: int,
 ) -> int:
     """Slack against the successors' *early* dates, not the project's late finish.
 
@@ -218,10 +218,14 @@ def _free_float(
     own dates that rule reproduces the stored ``FreeSlack`` for about
     ninety-eight in a hundred activities of every real schedule here.
 
-    ``horizon`` is the caller's permitted coordinate domain.  It is passed to
-    the inverse deliberately because a finite lag calendar can have a feasible
-    constant tail while the predecessor's scheduling calendar continues.  The
-    lag calendar's final productive coordinate is not a movement limit.
+    ``movement_limits`` is the caller's permitted coordinate domain, derived
+    from the latest complete span this activity can occupy on its scheduling
+    calendar.  A finish-anchored FS/FF edge uses that span's finish; a
+    start-anchored SS/SF edge uses its start, reserving room for the activity's
+    remaining duration.  The bound is passed to the inverse deliberately
+    because a finite lag calendar can have a feasible constant tail while the
+    predecessor's scheduling calendar continues.  The lag calendar's final
+    productive coordinate is not a movement limit.
     """
 
     early_start, early_finish = early[uid].early_start, early[uid].early_finish
@@ -254,7 +258,9 @@ def _free_float(
             lag_calendar,
             available,
             relationship.lag,
-            ceiling=horizon,
+            ceiling=movement_limits[uid][
+                1 if relationship.anchors_predecessor_finish else 0
+            ],
         )
         if permitted is None:
             # The forward pass placed this edge, so its inverse has to exist;
@@ -312,6 +318,35 @@ def float_analysis(
     # passes consumed it on -- the successor's scheduling calendar -- not the
     # one slack is measured on; on a real file the two differ (ADR-010).
     lag_calendars = {activity.uid: activity.calendar for activity in network.activities}
+    movement_limits: dict[UUID, tuple[int, int]] = {}
+    for activity in network.activities:
+        if activity.remaining == 0:
+            # An unsnapped milestone is a coordinate and consumes no calendar,
+            # so it can occupy the horizon itself without overrunning it.
+            movement_limits[activity.uid] = (network.horizon, network.horizon)
+            continue
+        floor = activity.calendar.first
+        latest = (
+            None
+            if floor is None
+            else latest_span(
+                activity.calendar,
+                network.horizon,
+                network.horizon,
+                activity.remaining,
+                floor,
+            )
+        )
+        if latest is None:
+            # A matching forward pass already placed this same remaining span
+            # within the same horizon, so reaching this is an inconsistent
+            # result set rather than a zero-slack answer.
+            raise CriticalityError(
+                "SCHEDULE_HORIZON_EXCEEDED",
+                activity.uid,
+                "no complete predecessor span fits inside the network horizon",
+            )
+        movement_limits[activity.uid] = latest
     released = frozenset(backward.overridden_relationships)
     outgoing = {
         uid: tuple(edge for edge in edges if edge.uid not in released)
@@ -356,8 +391,8 @@ def float_analysis(
             available_spans,
             calendar,
             lag_calendars,
+            movement_limits,
             backward.project_late_finish,
-            network.horizon,
         )
         rows.append(
             ActivityFloat(
