@@ -216,3 +216,146 @@ def heads_for_all_projects(conn: psycopg.Connection) -> list[dict[str, Any]]:
         ORDER BY v.project_id, h.kind
         """
     ).fetchall()
+
+
+# --- calculated results --------------------------------------------------------
+
+
+def insert_calculation(
+    conn: psycopg.Connection,
+    *,
+    project_id: uuid.UUID,
+    version_id: uuid.UUID,
+    result: Any,
+) -> uuid.UUID:
+    """Store one engine run: the header, then its rows.
+
+    Written in one statement per table rather than one per row: a real schedule
+    is a couple of thousand activities, and the caller holds a transaction
+    open around this.
+    """
+
+    provenance = result.provenance
+    row = conn.execute(
+        """
+        INSERT INTO schedule_calculations
+          (project_id, version_id, canonical_hash, result_fingerprint, epoch,
+           horizon_start, horizon_finish, progress_policy,
+           critical_float_threshold, profiles)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        RETURNING id
+        """,
+        (
+            project_id,
+            version_id,
+            provenance.canonical_hash,
+            result.fingerprint,
+            provenance.epoch,
+            provenance.horizon_start,
+            provenance.horizon_finish,
+            provenance.progress_policy,
+            provenance.critical_float_threshold,
+            Jsonb(
+                {
+                    "forward": provenance.forward_profile,
+                    "backward": provenance.backward_profile,
+                    "criticality": provenance.criticality_profile,
+                    "rollup": provenance.rollup_profile,
+                    "result": provenance.result_profile,
+                }
+            ),
+        ),
+    ).fetchone()
+    assert row is not None
+    calculation_id = row["id"]
+
+    with conn.cursor() as cursor:
+        cursor.executemany(
+            """
+            INSERT INTO activity_results
+              (calculation_id, activity_uid, disposition, early_start, early_finish,
+               late_start, late_finish, remaining_start, total_float_seconds,
+               free_float_seconds, critical, progress_state, placed_by,
+               driving_relationship_uid, exclusion_code, assumptions)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """,
+            [
+                (
+                    calculation_id,
+                    activity.uid,
+                    activity.disposition,
+                    activity.early_start,
+                    activity.early_finish,
+                    activity.late_start,
+                    activity.late_finish,
+                    activity.remaining_start,
+                    activity.total_float,
+                    activity.free_float,
+                    activity.critical,
+                    activity.state,
+                    activity.placed_by,
+                    activity.driving_relationship_uid,
+                    activity.exclusion_code,
+                    list(activity.assumptions),
+                )
+                for activity in result.activities
+            ],
+        )
+        rows = [
+            (calculation_id, summary.uid, summary.start, summary.finish, summary.placed)
+            for summary in result.summaries
+        ]
+        # A branch with nothing beneath it is stored as a row with no span, so
+        # that "not calculated" and "not in the file" stay different answers.
+        rows += [(calculation_id, uid, None, None, 0) for uid in result.empty_summaries]
+        cursor.executemany(
+            """
+            INSERT INTO summary_results
+              (calculation_id, wbs_uid, span_start, span_finish, placed)
+            VALUES (%s, %s, %s, %s, %s)
+            """,
+            rows,
+        )
+    return calculation_id
+
+
+def get_latest_calculation(
+    conn: psycopg.Connection, *, version_id: uuid.UUID
+) -> dict[str, Any] | None:
+    """The most recent run over one version, header only."""
+
+    return conn.execute(
+        """
+        SELECT * FROM schedule_calculations
+        WHERE version_id = %s
+        ORDER BY computed_at DESC, id DESC
+        LIMIT 1
+        """,
+        (version_id,),
+    ).fetchone()
+
+
+def get_activity_results(
+    conn: psycopg.Connection, *, calculation_id: uuid.UUID
+) -> list[dict[str, Any]]:
+    return conn.execute(
+        """
+        SELECT * FROM activity_results
+        WHERE calculation_id = %s
+        ORDER BY activity_uid
+        """,
+        (calculation_id,),
+    ).fetchall()
+
+
+def get_summary_results(
+    conn: psycopg.Connection, *, calculation_id: uuid.UUID
+) -> list[dict[str, Any]]:
+    return conn.execute(
+        """
+        SELECT * FROM summary_results
+        WHERE calculation_id = %s
+        ORDER BY wbs_uid
+        """,
+        (calculation_id,),
+    ).fetchall()

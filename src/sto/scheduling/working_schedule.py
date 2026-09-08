@@ -24,11 +24,21 @@ import os
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
 import psycopg
 
+from sto.core.engine import (
+    PlanError,
+    backward_pass,
+    build_plan,
+    float_analysis,
+    forward_pass,
+    roll_up,
+)
+from sto.core.engine.result import SCHEDULED, project_result
 from sto.core.hashing import canonical_sha256
 from sto.core.model import IdentityMap, ReconciliationReport, Schedule, decode_schedule
 from sto.core.model.codec import encode_schedule
@@ -58,6 +68,20 @@ class WorkingSchedule:
     canonical_hash: str
     schedule: Schedule
     identity: IdentityMap
+
+
+@dataclass(frozen=True, slots=True)
+class CalculationResult:
+    """A stored calculation: what it was computed from, and what it produced."""
+
+    project_id: uuid.UUID
+    version_id: uuid.UUID
+    calculation_id: uuid.UUID
+    canonical_hash: str
+    fingerprint: str
+    scheduled: int
+    excluded: int
+    summaries: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -140,6 +164,86 @@ class Workspace:
         self.integrity_failures.pop(project_id, None)
         self._resident[project_id] = working
         return working
+
+    # --- calculating -----------------------------------------------------------
+
+    def calculate(
+        self,
+        project_id: uuid.UUID,
+        *,
+        before: timedelta = timedelta(days=90),
+        after: timedelta = timedelta(days=365),
+    ) -> CalculationResult:
+        """Run the engine over a project's stored head and store the answer.
+
+        The horizon is the caller's, not the file's, so it is a parameter and
+        it is recorded on the row: the same document over a wider window is a
+        different calculation, and a stored result that did not say which
+        could not be read back a month later.
+
+        The document is loaded through :meth:`load`, which re-derives its hash
+        from what the database returned, so a calculation is never computed
+        over bytes that do not hash to what they claim.
+        """
+
+        working = self.load(project_id)
+        if working is None:
+            raise UnknownProject(str(project_id))
+        schedule = working.schedule
+        start = schedule.project.start
+        if start is None:
+            raise PlanError(
+                "PROJECT_START_MISSING",
+                None,
+                "the stored schedule declares no start, so there is nothing to compile around",
+            )
+        horizon = (start - before, start + after)
+        plan = build_plan(schedule, horizon)
+        forward = forward_pass(
+            plan.network,
+            snap_milestones=plan.snap_milestones,
+            progress_policy=plan.progress_policy,
+        )
+        backward = backward_pass(
+            plan.network,
+            forward,
+            snap_milestones=plan.snap_milestones,
+        )
+        floats = float_analysis(
+            plan.network, forward, backward, threshold=plan.critical_float_threshold
+        )
+        rollup = roll_up(
+            plan.wbs_children,
+            {uid: (row.early_start, row.early_finish) for uid, row in forward.by_uid().items()},
+        )
+        result = project_result(
+            plan,
+            forward,
+            backward,
+            floats,
+            rollup,
+            canonical_hash=working.canonical_hash,
+            horizon=horizon,
+        )
+        with self.connect() as conn:
+            calculation_id = repo.insert_calculation(
+                conn,
+                project_id=project_id,
+                version_id=working.version_id,
+                result=result,
+            )
+            conn.commit()
+        scheduled = sum(1 for row in result.activities if row.disposition == SCHEDULED)
+        return CalculationResult(
+            project_id=project_id,
+            version_id=working.version_id,
+            calculation_id=calculation_id,
+            canonical_hash=working.canonical_hash,
+            fingerprint=result.fingerprint,
+            scheduled=scheduled,
+            excluded=len(result.activities) - scheduled,
+            summaries=len(result.summaries),
+        )
 
     # --- importing -------------------------------------------------------------
 
