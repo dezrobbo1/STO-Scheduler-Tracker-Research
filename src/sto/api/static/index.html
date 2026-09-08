@@ -1,0 +1,52 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>STO — calculated schedule</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="styles.css">
+<header>
+  <h1>Calculated schedule</h1>
+  <p class="lede">
+    What the file said, and what this engine worked out, side by side. The two
+    are never blended: the imported dates come from the stored document and are
+    not recomputed, and the calculated ones are not written back over them.
+  </p>
+</header>
+
+<section aria-labelledby="project-heading">
+  <h2 id="project-heading">Project</h2>
+  <div class="row">
+    <label for="project">Project</label>
+    <select id="project"><option value="">loading…</option></select>
+    <button id="calculate" type="button">Calculate</button>
+  </div>
+  <p id="status" role="status"></p>
+</section>
+
+<section id="provenance-section" hidden aria-labelledby="provenance-heading">
+  <h2 id="provenance-heading">What produced this answer</h2>
+  <dl id="provenance"></dl>
+</section>
+
+<section id="rows-section" hidden aria-labelledby="rows-heading">
+  <h2 id="rows-heading">Activities</h2>
+  <div class="scroll">
+    <table id="rows">
+      <thead>
+        <tr>
+          <th scope="col">Code</th>
+          <th scope="col">Name</th>
+          <th scope="col">Imported start</th>
+          <th scope="col">Imported finish</th>
+          <th scope="col">Calculated start</th>
+          <th scope="col">Calculated finish</th>
+          <th scope="col">Total float</th>
+          <th scope="col">Critical</th>
+          <th scope="col">Agrees</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</section>
+
+<script src="app.js"></script>
