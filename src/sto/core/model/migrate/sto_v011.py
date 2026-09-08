@@ -62,13 +62,27 @@ from ..entities import (
     WorkTriple,
 )
 from ..ids import (
+    SEP,
+    DuplicateGuid,
     IdentityMap,
     ReconciliationEntry,
     ReconciliationReport,
+    mint_uid,
     normalise_guid,
 )
 
 SUPPORTED_IMPORTER_PROFILES = frozenset({"mspdi-import-v0.1.1"})
+
+#: The importer collections whose rows carry a GUID, with the kind each
+#: resolves as. Scanned for a GUID two rows of one document claim, before any
+#: of them is resolved.
+_GUID_BEARING_COLLECTIONS: tuple[tuple[EntityKind, str], ...] = (
+    (EntityKind.CALENDAR, "calendars"),
+    (EntityKind.WBS_NODE, "wbs_nodes"),
+    (EntityKind.ACTIVITY, "activities"),
+    (EntityKind.RESOURCE, "resources"),
+    (EntityKind.ASSIGNMENT, "assignments"),
+)
 
 #: Microsoft ``Task/Type``. Fixed Units is the Project default when omitted.
 _MS_TASK_TYPE: dict[int, DurationType] = {
@@ -180,15 +194,109 @@ def _seconds_of_day(value: Any) -> int:
     return parsed.hour * 3600 + parsed.minute * 60 + parsed.second
 
 
-def _duration(payload: Any) -> Duration | None:
-    """Convert the importer's ``{raw, seconds, parse_status}`` block."""
+#: Microsoft's ``DurationFormat`` codes, from the element's own reference table.
+#: The even code of each pair is the elapsed variant -- ``4`` elapsed minutes to
+#: ``3`` minutes, ``8`` elapsed days to ``7`` days -- and the estimated forms
+#: repeat the pattern from ``35``. Elapsed time counts every hour on the clock,
+#: working or not, so the code decides which calendar the span is placed on and
+#: is not presentation.
+_MS_DURATION_UNIT: dict[int, str] = {
+    3: "m", 4: "em", 5: "h", 6: "eh", 7: "d", 8: "ed", 9: "w", 10: "ew",
+    11: "mo", 12: "emo", 19: "%", 20: "e%",
+    35: "m?", 36: "em?", 37: "h?", 38: "eh?", 39: "d?", 40: "ed?",
+    41: "w?", 42: "ew?", 43: "mo?", 44: "emo?", 51: "%?", 52: "e%?",
+}
+
+#: The codes above whose unit begins with ``e``: elapsed time.
+_MS_ELAPSED_DURATION_FORMATS = frozenset(
+    code for code, unit in _MS_DURATION_UNIT.items() if unit.startswith("e")
+)
+
+#: ``21`` and ``53`` are the reference table's two ``Null`` codes: a format that
+#: names no unit. They are *display*, not meaning -- the ``<Duration>`` element
+#: is an ISO span either way -- so a row carrying one is ordinary work and is
+#: scheduled. KILN has forty-five of them, milestones and tasks, with durations
+#: from zero to four hours. The code itself is preserved on
+#: ``Duration.source_format_code``, so nothing is lost by not naming it twice.
+_MS_NULL_DURATION_FORMATS = frozenset({21, 53})
+
+
+class UnsupportedDuration:
+    """A duration the importer read and could not interpret.
+
+    Not a :class:`Duration` with a zero in it, and not ``None`` either: the
+    file said something, the parser could not turn it into seconds, and the
+    plan has to be able to tell that from a row that carried no duration and
+    from one that carried an explicit zero. It holds the raw text so the
+    disposition can quote it.
+    """
+
+    __slots__ = ("raw", "reason")
+
+    def __init__(self, raw: str, reason: str) -> None:
+        self.raw = raw
+        self.reason = reason
+
+
+def _duration(payload: Any, *, format_code: int | None = None) -> Duration | None | UnsupportedDuration:
+    """Convert the importer's ``{raw, seconds, parse_status}`` block.
+
+    Three outcomes, and they are three because the engine needs three: a
+    :class:`Duration`, ``None`` when the file carried nothing, and an
+    :class:`UnsupportedDuration` when it carried something the importer could
+    not read. Collapsing the third into the second lets uninterpreted work be
+    scheduled as no work at all.
+
+    ``format_code`` is Microsoft's ``DurationFormat`` for the row. It carries
+    the display unit -- which is what stops an imported ``8h`` being written
+    back as ``1d`` -- and whether the span is *elapsed*, which is not display
+    at all: elapsed time runs on the clock rather than on the activity's
+    calendar, and the plan schedules it accordingly.
+    """
 
     if not isinstance(payload, dict):
         return None
+    if payload.get("parse_status") == "unsupported":
+        return UnsupportedDuration(str(payload.get("raw") or ""), "DURATION_UNSUPPORTED")
     seconds = payload.get("seconds")
     if seconds is None:
         return None
-    return Duration(seconds=int(seconds), unit=None, elapsed=False)
+    if isinstance(seconds, float) and not seconds.is_integer():
+        # Truncating would silently shorten the work; the canonical model
+        # counts whole seconds, so the row says so instead.
+        return UnsupportedDuration(str(payload.get("raw") or ""), "DURATION_NON_INTEGRAL")
+    unit = None if format_code is None else _MS_DURATION_UNIT.get(format_code)
+    return Duration(
+        seconds=int(seconds),
+        unit=unit,
+        elapsed=format_code in _MS_ELAPSED_DURATION_FORMATS,
+        source_format_code=format_code,
+    )
+
+
+def _as_duration(value: Duration | None | UnsupportedDuration) -> Duration | None:
+    """The value when it is a duration, ``None`` when it is not one.
+
+    Every caller pairs this with :func:`_unsupported_fields`, which records
+    what was dropped. Absent and unreadable are different facts about the
+    source, and a work field that quietly becomes ``None`` -- or, through
+    ``WorkTriple``, zero -- is a false record of what the file said.
+    """
+
+    return value if isinstance(value, Duration) else None
+
+
+def _unsupported_fields(
+    prefix: str, value: Duration | None | UnsupportedDuration
+) -> dict[str, str]:
+    """Source fields naming a value the importer could not read, or nothing."""
+
+    if not isinstance(value, UnsupportedDuration):
+        return {}
+    return {
+        f"{prefix}_unsupported_source": value.raw,
+        f"{prefix}_unsupported_reason": value.reason,
+    }
 
 
 def _permille(value: Any) -> int:
@@ -214,6 +322,20 @@ def _ref(system: SourceSystem, row: dict[str, Any], snapshot_sha: str | None) ->
         else None,
         snapshot_sha256=snapshot_sha,
     )
+
+
+def _unresolved_calendar_uid(schedule_id: str, system: SourceSystem, ref: str) -> UUID:
+    """A canonical id for a calendar the file names and does not carry.
+
+    The importer warns and the reference survives as text; turning it into
+    ``None`` here would make a broken reference indistinguishable from a row
+    that inherits the project's calendar, and the plan would schedule it on the
+    default and call the result measured. Minting an id the calendar table has
+    no row for keeps the distinction: the plan looks the id up, does not find
+    it, and excludes the row as ``ACTIVITY_CALENDAR_UNRESOLVED``.
+    """
+
+    return mint_uid(schedule_id, system, EntityKind.CALENDAR, f"unresolved{SEP}{ref}")
 
 
 def _external(row: dict[str, Any], kind: str) -> str | None:
@@ -416,10 +538,37 @@ def migrate(
     entries: list[ReconciliationEntry] = []
     seen: dict[EntityKind, list[str]] = {}
 
+    # A GUID identifies one row of one document. Two rows sharing one is a
+    # source defect, and letting the second rekey onto the first collapses two
+    # tasks -- with their relationships -- onto one canonical identity, in a
+    # document the persistence layer stores without ever building a network to
+    # catch it. The duplicates are found *before* any row is resolved, because
+    # the damage is not confined to this import: if the first row had already
+    # taught the map its GUID, a later import that renumbers either row would
+    # be rekeyed onto whichever came first. So the GUID is quarantined on the
+    # identity map, which persists, and neither row is matched or recorded
+    # under it.
+    duplicate_guids: list[tuple[EntityKind, str, str]] = []
+    for kind, key in _GUID_BEARING_COLLECTIONS:
+        first_seen: dict[str, str] = {}
+        for row in document.get(key, []):
+            guid = normalise_guid(_external(row, "GUID"))
+            if guid is None:
+                continue
+            external = _external(row, "UID") or str(row.get("id"))
+            claimed = first_seen.get(guid)
+            if claimed is None:
+                first_seen[guid] = external
+            elif claimed != external:
+                duplicate_guids.append((kind, guid, external))
+                identity.quarantine_guid(kind, guid)
+
     def uid_for(kind: EntityKind, row: dict[str, Any], external_uid: str | None = None) -> UUID:
         external = external_uid if external_uid is not None else _external(row, "UID")
         if external is None:
             external = str(row.get("id"))
+        # ``resolve`` drops a quarantined GUID itself, so a row carrying one
+        # resolves on its own source UID and teaches the map nothing.
         uid, entry = identity.resolve(
             kind,
             external,
@@ -543,7 +692,41 @@ def migrate(
 
         return isinstance(text, str) and text.strip().lower() in {"1", "true"}
 
-    def source_fields_for(row: dict[str, Any], duration: Duration | None) -> dict[str, str]:
+    def _duration_format_of(row: dict[str, Any]) -> tuple[int | None, str | None]:
+        """The row's ``DurationFormat``, and the text when it is not one of them.
+
+        The canonical model has fields for what it means -- the unit and the
+        elapsed flag -- and they were never filled, so every elapsed task in
+        every real file was scheduled as working time. A code outside
+        Microsoft's table is worse than an absent one: it names semantics this
+        code does not have, and defaulting it to "working time" answers a
+        question nobody asked. It comes back as the second value and the plan
+        excludes the row.
+        """
+
+        values = [
+            extension_by_id[ref].get("payload", {}).get("text")
+            for ref in row.get("extension_refs", [])
+            if ref in extension_by_id
+            and extension_by_id[ref].get("payload", {}).get("name") == "DurationFormat"
+        ]
+        if len(values) != 1 or values[0] is None:
+            return None, None
+        text = str(values[0]).strip()
+        try:
+            code = int(text)
+        except ValueError:
+            return None, text
+        if code not in _MS_DURATION_UNIT and code not in _MS_NULL_DURATION_FORMATS:
+            return None, text
+        return code, None
+
+    def source_fields_for(
+        row: dict[str, Any],
+        duration: Duration | None | UnsupportedDuration,
+        remaining: Duration | None | UnsupportedDuration,
+        unknown_format: str | None,
+    ) -> dict[str, str]:
         """Source facts the engine reads that have no canonical field of their own.
 
         ``IgnoreResourceCalendar`` decides which calendar Microsoft Project
@@ -551,11 +734,34 @@ def migrate(
         and is carried here, as the milestone flag already is, rather than
         widening the canonical model for one vendor's switch. Only a set flag is
         recorded; an absent or clear one leaves the row as it was.
+
+        A duration the importer could not read is recorded here too, with the
+        text it could not read, because the canonical ``Duration`` has no way to
+        say "something, and not this". The plan refuses such a row rather than
+        scheduling the zero that ``None`` would otherwise become. A null
+        ``DurationFormat`` (Microsoft's codes 21 and 53) is recorded for the
+        same reason: the file named a format that names no unit.
         """
 
-        fields: dict[str, str] = {}
-        if row.get("milestone_source") and duration is not None and duration.seconds != 0:
+        fields: dict[str, str] = _unresolved_calendar_fields(row.get("calendar_ref"))
+        planned = _as_duration(duration)
+        if row.get("milestone_source") and planned is not None and planned.seconds != 0:
             fields["milestone_source"] = "true"
+        if unknown_format is not None:
+            fields["duration_format_unsupported_source"] = unknown_format
+        fields.update(_unsupported_fields("duration", duration))
+        fields.update(_unsupported_fields("remaining_duration", remaining))
+        for name, key in (
+            ("actual_duration", "actual_duration_source"),
+            ("work", "work"),
+            ("actual_work", "actual_work_source"),
+            ("remaining_work", "remaining_work_source"),
+        ):
+            fields.update(_unsupported_fields(name, _duration(row.get(key))))
+        if row.get("is_null_source"):
+            # A null placeholder row is a gap Project keeps in its task list,
+            # not work. Dropping the flag made it look like an ordinary task.
+            fields["is_null_source"] = "1"
         values = [
             extension_by_id[ref].get("payload", {}).get("text")
             for ref in row.get("extension_refs", [])
@@ -566,12 +772,39 @@ def migrate(
             fields["ignore_resource_calendar_source"] = "1"
         return fields
 
+    unresolved_calendar_refs: dict[UUID, str] = {}
+
+    def _unresolved_calendar_fields(ref: Any) -> dict[str, str]:
+        """The reference a row named, when the file does not carry it."""
+
+        uid = _calendar_uid(ref)
+        raw = unresolved_calendar_refs.get(uid) if uid is not None else None
+        return {} if raw is None else {"calendar_ref_unresolved": raw}
+
+    def _calendar_uid(ref: Any) -> UUID | None:
+        """The calendar a row names: its id, or an unresolved one, or nothing."""
+
+        if not ref:
+            return None
+        known = calendar_uid_by_ref.get(str(ref))
+        if known is not None:
+            return known
+        # The minted id is one-way, so the reference the file actually carried
+        # is kept beside it and travels on the row's ``source_fields``: an
+        # exclusion that says only "some uuid is not in the file" cannot be
+        # acted on without reopening the source.
+        minted = _unresolved_calendar_uid(resolved_id, system, str(ref))
+        unresolved_calendar_refs[minted] = str(ref)
+        return minted
+
     activity_uid_by_ref: dict[str, UUID] = {}
     activities: list[Activity] = []
     for row in document.get("activities", []):
         uid = uid_for(EntityKind.ACTIVITY, row)
         activity_uid_by_ref[str(row.get("id"))] = uid
-        duration = _duration(row.get("duration"))
+        format_code, unknown_format = _duration_format_of(row)
+        duration = _duration(row.get("duration"), format_code=format_code)
+        remaining = _duration(row.get("remaining_duration_source"), format_code=format_code)
         parent_ref = row.get("parent_wbs_id")
         calendar_ref = row.get("calendar_ref")
         activities.append(
@@ -580,20 +813,22 @@ def migrate(
                 name=row.get("name") or "",
                 wbs_uid=wbs_uid_by_ref.get(str(parent_ref)) if parent_ref else None,
                 code=row.get("wbs") or row.get("outline_number"),
-                kind=_activity_kind(row, duration),
+                kind=_activity_kind(row, _as_duration(duration)),
                 seq=int(row.get("source_order") or 0),
                 active=True if row.get("active") is None else bool(row.get("active")),
                 manual=bool(row.get("manual", False)),
                 duration_type=_duration_type(row.get("source_task_type")),
                 effort_driven=bool(row.get("effort_driven_source", False)),
-                planned_duration=duration,
-                remaining_duration=_duration(row.get("remaining_duration_source")),
-                actual_duration=_duration(row.get("actual_duration_source")),
-                planned_work=_duration(row.get("work")),
+                planned_duration=_as_duration(duration),
+                remaining_duration=_as_duration(remaining),
+                actual_duration=_as_duration(
+                    _duration(row.get("actual_duration_source"), format_code=format_code)
+                ),
+                planned_work=_as_duration(_duration(row.get("work"))),
                 percent_complete=_percent(row),
                 actual_start=_dt(row.get("actual_start_source")),
                 actual_finish=_dt(row.get("actual_finish_source")),
-                calendar_uid=calendar_uid_by_ref.get(str(calendar_ref)) if calendar_ref else None,
+                calendar_uid=_calendar_uid(calendar_ref),
                 primary_constraint=_constraint(row),
                 deadline=_dt(row.get("deadline_source")),
                 priority=row.get("priority"),
@@ -601,7 +836,7 @@ def migrate(
                 notes=row.get("notes"),
                 external_refs=(_ref(system, row, snapshot_sha),),
                 source_observations=_observations(row),
-                source_fields=source_fields_for(row, duration),
+                source_fields=source_fields_for(row, duration, remaining, unknown_format),
             )
         )
 
@@ -660,6 +895,7 @@ def migrate(
         resources.append(
             Resource(
                 uid=uid,
+                source_fields=_unresolved_calendar_fields(calendar_ref),
                 name=row.get("name") or "",
                 code=row.get("initials"),
                 type=resource_type,
@@ -667,7 +903,7 @@ def migrate(
                 if resource_type is ResourceType.COST
                 else SchedulingClass.RENEWABLE,
                 max_units_permille=None if max_units is None else _permille(max_units * 100),
-                calendar_uid=calendar_uid_by_ref.get(str(calendar_ref)) if calendar_ref else None,
+                calendar_uid=_calendar_uid(calendar_ref),
                 group=row.get("group"),
                 inactive=bool(row.get("inactive_source", False)),
                 external_refs=(_ref(system, row, snapshot_sha),),
@@ -680,9 +916,19 @@ def migrate(
         task_ref = row.get("task_ref")
         resource_ref = row.get("resource_ref")
         units = row.get("units_source")
-        work = _duration(row.get("work_source"))
-        actual_work = _duration(row.get("actual_work_source"))
-        remaining_work = _duration(row.get("remaining_work_source"))
+        raw_work = _duration(row.get("work_source"))
+        raw_actual_work = _duration(row.get("actual_work_source"))
+        raw_remaining_work = _duration(row.get("remaining_work_source"))
+        work = _as_duration(raw_work)
+        actual_work = _as_duration(raw_actual_work)
+        remaining_work = _as_duration(raw_remaining_work)
+        # ``WorkTriple`` counts seconds, so an unreadable value would be stored
+        # as a measured zero. What the file said is kept beside it instead.
+        assignment_fields = {
+            **_unsupported_fields("work", raw_work),
+            **_unsupported_fields("actual_work", raw_actual_work),
+            **_unsupported_fields("remaining_work", raw_remaining_work),
+        }
         assignments.append(
             Assignment(
                 uid=uid,
@@ -698,6 +944,7 @@ def migrate(
                 ),
                 start=_dt(row.get("start_source")),
                 finish=_dt(row.get("finish_source")),
+                source_fields=assignment_fields,
                 percent_work_complete_permille=_permille(row.get("percent_work_complete_source")),
                 unassigned_placeholder=resource_ref is None,
                 external_refs=(_ref(system, row, snapshot_sha),),
@@ -719,8 +966,14 @@ def migrate(
             if owner is None:
                 continue
             values = row.get("values", {})
-            duration = _duration(values.get("duration"))
-            work = _duration(values.get("work"))
+            raw_duration = _duration(values.get("duration"))
+            raw_work = _duration(values.get("work"))
+            duration = _as_duration(raw_duration)
+            work = _as_duration(raw_work)
+            baseline_fields = {
+                **_unsupported_fields("duration", raw_duration),
+                **_unsupported_fields("work", raw_work),
+            }
             states.append(
                 BaselineActivityState(
                     activity_uid=owner,
@@ -728,6 +981,7 @@ def migrate(
                     finish=_dt(values.get("finish")),
                     duration_seconds=None if duration is None else duration.seconds,
                     work_seconds=None if work is None else work.seconds,
+                    source_fields=baseline_fields,
                 )
             )
         baseline_uid, entry = identity.resolve(
@@ -753,17 +1007,20 @@ def migrate(
         start=_dt(project_row.get("start")),
         finish=_dt(project_row.get("finish")),
         status_date=_dt(project_row.get("status_date")),
-        schedule_direction=ScheduleDirection.FROM_START
-        if project_row.get("schedule_from_start", True)
-        else ScheduleDirection.FROM_FINISH,
+        # Only an explicit ``<ScheduleFromStart>0</ScheduleFromStart>`` is
+        # backward scheduling. An absent element is not a choice: the importer
+        # reports it as ``None``, Microsoft Project's own default is forward,
+        # and reading absence as backward would have the plan refuse a file
+        # that never asked for it.
+        schedule_direction=ScheduleDirection.FROM_FINISH
+        if project_row.get("schedule_from_start") is False
+        else ScheduleDirection.FROM_START,
         progress_policy=ProgressPolicy.RETAINED_LOGIC,
         # Microsoft Project exposes no lag-calendar setting. Recording the
         # working assumption explicitly keeps it falsifiable rather than buried.
         lag_calendar_policy=LagCalendar.SUCCESSOR,
         milestone_snap_policy=MilestoneSnapPolicy.NONE,
-        default_calendar_uid=calendar_uid_by_ref.get(str(default_calendar_ref))
-        if default_calendar_ref
-        else None,
+        default_calendar_uid=_calendar_uid(default_calendar_ref),
         critical_float_threshold_seconds=_critical_threshold(project_row),
         minutes_per_day=project_row.get("minutes_per_day"),
         minutes_per_week=project_row.get("minutes_per_week"),
@@ -818,4 +1075,11 @@ def migrate(
     for kind in sorted(known_kinds | set(seen), key=str):
         entries.extend(identity.missing_since(kind, seen.get(kind, ())))
 
-    return schedule, identity, ReconciliationReport(resolved_id, tuple(entries))
+    return schedule, identity, ReconciliationReport(
+        resolved_id,
+        tuple(entries),
+        duplicate_guids=tuple(
+            DuplicateGuid(kind=kind, guid=guid, external_uid=external)
+            for kind, guid, external in duplicate_guids
+        ),
+    )

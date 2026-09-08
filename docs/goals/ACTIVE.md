@@ -210,17 +210,17 @@ the writers that need it live):
    corpus and completion against the genuine Project-recalculation pair; the
    status date itself is proven by the corpus alone, because no file here
    carries one inside its own schedule.
-5. **Source meaning preserved before calculation** (`C1`). The 2026-09-07
-   comprehensive review reproduced five ways the import-to-plan boundary
-   turns unsupported input into an ordinary calculation: a task calendar the
-   file does not carry becomes inheritance; an elapsed duration becomes
-   working time (the untouched BOILER and CALCINER each carry two); a
-   duration the importer could not parse becomes zero work; manual and
-   from-finish scheduling settings are ignored (KILN has an active manual
-   leaf); and two rows sharing one GUID in a single snapshot collapse onto one
-   canonical identity. Each becomes a coded disposition or a labelled
-   assumption, tested from XML through to the passes — never a new way for a
-   real file to stop importing.
+5. ~~Source meaning preserved before calculation~~ (`C1`) — done. The five
+   ways the import-to-plan boundary turned unsupported input into an ordinary
+   calculation are each a coded disposition now (ADR-012): a calendar the file
+   does not carry excludes its row instead of inheriting the project default;
+   `DurationFormat` is read, so an elapsed span runs on the clock and is
+   labelled; a duration the parser could not read excludes its row rather than
+   becoming zero work; a manual leaf is excluded and a project scheduled from
+   its finish is refused; and two rows sharing one GUID in one snapshot keep
+   two identities, reported on the reconciliation. Tested from XML through to
+   the passes, which is the road the corpus cannot reach, and nothing new
+   refuses an import.
 6. **The two passes agree on their supported contract** (`C2`). The same
    review reproduced a free float that overstates safe delay across
    calendars, a discarded progress edge that can still refuse a schedule, a
@@ -303,6 +303,20 @@ outside the repository. `Shutdown-Tracker-Claude` stays deployed and untouched
 until the parity checklist passes.
 
 ## Known gaps recorded, not hidden
+
+- **An elapsed span starts at a working moment and then runs on the clock, and
+  only the second half is implemented.** Placing an elapsed duration on the
+  continuous calendar reproduces both of CALCINER's elapsed rows exactly and
+  puts both of BOILER's six and a half hours early — its resource calendar's
+  opening time — so Project starts the span on the task's calendar and then
+  counts clock time (ADR-012). The hybrid placement needs an activity-level
+  flag through both passes and both fingerprints, so it is `C2`'s; the rows are
+  labelled `ACTIVITY_DURATION_ELAPSED` and pinned as disagreeing, which is the
+  oracle for implementing it.
+- **CALCINER carries a duplicate assignment GUID** (UIDs 14103 and 14104). The
+  second row no longer takes the first's canonical identity; the pair is
+  counted as `guid_duplicated_in_snapshot`. No duplicate *task* GUID exists in
+  any real file here.
 
 - **GUID is not a durable key on this site's Microsoft Project export path.**
   Between the two BOILER snapshots every shared task UID kept its work-order and
@@ -458,10 +472,8 @@ here so they are not rediscovered as surprises:
 
 | Gap | Owed to |
 |---|---|
-| `DurationFormat` is preserved by the importer only as a vendor extension, so `Duration.unit`, `source_format_code` and — the part that matters now — `elapsed` are never set, and an elapsed task is scheduled as working time. A scheduling defect first (the untouched BOILER and CALCINER each carry two active elapsed tasks) and a writeback one second: `8h` must not come back as `1d`. | C1 for the meaning; S8 for the writeback |
 | `Assignment.timephased_ref` is never populated, so resource curves and exports cannot find the retained source payload. | S8 |
-| `is_null_source` is dropped, so a null placeholder task looks ordinary. | C1 |
-| An unresolved task `CalendarUID` becomes `None`, indistinguishable from inheriting the project calendar. A current calculation defect, not later interoperability work. | C1 |
+| `MsSummaryProjection` carries only part of a summary task's constraints, calendars, priority and custom fields, and nothing writes it back. | S8, writeback |
 | Summary-task constraints, deadlines, calendars, priority and custom fields are not retained on `WbsNode`. | S8, writeback |
 | `effort_driven` reads a key the importer never sets, so it is always `False`. | needs an importer change first |
 | Activity business keys (Work Order / Operation) are not passed to `IdentityMap.resolve`, so the documented fallback never fires. | the assignment-identity item above |

@@ -56,6 +56,11 @@ KNOWN_CODES = frozenset(
         "ACTIVITY_MULTIPLE_RESOURCE_CALENDARS",
         "ACTIVITY_CALENDAR_EMPTY",
         "ACTIVITY_MEASURE_CALENDAR_EMPTY",
+        "ACTIVITY_DURATION_UNSUPPORTED",
+        "ACTIVITY_DURATION_NON_INTEGRAL",
+        "ACTIVITY_REMAINING_UNSUPPORTED",
+        "ACTIVITY_MANUALLY_SCHEDULED",
+        "ACTIVITY_NULL_PLACEHOLDER",
         "ACTIVITY_CONSTRAINT_INCOMPLETE",
         "ACTIVITY_SECONDARY_CONSTRAINT_NOT_APPLIED",
         "RELATIONSHIP_ENDPOINT_NOT_SCHEDULED",
@@ -69,6 +74,7 @@ KNOWN_ASSUMPTIONS = frozenset(
     {
         "ACTIVITY_RESOURCE_CALENDARS_UNITED",
         "ACTIVITY_SUCCESSOR_OF_INACTIVE",
+        "ACTIVITY_DURATION_ELAPSED",
         "RELATIONSHIP_LAG_ON_PROJECT_CALENDAR",
     }
 )
@@ -249,14 +255,25 @@ class StoredDateAgreementTests(unittest.TestCase):
         )
         self.assertEqual(
             counts["assumed"],
-            {"ACTIVITY_RESOURCE_CALENDARS_UNITED": 11, "ACTIVITY_SUCCESSOR_OF_INACTIVE": 5},
+            {
+                "ACTIVITY_RESOURCE_CALENDARS_UNITED": 11,
+                "ACTIVITY_SUCCESSOR_OF_INACTIVE": 5,
+                # The file's two elapsed tasks, which were scheduled as
+                # working time until C1 read the DurationFormat that says
+                # otherwise. Neither agrees with Project's stored dates
+                # either way, so the exact count above does not move.
+                "ACTIVITY_DURATION_ELAPSED": 2,
+            },
         )
 
     def test_kiln(self):
         counts = _agreement(FIXTURES["kiln"])
+        # 416, not 417: the file's one manually scheduled leaf is excluded
+        # rather than scheduled as if it were automatic (C1). It was one of
+        # the rows with a mismatching predecessor, so that count drops with it.
         self.assertEqual(
             {k: counts[k] for k in ("compared", "exact", "first", "inherited")},
-            {"compared": 417, "exact": 247, "first": 6, "inherited": 164},
+            {"compared": 416, "exact": 247, "first": 6, "inherited": 163},
         )
 
     def test_calciner(self):

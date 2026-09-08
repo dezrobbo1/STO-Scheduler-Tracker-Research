@@ -73,15 +73,54 @@ from sto.core.model.enums import (
     LagCalendar,
     MilestoneSnapPolicy,
     ProgressPolicy,
+    ScheduleDirection,
 )
 
-from .network import Network, PlannedActivity, PlannedRelationship
+from .network import Network, NetworkError, PlannedActivity, PlannedRelationship
+
+
+class PlanError(NetworkError):
+    """A schedule the plan will not turn into a network, and why, by code.
+
+    A row the plan cannot schedule is an :class:`Excluded` with a code. This
+    is for the other kind: a project-wide setting that would make every row's
+    answer wrong, where returning a network at all would be the defect.
+    """
 
 #: Kinds the forward pass schedules. A summary is a rollup of its children (S6),
 #: and level-of-effort and hammock activities take their span from other rows
 #: rather than from their own duration, so none of the three is scheduled here.
 SCHEDULED_KINDS = frozenset(
     {ActivityKind.TASK, ActivityKind.START_MILESTONE, ActivityKind.FINISH_MILESTONE}
+)
+
+#: Exclusion codes that mean *we do not know when this row happens*, as
+#: opposed to structural ones. A successor of such a row cannot be scheduled
+#: either: dropping only the edge leaves it with no predecessor at all, and the
+#: forward pass then treats it as a root and floors it at the project start --
+#: earlier than the file says, which is exactly the false advancement excluding
+#: the predecessor was meant to prevent.
+#:
+#: Two exclusions are deliberately not here. ``ACTIVITY_INACTIVE`` has a
+#: measured rule of its own: the edge is dropped and the successor scheduled
+#: and labelled ``ACTIVITY_SUCCESSOR_OF_INACTIVE``, because Microsoft Project
+#: does schedule those rows (ADR-010). ``ACTIVITY_KIND_NOT_SCHEDULED`` is a
+#: summary, a level of effort or a hammock, whose span comes from its children
+#: rather than from itself; the rollup is S6's, and until then dropping the
+#: edge is what the previous engine did too.
+UNKNOWN_DATE_EXCLUSIONS = frozenset(
+    {
+        "ACTIVITY_CALENDAR_UNRESOLVED",
+        "ACTIVITY_CALENDAR_EMPTY",
+        "ACTIVITY_MEASURE_CALENDAR_EMPTY",
+        "ACTIVITY_CONSTRAINT_INCOMPLETE",
+        "ACTIVITY_DURATION_UNSUPPORTED",
+        "ACTIVITY_DURATION_NON_INTEGRAL",
+        "ACTIVITY_REMAINING_UNSUPPORTED",
+        "ACTIVITY_DURATION_FORMAT_UNSUPPORTED",
+        "ACTIVITY_MANUALLY_SCHEDULED",
+        "ACTIVITY_NULL_PLACEHOLDER",
+    }
 )
 
 #: Constraint types that need a date to mean anything.
@@ -166,6 +205,14 @@ class Plan:
 
 
 def _duration_seconds(activity: Activity) -> int:
+    """The activity's duration in seconds, where zero really means zero.
+
+    A row whose duration the importer could not read never reaches here: the
+    eligibility pass excludes it by code, because ``None`` reaching this
+    function would become zero work and let its successors advance under a
+    calculation that looks ordinary.
+    """
+
     if activity.planned_duration is None:
         return 0
     return activity.planned_duration.seconds
@@ -214,6 +261,16 @@ def build_plan(
     continuous = CompiledIntervals.of((window,))
 
     project = schedule.project
+    if project.schedule_direction is not ScheduleDirection.FROM_START:
+        # Scheduling from the finish reverses which pass is authoritative for
+        # every row in the network, so it is not a per-row disposition: the
+        # plan refuses rather than returning an answer computed the other way
+        # round and labelled as if it were the file's.
+        raise PlanError(
+            "PROJECT_SCHEDULED_FROM_FINISH",
+            None,
+            project.schedule_direction.value,
+        )
     excluded: list[Excluded] = []
 
     resources = {resource.uid: resource for resource in schedule.resources}
@@ -361,23 +418,65 @@ def build_plan(
         if not activity.active:
             excluded.append(Excluded(activity.uid, "activity", "ACTIVITY_INACTIVE"))
             continue
-        if activity.planned_duration is not None and activity.planned_duration.elapsed:
-            # An elapsed duration is wall-clock, not working time, so it does not
-            # belong on the activity's calendar. No real file here carries one.
+        unsupported = activity.source_fields.get("duration_unsupported_source")
+        if unsupported is not None:
+            # The file gave a duration and the importer could not read it.
+            # Not zero work: unknown work. Scheduling it as zero would let
+            # every successor advance under a calculation that looks ordinary.
             excluded.append(
-                Excluded(activity.uid, "activity", "ACTIVITY_DURATION_ELAPSED")
+                Excluded(
+                    activity.uid,
+                    "activity",
+                    "ACTIVITY_DURATION_" + activity.source_fields.get(
+                        "duration_unsupported_reason", "DURATION_UNSUPPORTED"
+                    ).removeprefix("DURATION_"),
+                    unsupported,
+                )
             )
             continue
-        if activity.remaining_duration is not None and activity.remaining_duration.elapsed:
-            # Same reason as the planned duration above: elapsed time is
-            # wall-clock and does not belong on the activity's calendar. Kept as
-            # its own code because a file could carry a working planned duration
-            # and an elapsed remaining one, and that is worth seeing.
+        remaining_unsupported = activity.source_fields.get(
+            "remaining_duration_unsupported_source"
+        )
+        if remaining_unsupported is not None:
             excluded.append(
-                Excluded(activity.uid, "activity", "ACTIVITY_REMAINING_ELAPSED")
+                Excluded(
+                    activity.uid,
+                    "activity",
+                    "ACTIVITY_REMAINING_UNSUPPORTED",
+                    remaining_unsupported,
+                )
             )
+            continue
+        unknown_format = activity.source_fields.get("duration_format_unsupported_source")
+        if unknown_format is not None:
+            # The code decides whether the span runs on the calendar or on the
+            # clock. An unknown one leaves that unanswered, so the row is not
+            # scheduled as though the answer were "working time".
+            excluded.append(
+                Excluded(
+                    activity.uid,
+                    "activity",
+                    "ACTIVITY_DURATION_FORMAT_UNSUPPORTED",
+                    unknown_format,
+                )
+            )
+            continue
+        if activity.source_fields.get("is_null_source") == "1":
+            # Project's null placeholder: a gap it keeps in the task list, not
+            # work. The migration dropped the flag and it looked ordinary.
+            excluded.append(Excluded(activity.uid, "activity", "ACTIVITY_NULL_PLACEHOLDER"))
+            continue
+        if activity.manual:
+            # A manually scheduled task holds the dates a planner typed;
+            # Project does not move it and this pass has no rule for one, so
+            # it is reported rather than scheduled as if it were automatic.
+            excluded.append(Excluded(activity.uid, "activity", "ACTIVITY_MANUALLY_SCHEDULED"))
             continue
 
+        elapsed = bool(
+            (activity.planned_duration is not None and activity.planned_duration.elapsed)
+            or (activity.remaining_duration is not None and activity.remaining_duration.elapsed)
+        )
         calendar, measure, code, detail, pending_assumption = effective_calendar(activity)
         if calendar is None:
             excluded.append(Excluded(activity.uid, "activity", code, detail))
@@ -392,6 +491,25 @@ def build_plan(
             # not a measurement; the row is excluded with its own code.
             excluded.append(Excluded(activity.uid, "activity", "ACTIVITY_MEASURE_CALENDAR_EMPTY"))
             continue
+
+        if elapsed:
+            # Elapsed time counts every hour on the clock, working or not
+            # (Microsoft's DurationFormat reference says so in as many words),
+            # so the span is placed on the continuous calendar. Slack is still
+            # measured where ADR-010 measures it. The rule is the format's
+            # documented meaning rather than a measurement of these files -- no
+            # elapsed row here has ever been scheduled before -- so the row is
+            # labelled, not silently claimed.
+            measure = measure if measure is not None else CompiledIntervals.of(
+                calendar.intervals
+            )
+            calendar = continuous
+            pending_assumption = Assumed(
+                activity.uid,
+                "activity",
+                "ACTIVITY_DURATION_ELAPSED",
+                "elapsed duration placed on the continuous calendar",
+            )
 
         constraint_type = ConstraintType.ASAP
         coordinate: int | None = None
@@ -442,6 +560,54 @@ def build_plan(
         scheduled.add(activity.uid)
         if pending_assumption is not None:
             assumed.append(pending_assumption)
+
+    # A row whose dates are unknown takes its successors with it. Walked to a
+    # fixed point, so a chain behind one unreadable duration is reported rather
+    # than half-reported, and the rows come out in declaration order.
+    unknown = {
+        row.uid
+        for row in excluded
+        if row.kind == "activity" and row.code in UNKNOWN_DATE_EXCLUSIONS
+    }
+    if unknown:
+        successors_of: dict[UUID, list[UUID]] = {}
+        for relationship in schedule.relationships:
+            successors_of.setdefault(relationship.predecessor_uid, []).append(
+                relationship.successor_uid
+            )
+        # Work that has finished is where the file says it finished: both
+        # passes pin a complete activity to its actual dates and neither reads
+        # its predecessors (ADR-009). So a completed successor is not cut --
+        # that would throw away known progress -- and the cut does not travel
+        # through it either, because everything after it reads *its* actual
+        # finish, which is known.
+        completed = {
+            row.uid for row in schedule.activities if row.actual_finish is not None
+        }
+        frontier = list(unknown)
+        cut: dict[UUID, UUID] = {}
+        while frontier:
+            predecessor_uid = frontier.pop()
+            for successor_uid in successors_of.get(predecessor_uid, ()):
+                if successor_uid in completed or successor_uid not in scheduled:
+                    continue
+                if successor_uid not in cut:
+                    cut[successor_uid] = predecessor_uid
+                    frontier.append(successor_uid)
+        if cut:
+            scheduled -= cut.keys()
+            activities = [row for row in activities if row.uid not in cut]
+            assumed = [row for row in assumed if row.uid not in cut]
+            for activity in schedule.activities:
+                if activity.uid in cut:
+                    excluded.append(
+                        Excluded(
+                            activity.uid,
+                            "activity",
+                            "ACTIVITY_PREDECESSOR_NOT_SCHEDULED",
+                            str(cut[activity.uid]),
+                        )
+                    )
 
     activity_calendars = {row.uid: row.calendar for row in activities}
 

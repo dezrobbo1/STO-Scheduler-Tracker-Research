@@ -71,6 +71,8 @@ class ImportResult:
     reconciliation: ReconciliationReport
     project_identity_mismatch: bool
     declared_project_guid: str | None
+    #: What the importer warned about while accepting the file.
+    warnings: tuple[str, ...] = ()
 
 
 def default_source_dir() -> Path:
@@ -157,6 +159,9 @@ class Workspace:
         # Parse and migrate outside any transaction: the 14 MB files take
         # seconds, and nothing below needs a lock held across them.
         document = import_mspdi(str(path))
+        warnings = tuple(
+            str(item) for item in document.get("import_validation", {}).get("warnings", [])
+        )
         declared = _declared_project_guid(document)
         mismatch = bool(
             prior_identity is not None
@@ -199,7 +204,12 @@ class Workspace:
                     "declared_project_guid": declared,
                     "project_identity_mismatch": mismatch,
                     "schedule_id": schedule.schedule_id,
+                    # What the importer said about the file it accepted. An
+                    # accepted import with warnings is not the same thing as a
+                    # clean one, and the batch recorded zero either way.
+                    "warnings": list(warnings),
                 },
+                warning_count=len(warnings),
             )
             sequence = repo.next_sequence(conn, project_id)
             version_id = repo.insert_version(
@@ -236,6 +246,7 @@ class Workspace:
             reconciliation=report,
             project_identity_mismatch=mismatch,
             declared_project_guid=declared,
+            warnings=warnings,
         )
 
     def _store_bytes(self, project_id: uuid.UUID, sha: str, data: bytes) -> Path:
@@ -303,4 +314,5 @@ def _counts(report: ReconciliationReport) -> dict[str, int]:
         "rekeyed": report.rekeyed,
         "missing": report.missing,
         "guid_changed": report.guid_changed,
+        "guid_duplicated_in_snapshot": report.guid_duplicated_in_snapshot,
     }

@@ -51,8 +51,8 @@ operational constraints follow, built against a stack in use.
 
 P0-G1 and P0-G3 both cite `tests/test_canonical_model.py`. Its real-schedule
 class skips when the BOILER files are absent, which is every CI run. Locally the
-suite reports 155 tests and no skips; in CI those criteria were being satisfied
-by a class that did not execute.
+suite reports no skips at all; in CI those criteria were being satisfied by a
+class that did not execute.
 
 Fixed by declaring the dependence rather than hiding it. A gate criterion may
 now carry `evidence_conditional`, naming the switch that makes its input

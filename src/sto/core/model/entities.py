@@ -380,6 +380,12 @@ class BaselineActivityState:
     finish: datetime | None = None
     duration_seconds: int | None = None
     work_seconds: int | None = None
+    #: What the source said where a value above could not be read. A baseline
+    #: is not a scheduling input, so an unreadable duration is not a refusal --
+    #: but ``None`` here would say the file carried nothing, and the activity's
+    #: own marker cannot stand in for this one: its live duration may parse
+    #: perfectly while its baseline does not.
+    source_fields: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)

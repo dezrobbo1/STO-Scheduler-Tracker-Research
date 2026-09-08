@@ -57,7 +57,7 @@ from .network import (
     shift_lag,
     unshift_lag,
 )
-from .plan import SCHEDULED_KINDS, Assumed, Excluded, Plan, build_plan
+from .plan import SCHEDULED_KINDS, Assumed, Excluded, Plan, PlanError, build_plan
 from .progress import (
     PROGRESS_PROFILE,
     RETAINING_POLICIES,
@@ -102,6 +102,7 @@ __all__ = [
     "Network",
     "NetworkError",
     "Plan",
+    "PlanError",
     "PlannedActivity",
     "PlannedRelationship",
     "ProgressError",
