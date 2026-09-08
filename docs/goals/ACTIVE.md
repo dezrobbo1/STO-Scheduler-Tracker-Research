@@ -73,6 +73,17 @@ activities shared between the snapshots keep their identifiers while 18 new and
 13 departed rows are reported rather than conflated. `sto canonicalise` and
 `sto reconcile` expose it.
 
+**The calculated schedule, visible (PL13).** A stored import can be calculated
+through the API and read back as a page: every activity with the dates the file
+carried beside the dates the engine computed, what placed each row, its floats,
+its progress state, and for an excluded row the code that says why there are no
+dates. The summaries show their rolled-up spans, and a branch with nothing
+beneath it is shown as a branch with no span rather than omitted. Reading goes
+through the verified loader, which reassembles the result from the header and
+both row sets and refuses a fingerprint that no longer matches its rows, so an
+edited row is a refusal rather than an answer. A restart serves the same
+calculation from the same stored input.
+
 **The calculated result (PL3).** `sto.core.engine.result` assembles one row per
 activity out of the passes, the float, the rollup and the plan's dispositions,
 and derives nothing a second time. A scheduled row carries four dates, two
@@ -258,14 +269,16 @@ the writers that need it live):
    them with the rows, so two results that agree say so before anyone compares
    dates. `V002` stores a calculation the way a version is stored: immutably,
    a recalculation being a new row rather than an edit.
-9. **The calculated schedule, persisted and visible** (`PL13`): stored
+9. ~~The calculated schedule, persisted and visible~~ (`PL13`) — done. Stored
    baseline → plan and passes → a result bound to its input hash, engine
    profiles and dispositions → an API route → a task table and simple Gantt
    showing imported dates beside calculated ones, reloaded identically after a
-   restart. With it the guards that flow needs: a parse or validation failure
-   becomes a coded failed import rather than a server error, uploads are
-   bounded, and one malformed stored document quarantines its project rather
-   than aborting the rebuild of every other.
+   restart. The page reads through the verified loader, so what a reader sees
+   is what the stored fingerprint attests to. With it the guards that flow
+   needs: a parse or validation failure becomes a coded failed import rather
+   than a server error, uploads are bounded, and one malformed stored document
+   quarantines its project rather than aborting the rebuild of every other
+   (`docs/history/2026-09-08-the-calculation-made-visible.md`).
 10. **One planner scenario** (`PL14`): pick a supported task, change its
     duration, see its successors move, reset to the baseline, export, restart.
     The first consolidated vertical slice; the legacy workspace retires after
