@@ -95,12 +95,6 @@ class ACorruptedResultIsCaughtTests(unittest.TestCase):
         times[0] = replace(times[0], early_finish=times[0].early_start - 1)
         self.assertIn("EARLY_SPAN_INVERTED", self._codes(forward=replace(f, times=tuple(times))))
 
-    def test_a_late_date_before_the_early_one(self):
-        _, _, b, _ = _sound()
-        rows = list(b.times)
-        rows[0] = replace(rows[0], late_start=rows[0].late_start - 20, late_finish=rows[0].late_finish - 20)
-        self.assertIn("LATE_BEFORE_EARLY", self._codes(backward=replace(b, times=tuple(rows))))
-
     def test_a_total_float_that_is_not_the_gap_between_the_spans(self):
         _, _, _, fl = _sound()
         rows = list(fl.rows)
@@ -112,6 +106,24 @@ class ACorruptedResultIsCaughtTests(unittest.TestCase):
         rows = list(fl.rows)
         rows[0] = replace(rows[0], critical=not rows[0].critical)
         self.assertIn("CRITICALITY_MISMATCH", self._codes(floats=replace(fl, rows=tuple(rows))))
+
+    def test_a_late_span_moved_off_the_float_it_reports(self):
+        """What the dropped ordering rule was really catching.
+
+        A late span dragged backwards is not a structural fault -- that shape
+        is negative float, and a sound overcommitted schedule has it. What it
+        is, is a disagreement with the number the result reports, and the float
+        measurement says so precisely.
+        """
+
+        _, _, b, _ = _sound()
+        rows = list(b.times)
+        rows[0] = replace(
+            rows[0], late_start=rows[0].late_start - 20, late_finish=rows[0].late_finish - 20
+        )
+        codes = self._codes(backward=replace(b, times=tuple(rows)))
+        self.assertIn("TOTAL_FLOAT_MISMATCH", codes)
+        self.assertIn("FINISH_FLOAT_MISMATCH", codes)
 
     def test_an_edge_the_dates_do_not_honour(self):
         """The successor pulled back inside its predecessor's lag."""
@@ -381,6 +393,97 @@ class TheChecksTheSecondPassFoundTests(unittest.TestCase):
         self.assertIn(
             "BACKWARD_DRIVER_NOT_INCIDENT",
             self._codes(net, f, replace(b, times=tuple(late)), fl),
+        )
+
+class TheChecksTheThirdPassFoundTests(unittest.TestCase):
+    """Sound results the validator was rejecting, and claims it never read.
+
+    Every one of these is the same mistake in the other direction from the
+    earlier passes: a rule stated more strongly than the engine's own
+    behaviour, so a correct answer came back as a violation.
+    """
+
+    def _codes(self, net, forward, backward, floats, **kwargs):
+        return {row.code for row in validate_result(net, forward, backward, floats, **kwargs)}
+
+    def test_an_overcommitted_schedule_is_sound_not_inverted(self):
+        """A late span before its early one is what negative float is."""
+
+        net = network(activity("A", 5), project_start=10)
+        forward = forward_pass(net)
+        backward = backward_pass(net, forward, project_late_finish=13)
+        floats = float_analysis(net, forward, backward)
+
+        row = floats.by_uid()[uid("A")]
+        self.assertEqual(row.total_float, -2)
+        self.assertTrue(row.negative)
+        self.assertLess(backward.by_uid()[uid("A")].late_start, forward.by_uid()[uid("A")].early_start)
+        self.assertEqual(validate_result(net, forward, backward, floats), ())
+
+    def test_a_finish_no_later_than_is_asked_of_the_late_span(self):
+        """The forward pass leaves the early finish past an FNLT it cannot meet.
+
+        That is the shortfall, carried as negative float, and it is the
+        backward pass that lowers the late finish to the constraint. Asking
+        the early span rejected the pass's own documented behaviour.
+        """
+
+        net = network(
+            activity("A", 2),
+            activity("B", 3, constraint_type=ConstraintType.FNLT, constraint_coordinate=14),
+            relationships=(
+                PlannedRelationship(uid("R"), uid("A"), uid("B"), RelationshipType.FS, 0, CONTINUOUS),
+            ),
+        )
+        forward = forward_pass(net)
+        backward = backward_pass(net, forward)
+        floats = float_analysis(net, forward, backward)
+        self.assertEqual(validate_result(net, forward, backward, floats), ())
+
+        late = list(backward.times)
+        index = next(i for i, row in enumerate(late) if row.uid == uid("B"))
+        late[index] = replace(late[index], late_finish=late[index].late_finish + 20)
+        self.assertIn(
+            "CONSTRAINT_NOT_HONOURED",
+            self._codes(net, forward, replace(backward, times=tuple(late)), floats),
+        )
+
+    def test_an_edge_a_hard_constraint_displaced_is_not_asked_to_hold(self):
+        """A must-start-on date wins against precedence, and says what it broke."""
+
+        net = network(
+            activity("A", 4),
+            activity("B", 2, constraint_type=ConstraintType.MSO, constraint_coordinate=12),
+            relationships=(
+                PlannedRelationship(uid("R"), uid("A"), uid("B"), RelationshipType.FS, 0, CONTINUOUS),
+            ),
+            project_start=10,
+        )
+        forward = forward_pass(net)
+        self.assertTrue(
+            forward.constraint_violations, "the fixture no longer displaces its logic"
+        )
+        backward = backward_pass(net, forward)
+        floats = float_analysis(net, forward, backward)
+        self.assertEqual(validate_result(net, forward, backward, floats), ())
+
+    def test_the_project_coordinates_are_read_too(self):
+        """Three numbers outside every row, taken on trust until now."""
+
+        net, f, b, fl = _sound()
+        self.assertIn(
+            "PROJECT_START_MISMATCH",
+            self._codes(net, replace(f, project_start=f.project_start - 5), b, fl),
+        )
+        self.assertIn(
+            "PROJECT_FINISH_MISMATCH",
+            self._codes(net, replace(f, project_finish=f.project_finish + 5), b, fl),
+        )
+        self.assertIn(
+            "PROJECT_LATE_FINISH_MISMATCH",
+            self._codes(
+                net, f, b, replace(fl, project_late_finish=fl.project_late_finish + 5)
+            ),
         )
 
 class TheCorpusValidatesTests(unittest.TestCase):

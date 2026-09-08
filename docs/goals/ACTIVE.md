@@ -320,8 +320,9 @@ until the parity checklist passes.
   successor's is a gap slips its own working time without moving the
   successor, so it holds free float the project does not allow — three such
   rows in KILN, five in CALCINER, six in the day-5 candidate, with no negative
-  float involved. Measured in S6; the validator asks the question only of
-  networks one calendar governs.
+  float involved. Measured in S6. The validator no longer rests on the
+  theorem: it measures the reported free float by applying it, so it asks the
+  question of every network whatever governs it, this fact included.
 
 - **Where an activity starts when its predecessors bound only its finish is
   assumed, not measured.** Such a row has no bound on its start; it falls back

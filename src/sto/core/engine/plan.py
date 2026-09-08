@@ -536,8 +536,13 @@ def build_plan(
                 coordinate = to_seconds(primary.date)
             constraint_type = primary.type
         if activity.secondary_constraint is not None:
-            excluded.append(
-                Excluded(
+            # The row *is* scheduled -- only its second constraint is not
+            # applied -- so this is an assumption about a placed activity and
+            # not a disposition. Recorded as an exclusion it made the same
+            # activity both scheduled and excluded, which is not a partition,
+            # and which a result keyed on the activity cannot store twice.
+            assumed.append(
+                Assumed(
                     activity.uid,
                     "activity",
                     "ACTIVITY_SECONDARY_CONSTRAINT_NOT_APPLIED",

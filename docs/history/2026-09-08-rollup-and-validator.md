@@ -94,6 +94,37 @@ and no test loaded a real file. `tests/test_validator_boiler.py` runs it over
 all six, under the plan's own threshold and progress policy, guarded like the
 other real-file oracles.
 
+### And a pass that found it too strict
+
+The third review reversed the direction of the earlier two. Where they found
+claims the validator never read, this one found rules stated more strongly
+than the engine's own behaviour, so a correct answer came back as a violation.
+
+A late span earlier than its early one is not a structural fault: it is what
+negative float *is*, and an overcommitted schedule reports exactly that shape.
+The ordering rule rejected every sound one. What it was really catching is a
+late span that disagrees with the float the result reports, and the float
+measurement already says that precisely, so the rule is gone rather than
+qualified.
+
+Each constraint is answered by the pass that applies it. The forward pass
+applies the no-earlier-than pair and the must-be-on pair; the backward pass
+applies the no-later-than pair, and the forward pass deliberately leaves an
+early finish beyond an FNLT it cannot meet, carrying the shortfall as negative
+float. Asking the early span about a no-later-than constraint therefore
+rejected the pass's own documented behaviour.
+
+A must-start-on date wins against precedence — that is what makes it hard in
+the canonical model — and the forward pass records what it displaced rather
+than pretending the edge held. Asking that successor to honour the edge anyway
+rejected the report as well as the result.
+
+Three coordinates sit outside every row and were read as if they described
+them: the window the forward pass says it worked in, and the finish the float
+measured open-ended tails against. They are compared with the network and with
+each other now, so a stored result cannot name a project start its own rows
+contradict.
+
 ### It refined ADR-008 on the way
 
 ADR-008 records that free float cannot exceed total float when every outgoing

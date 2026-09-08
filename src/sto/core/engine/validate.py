@@ -104,6 +104,41 @@ def validate_result(
             ),
         )
     violations: list[Violation] = []
+
+    # --- the coordinates the result carries about the whole project ------
+    # Three numbers sit outside every row and are read as if they described
+    # them: the window the forward pass says it worked in, and the finish the
+    # float measured open-ended tails against. Nothing compared them with the
+    # network or with each other, so a stored result could name a project start
+    # its own rows contradict.
+    if forward.project_start != network.project_start:
+        violations.append(
+            Violation(
+                "PROJECT_START_MISMATCH",
+                None,
+                f"the pass says {forward.project_start}, the network {network.project_start}",
+            )
+        )
+    if forward.times:
+        latest = max(row.early_finish for row in forward.times)
+        if forward.project_finish != latest:
+            violations.append(
+                Violation(
+                    "PROJECT_FINISH_MISMATCH",
+                    None,
+                    f"the pass says {forward.project_finish}, its own rows end at {latest}",
+                )
+            )
+    if floats.project_late_finish != backward.project_late_finish:
+        violations.append(
+            Violation(
+                "PROJECT_LATE_FINISH_MISMATCH",
+                None,
+                f"the float says {floats.project_late_finish}, "
+                f"the backward pass {backward.project_late_finish}",
+            )
+        )
+
     early = forward.by_uid()
     late = backward.by_uid()
     slack = floats.by_uid()
@@ -275,20 +310,17 @@ def validate_result(
                 )
             )
 
-        # --- the late span is not earlier than the early one -------------
-        # Measured against the *remaining* start where there is one: for work
-        # under way the early start is the immovable actual one while the late
-        # dates describe the part that can still move, so comparing those two
-        # accepted a late span earlier than the remaining span it bounds.
+        # A late span earlier than its early one is not a structural fault. It
+        # is what negative float *is*: an overcommitted schedule, an FNLT that
+        # cannot be met, reports exactly that shape and is sound. The float
+        # measurement below already covers the case, because the gap it
+        # measures is signed and is compared with the number the result
+        # reports -- so an ordering rule here only rejected sound results.
+        #
+        # The comparison is against the *remaining* start where there is one:
+        # for work under way the early start is the immovable actual one while
+        # the late dates describe the part that can still move.
         early_side = row.remaining_start if row.remaining_start is not None else row.early_start
-        if late_row.late_start < early_side:
-            violations.append(
-                Violation(
-                    "LATE_BEFORE_EARLY",
-                    uid,
-                    f"late start {late_row.late_start} < early start {early_side}",
-                )
-            )
 
         # --- total float is the gap between them, on the float calendar --
         float_row = slack.get(uid)
@@ -365,7 +397,7 @@ def validate_result(
         )
 
         # --- a constraint the result claims to honour ---------------------
-        violations.extend(_constraint_violations(activity, row, early_side))
+        violations.extend(_constraint_violations(activity, row, late_row, early_side))
 
     # --- free float, recomputed rather than bounded -----------------------
     # The first version of this check asked only that free float not exceed
@@ -429,10 +461,17 @@ def validate_result(
             )
 
     # --- every edge that binds is honoured by the dates it connects ------
+    # An MSO or MFO date wins against precedence -- that is what makes it hard
+    # in the canonical model -- and the forward pass reports what it displaced
+    # rather than pretending the edge held. Asking those successors to honour
+    # the edge anyway rejected the pass's own documented behaviour.
+    displaced = {violation.activity_uid for violation in forward.constraint_violations}
     for relationship in network.relationships:
         predecessor = early.get(relationship.predecessor_uid)
         successor = early.get(relationship.successor_uid)
         if predecessor is None or successor is None:
+            continue
+        if relationship.successor_uid in displaced:
             continue
         if not relationship_binds(
             progress_policy, states[relationship.successor_uid], network.status_time
@@ -570,13 +609,20 @@ def _edges_hold_after(
             return False
     return True
 
-def _constraint_violations(activity, row, early_side: int) -> list[Violation]:
+def _constraint_violations(activity, row, late_row, early_side: int) -> list[Violation]:
     """A constraint the result claims to honour, checked against its dates.
 
     The passes apply these; nothing here re-applies them. It asks only whether
     the span that came back satisfies what the network said, because a result
     can be internally well-shaped -- durations right, float consistent -- and
     still sit somewhere its own constraint forbids.
+
+    **Which span to ask of.** Each constraint is answered by the pass that
+    applies it. The forward pass applies the no-earlier-than pair and the
+    must-be-on pair; the backward pass applies the no-later-than pair, and the
+    forward pass deliberately leaves an early finish beyond an FNLT it cannot
+    meet, carrying the shortfall as negative float. Asking the early span
+    about a no-later-than constraint therefore rejected sound results.
     """
 
     constraint = activity.constraint_type
@@ -589,9 +635,15 @@ def _constraint_violations(activity, row, early_side: int) -> list[Violation]:
         return []
     checks = {
         ConstraintType.SNET: (early_side >= coordinate, "starts before"),
-        ConstraintType.SNLT: (early_side <= coordinate, "starts after"),
         ConstraintType.FNET: (row.early_finish >= coordinate, "finishes before"),
-        ConstraintType.FNLT: (row.early_finish <= coordinate, "finishes after"),
+        ConstraintType.SNLT: (
+            late_row.late_start <= coordinate,
+            "is bounded to start after",
+        ),
+        ConstraintType.FNLT: (
+            late_row.late_finish <= coordinate,
+            "is bounded to finish after",
+        ),
         ConstraintType.MSO: (early_side == coordinate, "does not start on"),
         ConstraintType.MFO: (row.early_finish == coordinate, "does not finish on"),
     }

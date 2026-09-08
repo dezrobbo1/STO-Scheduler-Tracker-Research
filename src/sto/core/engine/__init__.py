@@ -59,6 +59,7 @@ from .network import (
 )
 from .plan import SCHEDULED_KINDS, Assumed, Excluded, Plan, PlanError, build_plan
 from .rollup import ROLLUP_PROFILE, RolledUp, Rollup, roll_up
+from .validate import VALIDATOR_PROFILE, Violation, validate_result
 from .progress import (
     PROGRESS_PROFILE,
     RETAINING_POLICIES,
@@ -116,7 +117,10 @@ __all__ = [
     "float_analysis",
     "forward_pass",
     "relationship_binds",
+    "VALIDATOR_PROFILE",
+    "Violation",
     "roll_up",
+    "validate_result",
     "remaining_bound",
     "require_supported",
     "shift_lag",
