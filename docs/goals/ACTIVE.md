@@ -491,7 +491,7 @@ rule applies only to relationships that inherit the project's policy; a row
 whose measuring calendar has no working time is excluded
 (`ACTIVITY_MEASURE_CALENDAR_EMPTY`) rather than reported as zero float and
 critical, and a directly built network refuses it; the backward pass carries
-its progress policy and hashes it (`sto-backward-pass-v4`), and the float
+its progress policy and hashes it (introduced in `sto-backward-pass-v4`), and the float
 refuses a backward pass under one policy beside a forward pass under another
 (`SCHEDULE_POLICY_MISMATCH`); the multi-resource assumption is recorded only
 once the row is scheduled, and the plan refuses to carry an assumption about

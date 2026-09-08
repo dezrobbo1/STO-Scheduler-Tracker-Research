@@ -126,8 +126,10 @@ FROM_ACTUALS = "actuals"
 #: Named on the fingerprint so a stored answer says which pass produced it.
 #: Version two releases the edges the progress policy releases; version three
 #: names them in the hash, so releasing an edge that moved no late date -- one
-#: already redundant -- still changes the answer's digest.
-BACKWARD_PASS_PROFILE = "sto-backward-pass-v4"
+#: already redundant -- still changes the answer's digest. Version four binds
+#: the progress policy itself; version five closes a feasible plateau after a
+#: finite lag calendar against the network horizon.
+BACKWARD_PASS_PROFILE = "sto-backward-pass-v5"
 
 
 @dataclass(frozen=True, slots=True)

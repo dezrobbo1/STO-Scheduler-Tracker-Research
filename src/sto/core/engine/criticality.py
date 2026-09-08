@@ -91,7 +91,9 @@ from .network import (
 #: Named on the fingerprint so a stored answer says which rule produced it.
 #: Version two hashes the two component floats as well as their minimum, so
 #: two analyses whose spans straddle the calendar differently do not match.
-CRITICALITY_PROFILE = "sto-criticality-v2"
+#: Version three bounds the lag inverse by the caller's network horizon rather
+#: than silently substituting the lag calendar's final productive coordinate.
+CRITICALITY_PROFILE = "sto-criticality-v3"
 
 
 class CriticalityError(NetworkError):
@@ -191,6 +193,7 @@ def _free_float(
     calendar: CompiledIntervals,
     lag_calendars: dict[UUID, CompiledIntervals],
     project_late_finish: int,
+    horizon: int,
 ) -> int:
     """Slack against the successors' *early* dates, not the project's late finish.
 
@@ -214,6 +217,11 @@ def _free_float(
     it is this activity that would consume it by slipping. Read off Project's
     own dates that rule reproduces the stored ``FreeSlack`` for about
     ninety-eight in a hundred activities of every real schedule here.
+
+    ``horizon`` is the caller's permitted coordinate domain.  It is passed to
+    the inverse deliberately because a finite lag calendar can have a feasible
+    constant tail while the predecessor's scheduling calendar continues.  The
+    lag calendar's final productive coordinate is not a movement limit.
     """
 
     early_start, early_finish = early[uid].early_start, early[uid].early_finish
@@ -242,7 +250,12 @@ def _free_float(
         # continuous calendar and a successor held at twenty reported five
         # units of free float: delaying by all five moves the successor by
         # three, and only two were ever free.
-        permitted = unshift_lag(lag_calendar, available, relationship.lag)
+        permitted = unshift_lag(
+            lag_calendar,
+            available,
+            relationship.lag,
+            ceiling=horizon,
+        )
         if permitted is None:
             # The forward pass placed this edge, so its inverse has to exist;
             # arriving here would mean the two were run over different
@@ -344,6 +357,7 @@ def float_analysis(
             calendar,
             lag_calendars,
             backward.project_late_finish,
+            network.horizon,
         )
         rows.append(
             ActivityFloat(

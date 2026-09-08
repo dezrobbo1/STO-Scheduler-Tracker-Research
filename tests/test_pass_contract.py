@@ -22,6 +22,7 @@ from sto.core.engine import (
     backward_pass,
     float_analysis,
     forward_pass,
+    signed_working,
     shift_lag,
     unshift_lag,
 )
@@ -52,6 +53,31 @@ def network(*activities, relationships=(), project_start=0, horizon=200, status_
         horizon=horizon,
         status_time=status_time,
     )
+
+
+def exhaustive_unshift(
+    calendar: CompiledIntervals,
+    anchor: int,
+    lag: int,
+    *,
+    floor: int,
+    ceiling: int,
+) -> int | None:
+    """Reference inverse over one deliberately finite integer domain.
+
+    This is intentionally only the contract written out as enumeration: apply
+    the production forward lag to every coordinate the caller permits, retain
+    the coordinates that land at or before the relationship bound, and choose
+    the greatest.  It shares no inverse arithmetic with ``unshift_lag``.
+    """
+
+    feasible = [
+        candidate
+        for candidate in range(floor, ceiling + 1)
+        if (landing := shift_lag(calendar, candidate, lag)) is not None
+        and landing <= anchor
+    ]
+    return max(feasible, default=None)
 
 
 class FreeFloatIsWhatThisActivityCanAbsorbTests(unittest.TestCase):
@@ -165,6 +191,155 @@ class TheInverseAnswersTheCallerNotTheCalendarTests(unittest.TestCase):
         answer = unshift_lag(calendar, -10, -5)
         self.assertEqual(answer, 0)
         self.assertEqual(shift_lag(calendar, answer, -5), -10)
+
+    def test_an_exact_final_work_landing_keeps_the_caller_tail_plateau(self):
+        calendar = CompiledIntervals.of(((0, 5),))
+        self.assertEqual(shift_lag(calendar, 5, -5), 0)
+        self.assertEqual(shift_lag(calendar, 20, -5), 0)
+        self.assertEqual(unshift_lag(calendar, 0, -5, ceiling=20), 20)
+
+    def test_a_ceiling_before_the_first_feasible_lead_returns_no_answer(self):
+        calendar = CompiledIntervals.of(((0, 5),))
+        self.assertIsNone(unshift_lag(calendar, 0, -5, ceiling=4))
+
+
+class TheBoundedInverseAgreesWithAnExhaustiveOracleTests(unittest.TestCase):
+    """The optimized inverse solves the declared caller-bounded inequality."""
+
+    CALENDARS = (
+        CompiledIntervals.of(((0, 5),)),
+        CompiledIntervals.of(((0, 2), (4, 7))),
+        CompiledIntervals.of(((-5, 0), (2, 6))),
+    )
+
+    def test_positive_negative_and_zero_lags_across_boundaries_and_tails(self):
+        floor = -12
+        for calendar in self.CALENDARS:
+            for lag in (-3, -1, 0, 1, 3):
+                for anchor in range(-6, 16):
+                    for ceiling in range(-6, 21):
+                        expected = exhaustive_unshift(
+                            calendar,
+                            anchor,
+                            lag,
+                            floor=floor,
+                            ceiling=ceiling,
+                        )
+                        with self.subTest(
+                            intervals=calendar.intervals,
+                            lag=lag,
+                            anchor=anchor,
+                            ceiling=ceiling,
+                        ):
+                            self.assertEqual(
+                                unshift_lag(calendar, anchor, lag, ceiling=ceiling),
+                                expected,
+                            )
+
+
+class CalendarTailSchedulingConsequencesTests(unittest.TestCase):
+    def test_backward_pass_keeps_float_beyond_the_lag_calendars_final_work(self):
+        predecessor_calendar = CompiledIntervals.of(((0, 20),))
+        lag_calendar = CompiledIntervals.of(((0, 5),))
+        net = network(
+            activity("P", 5, predecessor_calendar),
+            activity(
+                "S",
+                0,
+                predecessor_calendar,
+                constraint_type=ConstraintType.SNLT,
+                constraint_coordinate=0,
+            ),
+            relationships=(link("R1", "P", "S", lag=-5, lag_calendar=lag_calendar),),
+            horizon=20,
+        )
+        forward = forward_pass(net)
+        backward = backward_pass(net, forward, project_late_finish=20)
+        predecessor = backward.by_uid()[uid("P")]
+        self.assertEqual(predecessor.late_finish, 20)
+        self.assertEqual(
+            shift_lag(lag_calendar, predecessor.late_finish, -5),
+            0,
+        )
+
+    def test_free_float_uses_the_callers_horizon_not_the_lag_calendar_tail(self):
+        scheduling = CompiledIntervals.of(((0, 200),))
+        lag_calendar = CompiledIntervals.of(((0, 50),))
+        net = network(
+            activity("P", 90, scheduling),
+            activity(
+                "S",
+                1,
+                scheduling,
+                constraint_type=ConstraintType.SNET,
+                constraint_coordinate=90,
+            ),
+            relationships=(link("R1", "P", "S", lag=-10, lag_calendar=lag_calendar),),
+            horizon=200,
+        )
+        forward = forward_pass(net)
+        backward = backward_pass(net, forward)
+        predecessor = float_analysis(net, forward, backward).by_uid()[uid("P")]
+        self.assertEqual(predecessor.total_float, 1)
+        self.assertEqual(predecessor.free_float, 110)
+
+    def test_every_relationship_type_and_lag_sign_uses_the_same_bounded_contract(self):
+        scheduling = CompiledIntervals.of(((0, 20),))
+        lag_calendar = CompiledIntervals.of(((0, 12),))
+        for kind in RelationshipType:
+            for lag in (-2, 0, 2):
+                successor_constraint = (
+                    ConstraintType.SNET
+                    if kind in (RelationshipType.FS, RelationshipType.SS)
+                    else ConstraintType.FNET
+                )
+                successor_coordinate = 14 if successor_constraint is ConstraintType.SNET else 15
+                net = network(
+                    activity(
+                        "P",
+                        2,
+                        scheduling,
+                        constraint_type=ConstraintType.SNET,
+                        constraint_coordinate=5,
+                    ),
+                    activity(
+                        "S",
+                        1,
+                        scheduling,
+                        constraint_type=successor_constraint,
+                        constraint_coordinate=successor_coordinate,
+                    ),
+                    relationships=(link("R1", "P", "S", kind, lag, lag_calendar),),
+                    horizon=20,
+                )
+                forward = forward_pass(net)
+                backward = backward_pass(net, forward)
+                floats = float_analysis(net, forward, backward)
+                early = forward.by_uid()
+                predecessor_anchor = (
+                    early[uid("P")].early_finish
+                    if kind in (RelationshipType.FS, RelationshipType.FF)
+                    else early[uid("P")].early_start
+                )
+                successor_bound = (
+                    early[uid("S")].early_start
+                    if kind in (RelationshipType.FS, RelationshipType.SS)
+                    else early[uid("S")].early_finish
+                )
+                permitted = exhaustive_unshift(
+                    lag_calendar,
+                    successor_bound,
+                    lag,
+                    floor=-5,
+                    ceiling=net.horizon,
+                )
+                self.assertIsNotNone(permitted)
+                expected = signed_working(scheduling, predecessor_anchor, permitted)
+                with self.subTest(kind=kind.value, lag=lag):
+                    self.assertEqual(
+                        floats.by_uid()[uid("P")].free_float,
+                        expected,
+                    )
 
 
 class AReleasedEdgeCannotRefuseTheScheduleTests(unittest.TestCase):

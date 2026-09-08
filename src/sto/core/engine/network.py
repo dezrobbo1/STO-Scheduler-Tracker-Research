@@ -500,22 +500,46 @@ def unshift_lag(
     It matters when the lead runs past the end of the *lag* calendar: every
     coordinate beyond that point shifts back to the same landing, so the
     constraint stops binding and the answer is bounded by the caller rather
-    than by this calendar. With lag intervals ``(0, 50)``, an anchor of ninety
-    and a lead of ten, both ninety and a hundred land on forty; answering
-    fifty would pull a predecessor on a longer calendar earlier than it needs
-    to be and understate its float. Defaults to this calendar's end, which is
-    what a caller that shares one calendar means anyway.
+    than by this calendar. The plateau also applies when consuming the lead
+    lands *exactly* on the final productive boundary: on ``(0, 5)``, both five
+    and twenty shifted by minus five land on zero. With lag intervals
+    ``(0, 50)``, an anchor of ninety and a lead of ten, both ninety and a
+    hundred land on forty; answering fifty would pull a predecessor on a
+    longer calendar earlier than it needs to be and understate its float.
+    Defaults to this calendar's end, which is what a caller that shares one
+    calendar means anyway. If the ceiling precedes the first feasible
+    coordinate, there is no answer in the caller's domain.
 
     ``None`` when no coordinate satisfies it -- the calendar runs out.
     """
 
+    limit = calendar.last if ceiling is None else ceiling
+    if limit is None:
+        # Zero lag does not consult a calendar at all.  Preserve that contract
+        # for an empty calendar when no caller domain was supplied.
+        return anchor if lag == 0 else None
+
+    # The caller's ceiling is itself the greatest possible answer.  Testing it
+    # first expresses the finite-domain contract directly and catches both
+    # kinds of plateau: a positive lag can start before a calendar opens, and a
+    # negative lag can finish after its final productive coordinate.  In the
+    # latter case ``calendar.last`` and the caller's limit are different facts.
+    at_limit = shift_lag(calendar, limit, lag)
+    if at_limit is not None and at_limit <= anchor:
+        return limit
+
     if lag == 0:
+        # ``limit`` was too late, so the relationship bound itself is the
+        # greatest coordinate that satisfies the identity transformation.
         return anchor
     if lag > 0:
         # Walking a positive lag back from the anchor cannot overshoot: the
         # result is at or before the anchor, and shifting it forward again is
-        # bounded by where it came from.
-        return sub_working(calendar, anchor, lag)
+        # bounded by where it came from.  If it lies beyond the caller's limit,
+        # that limit was not feasible (checked above), so the declared domain
+        # contains no answer.
+        answer = sub_working(calendar, anchor, lag)
+        return answer if answer is not None and answer <= limit else None
 
     # A negative lag walks back over working time, so every coordinate it can
     # land on is one at which work can start -- which is the question
@@ -530,15 +554,17 @@ def unshift_lag(
     landing = prev_working_start(calendar, anchor)
     if landing is None:
         return None
-    limit = calendar.last if ceiling is None else ceiling
     moved = add_working(calendar, landing, lead)
     if moved is None:
-        # The lead reaches past the end of this calendar, so every coordinate
-        # from there on lands in the same place and the caller's horizon is
-        # what bounds the answer.
-        return limit
+        # Any feasible tail coordinate would have made ``limit`` feasible in
+        # the explicit check above.  Reaching here therefore means the first
+        # such coordinate lies outside the caller's domain.
+        return None
     opened = next_working(calendar, moved)
     # ``next_working`` can legitimately answer zero, which is a coordinate and
     # not an absence.
     answer = moved if opened is None else opened
-    return min(answer, limit) if limit is not None else answer
+    if answer > limit:
+        return None
+    landed = shift_lag(calendar, answer, lag)
+    return answer if landed is not None and landed <= anchor else None
