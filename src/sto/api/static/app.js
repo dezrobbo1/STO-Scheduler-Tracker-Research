@@ -9,6 +9,10 @@ const provenanceSection = document.querySelector("#provenance-section");
 const provenance = document.querySelector("#provenance");
 const rowsSection = document.querySelector("#rows-section");
 const body = document.querySelector("#rows tbody");
+const chartSection = document.querySelector("#chart-section");
+const chart = document.querySelector("#chart");
+const summariesSection = document.querySelector("#summaries-section");
+const summaryBody = document.querySelector("#summaries tbody");
 
 function say(message, kind) {
   status.textContent = message;
@@ -83,19 +87,123 @@ function edgeSummary(edges) {
     .join(", ");
 }
 
+// --- the bar ---------------------------------------------------------------
+// A schedule people read is a schedule with a shape, and a table of timestamps
+// has none. This is the smallest thing that gives one: a horizontal band per
+// row, positioned against the whole calculation's extent. The outline behind
+// it is what the file said, so a row that moved shows the movement rather than
+// asking the reader to subtract two timestamps in their head.
+
+function moments(result) {
+  const values = [];
+  for (const row of result.activities) {
+    for (const key of ["early_start", "early_finish", "source_start", "source_finish"]) {
+      if (row[key]) values.push(Date.parse(row[key]));
+    }
+  }
+  for (const row of result.summaries) {
+    for (const key of ["span_start", "span_finish", "source_start", "source_finish"]) {
+      if (row[key]) values.push(Date.parse(row[key]));
+    }
+  }
+  const finite = values.filter(Number.isFinite);
+  if (finite.length === 0) return null;
+  const from = Math.min(...finite);
+  const to = Math.max(...finite);
+  return to > from ? { from, span: to - from } : null;
+}
+
+function band(scale, start, finish, className) {
+  if (!scale || !start) return null;
+  const from = Date.parse(start);
+  const to = Date.parse(finish ?? start);
+  if (!Number.isFinite(from) || !Number.isFinite(to)) return null;
+  const element = document.createElement("span");
+  element.className = className;
+  const left = ((from - scale.from) / scale.span) * 100;
+  // A milestone has no width of its own; a hairline keeps it visible instead
+  // of rendering as nothing at all.
+  const width = Math.max(((to - from) / scale.span) * 100, 0.4);
+  element.style.left = Math.max(0, Math.min(100, left)) + "%";
+  element.style.width = Math.max(0, Math.min(100 - left, width)) + "%";
+  return element;
+}
+
+function drawChart(result, scale) {
+  // Its own section, at the page's full width, because a track squeezed into a
+  // table column gave a seven-week shutdown about three pixels a day and read
+  // as a scatter of ticks rather than as a schedule.
+  chart.replaceChildren();
+  if (!scale) return;
+  // Time order, not the order the passes walked. The table below keeps the
+  // engine's order; a chart read down the page is read as a sequence.
+  const placed = result.activities
+    .filter((row) => row.early_start)
+    .sort((left, right) => left.early_start.localeCompare(right.early_start));
+  for (const row of placed) {
+    const line = document.createElement("div");
+    line.className = "gantt-row";
+    if (row.critical) line.dataset.critical = "true";
+    const label = document.createElement("span");
+    label.className = "gantt-label";
+    label.textContent = (row.code ? row.code + "  " : "") + (row.name ?? "");
+    label.title = label.textContent;
+    const track = document.createElement("span");
+    track.className = "track";
+    const imported = band(scale, row.source_start, row.source_finish, "bar imported");
+    if (imported) track.append(imported);
+    const computed = band(scale, row.early_start, row.early_finish, "bar computed");
+    if (computed) track.append(computed);
+    line.append(label, track);
+    chart.append(line);
+  }
+  chartSection.hidden = false;
+}
+
+function state(row) {
+  if (row.disposition === "excluded") return "not calculated";
+  const label = { not_started: "not started", in_progress: "in progress", complete: "complete" };
+  return label[row.progress_state] ?? row.progress_state ?? "";
+}
+
+function placement(row) {
+  // What put the row where it is, in the reader's words rather than the
+  // engine's. A row that disagrees with the file and says "constraint" has
+  // explained itself; one that only disagrees has not.
+  if (row.disposition === "excluded") return "";
+  const label = {
+    relationship: "a predecessor",
+    project_start: "the project start",
+    constraint: "a constraint",
+    actuals: "its own actual dates",
+    status_time: "the status date",
+  };
+  const reason = label[row.placed_by] ?? row.placed_by ?? "";
+  const notes = [];
+  if (reason) notes.push(reason);
+  if (row.constraint_override) notes.push("overriding its logic");
+  if (row.assumptions && row.assumptions.length) notes.push("under " + row.assumptions.join(", "));
+  return notes.join(", ");
+}
+
 function render(result) {
   describe(result);
+  const scale = moments(result);
+  drawChart(result, scale);
   body.replaceChildren();
   for (const row of result.activities) {
     const tr = document.createElement("tr");
     tr.dataset.disposition = row.disposition;
+    if (row.critical) tr.dataset.critical = "true";
     const cells = [
       [row.code ?? "", ""],
       [row.name ?? "", "name"],
+      [state(row), ""],
       [moment(row.source_start), ""],
       [moment(row.source_finish), ""],
       [row.disposition === "excluded" ? row.exclusion_code : moment(row.early_start), ""],
       [moment(row.early_finish), ""],
+      [placement(row), "reason"],
       [hours(row.total_float_seconds), "num"],
       [row.critical === null ? "" : row.critical ? "yes" : "no", ""],
       [row.agrees_with_source === null ? "" : row.agrees_with_source ? "yes" : "no", "agrees"],
@@ -103,8 +211,8 @@ function render(result) {
     for (const [text, kind] of cells) {
       const td = document.createElement("td");
       td.textContent = text;
-      if (kind === "num" || kind === "name") td.className = kind;
-      if (kind === "name" && text) td.title = text;
+      if (kind === "num" || kind === "name" || kind === "reason") td.className = kind;
+      if ((kind === "name" || kind === "reason") && text) td.title = text;
       if (kind === "agrees" && row.agrees_with_source !== null) {
         td.dataset.agrees = String(row.agrees_with_source);
       }
@@ -113,11 +221,36 @@ function render(result) {
     body.append(tr);
   }
   rowsSection.hidden = false;
+
+  summaryBody.replaceChildren();
+  for (const row of result.summaries) {
+    const tr = document.createElement("tr");
+    if (!row.span_start) tr.dataset.disposition = "excluded";
+    for (const [text, kind] of [
+      [row.code ?? "", ""],
+      [row.name ?? "", "name"],
+      [moment(row.source_start), ""],
+      [moment(row.source_finish), ""],
+      [row.span_start ? moment(row.span_start) : "nothing placed beneath it", ""],
+      [moment(row.span_finish), ""],
+      [String(row.placed ?? 0), "num"],
+    ]) {
+      const td = document.createElement("td");
+      td.textContent = text;
+      if (kind) td.className = kind;
+      if (kind === "name" && text) td.title = text;
+      tr.append(td);
+    }
+    summaryBody.append(tr);
+  }
+  summariesSection.hidden = false;
 }
 
 async function show(projectId) {
   provenanceSection.hidden = true;
   rowsSection.hidden = true;
+  summariesSection.hidden = true;
+  chartSection.hidden = true;
   if (!projectId) return;
   try {
     render(await json(`/api/projects/${projectId}/calculations/latest`));

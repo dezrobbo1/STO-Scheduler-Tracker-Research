@@ -100,7 +100,14 @@ class CalculationResult:
     fingerprint: str
     scheduled: int
     excluded: int
+    #: Every WBS row the calculation stored, a branch with nothing beneath it
+    #: included. It is stored as a row with no span, so counting only the ones
+    #: with spans made this endpoint disagree with the one that reads it back.
     summaries: int
+    #: Whether this run was already stored. A calculation is deterministic, so
+    #: asking for the same one twice is not an error and does not make a second
+    #: row; the caller is told which it got.
+    already_stored: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -298,16 +305,29 @@ class Workspace:
             canonical_hash=working.canonical_hash,
             horizon=horizon,
         )
+        already_stored = False
         with self.connect() as conn:
-            calculation_id = repo.insert_calculation(
-                conn,
-                project_id=project_id,
-                version_id=working.version_id,
-                result=result,
+            existing = repo.find_calculation(
+                conn, version_id=working.version_id, fingerprint=result.fingerprint
             )
-            conn.commit()
+            if existing is not None:
+                # The same document over the same window under the same rules
+                # is the same answer, and the table stores it once. Asking again
+                # is an ordinary thing for a caller to do, so it returns what is
+                # there rather than colliding with it.
+                calculation_id = existing["id"]
+                already_stored = True
+            else:
+                calculation_id = repo.insert_calculation(
+                    conn,
+                    project_id=project_id,
+                    version_id=working.version_id,
+                    result=result,
+                )
+                conn.commit()
         scheduled = sum(1 for row in result.activities if row.disposition == SCHEDULED)
         return CalculationResult(
+            already_stored=already_stored,
             project_id=project_id,
             version_id=working.version_id,
             calculation_id=calculation_id,
@@ -315,7 +335,7 @@ class Workspace:
             fingerprint=result.fingerprint,
             scheduled=scheduled,
             excluded=len(result.activities) - scheduled,
-            summaries=len(result.summaries),
+            summaries=len(result.summaries) + len(result.empty_summaries),
         )
 
 
@@ -453,6 +473,8 @@ class Workspace:
                     "critical": row.critical,
                     "progress_state": row.state,
                     "placed_by": row.placed_by,
+                    "late_placed_by": row.late_placed_by,
+                    "constraint_override": row.constraint_override,
                     "exclusion_code": row.exclusion_code,
                     "assumptions": list(row.assumptions),
                     "agrees_with_source": agrees,

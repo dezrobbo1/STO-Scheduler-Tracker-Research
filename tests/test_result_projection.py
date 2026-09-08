@@ -558,11 +558,45 @@ class AStoredCalculationComesBackTests(unittest.TestCase):
             ).fetchone()
         self.assertEqual(rows["n"], 2)
 
-    def test_the_same_calculation_twice_is_refused_rather_than_duplicated(self):
+    def test_the_same_calculation_twice_is_the_same_row_not_a_second_one(self):
+        """Asking again is an ordinary thing to do, not an error.
+
+        A calculation is deterministic: the same document over the same window
+        under the same rules is the same answer, and the table holds it once.
+        The second ask used to collide with the uniqueness constraint, which
+        reached a caller as a server fault for clicking a button twice.
+        """
+
         workspace, project_id = self._imported()
-        workspace.calculate(project_id)
-        with self.assertRaises(Exception):
-            workspace.calculate(project_id)
+        first = workspace.calculate(project_id)
+        second = workspace.calculate(project_id)
+
+        self.assertFalse(first.already_stored)
+        self.assertTrue(second.already_stored)
+        self.assertEqual(second.calculation_id, first.calculation_id)
+        self.assertEqual(second.fingerprint, first.fingerprint)
+        with self.connect() as conn:
+            rows = conn.execute(
+                "SELECT count(*) AS n FROM schedule_calculations WHERE version_id = %s",
+                (first.version_id,),
+            ).fetchone()
+        self.assertEqual(rows["n"], 1)
+
+    def test_the_database_still_refuses_a_duplicate_written_directly(self):
+        """The guard the workspace now avoids tripping is still there."""
+
+        from sto.persistence import repositories as repo
+
+        workspace, project_id = self._imported()
+        stored = workspace.calculate(project_id)
+        _, result = _projected(FIXTURE)
+        with self.connect() as conn, self.assertRaises(psycopg.errors.UniqueViolation):
+            repo.insert_calculation(
+                conn,
+                project_id=project_id,
+                version_id=stored.version_id,
+                result=result,
+            )
 
 
     def test_a_stored_calculation_is_checked_against_its_own_rows(self):

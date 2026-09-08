@@ -88,7 +88,12 @@ class CalculationSummary(BaseModel):
     fingerprint: str
     scheduled: int
     excluded: int
+    #: Every WBS row stored, a branch with nothing beneath it included, so this
+    #: agrees with the calculation read back.
     summaries: int
+    #: True when this run was already stored. A calculation is deterministic,
+    #: so asking twice is not an error and does not make a second row.
+    already_stored: bool = False
 
 
 class ActivityRow(BaseModel):
@@ -116,6 +121,11 @@ class ActivityRow(BaseModel):
     critical: bool | None = None
     progress_state: str | None = None
     placed_by: str | None = None
+    #: What bounded the late span, which in a chain is a different edge from
+    #: what bounded the early one.
+    late_placed_by: str | None = None
+    #: A hard constraint that overrode precedence, and what the logic wanted.
+    constraint_override: str | None = None
     exclusion_code: str | None = None
     assumptions: list[str] = []
     agrees_with_source: bool | None = None

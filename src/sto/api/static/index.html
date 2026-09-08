@@ -28,21 +28,64 @@
   <dl id="provenance"></dl>
 </section>
 
+<section id="chart-section" hidden aria-labelledby="chart-heading">
+  <h2 id="chart-heading">The shape of it</h2>
+  <p class="lede">
+    Every placed activity against the whole calculation's extent, earliest
+    first. The outline is what the file said and the solid bar is what this
+    engine worked out, so a row that moved shows the movement. Critical rows
+    are marked.
+  </p>
+  <div id="chart"></div>
+</section>
+
 <section id="rows-section" hidden aria-labelledby="rows-heading">
   <h2 id="rows-heading">Activities</h2>
+  <p class="lede">
+    The bar shows the calculated span against the whole schedule; the outline
+    behind it is what the file said. Where they do not line up, the placement
+    reason is what moved the row.
+  </p>
   <div class="scroll">
     <table id="rows">
       <thead>
         <tr>
           <th scope="col">Code</th>
           <th scope="col">Name</th>
+          <th scope="col">State</th>
           <th scope="col">Imported start</th>
           <th scope="col">Imported finish</th>
           <th scope="col">Calculated start</th>
           <th scope="col">Calculated finish</th>
+          <th scope="col">Placed by</th>
           <th scope="col">Total float</th>
           <th scope="col">Critical</th>
           <th scope="col">Agrees</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</section>
+
+<section id="summaries-section" hidden aria-labelledby="summaries-heading">
+  <h2 id="summaries-heading">Summaries</h2>
+  <p class="lede">
+    A summary's dates are its children's. A branch with nothing placed beneath
+    it is shown with no span rather than left out, because "nothing was
+    calculated here" and "this is not in the file" are different answers.
+  </p>
+  <div class="scroll">
+    <table id="summaries">
+      <thead>
+        <tr>
+          <th scope="col">Code</th>
+          <th scope="col">Name</th>
+          <th scope="col">Imported start</th>
+          <th scope="col">Imported finish</th>
+          <th scope="col">Rolled-up start</th>
+          <th scope="col">Rolled-up finish</th>
+          <th scope="col">Placed beneath</th>
         </tr>
       </thead>
       <tbody></tbody>

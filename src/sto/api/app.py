@@ -23,13 +23,19 @@ from fastapi.staticfiles import StaticFiles
 #: the parsing is how a single request takes the process with it.
 MAX_UPLOAD_BYTES = 64 * 1024 * 1024
 
+#: A multipart body carries boundaries, headers and a filename around the file
+#: itself, so the declared length of a request at the limit is a little over
+#: it. The slack is for that envelope, not for the file.
+_MULTIPART_ALLOWANCE = 8 * 1024
+
 #: The read-only page, beside this module so that packaging carries it.
 STATIC_DIR = Path(__file__).with_name("static")
 
 from sto.core.model.migrate.sto_v011 import MigrationError
 from sto.persistence import repositories as repo
 from sto.persistence.db import connect
-from sto.core.engine import PlanError
+from sto.core.calendar.compile import CalendarCompileError
+from sto.core.engine.network import NetworkError
 from sto.scheduling.working_schedule import (
     ImportRefused,
     IntegrityError,
@@ -42,6 +48,30 @@ from . import schemas
 #: 8090 is the Java API until cut-over (frozen-repository deployment); the new
 #: stack is trialled beside it. The port swaps at PL12, not before.
 DEFAULT_PORT = 8092
+
+
+def _refuse_oversized_body(request: Request) -> None:
+    """Refuse an oversized upload before anything reads it.
+
+    A declared length is not proof of anything, but it is what an honest
+    client sends and what a proxy sets, and refusing on it costs the server
+    nothing. A body that arrives without one, or that lies, is still bounded
+    by the chunked read below -- this only moves the refusal earlier for the
+    ordinary case, which is the case that fills a disk.
+    """
+
+    declared = request.headers.get("content-length")
+    if declared is None:
+        return
+    try:
+        length = int(declared)
+    except ValueError:
+        raise HTTPException(400, "the request declares a length that is not a number") from None
+    if length > MAX_UPLOAD_BYTES + _MULTIPART_ALLOWANCE:
+        raise HTTPException(
+            413,
+            f"the upload declares {length} bytes; the limit is {MAX_UPLOAD_BYTES}",
+        )
 
 
 async def _read_bounded(file: UploadFile) -> bytes:
@@ -133,10 +163,16 @@ def create_app(workspace: Workspace | None = None) -> FastAPI:
         status_code=201,
     )
     async def import_schedule(
+        request: Request,
         project_id: uuid.UUID,
         file: UploadFile = File(...),
         workspace: Workspace = Depends(ws),
     ) -> Any:
+        # The bound has to be answered before the body is read, not after.
+        # Multipart parsing spools the whole upload to a temporary file before
+        # this function is entered, so a limit applied to the resulting file
+        # object had already let the transfer happen and the disk fill.
+        _refuse_oversized_body(request)
         data = await _read_bounded(file)
         try:
             result = workspace.import_file(
@@ -182,14 +218,18 @@ def create_app(workspace: Workspace | None = None) -> FastAPI:
             result = workspace.calculate(project_id)
         except UnknownProject:
             raise HTTPException(404, "no such project") from None
+        except (NetworkError, CalendarCompileError) as error:
+            # The engine's whole refusal family, not PlanError alone. A
+            # schedule that imported cleanly and then would not compile -- one
+            # with no calendars, say -- came back as a server fault rather than
+            # as the coded refusal this route promises.
+            raise HTTPException(422, f"the schedule cannot be calculated: {error}") from None
         except IntegrityError as error:
             # Stored bytes that do not hash to what the row says. Nothing the
             # caller sent conflicts with anything, so this is a 500 like the
             # schedule route's, and the project is quarantined rather than
             # served a wrong answer.
             raise HTTPException(500, str(error)) from None
-        except PlanError as error:
-            raise HTTPException(422, f"the schedule cannot be planned: {error}") from None
         return schemas.CalculationSummary(
             project_id=result.project_id,
             version_id=result.version_id,
@@ -199,6 +239,7 @@ def create_app(workspace: Workspace | None = None) -> FastAPI:
             scheduled=result.scheduled,
             excluded=result.excluded,
             summaries=result.summaries,
+            already_stored=result.already_stored,
         )
 
     @app.get(
