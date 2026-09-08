@@ -8,14 +8,25 @@ empty cells and pass every other test in this repository.
 
 from __future__ import annotations
 
+import os
 import re
 import unittest
 from html.parser import HTMLParser
 from pathlib import Path
 
-from sto.api import schemas
-
 STATIC = Path(__file__).resolve().parents[1] / "src" / "sto" / "api" / "static"
+
+# The page's own consistency needs nothing installed. Comparing it with the
+# response models needs pydantic, which the bare suite does not have; the api
+# job sets STO_REQUIRE_DB=1 and turns its absence into a failure there.
+try:
+    from sto.api import schemas
+except ImportError as error:  # the bare suite: no api extra
+    if os.environ.get("STO_REQUIRE_DB") == "1":
+        raise RuntimeError(
+            f"STO_REQUIRE_DB=1 but the api extra is missing ({error.name})"
+        ) from error
+    schemas = None  # type: ignore[assignment]
 
 
 class _Links(HTMLParser):
@@ -61,6 +72,7 @@ class ThePageIsSelfConsistentTests(unittest.TestCase):
         self.assertEqual(sorted(wanted - self.parser.ids), [])
 
 
+@unittest.skipUnless(schemas is not None, "the api extra is not installed")
 class ThePageAndTheApiAgreeTests(unittest.TestCase):
     """The fields it reads are the fields the responses declare."""
 
