@@ -93,7 +93,9 @@ class ThePageAndTheApiAgreeTests(unittest.TestCase):
                 self.assertIn(path, routes)
 
     def test_the_row_fields_it_reads_are_declared_by_the_response(self):
-        declared = set(schemas.ActivityRow.model_fields)
+        """The page renders two kinds of row, so both models are the contract."""
+
+        declared = set(schemas.ActivityRow.model_fields) | set(schemas.SummaryRow.model_fields)
         read = set(re.findall(r"\brow\.(\w+)", self.script))
         self.assertTrue(read, "the script reads no row fields; this would pass vacuously")
         self.assertEqual(sorted(read - declared), [])

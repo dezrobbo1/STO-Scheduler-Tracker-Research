@@ -21,15 +21,42 @@ dt { font-weight: 600; }
 dd { margin: 0; font-variant-numeric: tabular-nums; }
 .scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 4px; }
 table { border-collapse: collapse; width: 100%; }
-th, td { text-align: left; padding: .3rem .5rem; border-bottom: 1px solid var(--line);
+th, td { text-align: left; padding: .3rem .4rem; border-bottom: 1px solid var(--line);
          white-space: nowrap; }
+table { font-size: .92em; }
 th { position: sticky; top: 0; background: Canvas; }
 td.num { font-variant-numeric: tabular-nums; text-align: right; }
 /* An activity name runs to a full line of prose, and a column that grew to fit
    one pushed every date off the side of the screen -- which is the one thing
    this page exists to show. The name is clipped and carries its full text as a
    tooltip; the dates stay where they can be compared. */
-td.name { max-width: 24rem; overflow: hidden; text-overflow: ellipsis; }
+/* Both of these run to a full line of prose, and columns that grew to fit one
+   pushed the span bar off the side of the screen -- the thing the page is
+   for. Clipped, with the full text as a tooltip. */
+td.name { max-width: 15rem; overflow: hidden; text-overflow: ellipsis; }
+td.reason { max-width: 10rem; overflow: hidden; text-overflow: ellipsis; opacity: .85; }
+
+/* The span bar. A table of timestamps has no shape; this gives one without a
+   charting library, a build step or a second request. The outline is what the
+   file said and the solid bar is what the engine worked out, so a row that
+   moved shows the movement instead of asking the reader to subtract two
+   timestamps in their head. */
+#chart { display: grid; grid-template-columns: minmax(8rem, 22rem) 1fr; gap: .15rem .75rem;
+         align-items: center; max-height: 30rem; overflow-y: auto;
+         border: 1px solid var(--line); border-radius: 4px; padding: .5rem; }
+.gantt-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+               font-size: .9em; }
+.gantt-row { display: contents; }
+.gantt-row[data-critical="true"] .gantt-label { font-weight: 600; }
+.track { position: relative; display: block; height: 1rem; border-radius: 2px;
+         background: color-mix(in srgb, Canvas 90%, CanvasText 10%); }
+.bar { position: absolute; top: 0; height: 100%; border-radius: 2px; }
+.bar.imported { border: 1px solid color-mix(in srgb, CanvasText 45%, transparent);
+                background: none; }
+.bar.computed { top: .2rem; height: .6rem;
+                background: color-mix(in srgb, CanvasText 55%, transparent); }
+tr[data-critical="true"] .bar.computed,
+.gantt-row[data-critical="true"] .bar.computed { background: var(--warn); }
 tr[data-disposition="excluded"] { opacity: .65; font-style: italic; }
 td[data-agrees="false"] { color: var(--warn); }
 td[data-agrees="true"] { color: var(--ok); }

@@ -371,6 +371,25 @@ def get_latest_calculation(
     ).fetchone()
 
 
+def find_calculation(
+    conn: psycopg.Connection, *, version_id: uuid.UUID, fingerprint: str
+) -> dict[str, Any] | None:
+    """The calculation already stored for this version under this fingerprint.
+
+    A calculation is deterministic, so the same version computed the same way
+    twice is the same answer. The table holds it once; this is how a caller
+    finds the one that is there instead of colliding with it.
+    """
+
+    return conn.execute(
+        """
+        SELECT * FROM schedule_calculations
+        WHERE version_id = %s AND result_fingerprint = %s
+        """,
+        (version_id, fingerprint),
+    ).fetchone()
+
+
 def get_calculation(
     conn: psycopg.Connection, *, calculation_id: uuid.UUID
 ) -> dict[str, Any] | None:

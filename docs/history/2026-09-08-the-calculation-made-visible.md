@@ -63,6 +63,37 @@ loads every project's head, and a boot that refused entirely because one of them
 was bad would hide which one; that project's routes report the failure and the
 others serve.
 
+## What the review of this slice added
+
+Three things the page claimed and did not do, and three the routes got wrong.
+
+The page had an activity table and nothing else, while the slice's own text
+promised summary spans, the reason a row sits where it does, and a simple
+Gantt. All three are there now. The chart has its own section at the page's
+full width, because a track squeezed into a table column gave a seven-week
+shutdown about three pixels a day and read as a scatter of ticks rather than
+as a schedule; sorted earliest first, it reads as one.
+
+Clicking Calculate twice was a server fault. A calculation is deterministic,
+so the second run produced the same fingerprint and collided with the
+uniqueness constraint that exists to keep it stored once. Asking again now
+returns the calculation that is there and says that is what happened.
+
+A schedule that imported cleanly and then would not compile — one carrying no
+calendars — came back as a server fault too, because only one of the engine's
+refusal types was named on the route. The refusal itself was the odd one out:
+it was a bare `ValueError` where every other reason a plan cannot be built is
+coded, so it is coded now and the route catches the family.
+
+The upload bound was applied to the file after multipart parsing had already
+spooled the whole body to disk, which is not a bound on anything that matters.
+It is answered from the declared length before the body is read, and the
+chunked read still holds for a request that arrives without one or lies.
+
+And the static assets were not in the wheel: `pyproject.toml` declared package
+data for two packages and not this one, so an installed `sto serve` raised on
+the missing directory at startup.
+
 ## What is not here
 
 No editing. The page is read-only, and the loop the phase gate asks for — change
