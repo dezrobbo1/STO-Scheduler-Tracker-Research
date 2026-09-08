@@ -261,7 +261,14 @@ def build_plan(
 
     calendars = compile_calendars(schedule, horizon, epoch=epoch)
     if not calendars:
-        raise ValueError("the schedule carries no calendars to compile")
+        # A coded refusal like every other reason a plan cannot be built. A
+        # bare ValueError here reached the API as a server fault, because it
+        # was the one refusal outside the engine's own error family.
+        raise PlanError(
+            "PROJECT_NO_CALENDARS",
+            None,
+            "the schedule carries no calendars to compile",
+        )
     any_calendar = next(iter(calendars.values()))
     shared_epoch = any_calendar.epoch
     window = any_calendar.horizon

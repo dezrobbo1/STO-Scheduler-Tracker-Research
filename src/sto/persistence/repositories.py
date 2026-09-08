@@ -355,6 +355,21 @@ def insert_calculation(
     return calculation_id
 
 
+def list_import_batches(
+    conn: psycopg.Connection, *, project_id: uuid.UUID
+) -> list[dict[str, Any]]:
+    """Every parser run against a project, newest last. Failures included."""
+
+    return conn.execute(
+        """
+        SELECT * FROM import_batches
+        WHERE project_id = %s
+        ORDER BY started_at, id
+        """,
+        (project_id,),
+    ).fetchall()
+
+
 def get_latest_calculation(
     conn: psycopg.Connection, *, version_id: uuid.UUID
 ) -> dict[str, Any] | None:
@@ -368,6 +383,25 @@ def get_latest_calculation(
         LIMIT 1
         """,
         (version_id,),
+    ).fetchone()
+
+
+def find_calculation(
+    conn: psycopg.Connection, *, version_id: uuid.UUID, fingerprint: str
+) -> dict[str, Any] | None:
+    """The calculation already stored for this version under this fingerprint.
+
+    A calculation is deterministic, so the same version computed the same way
+    twice is the same answer. The table holds it once; this is how a caller
+    finds the one that is there instead of colliding with it.
+    """
+
+    return conn.execute(
+        """
+        SELECT * FROM schedule_calculations
+        WHERE version_id = %s AND result_fingerprint = %s
+        """,
+        (version_id, fingerprint),
     ).fetchone()
 
 

@@ -1,0 +1,62 @@
+/* Deliberately small. This page exists to show that a stored calculation can
+   be read back and compared with its source, not to be the product's console;
+   the planner's own surface arrives with the editing loop. */
+:root { color-scheme: light dark; --line: #8883; --warn: #b3261e; --ok: #1b6b3a; }
+* { box-sizing: border-box; }
+/* Wide enough for both sets of dates and the verdict beside them without a
+   horizontal scroll on a normal screen. The prose stays narrow on its own. */
+body { margin: 0 auto; padding: 1.5rem; max-width: 96rem;
+       font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+h1 { font-size: 1.4rem; margin: 0 0 .25rem; }
+h2 { font-size: 1rem; margin: 1.75rem 0 .5rem; }
+.lede { margin: 0 0 1rem; max-width: 56rem; opacity: .8; }
+.row { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
+label { font-weight: 600; }
+select, button { font: inherit; padding: .35rem .6rem; }
+button { cursor: pointer; }
+#status { min-height: 1.5rem; margin: .5rem 0 0; }
+#status[data-kind="error"] { color: var(--warn); }
+dl { display: grid; grid-template-columns: max-content 1fr; gap: .2rem 1rem; margin: 0; }
+dt { font-weight: 600; }
+dd { margin: 0; font-variant-numeric: tabular-nums; }
+.scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 4px; }
+table { border-collapse: collapse; width: 100%; }
+th, td { text-align: left; padding: .3rem .4rem; border-bottom: 1px solid var(--line);
+         white-space: nowrap; }
+table { font-size: .92em; }
+th { position: sticky; top: 0; background: Canvas; }
+td.num { font-variant-numeric: tabular-nums; text-align: right; }
+/* An activity name runs to a full line of prose, and a column that grew to fit
+   one pushed every date off the side of the screen -- which is the one thing
+   this page exists to show. The name is clipped and carries its full text as a
+   tooltip; the dates stay where they can be compared. */
+/* Both of these run to a full line of prose, and columns that grew to fit one
+   pushed the span bar off the side of the screen -- the thing the page is
+   for. Clipped, with the full text as a tooltip. */
+td.name { max-width: 15rem; overflow: hidden; text-overflow: ellipsis; }
+td.reason { max-width: 10rem; overflow: hidden; text-overflow: ellipsis; opacity: .85; }
+
+/* The span bar. A table of timestamps has no shape; this gives one without a
+   charting library, a build step or a second request. The outline is what the
+   file said and the solid bar is what the engine worked out, so a row that
+   moved shows the movement instead of asking the reader to subtract two
+   timestamps in their head. */
+#chart { display: grid; grid-template-columns: minmax(8rem, 22rem) 1fr; gap: .15rem .75rem;
+         align-items: center; max-height: 30rem; overflow-y: auto;
+         border: 1px solid var(--line); border-radius: 4px; padding: .5rem; }
+.gantt-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+               font-size: .9em; }
+.gantt-row { display: contents; }
+.gantt-row[data-critical="true"] .gantt-label { font-weight: 600; }
+.track { position: relative; display: block; height: 1rem; border-radius: 2px;
+         background: color-mix(in srgb, Canvas 90%, CanvasText 10%); }
+.bar { position: absolute; top: 0; height: 100%; border-radius: 2px; }
+.bar.imported { border: 1px solid color-mix(in srgb, CanvasText 45%, transparent);
+                background: none; }
+.bar.computed { top: .2rem; height: .6rem;
+                background: color-mix(in srgb, CanvasText 55%, transparent); }
+tr[data-critical="true"] .bar.computed,
+.gantt-row[data-critical="true"] .bar.computed { background: var(--warn); }
+tr[data-disposition="excluded"] { opacity: .65; font-style: italic; }
+td[data-agrees="false"] { color: var(--warn); }
+td[data-agrees="true"] { color: var(--ok); }
