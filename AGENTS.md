@@ -1,8 +1,12 @@
 # STO working mode
 
-STO is a shutdown, turnaround and outage scheduler. It imports from a CMMS, from
-Primavera P6 or from Microsoft Project; it tracks, manages and schedules
-execution in real time; and it exports back to any of them.
+STO is a shutdown, turnaround and outage scheduler being built to import from
+a CMMS, from Primavera P6 or from Microsoft Project; to track, manage and
+schedule execution in real time; and to export back to any of them. Today it
+does two of those separately: it imports Microsoft Project XML into a canonical
+model and stores it with a durable identity, and it has its own CPM engine over
+that model. Connecting the two — a stored schedule calculated and shown — is
+`PL13`, and `docs/goals/ACTIVE.md` says what is built and what is next.
 
 Read `docs/goals/ACTIVE.md` for what is being built now and
 `docs/goals/roadmap.json` for phases, gate criteria and the rule registry

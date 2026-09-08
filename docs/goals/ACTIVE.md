@@ -2,6 +2,10 @@
 
 STO is becoming its own scheduler: import from a CMMS, Primavera P6 or Microsoft
 Project; track, manage and schedule in real time; export back to any of them.
+Today it imports Microsoft Project XML, calculates it, and stores it; the
+rest is the roadmap below, and the 2026-09-07 comprehensive repository review
+(`docs/history/2026-09-08-review-answered-and-roadmap-resequenced.md`) is
+the honest statement of the distance.
 `AGENTS.md` holds the boundaries, `docs/adr/` the decisions, and
 `docs/history/` how each decision was reached.
 `docs/roadmap/CONSOLIDATION-PLAN.md` is the design behind the summary below —
@@ -17,16 +21,15 @@ not start until the previous gate passes.
 <!-- roadmap:begin now -->
 <!-- generated from docs/goals/roadmap.json by `sto roadmap render`; edit the JSON, not this -->
 
-**P1 — Engine and interchange spine** (in progress; 1 of 6 gate criteria met)
+**P1 — Engine and local planner trial** (in progress; 1 of 5 gate criteria met)
 
 | | Gate criterion | Shown by |
 |---|---|---|
 | ✓ | The 47 executable conformance cases pass, byte-identically across three processes | `tests/test_conformance_determinism.py` |
 | · | Both BOILER snapshots: every leaf activity gets a disposition, and no difference is UNEXPLAINED across start, finish, late dates, float and criticality | — |
 | · | The genuine Project-recalculation oracle (before to after-native-progress) reports zero unexpected differences | — |
-| · | The Python importer and the MPXJ sidecar produce identical canonical output on every fixture | — |
-| · | A native .mpp file imports | — |
-| · | No route accepts a trusted actor header | — |
+| · | A persisted import shows calculated dates beside the ones it imported; one duration edit moves its successors; reset restores the baseline; the scenario exports; and a restart reproduces the same result from the same input hash | — |
+| · | Every API route rejects an unauthenticated request, and a project is readable only by an actor authorised on it | — |
 
 <!-- roadmap:end now -->
 
@@ -185,11 +188,12 @@ three weeks later, because it was written by tooling rather than recalculated by
 Project. Every one of its completed rows is already non-critical on slack alone,
 so it cannot distinguish the two rules and is never quoted for them.
 
-## Now: the engine and interchange spine
+## Now: the engine and a local planner trial
 
 Phase 0 passed on 2026-09-03 with every criterion crossed on its inputs
-present. Phase 1 is the engine, the sidecar, and real authentication, in this
-order:
+present. Phase 1 is the engine, one visible planner loop over it, and real
+authentication, in this order (ADR-011 — the sidecar moved to Phase 3, where
+the writers that need it live):
 
 1. ~~Calendars~~ — done.
 2. ~~Forward pass~~ — done against the corpus. The BOILER file-oracle
@@ -206,14 +210,48 @@ order:
    corpus and completion against the genuine Project-recalculation pair; the
    status date itself is proven by the corpus alone, because no file here
    carries one inside its own schedule.
-5. **WBS rollup, the eligibility re-partition and an independent validator.**
-6. **The per-activity result projection**, which ADR-006 deferred until its
-   columns had meanings and a result type to mirror. They do now.
-7. **The MPXJ sidecar** carried from the frozen repository, widened to emit the
-   full canonical document, cross-checked against the Python importer on every
-   fixture — and the first native `.mpp` import, for which a file now exists.
-8. **Real authentication.** Password with TOTP, server sessions, device tokens
-   for the field app. No route accepts a trusted actor header.
+5. **Source meaning preserved before calculation** (`C1`). The 2026-09-07
+   comprehensive review reproduced five ways the import-to-plan boundary
+   turns unsupported input into an ordinary calculation: a task calendar the
+   file does not carry becomes inheritance; an elapsed duration becomes
+   working time (the untouched BOILER and CALCINER each carry two); a
+   duration the importer could not parse becomes zero work; manual and
+   from-finish scheduling settings are ignored (KILN has an active manual
+   leaf); and two rows sharing one GUID in a single snapshot collapse onto one
+   canonical identity. Each becomes a coded disposition or a labelled
+   assumption, tested from XML through to the passes — never a new way for a
+   real file to stop importing.
+6. **The two passes agree on their supported contract** (`C2`). The same
+   review reproduced a free float that overstates safe delay across
+   calendars, a discarded progress edge that can still refuse a schedule, a
+   started-task constraint the forward pass defers and the backward pass
+   applies, and a negative working lag whose inverse overshoots at a calendar
+   gap. Fixed with the counterexamples pinned and an independent feasibility
+   check over the returned late dates.
+7. **WBS rollup, the eligibility re-partition and an independent validator**
+   (`S6`).
+8. **The per-activity result projection** (`PL3`), which ADR-006 deferred
+   until its columns had meanings and a result type to mirror. They do now.
+9. **The calculated schedule, persisted and visible** (`PL13`): stored
+   baseline → plan and passes → a result bound to its input hash, engine
+   profiles and dispositions → an API route → a task table and simple Gantt
+   showing imported dates beside calculated ones, reloaded identically after a
+   restart. With it the guards that flow needs: a parse or validation failure
+   becomes a coded failed import rather than a server error, uploads are
+   bounded, and one malformed stored document quarantines its project rather
+   than aborting the rebuild of every other.
+10. **One planner scenario** (`PL14`): pick a supported task, change its
+    duration, see its successors move, reset to the baseline, export, restart.
+    The first consolidated vertical slice; the legacy workspace retires after
+    this loop is accepted, not before.
+11. **Real authentication** (`PL2`). Password with TOTP, server sessions,
+    device tokens for the field app. Every route rejects an unauthenticated
+    request, and a project is readable only by an actor authorised on it.
+
+The MPXJ sidecar — carried from the frozen repository, widened to the full
+canonical document, cross-checked against the Python importer on every
+fixture, and the first native `.mpp` import — is Phase 3's, arriving when a
+trial file needs it (ADR-011).
 
 ## Next: the rest of the roadmap
 
@@ -420,10 +458,10 @@ here so they are not rediscovered as surprises:
 
 | Gap | Owed to |
 |---|---|
-| `DurationFormat` is preserved by the importer only as a vendor extension, so `Duration.unit` and `source_format_code` are always empty. The field exists precisely to stop an imported `8h` being written back as `1d`. | S8, MSPDI writer |
+| `DurationFormat` is preserved by the importer only as a vendor extension, so `Duration.unit`, `source_format_code` and — the part that matters now — `elapsed` are never set, and an elapsed task is scheduled as working time. A scheduling defect first (the untouched BOILER and CALCINER each carry two active elapsed tasks) and a writeback one second: `8h` must not come back as `1d`. | C1 for the meaning; S8 for the writeback |
 | `Assignment.timephased_ref` is never populated, so resource curves and exports cannot find the retained source payload. | S8 |
-| `is_null_source` is dropped, so a null placeholder task looks ordinary. | S6, eligibility |
-| An unresolved task `CalendarUID` becomes `None`, indistinguishable from inheriting the project calendar. | S2/S3 |
+| `is_null_source` is dropped, so a null placeholder task looks ordinary. | C1 |
+| An unresolved task `CalendarUID` becomes `None`, indistinguishable from inheriting the project calendar. A current calculation defect, not later interoperability work. | C1 |
 | Summary-task constraints, deadlines, calendars, priority and custom fields are not retained on `WbsNode`. | S8, writeback |
 | `effort_driven` reads a key the importer never sets, so it is always `False`. | needs an importer change first |
 | Activity business keys (Work Order / Operation) are not passed to `IdentityMap.resolve`, so the documented fallback never fires. | the assignment-identity item above |
@@ -444,7 +482,7 @@ PYTHONPATH=src python3 -m unittest discover -s tests
 
 The file-oracle cases skip unless the real schedules are present; point
 `STO_BOILER_BEFORE`, `STO_BOILER_DAY5`, `STO_KILN` and `STO_CALCINER` at them to
-run them. Two gate criteria rest on those cases, so cross a gate with
+run them. `P1-G2` and `P1-G3` rest on those cases, so cross a gate with
 `STO_REQUIRE_BOILER=1` set — their absence then fails instead of skipping
 quietly. The float and criticality rules are evidence from KILN and CALCINER as
 much as from BOILER, which is why those two now have variables of their own.

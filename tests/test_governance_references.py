@@ -165,6 +165,75 @@ class SliceCitationTests(unittest.TestCase):
             "in docs/goals/roadmap.json",
         )
 
+    @staticmethod
+    def _counted() -> re.Pattern[str]:
+        """A number, in digits or words, in front of a thing the roadmap counts."""
+
+        return re.compile(
+            r"\b(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|"
+            r"thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)[- ]"
+            r"(?:slice-days?|slices|gate criteria)\b",
+            re.IGNORECASE,
+        )
+
+    def test_no_prose_counts_the_roadmap_already_knows(self):
+        """A count of repository contents in prose goes stale by construction.
+
+        ``AGENTS.md`` says so and this is the class it means: how many slices a
+        phase carries, how many criteria a gate has, how many slice-days are
+        left. Every one of those is in ``docs/goals/roadmap.json`` and is
+        rendered into the generated regions of ``docs/goals/ACTIVE.md`` by
+        ``sto roadmap render``, so a second copy written by hand can only
+        disagree with it later. Numbers measured from a real file are not this:
+        they are evidence, they belong with the test that pins them, and they
+        name a file rather than a phase.
+
+        The scope is the documents that claim to describe the repository *now*.
+        ``docs/adr/`` and ``docs/history/`` are dated records of what was
+        decided and what was true when it was decided -- ``AGENTS.md`` puts
+        evidence in exactly those two places -- so a count there ages into a
+        historical statement rather than into a false one, and rewriting an
+        accepted ADR to remove it would be editing the record. An ADR written
+        today still should not restate the roadmap's bookkeeping, which is why
+        ADR-011 names the slices that moved instead of counting them.
+        """
+
+        counted = self._counted()
+        offences: list[str] = []
+        for path in (
+            REPO_ROOT / "docs" / "goals" / "ACTIVE.md",
+            REPO_ROOT / "AGENTS.md",
+            REPO_ROOT / "README.md",
+        ):
+            text = path.read_text(encoding="utf-8")
+            # The generated regions are rendered from the roadmap itself, so a
+            # count there is the roadmap's own and cannot drift from it.
+            text = re.sub(
+                r"<!-- roadmap:begin .*?<!-- roadmap:end \w+ -->", "", text, flags=re.S
+            )
+            for match in counted.finditer(text):
+                line = text[: match.start()].count("\n") + 1
+                offences.append(
+                    f"{path.relative_to(REPO_ROOT)}:{line} counts "
+                    f"{match.group(0)!r} in prose"
+                )
+        self.assertEqual(
+            offences,
+            [],
+            "docs/goals/roadmap.json holds these counts and `sto roadmap status` "
+            "prints them; name the slices instead:\n  " + "\n  ".join(offences),
+        )
+
+    def test_the_guard_catches_a_count_it_should(self):
+        counted = self._counted()
+        self.assertTrue(counted.search("Phase 1 carries eleven slices"))
+        self.assertTrue(counted.search("twenty slice-days left"))
+        self.assertTrue(counted.search("two gate criteria rest on those cases"))
+        self.assertTrue(counted.search("P1 has 3 slices"))
+        # Evidence measured from a real file is not a count of this repository.
+        self.assertIsNone(counted.search("451 activities agree with the stored dates"))
+        self.assertIsNone(counted.search("the corpus declares 47 executable cases"))
+
     def test_the_scan_found_slice_citations(self):
         text = (REPO_ROOT / "docs" / "goals" / "ACTIVE.md").read_text(encoding="utf-8")
         self.assertGreaterEqual(len(set(self.CITATION.findall(text))), 4)

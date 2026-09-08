@@ -79,7 +79,7 @@
         "S5",
         "P1-G2"
       ],
-      "note": "Two copies now exist on this machine and both are read-only, but they share one filesystem and the file has no upstream. S5 measured what it is and is not evidence for: its early dates are its actuals, so it is an oracle for reported work, but its late dates were never recalculated by Project and its slack describes a plan that no longer exists. The criticality rules rest on boiler-after-native-progress.xml and boiler-roundtrip-project-saved-task43.xml instead, and both are recoverable from Shutdown-Tracker-Claude. What would be lost with this file is the estate's only in-progress row and its only eight-row progressed cohort.",
+      "note": "Present on this machine on 2026-09-08 (two read-only copies, one filesystem, no upstream); the 2026-09-07 comprehensive review could not obtain it and marked every claim resting on it not re-verified. The off-machine copy is an ask of the user, not a task: a copy into the Drive archive the untouched source was recovered from would close it. S5 measured what it is and is not evidence for: its early dates are its actuals, so it is an oracle for reported work, but its late dates were never recalculated by Project and its slack describes a plan that no longer exists. The criticality rules rest on boiler-after-native-progress.xml and boiler-roundtrip-project-saved-task43.xml instead, and both are recoverable from Shutdown-Tracker-Claude. What would be lost with this file is the estate's only in-progress row and its only eight-row progressed cohort.",
       "asked_on": null
     }
   ],
@@ -145,19 +145,19 @@
     },
     {
       "id": "P1",
-      "title": "Engine and interchange spine",
+      "title": "Engine and local planner trial",
       "status": "in_progress",
       "slices": [
         "S2",
         "S3",
         "S4",
         "S5",
+        "C1",
+        "C2",
         "S6",
         "PL3",
-        "I1",
-        "I2",
-        "I3",
-        "I4",
+        "PL13",
+        "PL14",
         "PL2"
       ],
       "gate": [
@@ -181,19 +181,13 @@
         },
         {
           "id": "P1-G4",
-          "text": "The Python importer and the MPXJ sidecar produce identical canonical output on every fixture",
+          "text": "A persisted import shows calculated dates beside the ones it imported; one duration edit moves its successors; reset restores the baseline; the scenario exports; and a restart reproduces the same result from the same input hash",
           "met": false,
           "evidence": null
         },
         {
           "id": "P1-G5",
-          "text": "A native .mpp file imports",
-          "met": false,
-          "evidence": null
-        },
-        {
-          "id": "P1-G6",
-          "text": "No route accepts a trusted actor header",
+          "text": "Every API route rejects an unauthenticated request, and a project is readable only by an actor authorised on it",
           "met": false,
           "evidence": null
         }
@@ -248,6 +242,10 @@
       "title": "Export with evidence",
       "status": "not_started",
       "slices": [
+        "I1",
+        "I2",
+        "I3",
+        "I4",
         "I5",
         "I6",
         "I7",
@@ -284,6 +282,18 @@
         {
           "id": "P3-G5",
           "text": "One manual Microsoft Project session re-verifies the transaction on the current build and records an untouched-source control run",
+          "met": false,
+          "evidence": null
+        },
+        {
+          "id": "P3-G6",
+          "text": "The Python importer and the MPXJ sidecar produce identical canonical output on every fixture",
+          "met": false,
+          "evidence": null
+        },
+        {
+          "id": "P3-G7",
+          "text": "A native .mpp file imports",
           "met": false,
           "evidence": null
         }
@@ -419,6 +429,20 @@
       "days": 4
     },
     {
+      "id": "C1",
+      "title": "Source meaning preserved before calculation",
+      "phase": "P1",
+      "status": "not_started",
+      "days": 2
+    },
+    {
+      "id": "C2",
+      "title": "The two passes agree on their supported contract",
+      "phase": "P1",
+      "status": "not_started",
+      "days": 2
+    },
+    {
       "id": "S6",
       "title": "WBS rollup, eligibility and independent validator",
       "phase": "P1",
@@ -433,30 +457,44 @@
       "days": 2
     },
     {
+      "id": "PL13",
+      "title": "Calculated schedule persisted and visible",
+      "phase": "P1",
+      "status": "not_started",
+      "days": 4
+    },
+    {
+      "id": "PL14",
+      "title": "One planner scenario: edit, move, reset, export, restart",
+      "phase": "P1",
+      "status": "not_started",
+      "days": 3
+    },
+    {
       "id": "I1",
       "title": "Sidecar full extraction to canonical",
-      "phase": "P1",
+      "phase": "P3",
       "status": "not_started",
       "days": 6
     },
     {
       "id": "I2",
       "title": "Format detection and widened inputs",
-      "phase": "P1",
+      "phase": "P3",
       "status": "not_started",
       "days": 1
     },
     {
       "id": "I3",
       "title": "Sidecar client and process manager",
-      "phase": "P1",
+      "phase": "P3",
       "status": "not_started",
       "days": 3
     },
     {
       "id": "I4",
       "title": "Import oracle, then retire the Python parser",
-      "phase": "P1",
+      "phase": "P3",
       "status": "not_started",
       "days": 3
     },
