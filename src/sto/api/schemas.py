@@ -76,3 +76,78 @@ class Health(BaseModel):
     database: str
     resident_projects: int
     integrity_failures: dict[uuid.UUID, str] = Field(default_factory=dict)
+
+
+class CalculationSummary(BaseModel):
+    """A calculation that has been stored, and what produced it."""
+
+    project_id: uuid.UUID
+    version_id: uuid.UUID
+    calculation_id: uuid.UUID
+    canonical_hash: str
+    fingerprint: str
+    scheduled: int
+    excluded: int
+    summaries: int
+
+
+class ActivityRow(BaseModel):
+    """One activity, as imported and as calculated, side by side.
+
+    The two are kept apart deliberately. ``source_*`` is what the file said and
+    is never recomputed; the rest is what this engine worked out. A reader
+    comparing them is the point of the row, and a row that blended them could
+    not be compared at all.
+    """
+
+    activity_uid: uuid.UUID
+    code: str | None = None
+    name: str | None = None
+    disposition: str
+    source_start: datetime | None = None
+    source_finish: datetime | None = None
+    early_start: datetime | None = None
+    early_finish: datetime | None = None
+    late_start: datetime | None = None
+    late_finish: datetime | None = None
+    remaining_start: datetime | None = None
+    total_float_seconds: int | None = None
+    free_float_seconds: int | None = None
+    critical: bool | None = None
+    progress_state: str | None = None
+    placed_by: str | None = None
+    exclusion_code: str | None = None
+    assumptions: list[str] = []
+    agrees_with_source: bool | None = None
+
+
+class SummaryRow(BaseModel):
+    """One WBS node's rolled-up span, beside the one the file stored."""
+
+    wbs_uid: uuid.UUID
+    code: str | None = None
+    name: str | None = None
+    span_start: datetime | None = None
+    span_finish: datetime | None = None
+    placed: int = 0
+    source_start: datetime | None = None
+    source_finish: datetime | None = None
+
+
+class CalculationResponse(BaseModel):
+    """A stored calculation, with every row as imported and as calculated."""
+
+    project_id: uuid.UUID
+    version_id: uuid.UUID
+    calculation_id: uuid.UUID
+    canonical_hash: str
+    fingerprint: str
+    horizon_start: datetime
+    horizon_finish: datetime
+    progress_policy: str
+    critical_float_threshold: int
+    profiles: dict[str, str]
+    computed_at: datetime
+    counts: dict[str, int]
+    activities: list[ActivityRow]
+    summaries: list[SummaryRow]
