@@ -13,16 +13,50 @@ from typing import Any
 
 from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
 
+#: The largest upload this API will read. A schedule of CALCINER's size is
+#: fourteen megabytes; the legacy workspace already refused past sixty-four,
+#: and reading an unbounded body into memory on the one worker that also does
+#: the parsing is how a single request takes the process with it.
+MAX_UPLOAD_BYTES = 64 * 1024 * 1024
+
 from sto.core.model.migrate.sto_v011 import MigrationError
 from sto.persistence import repositories as repo
 from sto.persistence.db import connect
-from sto.scheduling.working_schedule import IntegrityError, UnknownProject, Workspace
+from sto.core.engine import PlanError
+from sto.scheduling.working_schedule import (
+    ImportRefused,
+    IntegrityError,
+    UnknownProject,
+    Workspace,
+)
 
 from . import schemas
 
 #: 8090 is the Java API until cut-over (frozen-repository deployment); the new
 #: stack is trialled beside it. The port swaps at PL12, not before.
 DEFAULT_PORT = 8092
+
+
+async def _read_bounded(file: UploadFile) -> bytes:
+    """The body, or a refusal before it is all in memory.
+
+    Read in chunks and stopped at the bound rather than read whole and
+    measured afterwards, which would mean holding the thing being refused.
+    """
+
+    chunks: list[bytes] = []
+    total = 0
+    while True:
+        chunk = await file.read(1024 * 1024)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > MAX_UPLOAD_BYTES:
+            raise HTTPException(
+                413, f"the upload is larger than {MAX_UPLOAD_BYTES} bytes"
+            )
+        chunks.append(chunk)
+    return b"".join(chunks)
 
 
 def create_app(workspace: Workspace | None = None) -> FastAPI:
@@ -96,13 +130,15 @@ def create_app(workspace: Workspace | None = None) -> FastAPI:
         file: UploadFile = File(...),
         workspace: Workspace = Depends(ws),
     ) -> Any:
-        data = await file.read()
+        data = await _read_bounded(file)
         try:
             result = workspace.import_file(
                 project_id, filename=file.filename or "upload.xml", data=data
             )
         except UnknownProject:
             raise HTTPException(404, "no such project") from None
+        except ImportRefused as error:
+            raise HTTPException(422, f"the file could not be read: {error}") from None
         except MigrationError as error:
             raise HTTPException(422, f"the file does not migrate: {error}") from None
         return schemas.ImportResponse(
@@ -126,6 +162,56 @@ def create_app(workspace: Workspace | None = None) -> FastAPI:
             declared_project_guid=result.declared_project_guid,
             warnings=list(result.warnings),
         )
+
+    @app.post(
+        "/api/projects/{project_id}/calculations",
+        response_model=schemas.CalculationSummary,
+        status_code=201,
+    )
+    def calculate(project_id: uuid.UUID, workspace: Workspace = Depends(ws)) -> Any:
+        """Run the engine over the project's stored head and store the answer."""
+
+        try:
+            result = workspace.calculate(project_id)
+        except UnknownProject:
+            raise HTTPException(404, "no such project") from None
+        except IntegrityError as error:
+            raise HTTPException(409, str(error)) from None
+        except PlanError as error:
+            raise HTTPException(422, f"the schedule cannot be planned: {error}") from None
+        return schemas.CalculationSummary(
+            project_id=result.project_id,
+            version_id=result.version_id,
+            calculation_id=result.calculation_id,
+            canonical_hash=result.canonical_hash,
+            fingerprint=result.fingerprint,
+            scheduled=result.scheduled,
+            excluded=result.excluded,
+            summaries=result.summaries,
+        )
+
+    @app.get(
+        "/api/projects/{project_id}/calculations/latest",
+        response_model=schemas.CalculationResponse,
+    )
+    def latest_calculation(project_id: uuid.UUID, workspace: Workspace = Depends(ws)) -> Any:
+        """The stored calculation, every row as imported beside as calculated.
+
+        The two sets of dates are kept apart: what the file said is never
+        recomputed, and what this engine worked out is never written back over
+        it. Comparing them is the point, and ``agrees_with_source`` says
+        whether they match so a reader does not have to.
+        """
+
+        try:
+            payload = workspace.latest_calculation(project_id)
+        except UnknownProject:
+            raise HTTPException(404, "no such project") from None
+        except IntegrityError as error:
+            raise HTTPException(409, str(error)) from None
+        if payload is None:
+            raise HTTPException(404, "the project has no calculation yet")
+        return schemas.CalculationResponse(**payload)
 
     @app.get("/api/projects/{project_id}/schedule", response_model=schemas.ScheduleResponse)
     def get_schedule(

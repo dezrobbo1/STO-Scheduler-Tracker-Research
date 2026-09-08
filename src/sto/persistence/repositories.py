@@ -340,6 +340,21 @@ def insert_calculation(
     return calculation_id
 
 
+def list_import_batches(
+    conn: psycopg.Connection, *, project_id: uuid.UUID
+) -> list[dict[str, Any]]:
+    """Every parser run against a project, newest last. Failures included."""
+
+    return conn.execute(
+        """
+        SELECT * FROM import_batches
+        WHERE project_id = %s
+        ORDER BY started_at, id
+        """,
+        (project_id,),
+    ).fetchall()
+
+
 def get_latest_calculation(
     conn: psycopg.Connection, *, version_id: uuid.UUID
 ) -> dict[str, Any] | None:

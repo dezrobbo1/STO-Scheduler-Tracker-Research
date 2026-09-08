@@ -62,6 +62,10 @@ PARSER_NAME = "sto.legacy.import_mspdi"
 PARSER_VERSION = "0.1.1"
 
 
+class ImportRefused(ValueError):
+    """A file the importer would not read. Recorded as a failed batch first."""
+
+
 class IntegrityError(RuntimeError):
     """Stored bytes do not hash to what the row says they hash to.
 
@@ -208,6 +212,31 @@ class Workspace:
         self._resident[project_id] = working
         return working
 
+    def _record_failure(
+        self,
+        project_id: uuid.UUID,
+        filename: str,
+        path: Path,
+        source_sha: str,
+        data: bytes,
+        error: Exception,
+    ) -> None:
+        """Record a refused import, so the bytes on disk have something naming them."""
+
+        with self.connect() as conn:
+            source_id = _record_source(conn, project_id, filename, path, source_sha, data)
+            repo.insert_import_batch(
+                conn,
+                project_id=project_id,
+                source_file_id=source_id,
+                status="failed",
+                parser_name=PARSER_NAME,
+                parser_version=PARSER_VERSION,
+                parse_summary={"error": str(error), "kind": type(error).__name__},
+                error_count=1,
+            )
+            conn.commit()
+
     # --- calculating -----------------------------------------------------------
 
     def calculate(
@@ -346,6 +375,133 @@ class Workspace:
             result=replace(result, fingerprint=recomputed),
         )
 
+    def latest_calculation(self, project_id: uuid.UUID) -> dict[str, Any] | None:
+        """The stored calculation for a project's head, with the source dates beside it.
+
+        Read through :meth:`read_calculation`, so the rows served here are the
+        rows the header's fingerprint attests to. Serving them from the tables
+        directly would put edited or corrupted dates in front of a reader under
+        a hash that still vouched for the originals.
+
+        The imported dates come from the document, not from a second copy: a
+        row that stored what the file said would be a third place for it to
+        drift from. They are read off the schedule the calculation names.
+        """
+
+        working = self.load(project_id)
+        if working is None:
+            raise UnknownProject(str(project_id))
+        stored = self.read_calculation(project_id)
+        if stored is None:
+            return None
+
+        result = stored.result
+        provenance = result.provenance
+        schedule = working.schedule
+        activities = {activity.uid: activity for activity in schedule.activities}
+        nodes = {node.uid: node for node in schedule.wbs_nodes}
+
+        activity_rows = []
+        for row in result.activities:
+            activity = activities.get(row.uid)
+            observed = activity.source_observations if activity is not None else None
+            source_start = None if observed is None else observed.start
+            source_finish = None if observed is None else observed.finish
+            agrees = None
+            if row.early_start is not None and source_start is not None:
+                agrees = row.early_start == source_start and row.early_finish == source_finish
+            activity_rows.append(
+                {
+                    "activity_uid": row.uid,
+                    "code": None if activity is None else activity.code,
+                    "name": None if activity is None else activity.name,
+                    "disposition": row.disposition,
+                    "source_start": source_start,
+                    "source_finish": source_finish,
+                    "early_start": row.early_start,
+                    "early_finish": row.early_finish,
+                    "late_start": row.late_start,
+                    "late_finish": row.late_finish,
+                    "remaining_start": row.remaining_start,
+                    "total_float_seconds": row.total_float,
+                    "free_float_seconds": row.free_float,
+                    "critical": row.critical,
+                    "progress_state": row.state,
+                    "placed_by": row.placed_by,
+                    "exclusion_code": row.exclusion_code,
+                    "assumptions": list(row.assumptions),
+                    "agrees_with_source": agrees,
+                }
+            )
+        activity_rows.sort(key=lambda row: str(row["activity_uid"]))
+
+        def _summary(uid, start, finish, placed):
+            node = nodes.get(uid)
+            observed = node.source_observations if node is not None else None
+            return {
+                "wbs_uid": uid,
+                "code": None if node is None else node.code,
+                "name": None if node is None else node.name,
+                "span_start": start,
+                "span_finish": finish,
+                "placed": placed,
+                "source_start": None if observed is None else observed.start,
+                "source_finish": None if observed is None else observed.finish,
+            }
+
+        summary_rows = [
+            _summary(row.uid, row.start, row.finish, row.placed) for row in result.summaries
+        ]
+        # A branch with nothing beneath it is shown as a branch with no span,
+        # so "not calculated" and "not in the file" stay different answers.
+        summary_rows += [_summary(uid, None, None, 0) for uid in result.empty_summaries]
+        summary_rows.sort(key=lambda row: str(row["wbs_uid"]))
+
+        agreed = sum(1 for row in activity_rows if row["agrees_with_source"] is True)
+        compared = sum(1 for row in activity_rows if row["agrees_with_source"] is not None)
+        return {
+            "project_id": project_id,
+            "version_id": stored.version_id,
+            "calculation_id": stored.calculation_id,
+            "canonical_hash": provenance.canonical_hash,
+            "fingerprint": result.fingerprint,
+            "horizon_start": provenance.horizon_start,
+            "horizon_finish": provenance.horizon_finish,
+            "progress_policy": provenance.progress_policy,
+            "critical_float_threshold": provenance.critical_float_threshold,
+            "status_time": provenance.status_time,
+            "status_time_outside_window": provenance.status_time_outside_window,
+            "profiles": {
+                "forward": provenance.forward_profile,
+                "backward": provenance.backward_profile,
+                "criticality": provenance.criticality_profile,
+                "rollup": provenance.rollup_profile,
+                "progress": provenance.progress_profile,
+                "result": provenance.result_profile,
+            },
+            "computed_at": stored.computed_at,
+            "counts": {
+                "activities": len(activity_rows),
+                "scheduled": sum(
+                    1 for row in activity_rows if row["disposition"] == SCHEDULED
+                ),
+                "summaries": len(summary_rows),
+                "compared_with_source": compared,
+                "agreeing_with_source": agreed,
+            },
+            "relationships": [
+                {
+                    "relationship_uid": edge.uid,
+                    "disposition": edge.disposition,
+                    "code": edge.code,
+                    "detail": edge.detail,
+                }
+                for edge in result.relationships
+            ],
+            "activities": activity_rows,
+            "summaries": summary_rows,
+        }
+
     # --- importing -------------------------------------------------------------
 
     def import_file(
@@ -363,7 +519,16 @@ class Workspace:
 
         # Parse and migrate outside any transaction: the 14 MB files take
         # seconds, and nothing below needs a lock held across them.
-        document = import_mspdi(str(path))
+        #
+        # A parse failure is recorded exactly as a migration failure is. Before
+        # this it was raised from outside the handler below, so malformed input
+        # produced an uncaught server error, no failed batch, and raw bytes on
+        # disk that nothing referred to.
+        try:
+            document = import_mspdi(str(path))
+        except Exception as error:  # noqa: BLE001 - recorded, not hidden
+            self._record_failure(project_id, filename, path, source_sha, data, error)
+            raise ImportRefused(str(error)) from error
         warnings = tuple(
             str(item) for item in document.get("import_validation", {}).get("warnings", [])
         )
@@ -376,19 +541,7 @@ class Workspace:
         try:
             schedule, identity, report = migrate(document, identity=prior_identity)
         except MigrationError as error:
-            with self.connect() as conn:
-                source_id = _record_source(conn, project_id, filename, path, source_sha, data)
-                repo.insert_import_batch(
-                    conn,
-                    project_id=project_id,
-                    source_file_id=source_id,
-                    status="failed",
-                    parser_name=PARSER_NAME,
-                    parser_version=PARSER_VERSION,
-                    parse_summary={"error": str(error)},
-                    error_count=1,
-                )
-                conn.commit()
+            self._record_failure(project_id, filename, path, source_sha, data, error)
             raise
 
         payload = encode_schedule(schedule)
@@ -569,7 +722,19 @@ def _record_source(
 
 
 def _verify(project_id: uuid.UUID, row: dict[str, Any]) -> WorkingSchedule:
-    schedule = decode_schedule(row["document"])
+    try:
+        schedule = decode_schedule(row["document"])
+        identity = IdentityMap.from_dict(row["identity_map"])
+    except Exception as error:  # noqa: BLE001 - contained, not hidden
+        # A stored document or identity map this code cannot read is exactly as
+        # much a failure of *this* project as a hash that does not match, and
+        # exactly as little a reason to refuse every other project at boot.
+        # Before this it escaped the integrity contract and aborted the whole
+        # rebuild: removing a schema_version from one row took every project
+        # with it.
+        raise IntegrityError(
+            f"schedule version {row['id']} for project {project_id} cannot be read: {error}"
+        ) from error
     recomputed = canonical_sha256(encode_schedule(schedule))
     if recomputed != row["canonical_hash"]:
         raise IntegrityError(
@@ -582,7 +747,7 @@ def _verify(project_id: uuid.UUID, row: dict[str, Any]) -> WorkingSchedule:
         sequence=int(row["sequence"]),
         canonical_hash=row["canonical_hash"],
         schedule=schedule,
-        identity=IdentityMap.from_dict(row["identity_map"]),
+        identity=identity,
     )
 
 
