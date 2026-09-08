@@ -180,3 +180,212 @@ review's F01, and is why the regression test sets the broken reference on the
 canonical row rather than in the XML. The distinction between an unresolved
 calendar and an absent one is the reason that branch exists at all, and until
 C1 connects the importer to it, the plan's half of it is what can be tested.
+
+## A fourth pass, after the merge
+
+Two findings arrived ten minutes after PR #34 merged, so they are answered
+here on the next branch, as `AGENTS.md` provides for.
+
+**A finish-only successor took its start from the compiled window.** When the
+project start stopped being a floor for tasks with predecessors, an unstarted
+task whose predecessors are all FF or SF was left with no bound on its start at
+all, and the missing side fell back to the calendar's first working moment.
+That moment is not a schedule input — it is wherever the caller compiled from —
+so widening the horizon moved the task earlier while nothing about the schedule
+changed. Reproduced: a two-hundred-unit FF successor of a task at project start
+100 was placed at 0, 40 or 80 as the window opened at 0, 40 or 80.
+
+The start side now falls back to the **project start**, which is where
+Microsoft Project puts an ASAP task nothing else places. The finish side still
+falls back to the calendar: an unbounded finish is already implied by the start
+bound plus the duration, and flooring it at the project start drags a
+lead-placed task back to it — the fifty-six BOILER rows ADR-010 measured, and
+the first attempt at this fix did exactly that, taking BOILER from 384 exact to
+328 before the asymmetry was understood.
+
+No file in the estate exercises the defect. KILN has fifty-eight finish-only
+rows and CALCINER fifty-three, and every one carries a finish bound late enough
+that its duration, not the floor, places it; measured across three horizons on
+both files, not one row moves. So the agreement counts are unchanged — 384 of
+BOILER's 451, 247 of KILN's 416, 1,645 of CALCINER's 1,763 — and the regression
+is synthetic, in `tests/test_post_residue_review.py`.
+
+**A count of tests in prose.** `docs/goals/ACTIVE.md` claimed a particular
+number of tests per finding. The guard added with the resequencing only caught
+digits, so it now catches a number spelled out as well, in every form up to
+ninety-nine — the first attempt stopped at twelve, which left the same class
+open one word further along.
+
+The first attempt also *rewrote* the counted sentences in the sections of this
+entry above, which is the one thing the record is not for: audit is
+append-only, and the estate corrects by superseding, never by rewriting. Those
+sentences are restored to what they said on 2026-09-07, and this paragraph
+supersedes them: what they call twelve tests, one test per finding and four
+native-recalculation tests are counts of a suite that has changed since, and
+the command in `docs/goals/ACTIVE.md` is what says how many there are now. The
+guard is scoped to the documents that describe the repository *now* —
+`docs/goals/ACTIVE.md`, `AGENTS.md`, `README.md` — for exactly that reason,
+which is the same line the slice-count guard already drew and which the first
+attempt crossed.
+
+### What that fix got wrong, and its own review said so
+
+Two things, both fair.
+
+**It superseded an accepted decision without saying so.** ADR-010 measured
+that the project start bounds only a task with no predecessors; the fix
+applied it to a task that has them, on no oracle, and the test asserted the
+resulting date as if it were known. The fallback stays, because the
+alternative — a date that moves with the compiled window — is worse and is not
+a schedule at all, and because it is the same rule every root already uses.
+But it is now written as an amendment to ADR-010 that says in as many words
+that this half is an assumption, it is listed among the known gaps with the
+file that would settle it, and the row itself reports `FROM_PROJECT_START`
+with no driving relationship, so a reader of the result sees that nothing in
+the schedule put it there.
+
+**It credited an edge that drove nothing.** With the start floor supplying a
+real coordinate, `_driver` still returned the finish edge whenever the start
+side had no driver of its own. The FF successor was placed at the project
+start with or without its edge, and reported the edge. The replay now runs for
+that case too: if the span from the start bound already satisfies the finish
+bound, the finish edge moved nothing and is not named.
+
+### And what *that* review said, which was more of the same
+
+Five findings, three of them about the answer just given.
+
+**The label was not in the channel a claim reads.** `FROM_PROJECT_START` is
+what an ordinary root reports, and a root's placement is measured, so a
+consumer could not tell the guess from the rule. The plan now puts every such
+row on `Plan.assumed` as `ACTIVITY_START_UNBOUNDED` — the channel ADR-010
+already uses for the successor of an inactive task. BOILER has none, KILN
+fifty-eight, CALCINER fifty-three, pinned in
+`tests/test_forward_pass_boiler.py`.
+
+**The driver replay snapped a milestone it should have left alone.** Enabling
+the replay for the no-start-driver case sent zero-duration rows through
+`earliest_span`, which always snaps forward, while `_place` under
+`snap_milestones=False` leaves a milestone exactly on its bound. With the
+project start in a calendar gap that reopens after the finish bound, the
+snapped replay landed past the bound and cleared a driver that had really
+placed the row: reproduced at coordinate 15, reported as driven by nothing.
+The replay now places a milestone the way the pass does.
+
+**Measured counts had been copied into `docs/goals/ACTIVE.md`.** Numbers from
+the real schedules belong in an ADR or here, where they are dated and sit with
+the run that produced them; the goal document keeps the qualitative gap and
+points at ADR-010.
+
+**The widened count guard stopped at twelve**, leaving the very class it was
+widened for open one word further along. It now covers every number word up to
+ninety-nine, in digits, words and hyphenated compounds.
+
+**And it had been applied by rewriting this record.** Corrected above.
+
+### A fourth round, and the guard finally ends its class
+
+Three findings, and the two about the guard are the same lesson twice.
+
+**The assumption named rows the fallback never reaches.** An in-progress
+activity is based on its actual start and a completed one is pinned to its
+actual dates in both directions, so neither uses the project-start floor; the
+label is now only on untouched work. The counts on the un-progressed files are
+unchanged, because they carry no actuals.
+
+**The count guard was still bounded.** Widening it to ninety-nine left "one
+thousand tests" passing, exactly as stopping at twelve had left "thirteen
+tests" passing — each attempt ending the class one step past wherever the last
+one stopped. It now matches a run of number words at any magnitude, with "and"
+allowed between them but never at the start, since "the importer and tests"
+is a conjunction and not a count.
+
+**And narrowing its scope had dropped real coverage.** Excluding the dated
+records is right; excluding the whole documentation tree with them was not,
+and left `docs/evidence/` and `docs/product/` free to grow a count. The guard
+now reads every maintained document and skips only `docs/adr/`,
+`docs/history/` and the frozen consolidation plan, each for a reason written
+beside the list.
+
+### A fifth round: the fallback rested on the window after all
+
+Three findings, one of them the root of the whole thread.
+
+**A schedule that declares no start had no anchor, and took the caller's.**
+`build_plan` substituted the compiled window's first coordinate for a missing
+`ProjectSettings.start`, so the project-start floor — the fix for the window
+dependence — *was* the window again for such a schedule, and moving the window
+a day moved the successor a day. It reaches every root too, and predates this
+change. A schedule with no declared start now raises
+`PROJECT_START_MISSING` rather than inventing an anchor: every floor in the
+pass is the project start, and there is no honest substitute for one the file
+never gave. All three real schedules declare theirs.
+
+**The label still named rows the fallback cannot reach.** A must-start-on or
+must-finish-on row is placed on its coordinate whatever the bounds say, so it
+is excluded from the assumption alongside started work. That is the second
+narrowing of the same label; what it means is now stated once, in the code:
+these are the rows whose start rests on the unmeasured rule, not the rows the
+rule happened to move.
+
+**And the count guard had another magnitude past its end.** Twelve, then
+ninety-nine, then trillion — each attempt ended the class one step past the
+last, because a list has an end and English does not. The scale words are now
+matched by their form, `-illion` being productive, so quadrillion and
+quintillion are caught by the same rule that catches billion, and there is no
+next magnitude to find.
+
+### A sixth round, and the label moves to where the fact is
+
+Two findings, and the first ended a thread rather than another instance of it.
+
+**The assumption was being decided in the wrong place.** Three rounds had each
+found another row the label named and the fallback never reached: work already
+started, a row pinned by a must-start-on constraint, and now a row a
+start-no-earlier-than raises past the floor. Every one of those was a real
+mistake, and together they say the design was wrong rather than the filter:
+the plan can see that no edge bounds a row's start, but not what then placed
+the row. The forward pass can, so it reports it —
+`ForwardPass.unbounded_starts`, the rows with predecessors that came to rest
+on the project start — and the plan's static label is gone. It is exact by
+construction, and the constraint and progress cases fall out of it without a
+filter to forget.
+
+Measured on the estate with that in hand: **no row rests on the fallback at
+all.** Every activity whose predecessors bound only its finish is placed by its
+own duration against that bound, on all three files, which is a stronger
+statement than the horizon comparison and is now what the real-file test
+asserts.
+
+**And the count guard did not know a dozen.** An exact count that names no
+digit is still an exact count, so the collective numerals are in it now.
+
+### A seventh round: the label was still reading the wrong thing
+
+Three findings.
+
+**A finish constraint hid the fallback behind it.** The report was conditioned
+on the row's reported `source`, and a finish-no-earlier-than that raises a
+bound the span already satisfies changes the source to "constraint" without
+moving the start. The report is now decided before any constraint is read,
+from the provenance of the *start* bound, and cleared only by a constraint
+that actually takes the start side over.
+
+Correcting that exposed the opposite error in the same breath, and with it a
+claim made here one round ago that was wrong. Conditioning on the start
+bound's provenance alone reported a hundred and eleven rows across KILN and
+CALCINER, because every activity whose predecessors bound only its finish
+takes the fallback as its start bound. What matters is whether the fallback
+*changed the answer*, so the row is now placed a second time with the
+calendar's own floor in the fallback's place and reported only if the span
+moves. On that reading none of those rows is placed by the fallback — the
+finish bound and the row's own duration decide — which is what the previous
+round claimed on a condition that could not have shown it either way.
+
+**And real-file counts had reached an engine comment.** Measurements from the
+hash-recorded schedules belong in an ADR or here; the comment is qualitative
+and points at ADR-010.
+
+**The count guard enumerated multipliers.** "A dozen" was caught and "eleven
+dozen" was not. The collectives are units the ordinary number grammar counts
+now, which is the fourth and last shape this guard has been wrong in.

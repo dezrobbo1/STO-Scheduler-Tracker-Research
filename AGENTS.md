@@ -183,7 +183,7 @@ They create and drop their own database on the server named by
 `STO_TEST_ADMIN_URL` (default: the local loopback instance on 5433).
 
 The conformance corpus needs nothing: it is in the package and every run checks
-it against its pins. One test additionally compares the copy with the pinned
+it against its pins. A test additionally compares the copy with the pinned
 commit in a `dezrobbo1/PM-Software` clone named by `STO_PM_SOFTWARE_DIR`, and
 skips without one; `STO_REQUIRE_PM=1` makes that absence a failure.
 

@@ -165,6 +165,59 @@ class SliceCitationTests(unittest.TestCase):
             "in docs/goals/roadmap.json",
         )
 
+    #: The words a number below a hundred is written out of. There are
+    #: finitely many and they are all here.
+    NUMBER_WORDS = (
+        "zero one two three four five six seven eight nine ten eleven twelve "
+        "thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty "
+        "thirty forty fifty sixty seventy eighty ninety"
+    ).split()
+
+    #: The scale words, matched by their *form* rather than by a list. Three
+    #: attempts at this guard each ended one magnitude past the last -- twelve,
+    #: then ninety-nine, then trillion -- because a list has an end and English
+    #: does not: -illion is productive, and quadrillion follows trillion the
+    #: same way trillion follows billion. Matching the form ends the class.
+    SCALE = r"(?:hundred|thousand|[a-z]+illion)"
+
+    #: Collective numerals, treated as units the ordinary number grammar
+    #: counts: "a dozen tests" is as precise as "twelve tests", and so is
+    #: "eleven dozen". Enumerating the multipliers left the class open above
+    #: whatever the list stopped at, which is the mistake this guard has now
+    #: made three times over.
+    COLLECTIVE_UNIT = r"(?:dozen|score|gross)"
+
+    #: Documentation that describes the repository *now*, and is therefore
+    #: expected to stay true. Everything under ``docs/`` qualifies except the
+    #: dated records -- ``docs/adr/`` and ``docs/history/``, where audit is
+    #: append-only and a count is corrected by an appended supersession rather
+    #: than by editing what it said -- and the frozen consolidation plan, whose
+    #: own preamble lists the counts in it that have gone stale.
+    DATED_OR_FROZEN = ("docs/adr/", "docs/history/", "docs/roadmap/CONSOLIDATION-PLAN.md")
+
+    @classmethod
+    def _maintained_documents(cls) -> list[Path]:
+        documents = [REPO_ROOT / "AGENTS.md", REPO_ROOT / "README.md"]
+        for path in sorted(REPO_ROOT.glob("docs/**/*.md")):
+            relative = path.relative_to(REPO_ROOT).as_posix()
+            if not relative.startswith(cls.DATED_OR_FROZEN):
+                documents.append(path)
+        return documents
+
+    @classmethod
+    def _number(cls) -> str:
+        """A digit run, or any number written out of number words."""
+
+        words = "|".join(cls.NUMBER_WORDS)
+        token = rf"(?:{words}|{cls.SCALE})"
+        # "and" joins number words -- two hundred and six -- but cannot begin
+        # one, or the plain conjunction in "and tests" would read as a count.
+        cardinal = rf"(?:\d[\d,]*|{token}(?:[- ](?:{token}|and))*)"
+        # A collective is a unit any cardinal can multiply, and the article
+        # stands in for one of them.
+        collective = rf"(?:(?:an?|{cardinal})[- ]{cls.COLLECTIVE_UNIT})"
+        return rf"(?:{collective}|{cardinal})"
+
     @staticmethod
     def _counted() -> re.Pattern[str]:
         """A number, in digits or words, in front of a thing the roadmap counts."""
@@ -179,16 +232,22 @@ class SliceCitationTests(unittest.TestCase):
     def test_no_prose_counts_the_roadmap_already_knows(self):
         """A count of repository contents in prose goes stale by construction.
 
-        ``AGENTS.md`` says so and this is the class it means: how many slices a
-        phase carries, how many criteria a gate has, how many slice-days are
-        left. Every one of those is in ``docs/goals/roadmap.json`` and is
+        ``AGENTS.md`` says so and this is the class it means: how many tests
+        cover a finding, how many slices a phase carries, how many criteria a
+        gate has, how many slice-days are left. Every one of those is in ``docs/goals/roadmap.json`` and is
         rendered into the generated regions of ``docs/goals/ACTIVE.md`` by
         ``sto roadmap render``, so a second copy written by hand can only
         disagree with it later. Numbers measured from a real file are not this:
         they are evidence, they belong with the test that pins them, and they
         name a file rather than a phase.
 
-        The scope is the documents that claim to describe the repository *now*.
+        The scope is the same as the slice-count guard above, and for the same
+        reason: the documents that claim to describe the repository *now*.
+        ``docs/adr/`` and ``docs/history/`` are dated records, audit is
+        append-only, and a count in one of them is corrected by an appended
+        supersession rather than by editing what it said. This guard once
+        covered them, and honouring it meant rewriting three sentences of a
+        dated entry -- which is the thing the rule forbids.
         ``docs/adr/`` and ``docs/history/`` are dated records of what was
         decided and what was true when it was decided -- ``AGENTS.md`` puts
         evidence in exactly those two places -- so a count there ages into a
@@ -235,16 +294,9 @@ class SliceCitationTests(unittest.TestCase):
         command that disagrees.
         """
 
-        counted = re.compile(r"\b\d+\s+tests?\b", re.IGNORECASE)
+        counted = re.compile(rf"\b{self._number()}\s+tests?\b", re.IGNORECASE)
         offences: list[str] = []
-        for path in sorted(REPO_ROOT.glob("docs/**/*.md")) + [
-            REPO_ROOT / "AGENTS.md",
-            REPO_ROOT / "README.md",
-        ]:
-            if path.name == "CONSOLIDATION-PLAN.md":
-                # Frozen on 2026-09-02 and explicitly not maintained; its own
-                # preamble lists the counts in it that have already gone stale.
-                continue
+        for path in self._maintained_documents():
             for match in counted.finditer(path.read_text(encoding="utf-8")):
                 text = path.read_text(encoding="utf-8")
                 line = text[: match.start()].count("\n") + 1
@@ -266,6 +318,33 @@ class SliceCitationTests(unittest.TestCase):
         # Evidence measured from a real file is not a count of this repository.
         self.assertIsNone(counted.search("451 activities agree with the stored dates"))
         self.assertIsNone(counted.search("the corpus declares 47 executable cases"))
+        spelled = re.compile(rf"\b{self._number()}\s+tests?\b", re.IGNORECASE)
+        # A number spelled out is still a number: "one test each" goes stale
+        # the moment a finding is covered by two, or shares one with another.
+        self.assertTrue(spelled.search("answered with one test each"))
+        # The hole the first attempt left: it stopped at twelve.
+        self.assertTrue(spelled.search("thirteen tests"))
+        self.assertTrue(spelled.search("twenty tests"))
+        self.assertTrue(spelled.search("forty-seven tests"))
+        # And at the next magnitude, which bounding the pattern kept leaving open.
+        self.assertTrue(spelled.search("one thousand tests"))
+        self.assertTrue(spelled.search("two hundred and six tests"))
+        self.assertTrue(spelled.search("1,024 tests"))
+        # The magnitude past whichever one the previous attempt stopped at.
+        self.assertTrue(spelled.search("one quadrillion tests"))
+        self.assertTrue(spelled.search("three quintillion tests"))
+        # An exact count that names no digit is still an exact count.
+        self.assertTrue(spelled.search("a dozen tests"))
+        self.assertTrue(spelled.search("two dozen tests"))
+        self.assertTrue(spelled.search("one gross tests"))
+        # Any cardinal multiplies a collective, at any magnitude.
+        self.assertTrue(spelled.search("eleven dozen tests"))
+        self.assertTrue(spelled.search("twenty score tests"))
+        self.assertTrue(spelled.search("one hundred gross tests"))
+        self.assertIsNone(spelled.search("a regression test for each"))
+        self.assertIsNone(spelled.search("each pinned by a test of its own"))
+        # "and" joins number words; on its own it is a conjunction.
+        self.assertIsNone(spelled.search("the importer and tests both read it"))
 
     def test_the_scan_found_slice_citations(self):
         text = (REPO_ROOT / "docs" / "goals" / "ACTIVE.md").read_text(encoding="utf-8")
