@@ -83,14 +83,47 @@ class RollupTests(unittest.TestCase):
         self.assertEqual(rolled[uid("one")].placed, 1)
         self.assertEqual(rolled[uid("two")].placed, 1)
 
-    def test_a_hierarchy_that_contains_itself_stops(self):
-        """A cycle is a defect in the source hierarchy, not an answer to give."""
+    def test_a_hierarchy_that_contains_itself_is_reported_not_answered(self):
+        """A cycle is a defect in the source hierarchy, not an answer to give.
 
-        result = roll_up(
-            {uid("a"): (uid("b"),), uid("b"): (uid("a"), uid("leaf"))},
+        Stopping the recursion is not enough. Whichever node the traversal
+        reached first spanned the whole cycle's leaves and the other spanned
+        only its own, so the same hierarchy gave two different answers
+        depending on the order of a mapping.
+        """
+
+        children = {uid("a"): (uid("b"),), uid("b"): (uid("a"), uid("leaf"))}
+        rollup = roll_up(children, {uid("leaf"): (1, 2)})
+        self.assertEqual(sorted(rollup.cyclic, key=str), sorted([uid("a"), uid("b")], key=str))
+        self.assertEqual(rollup.by_uid(), {})
+        self.assertEqual(rollup.empty, ())
+
+    def test_a_cycle_reads_the_same_from_either_end(self):
+        forwards = roll_up(
+            {uid("a"): (uid("b"), uid("x")), uid("b"): (uid("a"), uid("y"))},
+            {uid("x"): (1, 2), uid("y"): (5, 6)},
+        )
+        backwards = roll_up(
+            {uid("b"): (uid("a"), uid("y")), uid("a"): (uid("b"), uid("x"))},
+            {uid("x"): (1, 2), uid("y"): (5, 6)},
+        )
+        self.assertEqual(forwards.cyclic, backwards.cyclic)
+        self.assertEqual(forwards.by_uid(), backwards.by_uid())
+
+    def test_a_branch_above_a_cycle_is_not_given_what_it_could_reach(self):
+        rollup = roll_up(
+            {
+                uid("root"): (uid("sound"), uid("a")),
+                uid("a"): (uid("b"),),
+                uid("b"): (uid("a"),),
+                uid("sound"): (uid("leaf"),),
+            },
             {uid("leaf"): (1, 2)},
-        ).by_uid()
-        self.assertEqual((result[uid("a")].start, result[uid("a")].finish), (1, 2))
+        )
+        self.assertIn(uid("root"), rollup.cyclic)
+        self.assertEqual(
+            [row.uid for row in rollup.spans], [uid("sound")], "only the sound branch answers"
+        )
 
     def test_the_answer_does_not_depend_on_the_order_the_tree_is_walked(self):
         children = {

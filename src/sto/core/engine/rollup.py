@@ -59,6 +59,10 @@ class Rollup:
     #: guessed one, and they are named so that a shrinking cohort is visible
     #: instead of looking like a tree with fewer branches.
     empty: tuple[UUID, ...] = ()
+    #: Nodes the hierarchy makes unanswerable: those on a cycle, and those
+    #: whose subtree reaches one. A cycle has no deepest node, so there is no
+    #: rollup to compute; naming them is the answer.
+    cyclic: tuple[UUID, ...] = ()
 
     def by_uid(self) -> dict[UUID, RolledUp]:
         return {row.uid: row for row in self.spans}
@@ -77,36 +81,59 @@ def roll_up(
     work come back empty rather than come back wrong.
 
     Deterministic: nodes are answered in the order ``children`` presents them,
-    and each is answered once however many parents reach it.
+    each is answered once however many parents reach it, and a hierarchy that
+    contains a cycle produces the same report whichever node is reached first.
     """
 
     answered: dict[UUID, tuple[int, int] | None] = {}
     beneath: dict[UUID, int] = {}
+    cyclic: set[UUID] = set()
+    stack: list[UUID] = []
+    on_stack: set[UUID] = set()
 
     def resolve(uid: UUID) -> tuple[int, int] | None:
         if uid in answered:
             return answered[uid]
+        if uid in on_stack:
+            # Every node from the first sighting to here is on the cycle.
+            # Marking the node and returning nothing -- the earlier shape --
+            # stopped the recursion but made the answer depend on which node
+            # the traversal reached first: whichever resolved first spanned
+            # both subtrees and the other spanned only its own, and reversing
+            # the mapping swapped them. A cycle has no deepest node, so there
+            # is nothing to roll up and the honest answer is to say so.
+            cyclic.update(stack[stack.index(uid):])
+            return None
         placed = spans.get(uid)
         if placed is not None and uid not in children:
             beneath[uid] = 1
             answered[uid] = placed
             return placed
-        # Marked before descending, so a tree that names itself somewhere in
-        # its own subtree stops rather than recurring forever. A cycle is a
-        # defect in the source hierarchy, not something to answer.
-        answered[uid] = None
-        beneath[uid] = 0
+        stack.append(uid)
+        on_stack.add(uid)
         starts: list[int] = []
         finishes: list[int] = []
         total = 0
+        poisoned = False
         for child in children.get(uid, ()):
             child_span = resolve(child)
+            if child in cyclic:
+                poisoned = True
             if child_span is None:
                 continue
             starts.append(child_span[0])
             finishes.append(child_span[1])
             total += beneath.get(child, 0)
-        if not starts:
+        stack.pop()
+        on_stack.discard(uid)
+        if poisoned:
+            # A subtree that reaches a cycle cannot be summed, so an ancestor
+            # of one is not given a span built from whatever else it happened
+            # to reach.
+            cyclic.add(uid)
+        if poisoned or not starts:
+            answered[uid] = None
+            beneath[uid] = 0
             return None
         answered[uid] = (min(starts), max(finishes))
         beneath[uid] = total
@@ -116,8 +143,16 @@ def roll_up(
     empty: list[UUID] = []
     for uid in children:
         span = resolve(uid)
+        if uid in cyclic:
+            continue
         if span is None:
             empty.append(uid)
         else:
             rolled.append(RolledUp(uid, span[0], span[1], beneath[uid]))
-    return Rollup(spans=tuple(rolled), empty=tuple(empty))
+    # Sorted so a cycle reported from two entry points reads the same either
+    # way; everything else here is already order-independent.
+    return Rollup(
+        spans=tuple(rolled),
+        empty=tuple(empty),
+        cyclic=tuple(sorted(cyclic, key=str)),
+    )

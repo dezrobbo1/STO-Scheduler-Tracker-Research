@@ -65,8 +65,34 @@ agrees with its own float; and that every binding edge is honoured by the
 dates it connects, counted rather than shifted.
 
 It reports nothing on any real schedule or on any executable corpus case, and
-a test corrupts a sound result seven ways to show each check fires, because a
-validator that never fires is worth nothing.
+a test corrupts a sound result to show each check fires, because a validator
+that never fires is worth nothing.
+
+### What two review passes added to it
+
+The first version was thin in a way that only reading it closely revealed: it
+measured what the passes computed and never asked whether the result's claims
+*about itself* were true. So a row could report the wrong progress state, name
+an edge from another schedule as its driver, or have a completed span moved
+wholesale off the actual dates it reports, and every date check still passed.
+Those claims are read now, and a completed row's exemption is from the
+duration check alone.
+
+Free float was the sharpest of them. The check asked only that free float not
+exceed total float, which is a theorem and not a measurement: it left the
+reported number free to be anything below the bound, and it is false where
+total float is negative — a chain already late has no slack and free float of
+zero, which the inequality called a violation. The number is now checked by
+applying it. An activity with that much free float can slip exactly that far
+without moving a successor, and no further; both halves are asked, because the
+first alone accepts anything too small and the second anything too large.
+Nothing inverts a lag to do it, so the independence holds.
+
+And the claim in the paragraph above was, until the second pass, not executed
+anywhere: every end-to-end run of the validator went over the packaged corpus,
+and no test loaded a real file. `tests/test_validator_boiler.py` runs it over
+all six, under the plan's own threshold and progress policy, guarded like the
+other real-file oracles.
 
 ### It refined ADR-008 on the way
 
@@ -76,9 +102,13 @@ calendar and **not** across several, with no negative float anywhere. A
 predecessor whose own calendar is working where its successor's calendar is a
 gap can slip its own working time without moving the successor at all, so it
 genuinely holds free float the project does not allow — three such rows in
-KILN, five in CALCINER, six in the day-5 candidate. The check therefore asks
-only of a network one calendar governs, which is the conformance corpus, and
-the caveat is recorded rather than the check dropped.
+KILN, five in CALCINER, six in the day-5 candidate.
+
+That refinement is what the check was built on, and the second review replaced
+the check rather than the finding: measuring the reported free float directly
+needs no single-calendar caveat at all, because it never appeals to the
+theorem. The ADR-008 refinement stands as a fact about these schedules; it is
+no longer load-bearing for the validator.
 
 ## The eligibility re-partition, and why it is already done
 
