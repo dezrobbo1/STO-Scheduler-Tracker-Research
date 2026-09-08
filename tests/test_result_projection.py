@@ -17,8 +17,11 @@ import os
 import secrets
 import tempfile
 import unittest
+from dataclasses import replace
 from datetime import datetime, timedelta
 from pathlib import Path
+
+from calculation_fixture import _activity, _document, _relationship
 
 from sto.core.engine import (
     backward_pass,
@@ -27,9 +30,16 @@ from sto.core.engine import (
     forward_pass,
     roll_up,
 )
-from sto.core.engine.result import EXCLUDED, SCHEDULED, project_result
+from sto.core.engine.result import (
+    EXCLUDED,
+    SCHEDULED,
+    fingerprint_result,
+    project_result,
+)
 from sto.core.hashing import canonical_sha256
 from sto.core.model.codec import encode_schedule
+from sto.core.model.entities import Constraint
+from sto.core.model.enums import ConstraintType
 from sto.core.model.migrate.sto_v011 import migrate
 from sto.legacy import import_mspdi
 
@@ -87,6 +97,149 @@ def _projected(path: Path, *, before=timedelta(days=90), after=timedelta(days=36
         canonical_hash=canonical_sha256(encode_schedule(schedule)),
         horizon=horizon,
     )
+
+
+def repo_module():
+    from sto.persistence import repositories
+
+    return repositories
+
+
+def _projected_document(document, *, before=timedelta(days=90), after=timedelta(days=365)):
+    """The same road as :func:`_projected`, from a built document rather than a file."""
+
+    schedule, _, _ = migrate(document)
+    return _projected_schedule(schedule, before=before, after=after)
+
+
+def _projected_schedule(schedule, *, before=timedelta(days=90), after=timedelta(days=365)):
+    start = schedule.project.start or datetime(2026, 1, 5)
+    horizon = (start - before, start + after)
+    plan = build_plan(schedule, horizon)
+    forward = forward_pass(
+        plan.network, snap_milestones=plan.snap_milestones, progress_policy=plan.progress_policy
+    )
+    backward = backward_pass(plan.network, forward, snap_milestones=plan.snap_milestones)
+    floats = float_analysis(
+        plan.network, forward, backward, threshold=plan.critical_float_threshold
+    )
+    rollup = roll_up(
+        plan.wbs_children,
+        {uid: (row.early_start, row.early_finish) for uid, row in forward.by_uid().items()},
+    )
+    return plan, project_result(
+        plan,
+        forward,
+        backward,
+        floats,
+        rollup,
+        canonical_hash=canonical_sha256(encode_schedule(schedule)),
+        horizon=horizon,
+    )
+
+
+def _task(uid, hour=9):
+    return _activity(
+        uid,
+        start=f"2026-01-05T{hour:02d}:00:00",
+        finish=f"2026-01-05T{hour + 1:02d}:00:00",
+        duration_seconds=3600,
+    )
+
+
+class WhatElseDecidedTheseDatesTests(unittest.TestCase):
+    """A stored answer names every disposition behind it, not only the rows.
+
+    Each case here is one the review of this slice found: something the plan
+    decided, that moved the dates, and that the projection dropped on the way
+    to the database -- so the stored calculation looked fully evidenced when it
+    was not.
+    """
+
+    def test_an_edge_kept_under_a_labelled_rule_is_recorded(self):
+        """An inherited working lag runs on the project calendar by a rule the
+        estate cannot distinguish from elapsed time (ADR-010). The dates rest
+        on that label, so the label is part of the result."""
+
+        document = _document([_task(1), _task(2)], relationships=[_relationship(1, 1, 2, lag=600)])
+        plan, result = _projected_document(document)
+        labelled = [row for row in plan.assumed if row.kind == "relationship"]
+        self.assertTrue(labelled, "the fixture no longer produces a relationship assumption")
+        self.assertEqual(
+            [(row.disposition, row.code) for row in result.relationships],
+            [(SCHEDULED, row.code) for row in labelled],
+        )
+
+    def test_a_dropped_edge_is_recorded_too(self):
+        """An edge whose predecessor was not scheduled is not in the network,
+        and its absence is why the successor sits where it does."""
+
+        inactive, extensions = _task(1)
+        inactive["active"] = False
+        document = _document(
+            [(inactive, extensions), _task(2)], relationships=[_relationship(1, 1, 2)]
+        )
+        _, result = _projected_document(document)
+        self.assertIn(
+            (EXCLUDED, "RELATIONSHIP_ENDPOINT_NOT_SCHEDULED"),
+            [(row.disposition, row.code) for row in result.relationships],
+        )
+
+    def test_dropping_a_label_changes_the_fingerprint(self):
+        document = _document([_task(1), _task(2)], relationships=[_relationship(1, 1, 2, lag=600)])
+        _, full = _projected_document(document)
+        stripped = replace(full, relationships=())
+        self.assertNotEqual(fingerprint_result(full), fingerprint_result(stripped))
+
+    def test_a_discarded_status_date_is_not_an_absent_one(self):
+        """Two runs with the same dates and different inputs must not hash alike."""
+
+        document = _document([_task(1), _task(2)])
+        _, without = _projected_document(document)
+        stale = _document([_task(1), _task(2)])
+        stale["project"]["status_date"] = "2025-01-01T08:00:00"
+        plan, discarded = _projected_document(stale)
+
+        self.assertTrue(plan.status_time_outside_window)
+        self.assertIsNone(plan.network.status_time)
+        self.assertFalse(without.provenance.status_time_outside_window)
+        self.assertTrue(discarded.provenance.status_time_outside_window)
+        self.assertIsNone(discarded.provenance.status_time)
+        self.assertNotEqual(without.fingerprint, discarded.fingerprint)
+
+    def test_the_progress_rules_are_named_like_every_other_stage(self):
+        _, result = _projected(FIXTURE)
+        self.assertTrue(result.provenance.progress_profile.startswith("sto-progress-"))
+        self.assertIn("progress_profile", result.provenance.to_dict())
+
+    def test_a_secondary_constraint_answers_the_row_once(self):
+        """The row is scheduled; only its second constraint is not applied.
+
+        Recorded as an exclusion it made one activity both scheduled and
+        excluded, which is not a partition, and which a result keyed on the
+        activity cannot store twice.
+        """
+
+        schedule, _, _ = migrate(_document([_task(1), _task(2)]))
+        first = schedule.activities[0]
+        constrained = replace(
+            first,
+            secondary_constraint=Constraint(
+                type=ConstraintType.FNLT, date=datetime(2026, 1, 9, 16)
+            ),
+        )
+        schedule = replace(schedule, activities=(constrained,) + schedule.activities[1:])
+        plan, result = _projected_schedule(schedule)
+
+        rows = [row for row in result.activities if row.uid == first.uid]
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0].disposition, SCHEDULED)
+        self.assertIn("ACTIVITY_SECONDARY_CONSTRAINT_NOT_APPLIED", rows[0].assumptions)
+        self.assertEqual(
+            [row.code for row in plan.excluded if row.uid == first.uid],
+            [],
+            "a scheduled row must not also be excluded",
+        )
 
 
 class TheProjectionAnswersForEveryRowTests(unittest.TestCase):
@@ -234,6 +387,134 @@ class AStoredCalculationComesBackTests(unittest.TestCase):
         workspace.calculate(project_id)
         with self.assertRaises(Exception):
             workspace.calculate(project_id)
+
+
+    def test_a_stored_calculation_is_checked_against_its_own_rows(self):
+        """The header's fingerprint attests to rows in two other tables.
+
+        A version is protected by re-deriving its hash on every load. A
+        calculation cannot borrow that, so reading one back reassembles it and
+        recomputes the fingerprint. Without this, a row edited after the insert
+        is served as an answer while the header still vouches for the original.
+        """
+
+        from sto.scheduling.working_schedule import IntegrityError
+
+        workspace, project_id = self._imported()
+        stored = workspace.calculate(project_id)
+
+        read = workspace.read_calculation(project_id)
+        self.assertIsNotNone(read)
+        self.assertEqual(read.calculation_id, stored.calculation_id)
+        self.assertEqual(read.result.fingerprint, stored.fingerprint)
+
+        with self.connect() as conn:
+            conn.execute(
+                """
+                UPDATE activity_results SET early_finish = early_finish + interval '1 day'
+                WHERE calculation_id = %s AND disposition = 'scheduled'
+                AND activity_uid = (
+                    SELECT activity_uid FROM activity_results
+                    WHERE calculation_id = %s AND disposition = 'scheduled'
+                    ORDER BY activity_uid LIMIT 1
+                )
+                """,
+                (stored.calculation_id, stored.calculation_id),
+            )
+            conn.commit()
+
+        with self.assertRaises(IntegrityError):
+            workspace.read_calculation(project_id)
+
+    def test_an_edited_summary_row_is_caught_as_well(self):
+        from sto.scheduling.working_schedule import IntegrityError
+
+        workspace, project_id = self._imported()
+        stored = workspace.calculate(project_id)
+        with self.connect() as conn:
+            changed = conn.execute(
+                """
+                UPDATE summary_results SET placed = placed + 1
+                WHERE calculation_id = %s AND span_start IS NOT NULL
+                """,
+                (stored.calculation_id,),
+            ).rowcount
+            conn.commit()
+        self.assertGreater(changed, 0, "the fixture no longer produces summary rows")
+        with self.assertRaises(IntegrityError):
+            workspace.read_calculation(project_id)
+
+    def test_calculating_reads_the_document_back_out_of_the_database(self):
+        """Import leaves its own copy resident; the calculation must not use it.
+
+        Otherwise a document altered between the insert and the run is
+        computed over without the hash check this class exists for ever
+        touching the bytes the row actually holds.
+        """
+
+        from sto.scheduling.working_schedule import IntegrityError
+
+        workspace, project_id = self._imported()
+        with self.connect() as conn:
+            conn.execute(
+                """
+                UPDATE schedule_versions
+                SET document = jsonb_set(document, '{project,name}', '"renamed after the insert"')
+                WHERE id = (SELECT version_id FROM schedule_heads
+                            WHERE project_id = %s AND kind = 'baseline')
+                """,
+                (project_id,),
+            )
+            conn.commit()
+        with self.assertRaises(IntegrityError):
+            workspace.calculate(project_id)
+
+    def test_an_excluded_row_can_not_carry_a_remaining_start(self):
+        """An excluded row has no dates at all, and the database says so."""
+
+        workspace, project_id = self._imported()
+        stored = workspace.calculate(project_id)
+        with self.connect() as conn, self.assertRaises(psycopg.errors.CheckViolation):
+            conn.execute(
+                """
+                INSERT INTO activity_results
+                  (calculation_id, activity_uid, disposition, remaining_start, exclusion_code)
+                VALUES (%s, gen_random_uuid(), 'excluded', %s, 'ACTIVITY_INACTIVE')
+                """,
+                (stored.calculation_id, datetime(2026, 1, 5, 8)),
+            )
+
+    def test_remaining_start_belongs_to_the_in_progress_rows(self):
+        workspace, project_id = self._imported()
+        stored = workspace.calculate(project_id)
+        with self.connect() as conn, self.assertRaises(psycopg.errors.CheckViolation):
+            conn.execute(
+                """
+                INSERT INTO activity_results
+                  (calculation_id, activity_uid, disposition, early_start, early_finish,
+                   late_start, late_finish, remaining_start, total_float_seconds,
+                   free_float_seconds, critical, progress_state)
+                VALUES (%s, gen_random_uuid(), 'scheduled', %s, %s, %s, %s, %s, 0, 0,
+                        true, 'not_started')
+                """,
+                (
+                    stored.calculation_id,
+                    datetime(2026, 1, 5, 8),
+                    datetime(2026, 1, 5, 16),
+                    datetime(2026, 1, 5, 8),
+                    datetime(2026, 1, 5, 16),
+                    datetime(2026, 1, 5, 9),
+                ),
+            )
+
+    def test_a_run_whose_status_date_was_discarded_says_so_in_the_row(self):
+        workspace, project_id = self._imported()
+        stored = workspace.calculate(project_id)
+        with self.connect() as conn:
+            header = repo_module().get_calculation(conn, calculation_id=stored.calculation_id)
+        self.assertIn("status_time_outside_window", header)
+        self.assertIn("progress", header["profiles"])
+        self.assertIsInstance(header["relationship_dispositions"], list)
 
 
 if __name__ == "__main__":

@@ -36,6 +36,9 @@ CREATE TABLE schedule_calculations (
   horizon_finish TIMESTAMP NOT NULL,
   progress_policy TEXT NOT NULL,
   critical_float_threshold BIGINT NOT NULL,
+  status_time TIMESTAMP,
+  status_time_outside_window BOOLEAN NOT NULL DEFAULT FALSE,
+  relationship_dispositions JSONB NOT NULL DEFAULT '[]'::jsonb,
   profiles JSONB NOT NULL,
   computed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   CONSTRAINT schedule_calculations_canonical_hash_check
@@ -44,6 +47,12 @@ CREATE TABLE schedule_calculations (
     CHECK (result_fingerprint ~ '^[0-9a-f]{64}$'),
   CONSTRAINT schedule_calculations_horizon_check CHECK (horizon_finish > horizon_start),
   CONSTRAINT schedule_calculations_profiles_object_check CHECK (jsonb_typeof(profiles) = 'object'),
+  CONSTRAINT schedule_calculations_relationships_array_check
+    CHECK (jsonb_typeof(relationship_dispositions) = 'array'),
+  -- A status date that fell outside the compiled window was dropped, so the
+  -- passes ran without one. The two facts cannot both be present.
+  CONSTRAINT schedule_calculations_status_window_check
+    CHECK (NOT status_time_outside_window OR status_time IS NULL),
   CONSTRAINT schedule_calculations_version_fingerprint_unique
     UNIQUE (version_id, result_fingerprint)
 );
@@ -56,6 +65,10 @@ COMMENT ON COLUMN schedule_calculations.result_fingerprint IS
   'SHA-256 over the rows and their provenance. Two runs that agree hash alike.';
 COMMENT ON COLUMN schedule_calculations.horizon_start IS
   'The compiled window is the caller''s choice, not the file''s, and a pass over a wider one is a different calculation.';
+COMMENT ON COLUMN schedule_calculations.status_time IS
+  'The status date the passes used. NULL with status_time_outside_window true means the source carried one and it was dropped.';
+COMMENT ON COLUMN schedule_calculations.relationship_dispositions IS
+  'Edges the plan dropped and edges it kept under a labelled assumption: what decided these dates besides the activities themselves.';
 COMMENT ON COLUMN schedule_calculations.profiles IS
   'The engine profile of every stage that contributed, so a rule change cannot be mistaken for the old rule.';
 
@@ -94,9 +107,22 @@ CREATE TABLE activity_results (
     (disposition = 'excluded'
       AND early_start IS NULL AND early_finish IS NULL
       AND late_start IS NULL AND late_finish IS NULL
+      AND remaining_start IS NULL
       AND total_float_seconds IS NULL AND free_float_seconds IS NULL
       AND critical IS NULL AND progress_state IS NULL
       AND exclusion_code IS NOT NULL)
+  ),
+  -- Remaining start is where the unfinished part of work under way begins, so
+  -- it belongs to the in-progress rows and to no others. Without this the
+  -- excluded branch above is the only rule it has, and a scheduled row could
+  -- carry one while claiming not to have started.
+  CONSTRAINT activity_results_remaining_start_is_progress CHECK (
+    progress_state IS NULL
+    OR (remaining_start IS NOT NULL) = (progress_state = 'in_progress')
+  ),
+  CONSTRAINT activity_results_remaining_start_within_span CHECK (
+    remaining_start IS NULL
+    OR (remaining_start >= early_start AND remaining_start <= early_finish)
   ),
   CONSTRAINT activity_results_span_ordered
     CHECK (early_finish IS NULL OR early_finish >= early_start),

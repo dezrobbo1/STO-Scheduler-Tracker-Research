@@ -23,8 +23,8 @@ import hashlib
 import os
 import uuid
 from collections.abc import Callable
-from dataclasses import dataclass, field
-from datetime import timedelta
+from dataclasses import dataclass, field, replace
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -38,7 +38,17 @@ from sto.core.engine import (
     forward_pass,
     roll_up,
 )
-from sto.core.engine.result import SCHEDULED, project_result
+from sto.core.engine.result import (
+    EXCLUDED,
+    SCHEDULED,
+    ActivityResult,
+    Provenance,
+    RelationshipResult,
+    ScheduleResult,
+    SummaryResult,
+    fingerprint_result,
+    project_result,
+)
 from sto.core.hashing import canonical_sha256
 from sto.core.model import IdentityMap, ReconciliationReport, Schedule, decode_schedule
 from sto.core.model.codec import encode_schedule
@@ -53,7 +63,12 @@ PARSER_VERSION = "0.1.1"
 
 
 class IntegrityError(RuntimeError):
-    """A stored version does not hash to what it says it hashes to."""
+    """Stored bytes do not hash to what the row says they hash to.
+
+    Raised for a schedule version whose document disagrees with its canonical
+    hash, and for a stored calculation whose rows disagree with the fingerprint
+    the header attests to.
+    """
 
 
 class UnknownProject(LookupError):
@@ -82,6 +97,17 @@ class CalculationResult:
     scheduled: int
     excluded: int
     summaries: int
+
+
+@dataclass(frozen=True, slots=True)
+class StoredCalculation:
+    """A calculation read back from the database and checked against its rows."""
+
+    project_id: uuid.UUID
+    version_id: uuid.UUID
+    calculation_id: uuid.UUID
+    computed_at: datetime
+    result: ScheduleResult
 
 
 @dataclass(frozen=True, slots=True)
@@ -144,8 +170,19 @@ class Workspace:
     def resident_ids(self) -> frozenset[uuid.UUID]:
         return frozenset(self._resident)
 
-    def load(self, project_id: uuid.UUID) -> WorkingSchedule | None:
-        cached = self._resident.get(project_id)
+    def load(
+        self, project_id: uuid.UUID, *, refresh: bool = False
+    ) -> WorkingSchedule | None:
+        """The project's verified head, from the resident copy or the database.
+
+        ``refresh`` skips the resident copy and re-reads. Import populates the
+        cache from the schedule it has in hand, so without this a caller could
+        compute over a document that has never been read back out of
+        PostgreSQL, and the hash check this class exists for would not have run
+        on the bytes the row actually holds.
+        """
+
+        cached = None if refresh else self._resident.get(project_id)
         if cached is not None:
             return cached
         with self.connect() as conn:
@@ -181,12 +218,13 @@ class Workspace:
         different calculation, and a stored result that did not say which
         could not be read back a month later.
 
-        The document is loaded through :meth:`load`, which re-derives its hash
-        from what the database returned, so a calculation is never computed
-        over bytes that do not hash to what they claim.
+        The document is re-read from PostgreSQL and its hash re-derived from
+        what came back, so a calculation is never computed over bytes that do
+        not hash to what they claim -- not even straight after the import that
+        put them there, whose in-memory copy the resident cache holds.
         """
 
-        working = self.load(project_id)
+        working = self.load(project_id, refresh=True)
         if working is None:
             raise UnknownProject(str(project_id))
         schedule = working.schedule
@@ -243,6 +281,55 @@ class Workspace:
             scheduled=scheduled,
             excluded=len(result.activities) - scheduled,
             summaries=len(result.summaries),
+        )
+
+
+    def read_calculation(
+        self, project_id: uuid.UUID, *, calculation_id: uuid.UUID | None = None
+    ) -> StoredCalculation | None:
+        """A stored calculation, rebuilt from its rows and checked against them.
+
+        A schedule version is protected by re-deriving its hash from the stored
+        document on every load. A calculation needs the same protection and
+        cannot borrow it: its header carries a fingerprint over rows that live
+        in two other tables, so a row edited after the insert would be served
+        as an answer while the fingerprint still attested to the original.
+
+        So the header and both row sets are read together, the result is
+        reassembled, and its fingerprint is recomputed. A mismatch is an
+        :class:`IntegrityError`, not a set of dates.
+        """
+
+        with self.connect() as conn:
+            if repo.get_project(conn, project_id) is None:
+                raise UnknownProject(str(project_id))
+            if calculation_id is None:
+                head = repo.head_version(
+                    conn, project_id=project_id, kind="baseline", with_document=False
+                )
+                if head is None:
+                    return None
+                header = repo.get_latest_calculation(conn, version_id=head["id"])
+            else:
+                header = repo.get_calculation(conn, calculation_id=calculation_id)
+            if header is None:
+                return None
+            rows = repo.get_activity_results(conn, calculation_id=header["id"])
+            spans = repo.get_summary_results(conn, calculation_id=header["id"])
+
+        result = _rebuild_result(header, rows, spans)
+        recomputed = fingerprint_result(result)
+        if recomputed != header["result_fingerprint"]:
+            raise IntegrityError(
+                f"calculation {header['id']} for project {project_id} is stored under "
+                f"{header['result_fingerprint']} but its rows fingerprint to {recomputed}"
+            )
+        return StoredCalculation(
+            project_id=project_id,
+            version_id=header["version_id"],
+            calculation_id=header["id"],
+            computed_at=header["computed_at"],
+            result=replace(result, fingerprint=recomputed),
         )
 
     # --- importing -------------------------------------------------------------
@@ -362,6 +449,87 @@ class Workspace:
             tmp.write_bytes(data)
             os.replace(tmp, path)
         return path
+
+
+def _rebuild_result(
+    header: dict[str, Any], rows: list[dict[str, Any]], spans: list[dict[str, Any]]
+) -> ScheduleResult:
+    """Reassemble a stored calculation exactly as the engine produced it.
+
+    Every profile is read from the stored header rather than defaulted, because
+    the point of reading it back is to detect a row that no longer matches its
+    fingerprint, and a default that quietly agreed with the current code would
+    hide exactly the case where the rules changed underneath a stored answer.
+    """
+
+    profiles = header["profiles"]
+    provenance = Provenance(
+        canonical_hash=header["canonical_hash"],
+        epoch=header["epoch"],
+        horizon_start=header["horizon_start"],
+        horizon_finish=header["horizon_finish"],
+        progress_policy=header["progress_policy"],
+        critical_float_threshold=int(header["critical_float_threshold"]),
+        status_time=header["status_time"],
+        status_time_outside_window=header["status_time_outside_window"],
+        forward_profile=profiles["forward"],
+        backward_profile=profiles["backward"],
+        criticality_profile=profiles["criticality"],
+        rollup_profile=profiles["rollup"],
+        progress_profile=profiles["progress"],
+        result_profile=profiles["result"],
+    )
+    activities = tuple(
+        ActivityResult(
+            uid=row["activity_uid"],
+            disposition=row["disposition"],
+            early_start=row["early_start"],
+            early_finish=row["early_finish"],
+            late_start=row["late_start"],
+            late_finish=row["late_finish"],
+            remaining_start=row["remaining_start"],
+            total_float=(
+                None if row["total_float_seconds"] is None else int(row["total_float_seconds"])
+            ),
+            free_float=(
+                None if row["free_float_seconds"] is None else int(row["free_float_seconds"])
+            ),
+            critical=row["critical"],
+            state=row["progress_state"],
+            placed_by=row["placed_by"],
+            driving_relationship_uid=row["driving_relationship_uid"],
+            exclusion_code=row["exclusion_code"],
+            assumptions=tuple(row["assumptions"]),
+        )
+        for row in rows
+    )
+    summaries = tuple(
+        SummaryResult(
+            uid=span["wbs_uid"],
+            start=span["span_start"],
+            finish=span["span_finish"],
+            placed=int(span["placed"]),
+        )
+        for span in spans
+        if span["span_start"] is not None
+    )
+    empty = tuple(span["wbs_uid"] for span in spans if span["span_start"] is None)
+    relationships = tuple(
+        RelationshipResult(
+            uid=uuid.UUID(edge["uid"]),
+            disposition=edge["disposition"],
+            code=edge["code"],
+            detail=edge["detail"],
+        )
+        for edge in header["relationship_dispositions"]
+    )
+    return ScheduleResult(
+        provenance=provenance,
+        activities=activities,
+        summaries=summaries,
+        relationships=relationships,
+        empty_summaries=empty,
+    )
 
 
 def _record_source(

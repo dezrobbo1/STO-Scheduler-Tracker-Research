@@ -241,8 +241,9 @@ def insert_calculation(
         INSERT INTO schedule_calculations
           (project_id, version_id, canonical_hash, result_fingerprint, epoch,
            horizon_start, horizon_finish, progress_policy,
-           critical_float_threshold, profiles)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+           critical_float_threshold, status_time, status_time_outside_window,
+           relationship_dispositions, profiles)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         RETURNING id
         """,
         (
@@ -255,12 +256,26 @@ def insert_calculation(
             provenance.horizon_finish,
             provenance.progress_policy,
             provenance.critical_float_threshold,
+            provenance.status_time,
+            provenance.status_time_outside_window,
+            Jsonb(
+                [
+                    {
+                        "uid": str(edge.uid),
+                        "disposition": edge.disposition,
+                        "code": edge.code,
+                        "detail": edge.detail,
+                    }
+                    for edge in result.relationships
+                ]
+            ),
             Jsonb(
                 {
                     "forward": provenance.forward_profile,
                     "backward": provenance.backward_profile,
                     "criticality": provenance.criticality_profile,
                     "rollup": provenance.rollup_profile,
+                    "progress": provenance.progress_profile,
                     "result": provenance.result_profile,
                 }
             ),
@@ -332,6 +347,17 @@ def get_latest_calculation(
         LIMIT 1
         """,
         (version_id,),
+    ).fetchone()
+
+
+def get_calculation(
+    conn: psycopg.Connection, *, calculation_id: uuid.UUID
+) -> dict[str, Any] | None:
+    """One calculation header by identifier."""
+
+    return conn.execute(
+        "SELECT * FROM schedule_calculations WHERE id = %s",
+        (calculation_id,),
     ).fetchone()
 
 

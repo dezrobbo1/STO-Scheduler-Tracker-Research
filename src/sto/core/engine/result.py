@@ -24,7 +24,7 @@ place that says what an activity's answer is.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from uuid import UUID
 
@@ -34,15 +34,17 @@ from .backward import BACKWARD_PASS_PROFILE, BackwardPass
 from .criticality import CRITICALITY_PROFILE, FloatAnalysis
 from .forward import FORWARD_PASS_PROFILE, ForwardPass
 from .plan import Plan
-from .progress import ProgressState
+from .progress import PROGRESS_PROFILE, ProgressState
 from .rollup import ROLLUP_PROFILE, Rollup
 
 __all__ = [
     "RESULT_PROFILE",
     "ActivityResult",
     "Provenance",
+    "RelationshipResult",
     "ScheduleResult",
     "SummaryResult",
+    "fingerprint_result",
     "project_result",
 ]
 
@@ -72,10 +74,18 @@ class Provenance:
     horizon_finish: datetime
     progress_policy: str
     critical_float_threshold: int
+    #: The status date the passes actually used, and whether the source carried
+    #: one that had to be dropped. A run with no status date and a run whose
+    #: status date fell outside the compiled window produce the same dates from
+    #: different inputs, so a stored result that could not tell them apart
+    #: would present discarded progress context as an absence of it.
+    status_time: datetime | None = None
+    status_time_outside_window: bool = False
     forward_profile: str = FORWARD_PASS_PROFILE
     backward_profile: str = BACKWARD_PASS_PROFILE
     criticality_profile: str = CRITICALITY_PROFILE
     rollup_profile: str = ROLLUP_PROFILE
+    progress_profile: str = PROGRESS_PROFILE
     result_profile: str = RESULT_PROFILE
 
     def to_dict(self) -> dict[str, object]:
@@ -86,10 +96,13 @@ class Provenance:
             "horizon_finish": self.horizon_finish.isoformat(),
             "progress_policy": self.progress_policy,
             "critical_float_threshold": self.critical_float_threshold,
+            "status_time": None if self.status_time is None else self.status_time.isoformat(),
+            "status_time_outside_window": self.status_time_outside_window,
             "forward_profile": self.forward_profile,
             "backward_profile": self.backward_profile,
             "criticality_profile": self.criticality_profile,
             "rollup_profile": self.rollup_profile,
+            "progress_profile": self.progress_profile,
             "result_profile": self.result_profile,
         }
 
@@ -124,6 +137,22 @@ class ActivityResult:
 
 
 @dataclass(frozen=True, slots=True)
+class RelationshipResult:
+    """What the plan did with one edge, when it did anything worth recording.
+
+    An edge is not a row of the result the way an activity is: it has no dates
+    of its own. But a dropped edge and an edge kept under a labelled rule both
+    decided the dates that *are* stored, and a result that recorded neither
+    would present assumption-dependent answers as fully evidenced.
+    """
+
+    uid: UUID
+    disposition: str
+    code: str
+    detail: str = ""
+
+
+@dataclass(frozen=True, slots=True)
 class SummaryResult:
     """One summary row's span, rolled up from what sits beneath it."""
 
@@ -141,6 +170,8 @@ class ScheduleResult:
     provenance: Provenance
     activities: tuple[ActivityResult, ...]
     summaries: tuple[SummaryResult, ...]
+    #: Edges the plan dropped, and edges it kept under a labelled assumption.
+    relationships: tuple[RelationshipResult, ...] = ()
     #: Summary rows with nothing placed beneath them, named rather than absent.
     empty_summaries: tuple[UUID, ...] = ()
     fingerprint: str = ""
@@ -172,15 +203,27 @@ def project_result(
         horizon_finish=horizon[1],
         progress_policy=plan.progress_policy.value,
         critical_float_threshold=plan.critical_float_threshold,
+        status_time=(
+            None
+            if plan.network.status_time is None
+            else plan.to_datetime(plan.network.status_time)
+        ),
+        status_time_outside_window=plan.status_time_outside_window,
     )
 
     early = forward.by_uid()
     late = backward.by_uid()
     slack = floats.by_uid()
     assumptions: dict[UUID, list[str]] = {}
+    edges: list[RelationshipResult] = []
     for row in plan.assumed:
         if row.kind == "activity":
             assumptions.setdefault(row.uid, []).append(row.code)
+        else:
+            edges.append(RelationshipResult(row.uid, SCHEDULED, row.code, row.detail))
+    for dropped in plan.excluded:
+        if dropped.kind != "activity":
+            edges.append(RelationshipResult(dropped.uid, EXCLUDED, dropped.code, dropped.detail))
 
     rows: list[ActivityResult] = []
     for activity in plan.network.activities:
@@ -237,18 +280,13 @@ def project_result(
         provenance=provenance,
         activities=tuple(rows),
         summaries=summaries,
+        relationships=tuple(edges),
         empty_summaries=rollup.empty,
     )
-    return ScheduleResult(
-        provenance=provenance,
-        activities=result.activities,
-        summaries=result.summaries,
-        empty_summaries=result.empty_summaries,
-        fingerprint=_fingerprint(result),
-    )
+    return replace(result, fingerprint=fingerprint_result(result))
 
 
-def _fingerprint(result: ScheduleResult) -> str:
+def fingerprint_result(result: ScheduleResult) -> str:
     """A hash over the rows and what produced them.
 
     Sorted by identifier rather than by the order the passes happened to
@@ -280,6 +318,10 @@ def _fingerprint(result: ScheduleResult) -> str:
                     list(row.assumptions),
                 ]
                 for row in result.activities
+            ),
+            "relationships": sorted(
+                [str(row.uid), row.disposition, row.code, row.detail]
+                for row in result.relationships
             ),
             "summaries": sorted(
                 [str(row.uid), moment(row.start), moment(row.finish), row.placed]

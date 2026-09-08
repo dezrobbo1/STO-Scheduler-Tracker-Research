@@ -85,7 +85,7 @@ through the hash check so nothing is computed over bytes that do not hash to
 what they claim.
 
 **Persistence and multi-project (PL1).** PostgreSQL on the existing loopback
-instance, a new `sto` database, and one migration: projects, source files,
+instance, a new `sto` database, and `V001`: projects, source files,
 import batches, and the schedule-version envelope — immutable versions with
 the full canonical document and identity map, a movable head per kind
 (ADR-007). FastAPI over it: create projects, upload a schedule, read the head.
