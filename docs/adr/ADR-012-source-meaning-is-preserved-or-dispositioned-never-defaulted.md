@@ -130,6 +130,19 @@ imports today still imports.
 
 ## Measured
 
+> **Amended 2026-09-08 (C2): the first sentence below is withdrawn.** The
+> six-and-a-half-hour offset is inherited from the predecessors, whose own
+> stored finishes are 06:30 and 08:30 against the 00:00 and 02:00 computed for
+> them; both elapsed rows start exactly at their predecessor's computed finish,
+> and their effective calendar is twenty-four hours, so there is no working
+> moment to snap a start to. Implementing the rule changed nothing and was
+> removed. What the files do corroborate is the half that shipped: on all four
+> elapsed rows across the two files, the span Project stored equals the elapsed
+> duration exactly, so an elapsed span is clock time. Where one begins, relative
+> to logic rather than to a predecessor that already agrees, is unmeasured, and
+> `ACTIVITY_DURATION_ELAPSED` stays an assumption.
+> `docs/history/2026-09-08-pass-contract.md` has the working.
+
 **Microsoft Project starts an elapsed span at a working moment and then counts
 clock time.** CALCINER's two active elapsed rows (`eh`, 240 hours) are
 reproduced *exactly* by placing the span on the continuous calendar, because

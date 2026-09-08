@@ -197,7 +197,25 @@ class ReleasedEdgeTests(unittest.TestCase):
         policy = ProgressPolicy.PROGRESS_OVERRIDE
         self.assertFalse(relationship_binds(policy, ProgressState.IN_PROGRESS, 100))
         self.assertTrue(relationship_binds(policy, ProgressState.NOT_STARTED, 100))
-        self.assertTrue(relationship_binds(policy, ProgressState.COMPLETE, 100))
+
+    def test_an_edge_into_completed_work_holds_nothing_under_any_policy(self):
+        """C2: completion releases an edge as much as the override does.
+
+        A complete activity is its two actual dates in both directions and
+        consults no predecessor, so an edge into one holds nothing. Deciding
+        that in the forward pass alone left the backward pass walking an edge
+        the forward pass had set aside, and refusing a schedule the forward
+        pass had just placed.
+        """
+
+        for policy in ProgressPolicy:
+            if policy is ProgressPolicy.ACTUAL_DATES:
+                continue
+            for status_time in (None, 100):
+                with self.subTest(policy=policy, status_time=status_time):
+                    self.assertFalse(
+                        relationship_binds(policy, ProgressState.COMPLETE, status_time)
+                    )
 
 
 class RemainingWorkOnAWorkingCalendarTests(unittest.TestCase):

@@ -314,6 +314,14 @@ def backward_pass(
 
     for uid in reversed(forward.order):
         activity = by_uid[uid]
+        if (
+            states[uid] is not ProgressState.NOT_STARTED
+            and activity.constraint_type is not ConstraintType.ASAP
+        ):
+            # Recorded before the completed row returns, not after: work that
+            # has happened carries its constraints unapplied in *both* passes,
+            # and a completed activity leaves this loop immediately.
+            deferred.append(DeferredLateConstraint(uid, activity.constraint_type))
         if states[uid] is ProgressState.COMPLETE:
             # Work that has happened cannot be scheduled later, so its late
             # dates are its actual dates. Measured, not assumed: in the two
@@ -345,7 +353,20 @@ def backward_pass(
         coordinate = activity.constraint_coordinate
         pinned: str | None = None
         constrained = False
-        if constraint is ConstraintType.ALAP:
+        if states[uid] is not ProgressState.NOT_STARTED:
+            # The forward pass places work already under way on what happened
+            # and records every constraint it carries as not applied: an
+            # actual date is a fact and a constraint is an intention. This
+            # pass has to make the same judgement or the two disagree about
+            # one row. It did not, and the disagreement invented float out of
+            # nothing: an activity started at one with five units left, a
+            # status date of fifty and a must-start-on of twenty had its
+            # remaining work placed at 50-55 going forward and pinned at 20-25
+            # coming back -- minus thirty of total float, from a constraint
+            # one pass had already set aside. The deferral itself is recorded
+            # above, before a completed row leaves the loop.
+            pass
+        elif constraint is ConstraintType.ALAP:
             deferred.append(DeferredLateConstraint(uid, constraint))
         elif constraint is ConstraintType.SNLT and coordinate is not None:
             if coordinate < start_bound:

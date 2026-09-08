@@ -78,7 +78,7 @@ from sto.core.hashing import canonical_sha256
 
 from .backward import BackwardPass
 from .forward import ActivityTimes, ForwardPass
-from .network import Network, NetworkError, PlannedRelationship, shift_lag
+from .network import Network, NetworkError, PlannedRelationship, unshift_lag
 
 #: Named on the fingerprint so a stored answer says which rule produced it.
 #: Version two hashes the two component floats as well as their minimum, so
@@ -220,20 +220,33 @@ def _free_float(
             if relationship.lag_calendar is not None
             else lag_calendars[relationship.successor_uid]
         )
-        required = shift_lag(lag_calendar, anchor, relationship.lag)
-        if required is None:
-            # The forward pass already refused this edge; reaching it here would
-            # mean the two passes were run over different networks.
-            raise CriticalityError(
-                "SCHEDULE_LAG_UNREACHABLE",
-                relationship.uid,
-                f"lag {relationship.lag} from {anchor} leaves the calendar",
-            )
         successor_start, successor_finish = available_spans[relationship.successor_uid]
         available = (
             successor_start if relationship.bounds_successor_start else successor_finish
         )
-        slacks.append(signed_working(calendar, required, available))
+        # Where this activity may end up, not where the successor may. Free
+        # float is the movement *this* activity can absorb, so the successor's
+        # bound is carried back over the edge -- the inverse of the shift the
+        # forward pass made -- and the gap is measured from this activity's own
+        # coordinate to the latest one that still lands on time.
+        #
+        # Shifting the lag forward first and measuring the remaining gap on
+        # this calendar assumes the two calendars advance together, and they do
+        # not. A predecessor on 0-5, 15-25, 30-100 with a three-unit lag on a
+        # continuous calendar and a successor held at twenty reported five
+        # units of free float: delaying by all five moves the successor by
+        # three, and only two were ever free.
+        permitted = unshift_lag(lag_calendar, available, relationship.lag)
+        if permitted is None:
+            # The forward pass placed this edge, so its inverse has to exist;
+            # arriving here would mean the two were run over different
+            # networks.
+            raise CriticalityError(
+                "SCHEDULE_LAG_UNREACHABLE",
+                relationship.uid,
+                f"lag {relationship.lag} back from {available} leaves the calendar",
+            )
+        slacks.append(signed_working(calendar, anchor, permitted))
     return min(slacks)
 
 

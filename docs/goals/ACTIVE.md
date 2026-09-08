@@ -316,15 +316,22 @@ until the parity checklist passes.
   empty. Settling the rule needs a file with an FF or SF successor long enough
   for the floor to bind.
 
-- **An elapsed span starts at a working moment and then runs on the clock, and
-  only the second half is implemented.** Placing an elapsed duration on the
+- **An elapsed span runs on the clock; where it starts is unmeasured.** The
+  span rule is corroborated — on every elapsed row in the estate the span
+  Project stored equals the elapsed duration exactly. The rule C1 recorded for
+  the *start* was withdrawn in C2: the offset that suggested it is inherited
+  from the predecessors, and those rows' effective calendar is twenty-four
+  hours, so there was nothing to snap to (ADR-012 as amended). The rows stay
+  labelled `ACTIVITY_DURATION_ELAPSED`.
+- ~~**An elapsed span starts at a working moment and then runs on the clock,
+  and only the second half is implemented.**~~ Placing an elapsed duration on the
   continuous calendar reproduces both of CALCINER's elapsed rows exactly and
   puts both of BOILER's six and a half hours early — its resource calendar's
   opening time — so Project starts the span on the task's calendar and then
   counts clock time (ADR-012). The hybrid placement needs an activity-level
   flag through both passes and both fingerprints, so it is `C2`'s; the rows are
-  labelled `ACTIVITY_DURATION_ELAPSED` and pinned as disagreeing, which is the
-  oracle for implementing it.
+  labelled `ACTIVITY_DURATION_ELAPSED` and pinned as disagreeing. *Withdrawn
+  2026-09-08; see the entry above.*
 - **CALCINER carries a duplicate assignment GUID** (UIDs 14103 and 14104). The
   second row no longer takes the first's canonical identity; the pair is
   counted as `guid_duplicated_in_snapshot`. No duplicate *task* GUID exists in

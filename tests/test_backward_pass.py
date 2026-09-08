@@ -23,8 +23,7 @@ from __future__ import annotations
 import unittest
 from uuid import NAMESPACE_URL, UUID, uuid5
 
-from sto.core.calendar.arithmetic import CompiledIntervals
-from sto.core.calendar.arithmetic import working_between
+from sto.core.calendar.arithmetic import CompiledIntervals, add_working, working_between
 from sto.core.engine import (
     BackwardPassError,
     CriticalityError,
@@ -568,18 +567,24 @@ class MirrorPropertyTests(unittest.TestCase):
 
 
 class LagInversionTests(unittest.TestCase):
-    """``unshift_lag`` undoes ``shift_lag`` wherever a placed date can be.
+    """``unshift_lag`` is the greatest coordinate whose lag lands in time.
 
-    The backward pass walks a lag back with the inverse calendar operation,
-    which is only an inverse where the calendar is continuous. Measured over
-    the broken calendar, for both signs of lag: from a coordinate strictly
-    inside a working interval the round trip returns to the anchor exactly;
-    from an interval's edge, or from inside a gap -- which only a non-snapped
-    milestone can occupy -- it may land on the other edge of a gap, and the
-    distance is always zero working time, which is what a float is measured
-    in. So the artefact cannot reach a float, and is pinned here as a bound
-    rather than corrected: a correction would move coordinates that no float
-    can see.
+    **Superseded on 2026-09-08 (C2).** This class previously pinned the
+    round-trip artefact as a bound rather than correcting it, on the reasoning
+    that the distance was always zero working time and so could not reach a
+    float. That held for the arithmetic as it stood and stopped holding when
+    the free float began reading this function: across two calendars of the
+    estate's shape there are sixty-six pairs where walking the lag forward and
+    then back lands *after* the bound the caller gave, and the backward pass
+    was setting late dates the schedule cannot honour.
+
+    The function is now defined by the inequality rather than by running the
+    arithmetic the other way: the greatest coordinate whose shift lands at or
+    before the anchor. From strictly inside a working interval that is still
+    the exact inverse. From an edge or a gap it can land short of the anchor,
+    which is what a broken calendar means -- there is no coordinate whose lag
+    lands exactly there -- and it never lands beyond it, which is the property
+    a late date depends on.
     """
 
     LAGS = (-3, -2, -1, 1, 2, 3)
@@ -593,28 +598,63 @@ class LagInversionTests(unittest.TestCase):
         yield from range(first, last + 1)
 
     def test_from_inside_an_interval_the_round_trip_returns_exactly(self):
+        """Where a coordinate exists whose lag lands on the anchor, it is the one.
+
+        The qualifier is the calendar's end rather than its gaps: past the
+        last interval there is no coordinate to walk a negative lag out to, so
+        the greatest feasible one lands short of the anchor. Inside, exactness
+        and maximality are the same coordinate.
+        """
+
         for lag in self.LAGS:
             for anchor in self._interior_anchors():
+                # Past the calendar's last interval there is no coordinate to
+                # walk a negative lag out to, so skip the anchors where none
+                # exists rather than assert an inverse that cannot be built.
+                if lag < 0 and add_working(BROKEN, anchor, -lag) is None:
+                    continue
                 back = unshift_lag(BROKEN, anchor, lag)
                 if back is None:
                     continue
                 with self.subTest(lag=lag, anchor=anchor):
                     self.assertEqual(shift_lag(BROKEN, back, lag), anchor)
 
-    def test_from_anywhere_the_round_trip_costs_no_working_time(self):
-        seen = 0
+    def test_from_anywhere_the_round_trip_never_overshoots(self):
+        """The property a late date rests on: never later than the bound."""
+
+        reached = 0
         for lag in self.LAGS:
             for anchor in self._every_anchor():
                 back = unshift_lag(BROKEN, anchor, lag)
                 if back is None:
                     continue
+                reached += 1
                 again = shift_lag(BROKEN, back, lag)
                 with self.subTest(lag=lag, anchor=anchor):
                     self.assertIsNotNone(again)
-                    lo, hi = sorted((anchor, again))
-                    self.assertEqual(working_between(BROKEN, lo, hi), 0)
-                seen += 1
-        self.assertGreater(seen, 0)
+                    self.assertLessEqual(again, anchor)
+        self.assertGreater(reached, 0, "the scan reached no coordinate")
+
+    def test_and_no_later_coordinate_would_have_done(self):
+        """And the greatest such coordinate, or a late date gives away float."""
+
+        checked = 0
+        for lag in self.LAGS:
+            for anchor in self._every_anchor():
+                back = unshift_lag(BROKEN, anchor, lag)
+                if back is None:
+                    continue
+                if back >= BROKEN.last:
+                    # There is nothing past the calendar to be greater.
+                    continue
+                with self.subTest(lag=lag, anchor=anchor):
+                    beyond = shift_lag(BROKEN, back + 1, lag)
+                    self.assertTrue(
+                        beyond is None or beyond > anchor,
+                        f"{back + 1} also lands at or before {anchor}",
+                    )
+                    checked += 1
+        self.assertGreater(checked, 0, "the scan reached no coordinate")
 
 
 class RefusalTests(unittest.TestCase):
