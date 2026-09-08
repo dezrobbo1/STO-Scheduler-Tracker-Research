@@ -54,6 +54,51 @@ predecessor is placed by that predecessor alone, even when a lead puts it
 before the project start. Work that has begun is bounded by its actual start
 instead, as the post-S5 review established.
 
+> **Amended 2026-09-08, and this half is an assumption rather than a
+> measurement.** "Placed by that predecessor alone" assumes a predecessor that
+> bounds the *start*. An activity whose predecessors are all FF or SF bounds
+> only its finish, and the rule as written left its start with no bound at all;
+> the pass then fell back to the first working moment of the compiled calendar,
+> which is not a schedule input but wherever the caller compiled from, so the
+> activity moved whenever the horizon widened. The start side now falls back to
+> the **project start**.
+>
+> That fallback is not measured. Microsoft Project schedules an ASAP task as
+> early as it can, and the project start is where it puts a task nothing else
+> places, so this is the same rule the roots already use — but no file in the
+> estate exercises it. KILN has fifty-eight activities whose predecessors bound
+> only the finish and CALCINER fifty-three, and every one carries a finish
+> bound late enough that its own duration, not the floor, places it: measured
+> across three horizons on both files, not one row moves either way. So the
+> agreement counts are untouched and the choice rests on no oracle.
+>
+> It is therefore reported, by the only thing that knows. `FROM_PROJECT_START`
+> is what an ordinary root reports and a root's placement *is* measured, so the
+> source alone cannot tell the two apart. The forward pass names the rows on
+> `ForwardPass.unbounded_starts`: those with predecessors, none bounding their
+> start, that came to rest on the project start. The plan cannot answer this —
+> it sees that no edge bounds a row's start, not whether a constraint, an
+> actual date or the row's own duration then placed it, and three attempts at
+> deciding it there each named rows the fallback never reached.
+>
+> The question it answers is whether the fallback *changed* the answer, not
+> whether it supplied the bound: the row is placed a second time with the
+> calendar's own floor in the fallback's place, and reported only if the span
+> moves. Every activity in the estate whose predecessors bound only its finish
+> takes the fallback as its start bound — fifty-eight in KILN, fifty-three in
+> CALCINER, none in BOILER — and **not one of them is placed by it**; the
+> finish bound and the row's own duration decide, and the span is the same
+> either way. So `unbounded_starts` is empty on all three files, no result here
+> depends on the guess, and no horizon can move one. Pinned in
+> `tests/test_forward_pass_boiler.py`. Settling the rule itself needs a file
+> with an FF or SF successor long enough for the floor to bind: an ask
+> alongside the others in `docs/goals/ACTIVE.md`, not a claim.
+>
+> The finish side keeps the calendar floor. An unbounded finish is already
+> implied by the start bound plus the duration, and flooring it at the project
+> start drags a lead-placed task back to it: the first attempt at this
+> amendment did exactly that and took BOILER from 384 exact to 328.
+
 **The successor of an inactive task is labelled, not ruled.** The edge from an
 inactive task is dropped, as before, and the successor is reported on
 `Plan.assumed` as `ACTIVITY_SUCCESSOR_OF_INACTIVE`, because the files do not

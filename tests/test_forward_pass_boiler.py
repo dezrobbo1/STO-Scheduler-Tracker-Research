@@ -276,6 +276,27 @@ class StoredDateAgreementTests(unittest.TestCase):
             {"compared": 416, "exact": 247, "first": 6, "inherited": 163},
         )
 
+    def test_no_real_row_rests_on_the_unmeasured_start_fallback(self):
+        """ADR-010's amendment, measured where it would apply.
+
+        KILN and CALCINER carry activities whose predecessors bound only the
+        finish, and BOILER none; the question the amendment leaves open is
+        where such a row starts. On every file here the answer never comes
+        from the fallback -- each row is placed by its own duration against
+        its finish bound -- so no result in the estate rests on the guess, and
+        the horizon cannot move one.
+        """
+
+        for name in FIXTURES:
+            with self.subTest(name):
+                schedule, _, _ = migrate(import_mspdi(str(FIXTURES[name])))
+                start = schedule.project.start or datetime(2026, 8, 1)
+                plan = build_plan(
+                    schedule, (start - timedelta(days=60), start + timedelta(days=365))
+                )
+                result = forward_pass(plan.network, snap_milestones=plan.snap_milestones)
+                self.assertEqual(result.unbounded_starts, ())
+
     def test_calciner(self):
         counts = _agreement(FIXTURES["calciner"])
         self.assertEqual(

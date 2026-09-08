@@ -304,6 +304,18 @@ until the parity checklist passes.
 
 ## Known gaps recorded, not hidden
 
+- **Where an activity starts when its predecessors bound only its finish is
+  assumed, not measured.** Such a row has no bound on its start; it falls back
+  to the project start, which is where Microsoft Project puts an ASAP task
+  nothing else places and what every root already uses, but no file here
+  exercises it — every such row in the estate is placed by its own duration
+  rather than by the floor, on every horizon tried, and the counts behind that
+  are in ADR-010 (amended 2026-09-08) with the run that produced them. The
+  forward pass names any row that does rest on it, on
+  `ForwardPass.unbounded_starts`, and on every real schedule here that list is
+  empty. Settling the rule needs a file with an FF or SF successor long enough
+  for the floor to bind.
+
 - **An elapsed span starts at a working moment and then runs on the clock, and
   only the second half is implemented.** Placing an elapsed duration on the
   continuous calendar reproduces both of CALCINER's elapsed rows exactly and
@@ -428,7 +440,7 @@ pinned in `tests/test_backward_pass.py`.
 
 PR #33 merged five minutes before its review landed, so its three findings
 joined PR #34's five and all eight were answered on the residue branch
-(`docs/history/2026-09-07-post-residue-review.md`), one test each in
+(`docs/history/2026-09-07-post-residue-review.md`), each pinned in
 `tests/test_post_residue_review.py`. Fixed: the progress policy travels on the
 forward pass and the backward pass reads it there, refusing a different one
 by name (`SCHEDULE_POLICY_MISMATCH`) — the corpus digest had been attesting
@@ -446,7 +458,7 @@ allows. No agreement count moved.
 The reviewer's second pass on that commit raised five more, and the
 comprehensive review of 2026-09-07 reproduced every one; all five are fixed
 on the same branch (`docs/history/2026-09-07-post-residue-review.md`, second
-section), one test each. Fixed: an explicit canonical `LagCalendar.SUCCESSOR`
+section), pinned in the same file. Fixed: an explicit canonical `LagCalendar.SUCCESSOR`
 now means the successor's scheduling calendar, and the Microsoft task-or-project
 rule applies only to relationships that inherit the project's policy; a row
 whose measuring calendar has no working time is excluded

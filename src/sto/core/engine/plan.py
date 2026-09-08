@@ -759,7 +759,20 @@ def build_plan(
                 f"assumption {row.code} names activity {row.uid}, which the plan did not schedule"
             )
 
-    project_start = to_seconds(project.start) if project.start is not None else window[0]
+    if project.start is None:
+        # Every floor in this pass is the project start: a task nothing else
+        # places sits there, and so does the start of a task whose
+        # predecessors bound only its finish. Substituting the compiled
+        # window's first coordinate made all of those the caller's choice
+        # rather than the schedule's -- move the window a day and the dates
+        # move a day. A schedule that declares no start has no such anchor,
+        # and the plan says so instead of inventing one.
+        raise PlanError(
+            "PROJECT_START_MISSING",
+            None,
+            "the schedule declares no start, so there is no coordinate to floor a task at",
+        )
+    project_start = to_seconds(project.start)
     status_time: int | None = None
     status_outside = False
     if project.status_date is not None:

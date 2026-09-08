@@ -33,7 +33,9 @@ from calculation_fixture import _activity, _calendar, _document, _relationship
 
 from sto.core.calendar.arithmetic import CompiledIntervals
 from sto.core.engine import (
+    FROM_PROJECT_START,
     BackwardPassError,
+    PlanError,
     CriticalityError,
     ForwardPassError,
     Network,
@@ -44,7 +46,12 @@ from sto.core.engine import (
     float_analysis,
     forward_pass,
 )
-from sto.core.model.enums import LagCalendar, ProgressPolicy, RelationshipType
+from sto.core.model.enums import (
+    ConstraintType,
+    LagCalendar,
+    ProgressPolicy,
+    RelationshipType,
+)
 from sto.core.model.migrate.sto_v011 import migrate
 
 CONTINUOUS = CompiledIntervals.of(((0, 400),))
@@ -197,6 +204,13 @@ def _plan(document):
     schedule, _, _ = migrate(document)
     start = datetime(2026, 1, 5)
     return schedule, build_plan(schedule, (start - timedelta(days=7), start + timedelta(days=60)))
+
+
+def _ff_relationship(uid_, predecessor, successor, lag=0):
+    row = _relationship(uid_, predecessor, successor, lag)
+    row["type"] = "FF"
+    row["source_type_code"] = 0
+    return row
 
 
 def _task(number, *, calendar_ref=None, active=True, **fields):
@@ -495,6 +509,186 @@ class AssumptionsDescribeScheduledRowsOnlyTests(unittest.TestCase):
         )
         self.assertEqual(plan.assumed_by_code(), {"ACTIVITY_RESOURCE_CALENDARS_UNITED": 1})
         self.assertEqual(plan.assumed[0].uid, plan.network.activities[0].uid)
+
+
+class DatesDoNotDependOnTheCompiledWindowTests(unittest.TestCase):
+    """The review that landed after PR #34 merged: a finish-only successor.
+
+    Once a task with predecessors stopped being floored at the project start,
+    an unstarted task whose predecessors are all FF or SF had *no* bound on
+    its start, and the missing side fell back to the calendar's first working
+    moment. That is not a schedule input -- it is wherever the caller chose to
+    compile from -- so such a task moved whenever the horizon widened while
+    nothing about the schedule changed. The start side now falls back to the
+    project start, which is where Microsoft Project puts an ASAP task nothing
+    else places; the finish side still falls back to the calendar, because an
+    unbounded finish is implied by the start bound plus the duration and
+    flooring it at the project start drags a lead-placed task back to it --
+    the fifty-six BOILER rows of ADR-010.
+
+    No file in the estate exercises this: KILN's fifty-eight finish-only rows
+    and CALCINER's fifty-three all carry a finish bound late enough that the
+    duration, not the floor, places them. The agreement counts are unchanged.
+    """
+
+    def _placed(self, calendar_opens: int) -> tuple[int, int]:
+        calendar = CompiledIntervals.of(((calendar_opens, 400),))
+        net = network(
+            activity("A", 10, calendar),
+            # Long enough that starting at the floor already satisfies the
+            # finish bound, which is when the floor decides the answer.
+            activity("B", 200, calendar),
+            relationships=(link("R1", "A", "B", RelationshipType.FF),),
+            project_start=100,
+        )
+        row = forward_pass(net).by_uid()[uid("B")]
+        return row.early_start, row.early_finish
+
+    def test_a_finish_only_successor_sits_at_the_project_start(self):
+        self.assertEqual(self._placed(0), (100, 300))
+
+    def test_and_says_that_is_where_it_came_from(self):
+        """The fallback is an assumption, so the row is not allowed to hide it.
+
+        ADR-010 measured that the project start bounds only a task with no
+        predecessors, and this activity has one. No file in the estate settles
+        where such a row belongs, so the result says where it was placed from
+        and names no relationship as the reason -- the FF edge is satisfied by
+        the span the floor produces and drove nothing.
+        """
+
+        calendar = CompiledIntervals.of(((0, 400),))
+        net = network(
+            activity("A", 10, calendar),
+            activity("B", 200, calendar),
+            relationships=(link("R1", "A", "B", RelationshipType.FF),),
+            project_start=100,
+        )
+        row = forward_pass(net).by_uid()[uid("B")]
+        self.assertEqual(row.source, FROM_PROJECT_START)
+        self.assertIsNone(row.driving_relationship_uid)
+
+    def test_the_pass_reports_the_row_it_placed_on_the_fallback(self):
+        """The rows resting on the guess, named by the only thing that knows.
+
+        Three attempts at deciding this from the plan alone each named rows the
+        fallback never reached -- work already started, a row pinned by a
+        must-start-on constraint, a row a start-no-earlier-than raised past the
+        floor. The plan can see that no edge bounds a row's start; it cannot
+        see what then placed the row. The pass can, and reports it.
+        """
+
+        calendar = CompiledIntervals.of(((0, 400),))
+
+        def placed(**successor) -> tuple:
+            net = network(
+                activity("A", 10, calendar),
+                activity("B", 200, calendar, **successor),
+                relationships=(link("R1", "A", "B", RelationshipType.FF),),
+                project_start=100,
+            )
+            return forward_pass(net).unbounded_starts
+
+        self.assertEqual(placed(), (uid("B"),))
+        # A finish constraint that raises a bound the span already satisfies
+        # changes the row's reported source without moving its start, so
+        # reading the label off the source hid the fallback behind it.
+        self.assertEqual(
+            placed(constraint_type=ConstraintType.FNET, constraint_coordinate=150),
+            (uid("B"),),
+        )
+        # Each of these places the row itself, so the fallback never reaches it.
+        self.assertEqual(
+            placed(constraint_type=ConstraintType.SNET, constraint_coordinate=150), ()
+        )
+        self.assertEqual(
+            placed(constraint_type=ConstraintType.MSO, constraint_coordinate=150), ()
+        )
+        self.assertEqual(placed(actual_start=50, remaining_duration=10), ())
+
+    def test_a_row_the_fallback_supplies_but_does_not_place_is_not_reported(self):
+        """The bound is not the question; whether it changed the answer is.
+
+        Every activity in the estate whose predecessors bound only its finish
+        takes the fallback as its start bound, and not one of them is placed
+        by it: the finish bound and the row's own duration decide, and the
+        answer is the same with the calendar's floor in the fallback's place.
+        Reporting those rows would name a hundred and eleven assumptions the
+        schedule does not rest on.
+        """
+
+        calendar = CompiledIntervals.of(((0, 400),))
+        net = network(
+            activity("A", 10, calendar),
+            # Short enough that the FF bound, not the floor, places it.
+            activity("B", 10, calendar),
+            relationships=(link("R1", "A", "B", RelationshipType.FF, lag=100, lag_calendar=CONTINUOUS),),
+            project_start=100,
+        )
+        result = forward_pass(net)
+        self.assertEqual(result.by_uid()[uid("B")].early_start, 200)
+        self.assertEqual(result.unbounded_starts, ())
+
+    def test_a_row_its_predecessors_place_is_not_reported(self):
+        net = network(
+            activity("A", 10),
+            activity("B", 10),
+            relationships=(link("R1", "A", "B"),),
+            project_start=100,
+        )
+        self.assertEqual(forward_pass(net).unbounded_starts, ())
+
+    def test_an_unsnapped_milestone_keeps_the_edge_that_placed_it(self):
+        """The replay has to place a milestone the way the pass does.
+
+        With ``snap_milestones`` off a milestone sits exactly on its bound,
+        gap or no gap, but the replay went through ``earliest_span``, which
+        always snaps a zero-duration span forward. The project start here lies
+        in a gap that reopens after the finish bound, so the snapped replay
+        landed past the bound, concluded the edge was already satisfied, and
+        cleared a driver that had really placed the row.
+        """
+
+        gapped = CompiledIntervals.of(((0, 5), (20, 400)))
+        net = network(
+            activity("A", 5),
+            activity("M", 0, gapped),
+            relationships=(link("R1", "A", "M", RelationshipType.FF, lag_calendar=CONTINUOUS),),
+            project_start=10,
+        )
+        row = forward_pass(net, snap_milestones=False).by_uid()[uid("M")]
+        self.assertEqual(row.early_start, 15)
+        self.assertEqual(row.driving_relationship_uid, uid("R1"))
+
+    def test_but_a_finish_bound_that_really_moves_it_still_drives(self):
+        calendar = CompiledIntervals.of(((0, 400),))
+        net = network(
+            activity("A", 10, calendar),
+            activity("C", 10, calendar),
+            relationships=(link("R1", "A", "C", RelationshipType.FF, lag=100, lag_calendar=CONTINUOUS),),
+            project_start=100,
+        )
+        row = forward_pass(net).by_uid()[uid("C")]
+        self.assertEqual((row.early_start, row.early_finish), (200, 210))
+        self.assertEqual(row.driving_relationship_uid, uid("R1"))
+
+    def test_and_does_not_move_when_the_window_does(self):
+        self.assertEqual(self._placed(0), self._placed(40))
+        self.assertEqual(self._placed(0), self._placed(80))
+
+    def test_a_lead_placed_task_is_still_not_dragged_to_the_project_start(self):
+        # The rule this must not undo: an FS lead places a task before the
+        # project start, and its unbounded *finish* side must not floor it.
+        net = network(
+            activity("A", 10),
+            activity("C", 10),
+            relationships=(
+                link("R1", "A", "C", RelationshipType.FS, lag=-50, lag_calendar=CONTINUOUS),
+            ),
+            project_start=100,
+        )
+        row = forward_pass(net).by_uid()[uid("C")]
+        self.assertEqual((row.early_start, row.early_finish), (60, 70))
 
 
 class AnEdgeBelowTheFloorIsNotADriverTests(unittest.TestCase):

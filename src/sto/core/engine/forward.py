@@ -167,6 +167,14 @@ class ForwardPass:
     project_finish: int
     deferred_constraints: tuple[DeferredConstraint, ...] = ()
     constraint_violations: tuple[ConstraintViolation, ...] = ()
+    #: Activities this pass placed on the project start although they have
+    #: predecessors -- the rows resting on the fallback ADR-010's amendment
+    #: records as an assumption rather than a measurement. Recorded here
+    #: because only the pass knows it: the plan can see that no edge bounds a
+    #: row's start, but not whether a constraint, an actual date or the row's
+    #: own duration then decided where it went. Three attempts at deciding it
+    #: from the plan alone each named rows the fallback never reached.
+    unbounded_starts: tuple[UUID, ...] = ()
     fingerprint: str = ""
     #: :meth:`Network.fingerprint` of the network this was computed over, so
     #: the backward pass and the float can refuse a result from another one.
@@ -250,6 +258,7 @@ def _bounds(
     incoming: tuple[PlannedRelationship, ...],
     placed: dict[UUID, ActivityTimes],
     base: int,
+    unbounded_floor: int,
 ) -> tuple[int, int, UUID | None, UUID | None]:
     """Lower bounds on start and finish from precedence, and what drove each.
 
@@ -320,11 +329,31 @@ def _bounds(
     # drive it. Clearing the driver here is what keeps the replay in
     # :func:`_driver` honest -- a lead that reaches back past the first
     # working moment of the successor's calendar is a bound with no effect.
-    floor = _calendar_floor(activity)
-    if start_bound is None or start_bound < floor:
-        start_bound, start_driver = floor, None
-    if finish_bound is None or finish_bound < floor:
-        finish_bound, finish_driver = floor, None
+    # Two different floors, for two different situations.
+    #
+    # A *start* side no edge reached -- an activity whose predecessors are all
+    # FF or SF bounds its finish and says nothing about its start -- takes
+    # ``unbounded_floor``, the project start. The calendar's first working
+    # moment is not a schedule input: it is wherever the caller chose to
+    # compile from, so using it here made such an activity's dates move when
+    # the horizon widened while nothing about the schedule changed. The rule
+    # is an assumption rather than a measurement; ADR-010's amendment carries
+    # it, with what the real schedules say about it.
+    #
+    # A side an edge *did* reach, below the first moment the calendar has to
+    # offer, takes the calendar floor and loses its driver: the activity is
+    # placed there whether or not the edge exists, so the edge drove nothing.
+    calendar_floor = _calendar_floor(activity)
+    if start_bound is None:
+        start_bound, start_driver = unbounded_floor, None
+    elif start_bound < calendar_floor:
+        start_bound, start_driver = calendar_floor, None
+    # The finish side takes the calendar's floor when nothing reached it, not
+    # the project start: an unbounded finish is already implied by the start
+    # bound plus the duration, and flooring it at the project start would drag
+    # a lead-placed task back to it -- the fifty-six rows ADR-010 measured.
+    if finish_bound is None or finish_bound < calendar_floor:
+        finish_bound, finish_driver = calendar_floor, None
     return start_bound, finish_bound, start_driver, finish_driver
 
 
@@ -360,6 +389,7 @@ def forward_pass(
     incoming = network.predecessors()
 
     placed: dict[UUID, ActivityTimes] = {}
+    unbounded_starts: list[UUID] = []
     deferred: list[DeferredConstraint] = []
     violations: list[ConstraintViolation] = []
 
@@ -372,13 +402,26 @@ def forward_pass(
             base = None
         else:
             base = network.project_start
+        unbounded_floor = base if base is not None else network.project_start
         start_bound, finish_bound, start_driver, finish_driver = _bounds(
-            activity, incoming[uid], placed, base
+            activity, incoming[uid], placed, base, unbounded_floor
         )
         # The floor the bounds rested on when no edge reached one end, and so
         # the floor the driver replay must use too.
         floor = base if base is not None else _calendar_floor(activity)
         logic_start, logic_finish = start_bound, finish_bound
+        # Whether this row's *start* came from the fallback, decided here,
+        # before any constraint is read. Reading it off the row's ``source``
+        # afterwards was wrong in both directions: a finish constraint that
+        # raises a bound the span already satisfies makes the source say
+        # "constraint" without moving the start, and only a constraint that
+        # actually takes over the start side displaces the fallback.
+        rests_on_fallback = (
+            bool(incoming[uid])
+            and state is ProgressState.NOT_STARTED
+            and start_driver is None
+            and start_bound == network.project_start
+        )
 
         constraint = activity.constraint_type
         coordinate = activity.constraint_coordinate
@@ -414,13 +457,17 @@ def forward_pass(
         elif constraint is ConstraintType.SNET and coordinate is not None:
             if coordinate > start_bound:
                 start_bound, start_driver, constrained = coordinate, None, True
+                # The constraint, not the fallback, decides where it starts.
+                rests_on_fallback = False
         elif constraint is ConstraintType.FNET and coordinate is not None:
             if coordinate > finish_bound:
                 finish_bound, finish_driver, constrained = coordinate, None, True
         elif constraint is ConstraintType.MSO and coordinate is not None:
             pinned = "start"
+            rests_on_fallback = False
         elif constraint is ConstraintType.MFO and coordinate is not None:
             pinned = "finish"
+            rests_on_fallback = False
 
         start, finish = _place(
             activity,
@@ -452,10 +499,30 @@ def forward_pass(
                 finish_driver,
                 floor,
                 network.horizon,
+                snap_milestones,
             )
             source = FROM_RELATIONSHIP if driver is not None else FROM_PROJECT_START
 
         placed[uid] = ActivityTimes(uid, start, finish, driver, source, state)
+        if rests_on_fallback:
+            # Whether the fallback *decided* anything, not merely whether it
+            # supplied the bound: place the activity again with the start
+            # bound the calendar alone would give and see whether the answer
+            # moves. On the real schedules it does not -- every such row is
+            # placed by its own duration against its finish bound -- and a row
+            # the fallback really does place reports it.
+            elsewhere = _place(
+                activity,
+                activity.remaining,
+                _calendar_floor(activity),
+                finish_bound,
+                network.horizon,
+                snap_milestones,
+                pinned,
+                coordinate,
+            )
+            if elsewhere != (start, finish):
+                unbounded_starts.append(uid)
 
     times = tuple(placed[uid] for uid in order)
     project_finish = max((row.early_finish for row in times), default=network.project_start)
@@ -469,6 +536,7 @@ def forward_pass(
         fingerprint=_fingerprint(times, network.project_start, project_finish),
         network_fingerprint=network.fingerprint(),
         progress_policy=progress_policy,
+        unbounded_starts=tuple(unbounded_starts),
     )
 
 
@@ -555,6 +623,7 @@ def _driver(
     finish_driver: UUID | None,
     floor: int,
     horizon: int,
+    snap_milestones: bool,
 ) -> UUID | None:
     """Which bound actually placed the activity.
 
@@ -570,11 +639,30 @@ def _driver(
 
     if finish_driver is None:
         return start_driver
-    if start_driver is None:
-        return finish_driver
-    without_finish = earliest_span(
-        activity.calendar, start_bound, floor, duration, horizon
-    )
+    # No early return when the start side has no driver of its own. The start
+    # bound is still a real coordinate -- the project start, for an activity
+    # whose predecessors bound only its finish -- and if the span it produces
+    # already satisfies the finish bound then the finish edge moved nothing and
+    # did not drive. Crediting it there reported an edge as the reason for a
+    # date the schedule would have produced without it.
+    # The replay has to place the activity the way :func:`_place` would, not
+    # merely find a span: a milestone is a coordinate, and under
+    # ``snap_milestones=False`` it sits exactly where its bound puts it, gap or
+    # no gap. ``earliest_span`` always snaps a zero-duration span forward, so
+    # replaying a milestone through it reported the next working moment and
+    # cleared a driver that had really placed the row.
+    if duration == 0:
+        without_finish: tuple[int, int] | None = None
+        moment = max(start_bound, floor)
+        if snap_milestones:
+            snapped = next_working(activity.calendar, moment)
+            moment = snapped if snapped is not None else None
+        if moment is not None:
+            without_finish = (moment, moment)
+    else:
+        without_finish = earliest_span(
+            activity.calendar, start_bound, floor, duration, horizon
+        )
     if without_finish is not None and without_finish[1] >= finish_bound:
         return start_driver
     return finish_driver
@@ -659,6 +747,7 @@ def _place_reported(
         finish_driver,
         activity.actual_start,
         network.horizon,
+        snap_milestones,
     )
     if driver is not None:
         source = FROM_RELATIONSHIP
