@@ -60,7 +60,7 @@ calendar in the plan, because coordinates from two epochs cannot be compared.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from uuid import UUID
 
@@ -175,6 +175,13 @@ class Plan:
     #: Microsoft Project has no field for it and the migration writes retained
     #: logic, which is what Project does; a Primavera file will carry its own.
     progress_policy: ProgressPolicy = ProgressPolicy.RETAINED_LOGIC
+    #: The hierarchy beneath every summary row, as identifiers: the WBS nodes
+    #: and activities directly under each node, in source order. The rollup
+    #: reads it and nothing else does, but it belongs here rather than in the
+    #: network -- a summary is not scheduled, and the network carries only what
+    #: the passes place. Reading it off the canonical model twice would be two
+    #: chances to disagree about what a summary contains.
+    wbs_children: dict[UUID, tuple[UUID, ...]] = field(default_factory=dict)
     #: The file declared a status date that falls outside the compiled window,
     #: so the network carries none. Reported rather than dropped silently,
     #: because a schedule that loses its status date schedules its remaining
@@ -529,8 +536,13 @@ def build_plan(
                 coordinate = to_seconds(primary.date)
             constraint_type = primary.type
         if activity.secondary_constraint is not None:
-            excluded.append(
-                Excluded(
+            # The row *is* scheduled -- only its second constraint is not
+            # applied -- so this is an assumption about a placed activity and
+            # not a disposition. Recorded as an exclusion it made the same
+            # activity both scheduled and excluded, which is not a partition,
+            # and which a result keyed on the activity cannot store twice.
+            assumed.append(
+                Assumed(
                     activity.uid,
                     "activity",
                     "ACTIVITY_SECONDARY_CONSTRAINT_NOT_APPLIED",
@@ -759,6 +771,17 @@ def build_plan(
                 f"assumption {row.code} names activity {row.uid}, which the plan did not schedule"
             )
 
+    # The hierarchy, in source order, so the rollup answers a summary the same
+    # way twice. Every node appears, including one with nothing beneath it:
+    # the rollup reports those rather than leaving them out.
+    wbs_children: dict[UUID, list[UUID]] = {node.uid: [] for node in schedule.wbs_nodes}
+    for node in schedule.wbs_nodes:
+        if node.parent_uid is not None and node.parent_uid in wbs_children:
+            wbs_children[node.parent_uid].append(node.uid)
+    for activity in schedule.activities:
+        if activity.wbs_uid is not None and activity.wbs_uid in wbs_children:
+            wbs_children[activity.wbs_uid].append(activity.uid)
+
     if project.start is None:
         # Every floor in this pass is the project start: a task nothing else
         # places sits there, and so does the start of a task whose
@@ -799,4 +822,5 @@ def build_plan(
         critical_float_threshold=project.critical_float_threshold_seconds,
         progress_policy=project.progress_policy,
         status_time_outside_window=status_outside,
+        wbs_children={uid: tuple(kids) for uid, kids in wbs_children.items()},
     )

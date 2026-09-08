@@ -228,8 +228,18 @@ the writers that need it live):
    applies, and a negative working lag whose inverse overshoots at a calendar
    gap. Fixed with the counterexamples pinned and an independent feasibility
    check over the returned late dates.
-7. **WBS rollup, the eligibility re-partition and an independent validator**
-   (`S6`).
+7. ~~WBS rollup, the eligibility re-partition and an independent validator~~
+   (`S6`) — done. A summary's span is its children's, measured against the
+   summary dates all three real files store: exact wherever the pass beneath
+   it is, and every disagreement has a disagreeing leaf under it. The
+   validator reads a finished result and checks the relations it claims
+   without calling the passes that produced them, which is the shape of check
+   that would have caught the cross-pass defects `C2` fixed by reading code.
+   The re-partition the frozen plan describes was written against the previous
+   engine's reason codes; none of them exists here and the cascade it wanted
+   removed reaches no row in the estate, so the disposition partition is
+   enforced instead of rebuilt
+   (`docs/history/2026-09-08-rollup-and-validator.md`).
 8. **The per-activity result projection** (`PL3`), which ADR-006 deferred
    until its columns had meanings and a result type to mirror. They do now.
 9. **The calculated schedule, persisted and visible** (`PL13`): stored
@@ -303,6 +313,16 @@ outside the repository. `Shutdown-Tracker-Claude` stays deployed and untouched
 until the parity checklist passes.
 
 ## Known gaps recorded, not hidden
+
+- **Free float can exceed total float across differing calendars.** ADR-008
+  records the relation as a finish-to-start theorem; it is also a
+  single-calendar one. A predecessor whose own calendar is working where its
+  successor's is a gap slips its own working time without moving the
+  successor, so it holds free float the project does not allow — three such
+  rows in KILN, five in CALCINER, six in the day-5 candidate, with no negative
+  float involved. Measured in S6. The validator no longer rests on the
+  theorem: it measures the reported free float by applying it, so it asks the
+  question of every network whatever governs it, this fact included.
 
 - **Where an activity starts when its predecessors bound only its finish is
   assumed, not measured.** Such a row has no bound on its start; it falls back
