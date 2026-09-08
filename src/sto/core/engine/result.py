@@ -86,6 +86,11 @@ class Provenance:
     #: would present discarded progress context as an absence of it.
     status_time: datetime | None = None
     status_time_outside_window: bool = False
+    #: Whether resource calendars were applied when the plan was built. The
+    #: caller's choice, not the file's, and it moves the dates on any schedule
+    #: with assignments; two results under the two rule sets were otherwise
+    #: indistinguishable.
+    resource_calendars_apply: bool = True
     forward_profile: str = FORWARD_PASS_PROFILE
     backward_profile: str = BACKWARD_PASS_PROFILE
     criticality_profile: str = CRITICALITY_PROFILE
@@ -103,6 +108,7 @@ class Provenance:
             "critical_float_threshold": self.critical_float_threshold,
             "status_time": None if self.status_time is None else self.status_time.isoformat(),
             "status_time_outside_window": self.status_time_outside_window,
+            "resource_calendars_apply": self.resource_calendars_apply,
             "forward_profile": self.forward_profile,
             "backward_profile": self.backward_profile,
             "criticality_profile": self.criticality_profile,
@@ -156,6 +162,11 @@ class ActivityResult:
     constraint_override: str | None = None
     #: The code the plan excluded it under, and the assumptions it rests on.
     exclusion_code: str | None = None
+    #: What the code could not say on its own: which predecessor was not
+    #: scheduled, which duration could not be read, which constraint was
+    #: incomplete. Without it a stored exclusion cannot be acted on without
+    #: rerunning the planner version that produced it.
+    exclusion_detail: str | None = None
     assumptions: tuple[str, ...] = ()
 
 
@@ -232,6 +243,7 @@ def project_result(
             else plan.to_datetime(plan.network.status_time)
         ),
         status_time_outside_window=plan.status_time_outside_window,
+        resource_calendars_apply=plan.resource_calendars_apply,
     )
 
     early = forward.by_uid()
@@ -325,6 +337,7 @@ def project_result(
                 uid=excluded.uid,
                 disposition=EXCLUDED,
                 exclusion_code=excluded.code,
+                exclusion_detail=excluded.detail or None,
                 assumptions=tuple(row_assumptions(excluded.uid)),
             )
         )
@@ -385,6 +398,7 @@ def fingerprint_result(result: ScheduleResult) -> str:
                     else str(row.late_driving_relationship_uid),
                     row.constraint_override,
                     row.exclusion_code,
+                    row.exclusion_detail,
                     list(row.assumptions),
                 ]
                 for row in result.activities

@@ -307,24 +307,31 @@ class Workspace:
         )
         already_stored = False
         with self.connect() as conn:
-            existing = repo.find_calculation(
-                conn, version_id=working.version_id, fingerprint=result.fingerprint
+            # Attempted, not looked up first. The same document over the same
+            # window under the same rules is the same answer and the table
+            # stores it once; two callers asking at the same moment both pass a
+            # lookup, and one insert then loses to the constraint. This yields
+            # to the winner instead of colliding with it.
+            calculation_id = repo.insert_calculation(
+                conn,
+                project_id=project_id,
+                version_id=working.version_id,
+                result=result,
             )
-            if existing is not None:
-                # The same document over the same window under the same rules
-                # is the same answer, and the table stores it once. Asking again
-                # is an ordinary thing for a caller to do, so it returns what is
-                # there rather than colliding with it.
+            if calculation_id is None:
+                existing = repo.find_calculation(
+                    conn, version_id=working.version_id, fingerprint=result.fingerprint
+                )
+                assert existing is not None
                 calculation_id = existing["id"]
                 already_stored = True
-            else:
-                calculation_id = repo.insert_calculation(
-                    conn,
-                    project_id=project_id,
-                    version_id=working.version_id,
-                    result=result,
-                )
-                conn.commit()
+            conn.commit()
+        if already_stored:
+            # Reusing a stored calculation is serving it, so it goes through the
+            # same fingerprint check as any other read. Reporting success for
+            # rows altered under it would tell the caller their answer was
+            # stored when it is no longer the answer.
+            self.read_calculation(project_id, calculation_id=calculation_id)
         scheduled = sum(1 for row in result.activities if row.disposition == SCHEDULED)
         return CalculationResult(
             already_stored=already_stored,
@@ -476,6 +483,7 @@ class Workspace:
                     "late_placed_by": row.late_placed_by,
                     "constraint_override": row.constraint_override,
                     "exclusion_code": row.exclusion_code,
+                    "exclusion_detail": row.exclusion_detail,
                     "assumptions": list(row.assumptions),
                     "agrees_with_source": agrees,
                 }
@@ -686,6 +694,7 @@ def _rebuild_result(
         critical_float_threshold=int(header["critical_float_threshold"]),
         status_time=header["status_time"],
         status_time_outside_window=header["status_time_outside_window"],
+        resource_calendars_apply=header["resource_calendars_apply"],
         forward_profile=profiles["forward"],
         backward_profile=profiles["backward"],
         criticality_profile=profiles["criticality"],
@@ -722,6 +731,7 @@ def _rebuild_result(
             late_driving_relationship_uid=row["late_driving_relationship_uid"],
             constraint_override=row["constraint_override"],
             exclusion_code=row["exclusion_code"],
+            exclusion_detail=row["exclusion_detail"],
             assumptions=tuple(row["assumptions"]),
         )
         for row in rows

@@ -119,7 +119,16 @@ def _dt(value: Any) -> datetime | None:
     if isinstance(value, datetime):
         parsed = value
     else:
-        parsed = datetime.fromisoformat(str(value))
+        try:
+            parsed = datetime.fromisoformat(str(value))
+        except ValueError as error:
+            # A coded refusal like every other reason a document will not
+            # migrate. A bare ValueError here escaped the failed-import path
+            # entirely: the batch was never recorded and the caller got a
+            # server fault for a file the importer had accepted.
+            raise MigrationError(
+                f"source date is not a date: {value!r} ({error})"
+            ) from None
     if parsed.utcoffset() is not None:
         raise MigrationError(
             f"timezone-aware source date is outside the canonical wall-clock contract: {value!r}"

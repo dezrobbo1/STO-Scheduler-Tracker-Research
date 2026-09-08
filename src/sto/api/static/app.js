@@ -35,7 +35,13 @@ async function json(url, options) {
   if (!response.ok) {
     let detail = response.statusText;
     try { detail = (await response.json()).detail ?? detail; } catch (error) { /* keep status */ }
-    throw new Error(detail);
+    const failure = new Error(detail);
+    // Carried, because the page has to tell "there is no calculation" from
+    // "there is one and the server refused to serve it". Reporting an
+    // integrity refusal as an absence hides the very thing the check exists
+    // to surface.
+    failure.status = response.status;
+    throw failure;
   }
   return response.json();
 }
@@ -94,16 +100,35 @@ function edgeSummary(edges) {
 // it is what the file said, so a row that moved shows the movement rather than
 // asking the reader to subtract two timestamps in their head.
 
+function instant(value) {
+  // A schedule date is wall-clock with no offset, and `Date.parse` reads one
+  // as a local instant -- so across a daylight-saving transition two
+  // consecutive midnights come out 23 hours apart and every bar on the chart
+  // shifts. The components are read directly into a UTC epoch, where an hour
+  // is always an hour.
+  if (!value) return NaN;
+  const parts = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?/.exec(value);
+  if (!parts) return NaN;
+  return Date.UTC(
+    Number(parts[1]),
+    Number(parts[2]) - 1,
+    Number(parts[3]),
+    Number(parts[4]),
+    Number(parts[5]),
+    Number(parts[6] ?? 0)
+  );
+}
+
 function moments(result) {
   const values = [];
   for (const row of result.activities) {
     for (const key of ["early_start", "early_finish", "source_start", "source_finish"]) {
-      if (row[key]) values.push(Date.parse(row[key]));
+      if (row[key]) values.push(instant(row[key]));
     }
   }
   for (const row of result.summaries) {
     for (const key of ["span_start", "span_finish", "source_start", "source_finish"]) {
-      if (row[key]) values.push(Date.parse(row[key]));
+      if (row[key]) values.push(instant(row[key]));
     }
   }
   const finite = values.filter(Number.isFinite);
@@ -115,8 +140,8 @@ function moments(result) {
 
 function band(scale, start, finish, className) {
   if (!scale || !start) return null;
-  const from = Date.parse(start);
-  const to = Date.parse(finish ?? start);
+  const from = instant(start);
+  const to = instant(finish ?? start);
   if (!Number.isFinite(from) || !Number.isFinite(to)) return null;
   const element = document.createElement("span");
   element.className = className;
@@ -246,17 +271,31 @@ function render(result) {
   summariesSection.hidden = false;
 }
 
+// The project a render belongs to. The selector stays usable while a request
+// is in flight, and two requests can finish out of order, so a response is
+// dropped unless it is still the one being waited for -- otherwise the page
+// shows one project's schedule under another project's name.
+let awaiting = null;
+
 async function show(projectId) {
   provenanceSection.hidden = true;
   rowsSection.hidden = true;
   summariesSection.hidden = true;
   chartSection.hidden = true;
+  awaiting = projectId;
   if (!projectId) return;
   try {
-    render(await json(`/api/projects/${projectId}/calculations/latest`));
+    const result = await json(`/api/projects/${projectId}/calculations/latest`);
+    if (awaiting !== projectId) return;
+    render(result);
     say("");
   } catch (error) {
-    say("No calculation stored for this project yet. " + error.message);
+    if (awaiting !== projectId) return;
+    if (error.status === 404) {
+      say("No calculation stored for this project yet.");
+    } else {
+      say("The stored calculation could not be served: " + error.message, "error");
+    }
   }
 }
 

@@ -38,6 +38,7 @@ CREATE TABLE schedule_calculations (
   critical_float_threshold BIGINT NOT NULL,
   status_time TIMESTAMP,
   status_time_outside_window BOOLEAN NOT NULL DEFAULT FALSE,
+  resource_calendars_apply BOOLEAN NOT NULL DEFAULT TRUE,
   relationship_dispositions JSONB NOT NULL DEFAULT '[]'::jsonb,
   profiles JSONB NOT NULL,
   computed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -67,6 +68,8 @@ COMMENT ON COLUMN schedule_calculations.horizon_start IS
   'The compiled window is the caller''s choice, not the file''s, and a pass over a wider one is a different calculation.';
 COMMENT ON COLUMN schedule_calculations.status_time IS
   'The status date the passes used. NULL with status_time_outside_window true means the source carried one and it was dropped.';
+COMMENT ON COLUMN schedule_calculations.resource_calendars_apply IS
+  'Whether resource calendars were applied when the plan was built. The caller''s choice, and it moves the dates on any schedule with assignments.';
 COMMENT ON COLUMN schedule_calculations.relationship_dispositions IS
   'Edges the plan dropped and edges it kept under a labelled assumption: what decided these dates besides the activities themselves.';
 COMMENT ON COLUMN schedule_calculations.profiles IS
@@ -93,6 +96,7 @@ CREATE TABLE activity_results (
   late_driving_relationship_uid UUID,
   constraint_override TEXT,
   exclusion_code TEXT,
+  exclusion_detail TEXT,
   assumptions TEXT[] NOT NULL DEFAULT '{}',
   PRIMARY KEY (calculation_id, activity_uid),
   CONSTRAINT activity_results_disposition_check

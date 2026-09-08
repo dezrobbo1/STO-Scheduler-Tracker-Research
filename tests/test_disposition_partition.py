@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import os
 import unittest
+import uuid
 from collections import Counter
 from dataclasses import replace
 from datetime import datetime, timedelta
@@ -28,7 +29,7 @@ from pathlib import Path
 from calculation_fixture import _activity, _document
 
 from sto.core.engine import build_plan
-from sto.core.model.entities import Constraint
+from sto.core.model.entities import Constraint, WbsNode
 from sto.core.model.enums import ConstraintType
 from sto.core.model.migrate.sto_v011 import migrate
 from sto.legacy import import_mspdi
@@ -200,6 +201,38 @@ class ThePartitionHoldsWithoutTheRealFilesTests(unittest.TestCase):
         self.assertIn(
             "ACTIVITY_SECONDARY_CONSTRAINT_NOT_APPLIED",
             [row.code for row in plan.assumed if row.uid == first.uid],
+        )
+
+
+    def test_a_summary_lists_its_children_in_source_order(self):
+        """Both kinds together, ordered by the sequence they share.
+
+        Appending every nested summary and then every activity put a summary
+        before an activity the file lists after it, which is neither the source
+        order the field promises nor the order a reader expects.
+        """
+
+        schedule, _, _ = migrate(_document([self._task(1), self._task(3)]))
+        parent = WbsNode(uid=uuid.uuid5(uuid.NAMESPACE_URL, "wbs:parent"), seq=0, name="Parent")
+        nested = WbsNode(
+            uid=uuid.uuid5(uuid.NAMESPACE_URL, "wbs:nested"),
+            seq=2,
+            name="Nested",
+            parent_uid=parent.uid,
+        )
+        first, third = schedule.activities
+        schedule = replace(
+            schedule,
+            wbs_nodes=(parent, nested),
+            activities=(
+                replace(first, wbs_uid=parent.uid, seq=1),
+                replace(third, wbs_uid=parent.uid, seq=3),
+            ),
+        )
+        plan = self._plan(schedule)
+        self.assertEqual(
+            list(plan.wbs_children[parent.uid]),
+            [first.uid, nested.uid, third.uid],
         )
 
     def test_an_inactive_row_is_excluded_and_not_scheduled(self):

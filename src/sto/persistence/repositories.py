@@ -239,8 +239,12 @@ def insert_calculation(
     project_id: uuid.UUID,
     version_id: uuid.UUID,
     result: Any,
-) -> uuid.UUID:
-    """Store one engine run: the header, then its rows.
+) -> uuid.UUID | None:
+    """Store one engine run: the header, then its rows, or ``None``.
+
+    ``None`` means an identical run was already stored -- same version, same
+    fingerprint -- which the unique constraint enforces and which two
+    overlapping callers can both reach. The caller looks the winner up.
 
     Written in one statement per table rather than one per row: a real schedule
     is a couple of thousand activities, and the caller holds a transaction
@@ -254,8 +258,9 @@ def insert_calculation(
           (project_id, version_id, canonical_hash, result_fingerprint, epoch,
            horizon_start, horizon_finish, progress_policy,
            critical_float_threshold, status_time, status_time_outside_window,
-           relationship_dispositions, profiles)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+           resource_calendars_apply, relationship_dispositions, profiles)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (version_id, result_fingerprint) DO NOTHING
         RETURNING id
         """,
         (
@@ -270,6 +275,7 @@ def insert_calculation(
             provenance.critical_float_threshold,
             provenance.status_time,
             provenance.status_time_outside_window,
+            provenance.resource_calendars_apply,
             Jsonb(
                 [
                     {
@@ -293,7 +299,11 @@ def insert_calculation(
             ),
         ),
     ).fetchone()
-    assert row is not None
+    if row is None:
+        # Another caller stored this exact answer between any lookup and here.
+        # A calculation is deterministic, so the row that won is the row this
+        # one would have written; the race is not an error.
+        return None
     calculation_id = row["id"]
 
     with conn.cursor() as cursor:
@@ -306,9 +316,9 @@ def insert_calculation(
                critical, progress_state, placed_by,
                driving_relationship_uid, late_placed_by,
                late_driving_relationship_uid, constraint_override,
-               exclusion_code, assumptions)
+               exclusion_code, exclusion_detail, assumptions)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                    %s, %s, %s, %s, %s, %s)
+                    %s, %s, %s, %s, %s, %s, %s)
             """,
             [
                 (
@@ -332,6 +342,7 @@ def insert_calculation(
                     activity.late_driving_relationship_uid,
                     activity.constraint_override,
                     activity.exclusion_code,
+                    activity.exclusion_detail,
                     list(activity.assumptions),
                 )
                 for activity in result.activities

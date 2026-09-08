@@ -187,6 +187,11 @@ class Plan:
     #: because a schedule that loses its status date schedules its remaining
     #: work from its logic and looks like an ordinary un-progressed plan.
     status_time_outside_window: bool = False
+    #: Whether resource calendars were applied to activity calendars. It is the
+    #: caller's choice and not the file's, and it changes the dates on any
+    #: schedule with assignments -- so a result that did not record it could
+    #: not say which rules produced it.
+    resource_calendars_apply: bool = True
 
     def to_datetime(self, coordinate: int) -> datetime:
         return self.epoch + timedelta(seconds=coordinate)
@@ -781,13 +786,21 @@ def build_plan(
     # The hierarchy, in source order, so the rollup answers a summary the same
     # way twice. Every node appears, including one with nothing beneath it:
     # the rollup reports those rather than leaving them out.
+    # Children of both kinds are collected together and ordered by the source
+    # sequence they share. Appending every nested summary and then every
+    # activity put a summary before an activity the file lists after it, which
+    # is not the source order this field promises and not the order a reader
+    # of the hierarchy expects.
     wbs_children: dict[UUID, list[UUID]] = {node.uid: [] for node in schedule.wbs_nodes}
+    gathered: dict[UUID, list[tuple[int, UUID]]] = {node.uid: [] for node in schedule.wbs_nodes}
     for node in schedule.wbs_nodes:
-        if node.parent_uid is not None and node.parent_uid in wbs_children:
-            wbs_children[node.parent_uid].append(node.uid)
+        if node.parent_uid is not None and node.parent_uid in gathered:
+            gathered[node.parent_uid].append((node.seq, node.uid))
     for activity in schedule.activities:
-        if activity.wbs_uid is not None and activity.wbs_uid in wbs_children:
-            wbs_children[activity.wbs_uid].append(activity.uid)
+        if activity.wbs_uid is not None and activity.wbs_uid in gathered:
+            gathered[activity.wbs_uid].append((activity.seq, activity.uid))
+    for parent, rows in gathered.items():
+        wbs_children[parent] = [uid for _, uid in sorted(rows, key=lambda row: (row[0], str(row[1])))]
 
     if project.start is None:
         # Every floor in this pass is the project start: a task nothing else
@@ -829,5 +842,6 @@ def build_plan(
         critical_float_threshold=project.critical_float_threshold_seconds,
         progress_policy=project.progress_policy,
         status_time_outside_window=status_outside,
+        resource_calendars_apply=resource_calendars_apply,
         wbs_children={uid: tuple(kids) for uid, kids in wbs_children.items()},
     )

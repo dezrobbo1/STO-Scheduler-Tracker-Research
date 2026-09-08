@@ -418,6 +418,72 @@ class WhatElseDecidedTheseDatesTests(unittest.TestCase):
             fingerprint_result(replace(result, activities=tuple(rows))),
         )
 
+    def test_the_calendar_policy_is_part_of_what_produced_the_answer(self):
+        """A caller's choice that moves the dates, and was not recorded."""
+
+        document = _document([_task(1), _task(2)])
+        schedule, _, _ = migrate(document)
+        start = schedule.project.start
+        horizon = (start - timedelta(days=90), start + timedelta(days=365))
+
+        def project(apply_resource_calendars):
+            plan = build_plan(
+                schedule, horizon, resource_calendars_apply=apply_resource_calendars
+            )
+            forward = forward_pass(
+                plan.network,
+                snap_milestones=plan.snap_milestones,
+                progress_policy=plan.progress_policy,
+            )
+            backward = backward_pass(plan.network, forward, snap_milestones=plan.snap_milestones)
+            floats = float_analysis(
+                plan.network, forward, backward, threshold=plan.critical_float_threshold
+            )
+            rollup = roll_up(
+                plan.wbs_children,
+                {
+                    uid: (row.early_start, row.early_finish)
+                    for uid, row in forward.by_uid().items()
+                },
+            )
+            return project_result(
+                plan,
+                forward,
+                backward,
+                floats,
+                rollup,
+                canonical_hash=canonical_sha256(encode_schedule(schedule)),
+                horizon=horizon,
+            )
+
+        applied = project(True)
+        ignored = project(False)
+        self.assertTrue(applied.provenance.resource_calendars_apply)
+        self.assertFalse(ignored.provenance.resource_calendars_apply)
+        # This fixture has no assignments, so the two rule sets give identical
+        # dates -- which is exactly the case a stored result could not tell
+        # apart before, and the fingerprint now can.
+        self.assertNotEqual(applied.fingerprint, ignored.fingerprint)
+
+    def test_an_exclusion_carries_what_its_code_cannot_say(self):
+        """The predecessor named, not just the fact of a missing one."""
+
+        first, first_ext = _task(1)
+        first["duration"] = {"raw": "P1M", "seconds": None, "parse_status": "unsupported"}
+        document = _document(
+            [(first, first_ext), _task(2)], relationships=[_relationship(1, 1, 2)]
+        )
+        _, result = _projected_document(document)
+        cascaded = [
+            row
+            for row in result.activities
+            if row.exclusion_code == "ACTIVITY_PREDECESSOR_NOT_SCHEDULED"
+        ]
+        self.assertTrue(cascaded, "the fixture no longer cascades an exclusion")
+        for row in cascaded:
+            with self.subTest(str(row.uid)):
+                self.assertTrue(row.exclusion_detail, "the code alone cannot name the predecessor")
+
 class TheProjectionAnswersForEveryRowTests(unittest.TestCase):
     """No database needed: the assembly itself."""
 
@@ -582,21 +648,58 @@ class AStoredCalculationComesBackTests(unittest.TestCase):
             ).fetchone()
         self.assertEqual(rows["n"], 1)
 
-    def test_the_database_still_refuses_a_duplicate_written_directly(self):
-        """The guard the workspace now avoids tripping is still there."""
+    def test_a_duplicate_insert_yields_to_the_row_that_is_there(self):
+        """Two callers can reach the insert; one of them has to lose politely.
+
+        The uniqueness constraint is still what enforces one row per answer.
+        What changed is that losing to it is not an exception any more: the
+        winner is the row this caller would have written, so the insert
+        reports that it wrote nothing and the caller looks it up.
+        """
 
         from sto.persistence import repositories as repo
 
         workspace, project_id = self._imported()
         stored = workspace.calculate(project_id)
         _, result = _projected(FIXTURE)
-        with self.connect() as conn, self.assertRaises(psycopg.errors.UniqueViolation):
-            repo.insert_calculation(
-                conn,
-                project_id=project_id,
-                version_id=stored.version_id,
-                result=result,
+        with self.connect() as conn:
+            self.assertIsNone(
+                repo.insert_calculation(
+                    conn,
+                    project_id=project_id,
+                    version_id=stored.version_id,
+                    result=result,
+                )
             )
+            found = repo.find_calculation(
+                conn, version_id=stored.version_id, fingerprint=result.fingerprint
+            )
+            rows = conn.execute(
+                "SELECT count(*) AS n FROM schedule_calculations WHERE version_id = %s",
+                (stored.version_id,),
+            ).fetchone()
+        self.assertEqual(found["id"], stored.calculation_id)
+        self.assertEqual(rows["n"], 1)
+
+    def test_reusing_a_calculation_checks_the_rows_it_is_reusing(self):
+        """Reuse is service, so it goes through the fingerprint check."""
+
+        from sto.scheduling.working_schedule import IntegrityError
+
+        workspace, project_id = self._imported()
+        stored = workspace.calculate(project_id)
+        with self.connect() as conn:
+            conn.execute(
+                """
+                UPDATE activity_results
+                SET early_finish = early_finish + interval '1 day'
+                WHERE calculation_id = %s AND disposition = 'scheduled'
+                """,
+                (stored.calculation_id,),
+            )
+            conn.commit()
+        with self.assertRaises(IntegrityError):
+            workspace.calculate(project_id)
 
 
     def test_a_stored_calculation_is_checked_against_its_own_rows(self):

@@ -127,6 +127,8 @@ class ActivityRow(BaseModel):
     #: A hard constraint that overrode precedence, and what the logic wanted.
     constraint_override: str | None = None
     exclusion_code: str | None = None
+    #: What the code alone cannot say: which predecessor, which duration.
+    exclusion_detail: str | None = None
     assumptions: list[str] = []
     agrees_with_source: bool | None = None
 

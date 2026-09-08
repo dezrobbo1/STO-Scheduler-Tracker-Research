@@ -66,6 +66,32 @@ class ThePageIsSelfConsistentTests(unittest.TestCase):
             with self.subTest(asset):
                 self.assertTrue((STATIC / asset).is_file(), f"{asset} is not in {STATIC}")
 
+    def test_it_does_not_read_a_schedule_date_as_a_local_instant(self):
+        """A schedule date is wall-clock with no offset.
+
+        `Date.parse` reads one in the browser's zone, so across a
+        daylight-saving transition two consecutive midnights come out 23 hours
+        apart and every bar on the chart shifts. This is a static check because
+        the suite has no browser; what it can say is that the call is not
+        there and the neutral reader is.
+        """
+
+        code = re.sub(r"//[^\n]*", "", self.script)
+        self.assertNotIn("Date.parse(", code)
+        self.assertIn("Date.UTC(", code)
+
+    def test_it_tells_an_absent_calculation_from_a_refused_one(self):
+        """Reporting an integrity refusal as an absence hides the refusal."""
+
+        self.assertIn("error.status === 404", self.script)
+        self.assertIn("failure.status = response.status", self.script)
+
+    def test_it_drops_a_response_for_a_project_no_longer_selected(self):
+        """Two requests can finish out of order while the selector stays live."""
+
+        self.assertIn("awaiting", self.script)
+        self.assertIn("if (awaiting !== projectId) return;", self.script)
+
     def test_every_element_the_script_reaches_for_exists_in_the_page(self):
         wanted = set(re.findall(r'querySelector\("#([\w-]+)', self.script))
         self.assertTrue(wanted, "the script selects nothing; this test would pass vacuously")
