@@ -11,13 +11,20 @@ import uuid
 from contextlib import asynccontextmanager
 from typing import Any
 
+from pathlib import Path
+
 from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 #: The largest upload this API will read. A schedule of CALCINER's size is
 #: fourteen megabytes; the legacy workspace already refused past sixty-four,
 #: and reading an unbounded body into memory on the one worker that also does
 #: the parsing is how a single request takes the process with it.
 MAX_UPLOAD_BYTES = 64 * 1024 * 1024
+
+#: The read-only page, beside this module so that packaging carries it.
+STATIC_DIR = Path(__file__).with_name("static")
 
 from sto.core.model.migrate.sto_v011 import MigrationError
 from sto.persistence import repositories as repo
@@ -240,6 +247,17 @@ def create_app(workspace: Workspace | None = None) -> FastAPI:
             document=document,
         )
 
+    @app.get("/", include_in_schema=False)
+    def index() -> Any:
+        """The read-only view of a stored calculation.
+
+        Mounted rather than templated: the page is three static files that
+        fetch two routes, so what it can show is exactly what the API returns
+        and there is no second rendering of the same numbers to disagree.
+        """
+
+        return FileResponse(STATIC_DIR / "index.html")
+
     @app.get("/api/projects/{project_id}/versions", response_model=list[schemas.ScheduleHead])
     def list_versions(project_id: uuid.UUID, workspace: Workspace = Depends(ws)) -> Any:
         with workspace.connect() as conn:
@@ -248,6 +266,7 @@ def create_app(workspace: Workspace | None = None) -> FastAPI:
             rows = repo.list_versions(conn, project_id=project_id)
         return [_head(row) for row in rows]
 
+    app.mount("/", StaticFiles(directory=STATIC_DIR), name="static")
     return app
 
 
