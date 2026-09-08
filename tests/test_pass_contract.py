@@ -339,6 +339,71 @@ class CalendarTailSchedulingConsequencesTests(unittest.TestCase):
             20,
         )
 
+    def test_snapped_milestone_stops_before_its_calendars_exclusive_tail(self):
+        scheduling = CompiledIntervals.of(((0, 5), (10, 15)))
+        lag_calendar = CompiledIntervals.of(((0, 5),))
+        successor_calendar = CompiledIntervals.of(((0, 20),))
+        net = network(
+            activity("P", 0, scheduling),
+            activity("S", 0, successor_calendar),
+            relationships=(
+                link("R1", "P", "S", RelationshipType.SS, -5, lag_calendar),
+            ),
+            project_start=5,
+            horizon=20,
+        )
+        forward = forward_pass(net, snap_milestones=True)
+        predecessor = float_analysis(
+            net,
+            forward,
+            backward_pass(net, forward, snap_milestones=True),
+        ).by_uid()[uid("P")]
+
+        self.assertEqual(forward.by_uid()[uid("P")].early_start, 10)
+        self.assertEqual(predecessor.free_float, 4)
+        self.assertEqual(
+            forward_pass(
+                network(
+                    activity("P", 0, scheduling),
+                    activity("S", 0, successor_calendar),
+                    relationships=(
+                        link(
+                            "R1",
+                            "P",
+                            "S",
+                            RelationshipType.SS,
+                            -5,
+                            lag_calendar,
+                        ),
+                    ),
+                    project_start=14,
+                    horizon=20,
+                ),
+                snap_milestones=True,
+            ).by_uid()[uid("P")].early_start,
+            14,
+        )
+        with self.assertRaisesRegex(ForwardPassError, "SCHEDULE_HORIZON_EXCEEDED"):
+            forward_pass(
+                network(
+                    activity("P", 0, scheduling),
+                    activity("S", 0, successor_calendar),
+                    relationships=(
+                        link(
+                            "R1",
+                            "P",
+                            "S",
+                            RelationshipType.SS,
+                            -5,
+                            lag_calendar,
+                        ),
+                    ),
+                    project_start=15,
+                    horizon=20,
+                ),
+                snap_milestones=True,
+            )
+
     def test_every_relationship_type_and_lag_sign_uses_the_same_bounded_contract(self):
         scheduling = CompiledIntervals.of(((0, 20),))
         lag_calendar = CompiledIntervals.of(((0, 12),))

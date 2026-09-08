@@ -75,7 +75,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from uuid import UUID
 
-from sto.core.calendar.arithmetic import CompiledIntervals, latest_span, working_between
+from sto.core.calendar.arithmetic import (
+    CompiledIntervals,
+    latest_span,
+    prev_working_start,
+    working_between,
+)
 from sto.core.hashing import canonical_sha256
 
 from .backward import BackwardPass
@@ -87,12 +92,15 @@ from .network import (
     lag_calendar_for,
     unshift_lag,
 )
+from .progress import ProgressState
 
 #: Named on the fingerprint so a stored answer says which rule produced it.
 #: Version two hashes the two component floats as well as their minimum, so
 #: two analyses whose spans straddle the calendar differently do not match.
-#: Version three bounds the lag inverse by the caller's network horizon rather
-#: than silently substituting the lag calendar's final productive coordinate.
+#: Version three bounds the lag inverse by the caller's latest valid placement
+#: rather than silently substituting the lag calendar's final productive
+#: coordinate. That placement reserves a complete remaining span and, when the
+#: forward pass snapped zero-length spans, remains on a productive coordinate.
 CRITICALITY_PROFILE = "sto-criticality-v3"
 
 
@@ -321,9 +329,26 @@ def float_analysis(
     movement_limits: dict[UUID, tuple[int, int]] = {}
     for activity in network.activities:
         if activity.remaining == 0:
-            # An unsnapped milestone is a coordinate and consumes no calendar,
-            # so it can occupy the horizon itself without overrunning it.
-            movement_limits[activity.uid] = (network.horizon, network.horizon)
+            # An unsnapped zero-length span is a coordinate and consumes no
+            # calendar, so it can occupy the horizon itself. A snapped one has
+            # a smaller domain: the forward pass applies ``next_working`` to
+            # its bound, and the last coordinate that operation can place is
+            # the latest working start at or before the horizon. In particular,
+            # an interval's exclusive finish is not a valid snapped milestone.
+            limit = network.horizon
+            if (
+                forward.snap_milestones
+                and early[activity.uid].state is not ProgressState.COMPLETE
+            ):
+                snapped_limit = prev_working_start(activity.calendar, limit)
+                if snapped_limit is None:
+                    raise CriticalityError(
+                        "SCHEDULE_HORIZON_EXCEEDED",
+                        activity.uid,
+                        "no snapped milestone coordinate fits inside the network horizon",
+                    )
+                limit = snapped_limit
+            movement_limits[activity.uid] = (limit, limit)
             continue
         floor = activity.calendar.first
         latest = (

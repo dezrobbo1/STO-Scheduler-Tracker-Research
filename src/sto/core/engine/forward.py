@@ -191,6 +191,11 @@ class ForwardPass:
     #: -- so the backward pass reads it from here rather than defaulting it a
     #: second time, and refuses a caller who names a different one.
     progress_policy: ProgressPolicy = ProgressPolicy.RETAINED_LOGIC
+    #: Whether zero-length spans were moved to the next productive coordinate.
+    #: Criticality carries the same placement domain into free float: a
+    #: snapped milestone cannot claim movement to a coordinate from which the
+    #: forward pass could no longer place it.
+    snap_milestones: bool = False
 
     def by_uid(self) -> dict[UUID, ActivityTimes]:
         return {row.uid: row for row in self.times}
@@ -555,6 +560,7 @@ def forward_pass(
         network_fingerprint=network.fingerprint(),
         progress_policy=progress_policy,
         unbounded_starts=tuple(unbounded_starts),
+        snap_milestones=snap_milestones,
     )
 
 
