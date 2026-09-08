@@ -41,6 +41,9 @@ class Reconciliation(BaseModel):
     rekeyed: int
     missing: int
     guid_changed: int
+    #: Rows whose GUID had already been seen in the same document, resolved on
+    #: their own source UID rather than conflated with the row that came first.
+    guid_duplicated_in_snapshot: int = 0
 
 
 class ImportResponse(BaseModel):
@@ -53,6 +56,9 @@ class ImportResponse(BaseModel):
     reconciliation: Reconciliation
     project_identity_mismatch: bool
     declared_project_guid: str | None
+    #: What the importer warned about while accepting the file. An accepted
+    #: import is not necessarily a clean one, and the caller is told which.
+    warnings: list[str] = []
 
 
 class ScheduleResponse(BaseModel):

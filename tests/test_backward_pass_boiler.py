@@ -288,7 +288,9 @@ class FloatRuleTests(unittest.TestCase):
 
         self.assertEqual(self.boiler.stored_total_float_agreement()["working_min"], 449)
         kiln = self.kiln.stored_total_float_agreement()
-        self.assertEqual((kiln["working_min"], kiln["compared"]), (417, 417))
+        # 416 of 416 since C1: the rule still explains every row it is asked
+        # about, and KILN's manually scheduled leaf is no longer one of them.
+        self.assertEqual((kiln["working_min"], kiln["compared"]), (416, 416))
         calciner = self.calciner.stored_total_float_agreement()
         self.assertEqual((calciner["working_min"], calciner["compared"]), (1763, 1763))
 
@@ -300,7 +302,7 @@ class FloatRuleTests(unittest.TestCase):
         boiler = self.boiler.stored_free_float_agreement()
         self.assertEqual((boiler["agreed"], boiler["compared"]), (448, 451))
         kiln = self.kiln.stored_free_float_agreement()
-        self.assertEqual((kiln["agreed"], kiln["compared"]), (407, 417))
+        self.assertEqual((kiln["agreed"], kiln["compared"]), (407, 416))
         calciner = self.calciner.stored_free_float_agreement()
         self.assertEqual((calciner["agreed"], calciner["compared"]), (1730, 1763))
 
@@ -426,7 +428,8 @@ class NotClaimedTests(unittest.TestCase):
         """
 
         expected = {
-            "kiln": (417, 0, 4, 304),
+            # KILN's cohort is one row smaller since C1 excluded its manual leaf.
+            "kiln": (416, 0, 4, 304),
             "calciner": (1763, 1572, 1488, 1689),
         }
         for name, (compared_expected, late_expected, total_expected, free_expected) in (

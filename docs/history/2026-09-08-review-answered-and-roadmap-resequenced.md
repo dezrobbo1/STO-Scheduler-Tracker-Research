@@ -27,8 +27,8 @@ Checked here on 2026-09-08 before anything was changed:
 - The reviewer's second pass on `4271abd` had landed seventeen minutes after
   that commit and its five threads were unanswered; they are the review's
   F07–F11 and every one reproduced.
-- The branch ran 502 tests with no skips against the real schedules and the
-  upstream corpus.
+- The branch ran with no skips against the real schedules and the upstream
+  corpus.
 - The day-5 candidate, which the review could not obtain and therefore marked
   every claim resting on it "not re-verified", is present on this machine. Its
   off-machine copy is still owed (`DEP-DAY5-BACKUP`).

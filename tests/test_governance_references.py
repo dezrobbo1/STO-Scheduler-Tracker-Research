@@ -224,6 +224,39 @@ class SliceCitationTests(unittest.TestCase):
             "prints them; name the slices instead:\n  " + "\n  ".join(offences),
         )
 
+    def test_no_document_counts_the_test_suite(self):
+        """A test count in prose is stale the next time a test is added.
+
+        ``AGENTS.md`` names tests in the same breath as files and cases. This
+        one covers every document, `docs/adr/` and `docs/history/` included:
+        a count of *this repository's* tests is never evidence about a real
+        file, so unlike a slice count it does not age into a true historical
+        statement -- it ages into a wrong one, and a reader chasing it runs a
+        command that disagrees.
+        """
+
+        counted = re.compile(r"\b\d+\s+tests?\b", re.IGNORECASE)
+        offences: list[str] = []
+        for path in sorted(REPO_ROOT.glob("docs/**/*.md")) + [
+            REPO_ROOT / "AGENTS.md",
+            REPO_ROOT / "README.md",
+        ]:
+            if path.name == "CONSOLIDATION-PLAN.md":
+                # Frozen on 2026-09-02 and explicitly not maintained; its own
+                # preamble lists the counts in it that have already gone stale.
+                continue
+            for match in counted.finditer(path.read_text(encoding="utf-8")):
+                text = path.read_text(encoding="utf-8")
+                line = text[: match.start()].count("\n") + 1
+                offences.append(
+                    f"{path.relative_to(REPO_ROOT)}:{line} counts {match.group(0)!r}"
+                )
+        self.assertEqual(
+            offences,
+            [],
+            "name the command that counts them instead:\n  " + "\n  ".join(offences),
+        )
+
     def test_the_guard_catches_a_count_it_should(self):
         counted = self._counted()
         self.assertTrue(counted.search("Phase 1 carries eleven slices"))

@@ -118,9 +118,13 @@ def create_app(workspace: Workspace | None = None) -> FastAPI:
                 rekeyed=result.reconciliation.rekeyed,
                 missing=result.reconciliation.missing,
                 guid_changed=result.reconciliation.guid_changed,
+                guid_duplicated_in_snapshot=(
+                    result.reconciliation.guid_duplicated_in_snapshot
+                ),
             ),
             project_identity_mismatch=result.project_identity_mismatch,
             declared_project_guid=result.declared_project_guid,
+            warnings=list(result.warnings),
         )
 
     @app.get("/api/projects/{project_id}/schedule", response_model=schemas.ScheduleResponse)

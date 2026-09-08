@@ -99,11 +99,28 @@ class ReconciliationEntry:
 
 
 @dataclass(frozen=True, slots=True)
+class DuplicateGuid:
+    """Two rows of one snapshot carrying one GUID, and the second of them.
+
+    A GUID identifies a row within a document. Two rows sharing one is a
+    source defect, and it is reported rather than followed: the second row
+    resolves on its own external UID, keeps its own canonical identity, and
+    appears here so the import can say what it saw.
+    """
+
+    kind: EntityKind
+    guid: str
+    external_uid: str
+
+
+@dataclass(frozen=True, slots=True)
 class ReconciliationReport:
     """What a re-import did to identity, in numbers a planner can check."""
 
     schedule_id: str
     entries: tuple[ReconciliationEntry, ...] = ()
+    #: Rows whose GUID had already been seen in the same document.
+    duplicate_guids: tuple[DuplicateGuid, ...] = ()
 
     def _count(self, outcome: ReconciliationOutcome) -> int:
         return sum(1 for entry in self.entries if entry.outcome is outcome)
@@ -128,6 +145,10 @@ class ReconciliationReport:
     def guid_changed(self) -> int:
         return sum(1 for entry in self.entries if entry.guid_changed)
 
+    @property
+    def guid_duplicated_in_snapshot(self) -> int:
+        return len(self.duplicate_guids)
+
     def of_kind(self, kind: EntityKind) -> tuple[ReconciliationEntry, ...]:
         return tuple(entry for entry in self.entries if entry.kind is kind)
 
@@ -139,6 +160,15 @@ class ReconciliationReport:
             "missing": self.missing,
             "rekeyed": self.rekeyed,
             "guid_changed": self.guid_changed,
+            "guid_duplicated_in_snapshot": self.guid_duplicated_in_snapshot,
+            "duplicate_guids": [
+                {
+                    "kind": str(row.kind),
+                    "guid": row.guid,
+                    "external_uid": row.external_uid,
+                }
+                for row in self.duplicate_guids
+            ],
             "entries": [
                 {
                     "kind": str(entry.kind),
@@ -175,10 +205,39 @@ class IdentityMap:
     retired_external: dict[tuple[str, str], int] = field(default_factory=dict)
     #: uid -> the external_uid it was last seen under
     external_of: dict[uuid.UUID, str] = field(default_factory=dict)
+    #: (kind, GUID) pairs that two rows of one document have carried. A GUID
+    #: identifies one row; once two have claimed it, it can never again say
+    #: which row is which, so it is retired from GUID reconciliation for good
+    #: rather than for the import that noticed. Persisted, because the import
+    #: that renumbers one of those rows is a later one.
+    ambiguous_guids: set[tuple[str, str]] = field(default_factory=set)
     #: uid -> the GUID it was last seen with. ``by_guid`` keeps every GUID a
     #: row has ever carried, so an older export can still rekey it; this holds
     #: only the current one, so a change can be noticed.
     guid_of: dict[uuid.UUID, str] = field(default_factory=dict)
+
+    def quarantine_guid(self, kind: EntityKind | str, guid: str | None) -> None:
+        """Retire a GUID two rows of one document claimed, and forget it.
+
+        Both the mapping it may already have made and any future one: a GUID
+        that has identified two rows cannot be evidence about either, and a
+        later import renumbering one of them would otherwise be rekeyed onto
+        whichever appeared first.
+        """
+
+        guid = normalise_guid(guid)
+        if guid is None:
+            return
+        key = (str(kind), guid)
+        self.ambiguous_guids.add(key)
+        self.by_guid.pop(key, None)
+        for uid, held in list(self.guid_of.items()):
+            if held == guid:
+                del self.guid_of[uid]
+
+    def guid_is_ambiguous(self, kind: EntityKind | str, guid: str | None) -> bool:
+        guid = normalise_guid(guid)
+        return guid is not None and (str(kind), guid) in self.ambiguous_guids
 
     def clone(self) -> IdentityMap:
         """Return an independent copy suitable for transactional migration."""
@@ -198,6 +257,10 @@ class IdentityMap:
         kind_key = str(kind)
         external_uid = str(external_uid)
         guid = normalise_guid(guid)
+        if guid is not None and (kind_key, guid) in self.ambiguous_guids:
+            # Two rows of one document have carried it. It cannot identify
+            # either of them, so it is not learned and not matched on.
+            guid = None
 
         known = self.by_external.get((kind_key, external_uid))
         if known is not None:
@@ -326,6 +389,7 @@ class IdentityMap:
                 for key, generation in sorted(self.retired_external.items())
             },
             "guid_of": {str(uid): guid for uid, guid in sorted(self.guid_of.items())},
+            "ambiguous_guids": [SEP.join(key) for key in sorted(self.ambiguous_guids)],
         }
 
     @classmethod
@@ -364,6 +428,13 @@ class IdentityMap:
             retired_external=_split_int(
                 payload.get("retired_external", {})  # type: ignore[arg-type]
             ),
+            ambiguous_guids={
+                (kind, normalise_guid(rest) or rest)
+                for kind, _, rest in (
+                    str(entry).partition(SEP)
+                    for entry in payload.get("ambiguous_guids", ())  # type: ignore[union-attr]
+                )
+            },
         )
         identity.external_of = {uid: external for (_, external), uid in by_external.items()}
         # Maps written before ``guid_of`` existed have only ``by_guid``. A row
