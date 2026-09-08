@@ -103,3 +103,31 @@ and `ACTIVITY_DURATION_ELAPSED` stays a labelled assumption.
 
 This is the fourth claim in this estate to be withdrawn after measurement
 rather than shipped.
+
+## The slice's own review
+
+Three findings, each one a place where a fix above stopped one step short.
+
+**Completion was released in one pass out of three.** F12's fix dropped the
+edge into completed work while computing the forward bound, and left
+`relationship_binds` answering "yes" for a complete successor — so the backward
+pass and the free float went on consuming an edge the forward pass had set
+aside, and the completed case placed going forward and refused coming back. The
+test written for it only looked at the forward pass. Completion is part of the
+shared applicability decision now, where all three calculations read it.
+
+**A completed row returned before its constraint was deferred.** F13's fix
+handled work that has started, but a complete activity leaves the loop at the
+top, so its constraint appeared in the forward pass's deferred list and not the
+backward pass's — the same inconsistency the fix existed to remove, one state
+along. The deferral is recorded before the early return.
+
+**And the inverse required the anchor itself to be reachable.** Walking a
+negative lag back from an anchor can run off the beginning of the calendar
+while a later coordinate has the room: on a continuous calendar a lead of one
+from an anchor of zero is unreachable at zero and reachable at one, and the
+forward pass places exactly that schedule. The first coordinate with the room
+is now found by halving — stepping walked past it — and the search starts
+there rather than at the anchor. Re-verified over five calendars and both
+signs: no overshoot, nothing wrongly refused, and the only coordinates it
+declines to reach lie beyond the compiled calendar, where nothing is placed.

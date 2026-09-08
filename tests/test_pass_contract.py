@@ -174,6 +174,43 @@ class AReleasedEdgeCannotRefuseTheScheduleTests(unittest.TestCase):
             (rows[uid("S")].early_start, rows[uid("S")].early_finish), (10, 45)
         )
 
+    def test_every_calculation_releases_the_completed_edge_together(self):
+        """The forward pass alone was not enough.
+
+        Releasing the edge while computing the forward bound left the backward
+        pass and the free float still walking it, so the completed case placed
+        forward and then refused coming back. Completion belongs to the shared
+        applicability decision, where all three calculations read it.
+        """
+
+        net = self._network(actual_start=10, actual_finish=45)
+        forward = forward_pass(net)
+        backward = backward_pass(net, forward)
+        floats = float_analysis(net, forward, backward)
+        late = backward.by_uid()[uid("S")]
+        self.assertEqual((late.late_start, late.late_finish), (10, 45))
+        self.assertIn(uid("R1"), backward.overridden_relationships)
+        self.assertIsNotNone(floats.by_uid()[uid("P")].free_float)
+
+    def test_a_lead_the_forward_pass_places_is_not_refused_coming_back(self):
+        """The inverse must look above the anchor, not only at it.
+
+        A one-unit lead from a predecessor at 0-1 puts the successor at zero,
+        which the forward pass places. Walking the lag back *from* zero runs
+        off the beginning of the calendar, and requiring the anchor itself to
+        be reachable refused a schedule that had just been placed.
+        """
+
+        net = network(
+            activity("P", 1),
+            activity("S", 1),
+            relationships=(link("R1", "P", "S", lag=-1, lag_calendar=CONTINUOUS),),
+        )
+        forward = forward_pass(net)
+        self.assertEqual(forward.by_uid()[uid("S")].early_start, 0)
+        backward = backward_pass(net, forward)
+        self.assertEqual(backward.by_uid()[uid("P")].late_finish, 1)
+
     def test_but_retained_logic_does_use_the_edge_and_still_refuses(self):
         """The refusal that is not a defect: this policy reads that bound."""
 
@@ -192,6 +229,29 @@ class AReleasedEdgeCannotRefuseTheScheduleTests(unittest.TestCase):
 
 class OneApplicabilityDecisionForBothPassesTests(unittest.TestCase):
     """F13. A constraint one pass sets aside is not applied by the other."""
+
+    def test_a_completed_row_defers_its_constraint_in_both_directions_too(self):
+        """The deferral has to be recorded before the completed row returns."""
+
+        net = network(
+            activity(
+                "A",
+                10,
+                actual_start=1,
+                actual_finish=8,
+                constraint_type=ConstraintType.MSO,
+                constraint_coordinate=20,
+            ),
+            status_time=50,
+        )
+        forward = forward_pass(net)
+        backward = backward_pass(net, forward)
+        self.assertEqual(
+            [row.type for row in forward.deferred_constraints], [ConstraintType.MSO]
+        )
+        self.assertEqual(
+            [row.type for row in backward.deferred_constraints], [ConstraintType.MSO]
+        )
 
     def test_a_constraint_on_started_work_is_deferred_in_both_directions(self):
         net = network(

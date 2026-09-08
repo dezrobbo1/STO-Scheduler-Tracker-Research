@@ -418,13 +418,7 @@ def forward_pass(
         # successor started at ten with one unit left, status date fifty and a
         # thirty-unit lag: both rows fit, and the pass raised
         # ``SCHEDULE_LAG_UNREACHABLE``.
-        # A complete activity is its two actual dates and reads no bound at
-        # all, so computing its predecessors' bounds can only refuse a
-        # schedule over a coordinate nothing will look at -- the same defect
-        # one state along.
-        holds = state is not ProgressState.COMPLETE and relationship_binds(
-            progress_policy, state, network.status_time
-        )
+        holds = relationship_binds(progress_policy, state, network.status_time)
         binding = incoming[uid] if holds else ()
         unbounded_floor = base if base is not None else network.project_start
         start_bound, finish_bound, start_driver, finish_driver = _bounds(

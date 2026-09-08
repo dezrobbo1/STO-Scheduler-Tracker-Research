@@ -486,10 +486,36 @@ def unshift_lag(calendar: CompiledIntervals, anchor: int, lag: int) -> int | Non
         landing = shift_lag(calendar, coordinate, lag)
         return landing is not None and landing <= anchor
 
-    if not lands_in_time(anchor):
-        # Not an overshoot: the calendar has less working time behind the
-        # anchor than the lag asks for, and no coordinate can supply it --
-        # ``shift_lag`` is undefined at the anchor and stays undefined below it.
+    ceiling = calendar.intervals[-1][1] if calendar.intervals else anchor
+
+    # The anchor itself need not work. Walking a negative lag back from it can
+    # run off the beginning of the calendar while a *later* coordinate has the
+    # room: on a continuous 0-100 calendar a lead of one from an anchor of zero
+    # is unreachable at zero and reachable at one, and the forward pass places
+    # exactly that schedule. Requiring the anchor to be feasible refused it.
+    def reachable(coordinate: int) -> bool:
+        return shift_lag(calendar, coordinate, lag) is not None
+
+    # Walking a negative lag back needs working time behind the coordinate, so
+    # reachability only ever turns on as the coordinate rises: the first
+    # coordinate that has the room is found by halving, not by stepping, or
+    # the search walks past it.
+    if not reachable(ceiling):
+        return None
+    if reachable(anchor):
+        low = anchor
+    else:
+        below, above = anchor, ceiling
+        while above - below > 1:
+            middle = (below + above) // 2
+            if reachable(middle):
+                above = middle
+            else:
+                below = middle
+        low = above
+    if not lands_in_time(low):
+        # The first coordinate with the room already lands after the anchor,
+        # and a later one only lands later still.
         return None
 
     # ``shift_lag`` does not decrease as its anchor rises, so the answer is the
@@ -497,11 +523,9 @@ def unshift_lag(calendar: CompiledIntervals, anchor: int, lag: int) -> int | Non
     # until it does stop -- across a gap, a whole run of coordinates shifts
     # back to the same place, so the first candidate is not always the last one
     # -- then halve the interval.
-    low = anchor
-    high = anchor + 1 if candidate is None else max(candidate, anchor + 1)
-    ceiling = calendar.intervals[-1][1] if calendar.intervals else anchor
+    high = max(low + 1, anchor + 1 if candidate is None else candidate)
     while lands_in_time(high) and high < ceiling:
-        low, high = high, min(high * 2 - anchor + 1, ceiling)
+        low, high = high, min(high * 2 - low + 1, ceiling)
     if lands_in_time(high):
         return high
     while high - low > 1:

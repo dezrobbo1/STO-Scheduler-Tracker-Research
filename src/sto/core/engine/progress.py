@@ -203,15 +203,28 @@ def relationship_binds(
 ) -> bool:
     """Whether a relationship into ``successor`` still holds its remaining work.
 
-    Under ``progress_override`` with a status time, an in-progress successor's
+    Two ways an edge stops holding, and both have to be answered here, because
+    the forward pass, the backward pass and the free float all ask this
+    question and a schedule where they disagree is not one schedule.
+
+    **Completed work.** A complete activity is its two actual dates in both
+    directions and consults no predecessor at all, so an edge into one holds
+    nothing. Deciding that in the forward pass alone -- which is what C2 did
+    at first -- left the backward pass walking an edge the forward pass had
+    already set aside, and refusing a schedule the forward pass had just
+    placed.
+
+    **Progress override.** With a status time, an in-progress successor's
     remaining work continues from the status date and its predecessors do not
-    hold it. The forward pass drops such an edge from the successor's bound;
-    the backward pass and the free float drop the same edge, so the three
-    never disagree about whether one edge exists. Every other edge binds: a
-    not-started successor obeys its logic under every policy, and a schedule
-    with no status time has nothing to override with.
+    hold it.
+
+    Every other edge binds: a not-started successor obeys its logic under
+    every policy, and a schedule with no status time has nothing to override
+    with.
     """
 
+    if successor_state is ProgressState.COMPLETE:
+        return False
     if policy is not ProgressPolicy.PROGRESS_OVERRIDE or status_time is None:
         return True
     return successor_state is not ProgressState.IN_PROGRESS
