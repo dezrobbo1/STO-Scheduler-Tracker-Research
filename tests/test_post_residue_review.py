@@ -157,21 +157,32 @@ class FreeFloatReadsEdgesAsTheForwardPassDidTests(unittest.TestCase):
         self.assertEqual(floats.by_uid()[uid("A")].free_float, 0)
 
     def test_a_lag_with_no_calendar_falls_back_to_the_scheduling_calendar(self):
-        # B is placed on a calendar that opens at 100 and its float is measured
-        # on the continuous one. The forward pass consumed the lag on B's
-        # scheduling calendar (10 -> 100 -> 120); the free float must read the
-        # same edge the same way, or it reports ninety units of slack that A
-        # does not have.
-        opens_late = CompiledIntervals.of(((100, 400),))
+        """The edge is read on the calendar the passes consumed it on.
+
+        B is placed on a calendar with a gap and its float is measured on the
+        continuous one. The forward pass consumes the twenty-unit lag on B's
+        *scheduling* calendar: ten units of 100-110, then ten more from 200, so
+        B starts at 210. Carrying that bound back over the same calendar says A
+        may finish as late as 100; carrying it back over the measuring calendar
+        would say 190, which is not true -- A finishing at 190 puts B at 220.
+
+        The expected value changed with C2. It was written as zero under the
+        rule that shifted the lag forward and measured the leftover gap, and
+        that rule understates as badly as it overstates: A really can finish
+        ninety units later than it does without moving B, because the lag
+        cannot begin to be consumed until the calendar opens.
+        """
+
+        gapped = CompiledIntervals.of(((100, 110), (200, 400)))
         net = network(
             activity("A", 10),
-            activity("B", 10, opens_late, measure_calendar=CONTINUOUS),
+            activity("B", 10, gapped, measure_calendar=CONTINUOUS),
             relationships=(link("R1", "A", "B", lag=20),),
         )
         forward = forward_pass(net)
-        self.assertEqual(forward.by_uid()[uid("B")].early_start, 120)
+        self.assertEqual(forward.by_uid()[uid("B")].early_start, 210)
         floats = float_analysis(net, forward, backward_pass(net, forward))
-        self.assertEqual(floats.by_uid()[uid("A")].free_float, 0)
+        self.assertEqual(floats.by_uid()[uid("A")].free_float, 90)
 
 
 class DriverReplayFloorsWhereTheBoundsDidTests(unittest.TestCase):

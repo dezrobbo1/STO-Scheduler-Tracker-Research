@@ -429,8 +429,11 @@ class NotClaimedTests(unittest.TestCase):
 
         expected = {
             # KILN's cohort is one row smaller since C1 excluded its manual leaf.
-            "kiln": (416, 0, 4, 304),
-            "calciner": (1763, 1572, 1488, 1689),
+            # KILN's free float rose by one and CALCINER's by six when C2
+            # inverted the lag rather than shifting it: both counts are our
+            # own float against the file's stored FreeSlack.
+            "kiln": (416, 0, 4, 305),
+            "calciner": (1763, 1572, 1488, 1695),
         }
         for name, (compared_expected, late_expected, total_expected, free_expected) in (
             expected.items()

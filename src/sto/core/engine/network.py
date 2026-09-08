@@ -454,14 +454,60 @@ def shift_lag(calendar: CompiledIntervals, anchor: int, lag: int) -> int | None:
 
 
 def unshift_lag(calendar: CompiledIntervals, anchor: int, lag: int) -> int | None:
-    """Signed productive lag backward from ``anchor``: the inverse of :func:`shift_lag`.
+    """The **greatest** coordinate whose lag lands at or before ``anchor``.
 
-    A positive lag that pushed a successor forward pulls its predecessor back by
-    the same productive amount, and a negative lag does the reverse.
+    The inverse of :func:`shift_lag`, defined by the inequality it has to
+    satisfy rather than by running the arithmetic the other way. Those are the
+    same answer in the interior and differ at a discontinuity: walking a
+    negative lag forward out of a gap arrives at the far side of it, and
+    walking back from there lands past the bound the caller gave.
+
+    On a calendar of ``0-5`` and ``10-100``, a lag of minus two from an anchor
+    of five walked forward gives twelve, and twelve walked back gives ten,
+    which is later than the five that was asked for. Eleven is the greatest
+    coordinate that works. Sixty-six such pairs exist across two calendars of
+    that shape, and both the backward pass and the free float read this
+    function, so each was placing a bound the schedule cannot honour.
+
+    ``None`` when no coordinate satisfies it -- the calendar runs out.
     """
 
     if lag == 0:
         return anchor
     if lag > 0:
+        # Walking a positive lag back from the anchor cannot overshoot: the
+        # result is at or before the anchor, and shifting it forward again is
+        # bounded by where it came from.
         return sub_working(calendar, anchor, lag)
-    return add_working(calendar, anchor, -lag)
+
+    candidate = add_working(calendar, anchor, -lag)
+
+    def lands_in_time(coordinate: int) -> bool:
+        landing = shift_lag(calendar, coordinate, lag)
+        return landing is not None and landing <= anchor
+
+    if not lands_in_time(anchor):
+        # Not an overshoot: the calendar has less working time behind the
+        # anchor than the lag asks for, and no coordinate can supply it --
+        # ``shift_lag`` is undefined at the anchor and stays undefined below it.
+        return None
+
+    # ``shift_lag`` does not decrease as its anchor rises, so the answer is the
+    # last coordinate before it stops landing in time. Walk the upper end out
+    # until it does stop -- across a gap, a whole run of coordinates shifts
+    # back to the same place, so the first candidate is not always the last one
+    # -- then halve the interval.
+    low = anchor
+    high = anchor + 1 if candidate is None else max(candidate, anchor + 1)
+    ceiling = calendar.intervals[-1][1] if calendar.intervals else anchor
+    while lands_in_time(high) and high < ceiling:
+        low, high = high, min(high * 2 - anchor + 1, ceiling)
+    if lands_in_time(high):
+        return high
+    while high - low > 1:
+        middle = (low + high) // 2
+        if lands_in_time(middle):
+            low = middle
+        else:
+            high = middle
+    return low
