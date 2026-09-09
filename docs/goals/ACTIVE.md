@@ -73,8 +73,30 @@ activities shared between the snapshots keep their identifiers while 18 new and
 13 departed rows are reported rather than conflated. `sto canonicalise` and
 `sto reconcile` expose it.
 
+**The calculated schedule, visible (PL13).** A stored import can be calculated
+through the API and read back as a page: every activity with the dates the file
+carried beside the dates the engine computed, what placed each row, its floats,
+its progress state, and for an excluded row the code that says why there are no
+dates. The summaries show their rolled-up spans, and a branch with nothing
+beneath it is shown as a branch with no span rather than omitted. Reading goes
+through the verified loader, which reassembles the result from the header and
+both row sets and refuses a fingerprint that no longer matches its rows, so an
+edited row is a refusal rather than an answer. A restart serves the same
+calculation from the same stored input.
+
+**The calculated result (PL3).** `sto.core.engine.result` assembles one row per
+activity out of the passes, the float, the rollup and the plan's dispositions,
+and derives nothing a second time. A scheduled row carries four dates, two
+floats, its progress state and what placed it; an excluded row carries the code
+that says why and no dates at all. Schedule dates are stored as wall-clock
+without a time zone, because a Microsoft Project date carries no offset and
+attaching one would move the working day. `Workspace.calculate` runs the engine
+over a project's stored head and stores the answer, reading the document back
+through the hash check so nothing is computed over bytes that do not hash to
+what they claim.
+
 **Persistence and multi-project (PL1).** PostgreSQL on the existing loopback
-instance, a new `sto` database, and one migration: projects, source files,
+instance, a new `sto` database, and `V001`: projects, source files,
 import batches, and the schedule-version envelope — immutable versions with
 the full canonical document and identity map, a movable head per kind
 (ADR-007). FastAPI over it: create projects, upload a schedule, read the head.
@@ -240,16 +262,23 @@ the writers that need it live):
    removed reaches no row in the estate, so the disposition partition is
    enforced instead of rebuilt
    (`docs/history/2026-09-08-rollup-and-validator.md`).
-8. **The per-activity result projection** (`PL3`), which ADR-006 deferred
-   until its columns had meanings and a result type to mirror. They do now.
-9. **The calculated schedule, persisted and visible** (`PL13`): stored
+8. ~~The per-activity result projection~~ (`PL3`) — done. ADR-006 deferred it
+   until its columns had meanings and a result type to mirror; S3 to S6 gave
+   them both. A result carries the document hash it was computed from, the
+   horizon, the policy, the threshold and every stage's profile, and hashes
+   them with the rows, so two results that agree say so before anyone compares
+   dates. `V002` stores a calculation the way a version is stored: immutably,
+   a recalculation being a new row rather than an edit.
+9. ~~The calculated schedule, persisted and visible~~ (`PL13`) — done. Stored
    baseline → plan and passes → a result bound to its input hash, engine
    profiles and dispositions → an API route → a task table and simple Gantt
    showing imported dates beside calculated ones, reloaded identically after a
-   restart. With it the guards that flow needs: a parse or validation failure
-   becomes a coded failed import rather than a server error, uploads are
-   bounded, and one malformed stored document quarantines its project rather
-   than aborting the rebuild of every other.
+   restart. The page reads through the verified loader, so what a reader sees
+   is what the stored fingerprint attests to. With it the guards that flow
+   needs: a parse or validation failure becomes a coded failed import rather
+   than a server error, uploads are bounded, and one malformed stored document
+   quarantines its project rather than aborting the rebuild of every other
+   (`docs/history/2026-09-08-the-calculation-made-visible.md`).
 10. **One planner scenario** (`PL14`): pick a supported task, change its
     duration, see its successors move, reset to the baseline, export, restart.
     The first consolidated vertical slice; the legacy workspace retires after

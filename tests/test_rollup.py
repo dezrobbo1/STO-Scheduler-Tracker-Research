@@ -83,6 +83,21 @@ class RollupTests(unittest.TestCase):
         self.assertEqual(rolled[uid("one")].placed, 1)
         self.assertEqual(rolled[uid("two")].placed, 1)
 
+    def test_a_leaf_two_branches_share_is_counted_once(self):
+        """Adding the branches' counts at their ancestor double-counted it."""
+
+        rollup = roll_up(
+            {
+                uid("root"): (uid("left"), uid("right")),
+                uid("left"): (uid("shared"),),
+                uid("right"): (uid("shared"),),
+                uid("shared"): (uid("leaf"),),
+            },
+            {uid("leaf"): (1, 2)},
+        ).by_uid()
+        self.assertEqual(rollup[uid("root")].placed, 1)
+        self.assertEqual((rollup[uid("root")].start, rollup[uid("root")].finish), (1, 2))
+
     def test_a_hierarchy_that_contains_itself_is_reported_not_answered(self):
         """A cycle is a defect in the source hierarchy, not an answer to give.
 

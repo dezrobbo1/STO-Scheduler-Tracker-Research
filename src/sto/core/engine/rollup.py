@@ -86,7 +86,11 @@ def roll_up(
     """
 
     answered: dict[UUID, tuple[int, int] | None] = {}
-    beneath: dict[UUID, int] = {}
+    #: The placed leaves under each node, by identity rather than by count.
+    #: A hierarchy where two parents reach one subtree is supported, and adding
+    #: their counts at a shared ancestor counted the same leaf once per path --
+    #: a branch with one leaf beneath it reporting two.
+    leaves: dict[UUID, frozenset[UUID]] = {}
     cyclic: set[UUID] = set()
     stack: list[UUID] = []
     on_stack: set[UUID] = set()
@@ -106,14 +110,14 @@ def roll_up(
             return None
         placed = spans.get(uid)
         if placed is not None and uid not in children:
-            beneath[uid] = 1
+            leaves[uid] = frozenset({uid})
             answered[uid] = placed
             return placed
         stack.append(uid)
         on_stack.add(uid)
         starts: list[int] = []
         finishes: list[int] = []
-        total = 0
+        found: set[UUID] = set()
         poisoned = False
         for child in children.get(uid, ()):
             child_span = resolve(child)
@@ -123,7 +127,7 @@ def roll_up(
                 continue
             starts.append(child_span[0])
             finishes.append(child_span[1])
-            total += beneath.get(child, 0)
+            found |= leaves.get(child, frozenset())
         stack.pop()
         on_stack.discard(uid)
         if poisoned:
@@ -133,10 +137,10 @@ def roll_up(
             cyclic.add(uid)
         if poisoned or not starts:
             answered[uid] = None
-            beneath[uid] = 0
+            leaves[uid] = frozenset()
             return None
         answered[uid] = (min(starts), max(finishes))
-        beneath[uid] = total
+        leaves[uid] = frozenset(found)
         return answered[uid]
 
     rolled: list[RolledUp] = []
@@ -148,7 +152,7 @@ def roll_up(
         if span is None:
             empty.append(uid)
         else:
-            rolled.append(RolledUp(uid, span[0], span[1], beneath[uid]))
+            rolled.append(RolledUp(uid, span[0], span[1], len(leaves[uid])))
     # Sorted so a cycle reported from two entry points reads the same either
     # way; everything else here is already order-independent.
     return Rollup(

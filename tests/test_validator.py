@@ -486,6 +486,61 @@ class TheChecksTheThirdPassFoundTests(unittest.TestCase):
             ),
         )
 
+class TheChecksTheFourthPassFoundTests(unittest.TestCase):
+    """What the checker took on trust, and one probe that could not answer."""
+
+    def _codes(self, net, forward, backward, floats, **kwargs):
+        return {row.code for row in validate_result(net, forward, backward, floats, **kwargs)}
+
+    def test_a_result_from_another_network_is_not_read_as_this_one(self):
+        """Both passes hash the network they ran over; nothing compared it."""
+
+        net, f, b, fl = _sound()
+        other = replace(net, horizon=net.horizon + 1000)
+        codes = self._codes(other, f, b, fl)
+        self.assertIn("FORWARD_NETWORK_MISMATCH", codes)
+        self.assertIn("BACKWARD_NETWORK_MISMATCH", codes)
+
+    def test_a_free_float_that_can_not_be_applied_at_all(self):
+        """Silence from both probes was read as agreement."""
+
+        net, f, b, fl = _sound()
+        rows = list(fl.rows)
+        rows[0] = replace(rows[0], free_float=-100_000)
+        self.assertIn(
+            "FREE_FLOAT_UNANSWERABLE", self._codes(net, f, b, replace(fl, rows=tuple(rows)))
+        )
+
+    def test_a_completed_late_span_is_pinned_to_its_actuals_too(self):
+        """The forward checks did not protect the backward copy of history."""
+
+        net = network(activity("A", 10, actual_start=0, actual_finish=10), status_time=20)
+        forward = forward_pass(net)
+        backward = backward_pass(net, forward)
+        floats = float_analysis(net, forward, backward)
+        self.assertEqual(validate_result(net, forward, backward, floats), ())
+        late = list(backward.times)
+        late[0] = replace(late[0], late_start=1, late_finish=11)
+        codes = self._codes(net, forward, replace(backward, times=tuple(late)), floats)
+        self.assertIn("COMPLETED_LATE_START_NOT_ITS_ACTUAL", codes)
+        self.assertIn("COMPLETED_LATE_FINISH_NOT_ITS_ACTUAL", codes)
+
+    def test_work_under_way_has_to_say_where_its_remaining_work_begins(self):
+        """The coordinate exists for this state, and its absence was invisible."""
+
+        net = network(
+            activity("A", 20, actual_start=0, remaining_duration=5), status_time=50
+        )
+        forward = forward_pass(net, progress_policy=ProgressPolicy.PROGRESS_OVERRIDE)
+        backward = backward_pass(net, forward)
+        floats = float_analysis(net, forward, backward)
+        times = list(forward.times)
+        times[0] = replace(times[0], remaining_start=None)
+        self.assertIn(
+            "REMAINING_START_MISSING",
+            self._codes(net, replace(forward, times=tuple(times)), backward, floats),
+        )
+
 class TheCorpusValidatesTests(unittest.TestCase):
     """Every case the engine runs, checked against itself rather than its answer."""
 

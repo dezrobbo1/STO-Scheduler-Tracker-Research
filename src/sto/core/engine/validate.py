@@ -105,6 +105,28 @@ def validate_result(
         )
     violations: list[Violation] = []
 
+    # --- the passes describe *this* network ------------------------------
+    # Both passes hash the network they ran over, and `float_analysis` already
+    # refuses a mismatched pair. Nothing checked the pair against the network
+    # in hand, so a result computed over the same activities under a different
+    # horizon validated cleanly against the current one -- which is how a stale
+    # stored calculation gets blessed as belonging to a schedule it does not.
+    fingerprint = network.fingerprint()
+    for name, seen in (("FORWARD", forward.network_fingerprint), ("BACKWARD", backward.network_fingerprint)):
+        if seen != fingerprint:
+            violations.append(
+                Violation(
+                    f"{name}_NETWORK_MISMATCH",
+                    None,
+                    f"the pass ran over {seen}, this network is {fingerprint}",
+                )
+            )
+    if violations:
+        # Every check below reads rows keyed by this network's activities.
+        # Measuring them against a pass that ran over another one produces
+        # noise, not findings.
+        return tuple(violations)
+
     # --- the coordinates the result carries about the whole project ------
     # Three numbers sit outside every row and are read as if they described
     # them: the window the forward pass says it worked in, and the finish the
@@ -263,6 +285,26 @@ def validate_result(
         # completed span consume whatever it consumes, and without this it also
         # let the span be moved anywhere at all.
         if state is ProgressState.COMPLETE:
+            # Both copies of history, not just the forward one. Where the
+            # actuals sit in a non-working gap the float measures zero either
+            # way, so the late span could be moved anywhere in that gap and
+            # every arithmetic check still agreed.
+            if activity.actual_start is not None and late_row.late_start != activity.actual_start:
+                violations.append(
+                    Violation(
+                        "COMPLETED_LATE_START_NOT_ITS_ACTUAL",
+                        uid,
+                        f"late start {late_row.late_start}, actual start {activity.actual_start}",
+                    )
+                )
+            if activity.actual_finish is not None and late_row.late_finish != activity.actual_finish:
+                violations.append(
+                    Violation(
+                        "COMPLETED_LATE_FINISH_NOT_ITS_ACTUAL",
+                        uid,
+                        f"late finish {late_row.late_finish}, actual finish {activity.actual_finish}",
+                    )
+                )
             if activity.actual_start is not None and row.early_start != activity.actual_start:
                 violations.append(
                     Violation(
@@ -280,6 +322,18 @@ def validate_result(
                     )
                 )
         elif state is ProgressState.IN_PROGRESS:
+            # The coordinate exists for exactly this state. Where the actual
+            # start happens to equal it, dropping it changed no duration and no
+            # float, and the structural checks that read it were all guarded on
+            # its presence -- so its absence was invisible.
+            if row.remaining_start is None:
+                violations.append(
+                    Violation(
+                        "REMAINING_START_MISSING",
+                        uid,
+                        "work under way reports no remaining start",
+                    )
+                )
             if activity.actual_start is not None and row.early_start != activity.actual_start:
                 violations.append(
                     Violation(
@@ -445,7 +499,18 @@ def validate_result(
                                   snap_milestones=forward.snap_milestones)
         further = _edges_hold_after(reported + 1, row, activity, edges, early, activities,
                                   snap_milestones=forward.snap_milestones)
-        if holds is False:
+        if further is True:
+            # Asked first, because it answers on its own terms: one more unit
+            # of slip moves nothing, so the reported number is understated
+            # whether or not the reported slip itself could be applied.
+            violations.append(
+                Violation(
+                    "FREE_FLOAT_TOO_SMALL",
+                    uid,
+                    f"slipping {reported + 1} still moves nothing",
+                )
+            )
+        elif holds is False:
             violations.append(
                 Violation(
                     "FREE_FLOAT_TOO_LARGE",
@@ -453,12 +518,16 @@ def validate_result(
                     f"slipping {reported} moves a successor",
                 )
             )
-        elif further is True:
+        elif holds is None:
+            # Neither probe lands on the calendar, so the number cannot be
+            # applied at all. That is not agreement: a free float of minus a
+            # hundred is unanswerable in exactly this way, and treating silence
+            # as a pass let it through.
             violations.append(
                 Violation(
-                    "FREE_FLOAT_TOO_SMALL",
+                    "FREE_FLOAT_UNANSWERABLE",
                     uid,
-                    f"slipping {reported + 1} still moves nothing",
+                    f"slipping {reported} leaves the calendar",
                 )
             )
 

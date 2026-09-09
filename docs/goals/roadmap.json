@@ -453,14 +453,14 @@
       "id": "PL3",
       "title": "Per-activity result projection",
       "phase": "P1",
-      "status": "not_started",
+      "status": "done",
       "days": 2
     },
     {
       "id": "PL13",
       "title": "Calculated schedule persisted and visible",
       "phase": "P1",
-      "status": "not_started",
+      "status": "done",
       "days": 4
     },
     {

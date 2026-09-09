@@ -208,6 +208,18 @@ def list_versions(conn: psycopg.Connection, *, project_id: uuid.UUID) -> list[di
     ).fetchall()
 
 
+def get_version(
+    conn: psycopg.Connection, *, version_id: uuid.UUID, with_document: bool
+) -> dict[str, Any] | None:
+    """One version by identifier, whatever head points at it."""
+
+    columns = _VERSION_SUMMARY + (", v.document, v.identity_map" if with_document else "")
+    return conn.execute(
+        f"SELECT {columns} FROM schedule_versions v WHERE v.id = %s",
+        (version_id,),
+    ).fetchone()
+
+
 def heads_for_all_projects(conn: psycopg.Connection) -> list[dict[str, Any]]:
     return conn.execute(
         f"""
@@ -215,4 +227,227 @@ def heads_for_all_projects(conn: psycopg.Connection) -> list[dict[str, Any]]:
         FROM schedule_heads h JOIN schedule_versions v ON v.id = h.version_id
         ORDER BY v.project_id, h.kind
         """
+    ).fetchall()
+
+
+# --- calculated results --------------------------------------------------------
+
+
+def insert_calculation(
+    conn: psycopg.Connection,
+    *,
+    project_id: uuid.UUID,
+    version_id: uuid.UUID,
+    result: Any,
+) -> uuid.UUID | None:
+    """Store one engine run: the header, then its rows, or ``None``.
+
+    ``None`` means an identical run was already stored -- same version, same
+    fingerprint -- which the unique constraint enforces and which two
+    overlapping callers can both reach. The caller looks the winner up.
+
+    Written in one statement per table rather than one per row: a real schedule
+    is a couple of thousand activities, and the caller holds a transaction
+    open around this.
+    """
+
+    provenance = result.provenance
+    row = conn.execute(
+        """
+        INSERT INTO schedule_calculations
+          (project_id, version_id, canonical_hash, result_fingerprint, epoch,
+           horizon_start, horizon_finish, progress_policy,
+           critical_float_threshold, status_time, status_time_outside_window,
+           resource_calendars_apply, relationship_dispositions, profiles)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (version_id, result_fingerprint) DO NOTHING
+        RETURNING id
+        """,
+        (
+            project_id,
+            version_id,
+            provenance.canonical_hash,
+            result.fingerprint,
+            provenance.epoch,
+            provenance.horizon_start,
+            provenance.horizon_finish,
+            provenance.progress_policy,
+            provenance.critical_float_threshold,
+            provenance.status_time,
+            provenance.status_time_outside_window,
+            provenance.resource_calendars_apply,
+            Jsonb(
+                [
+                    {
+                        "uid": str(edge.uid),
+                        "disposition": edge.disposition,
+                        "code": edge.code,
+                        "detail": edge.detail,
+                    }
+                    for edge in result.relationships
+                ]
+            ),
+            Jsonb(
+                {
+                    "forward": provenance.forward_profile,
+                    "backward": provenance.backward_profile,
+                    "criticality": provenance.criticality_profile,
+                    "rollup": provenance.rollup_profile,
+                    "progress": provenance.progress_profile,
+                    "result": provenance.result_profile,
+                }
+            ),
+        ),
+    ).fetchone()
+    if row is None:
+        # Another caller stored this exact answer between any lookup and here.
+        # A calculation is deterministic, so the row that won is the row this
+        # one would have written; the race is not an error.
+        return None
+    calculation_id = row["id"]
+
+    with conn.cursor() as cursor:
+        cursor.executemany(
+            """
+            INSERT INTO activity_results
+              (calculation_id, activity_uid, disposition, early_start, early_finish,
+               late_start, late_finish, remaining_start, total_float_seconds,
+               free_float_seconds, start_float_seconds, finish_float_seconds,
+               critical, progress_state, placed_by,
+               driving_relationship_uid, late_placed_by,
+               late_driving_relationship_uid, constraint_override,
+               exclusion_code, exclusion_detail, assumptions)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                    %s, %s, %s, %s, %s, %s, %s)
+            """,
+            [
+                (
+                    calculation_id,
+                    activity.uid,
+                    activity.disposition,
+                    activity.early_start,
+                    activity.early_finish,
+                    activity.late_start,
+                    activity.late_finish,
+                    activity.remaining_start,
+                    activity.total_float,
+                    activity.free_float,
+                    activity.start_float,
+                    activity.finish_float,
+                    activity.critical,
+                    activity.state,
+                    activity.placed_by,
+                    activity.driving_relationship_uid,
+                    activity.late_placed_by,
+                    activity.late_driving_relationship_uid,
+                    activity.constraint_override,
+                    activity.exclusion_code,
+                    activity.exclusion_detail,
+                    list(activity.assumptions),
+                )
+                for activity in result.activities
+            ],
+        )
+        rows = [
+            (calculation_id, summary.uid, summary.start, summary.finish, summary.placed)
+            for summary in result.summaries
+        ]
+        # A branch with nothing beneath it is stored as a row with no span, so
+        # that "not calculated" and "not in the file" stay different answers.
+        rows += [(calculation_id, uid, None, None, 0) for uid in result.empty_summaries]
+        cursor.executemany(
+            """
+            INSERT INTO summary_results
+              (calculation_id, wbs_uid, span_start, span_finish, placed)
+            VALUES (%s, %s, %s, %s, %s)
+            """,
+            rows,
+        )
+    return calculation_id
+
+
+def list_import_batches(
+    conn: psycopg.Connection, *, project_id: uuid.UUID
+) -> list[dict[str, Any]]:
+    """Every parser run against a project, newest last. Failures included."""
+
+    return conn.execute(
+        """
+        SELECT * FROM import_batches
+        WHERE project_id = %s
+        ORDER BY started_at, id
+        """,
+        (project_id,),
+    ).fetchall()
+
+
+def get_latest_calculation(
+    conn: psycopg.Connection, *, version_id: uuid.UUID
+) -> dict[str, Any] | None:
+    """The most recent run over one version, header only."""
+
+    return conn.execute(
+        """
+        SELECT * FROM schedule_calculations
+        WHERE version_id = %s
+        ORDER BY computed_at DESC, id DESC
+        LIMIT 1
+        """,
+        (version_id,),
+    ).fetchone()
+
+
+def find_calculation(
+    conn: psycopg.Connection, *, version_id: uuid.UUID, fingerprint: str
+) -> dict[str, Any] | None:
+    """The calculation already stored for this version under this fingerprint.
+
+    A calculation is deterministic, so the same version computed the same way
+    twice is the same answer. The table holds it once; this is how a caller
+    finds the one that is there instead of colliding with it.
+    """
+
+    return conn.execute(
+        """
+        SELECT * FROM schedule_calculations
+        WHERE version_id = %s AND result_fingerprint = %s
+        """,
+        (version_id, fingerprint),
+    ).fetchone()
+
+
+def get_calculation(
+    conn: psycopg.Connection, *, calculation_id: uuid.UUID
+) -> dict[str, Any] | None:
+    """One calculation header by identifier."""
+
+    return conn.execute(
+        "SELECT * FROM schedule_calculations WHERE id = %s",
+        (calculation_id,),
+    ).fetchone()
+
+
+def get_activity_results(
+    conn: psycopg.Connection, *, calculation_id: uuid.UUID
+) -> list[dict[str, Any]]:
+    return conn.execute(
+        """
+        SELECT * FROM activity_results
+        WHERE calculation_id = %s
+        ORDER BY activity_uid
+        """,
+        (calculation_id,),
+    ).fetchall()
+
+
+def get_summary_results(
+    conn: psycopg.Connection, *, calculation_id: uuid.UUID
+) -> list[dict[str, Any]]:
+    return conn.execute(
+        """
+        SELECT * FROM summary_results
+        WHERE calculation_id = %s
+        ORDER BY wbs_uid
+        """,
+        (calculation_id,),
     ).fetchall()
