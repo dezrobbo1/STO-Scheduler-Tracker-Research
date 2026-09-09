@@ -109,8 +109,10 @@ FROM_STATUS_TIME = "status_time"
 #: Version two carried the remaining start, so a progressed schedule's answer
 #: cannot hash the same as the unprogressed one it was computed from; version
 #: three carries the progress state too, so an activity completed on exactly
-#: its planned dates does not hash the same as one that has not begun.
-FORWARD_PASS_PROFILE = "sto-forward-pass-v3"
+#: its planned dates does not hash the same as one that has not begun. Version
+#: four carries the milestone-snap policy: it can change downstream free float
+#: even when every early coordinate happens to be the same.
+FORWARD_PASS_PROFILE = "sto-forward-pass-v4"
 
 
 @dataclass(frozen=True, slots=True)
@@ -191,6 +193,11 @@ class ForwardPass:
     #: -- so the backward pass reads it from here rather than defaulting it a
     #: second time, and refuses a caller who names a different one.
     progress_policy: ProgressPolicy = ProgressPolicy.RETAINED_LOGIC
+    #: Whether zero-length spans were moved to the next productive coordinate.
+    #: Criticality carries the same placement domain into free float: a
+    #: snapped milestone cannot claim movement to a coordinate from which the
+    #: forward pass could no longer place it.
+    snap_milestones: bool = False
 
     def by_uid(self) -> dict[UUID, ActivityTimes]:
         return {row.uid: row for row in self.times}
@@ -551,10 +558,16 @@ def forward_pass(
         project_finish=project_finish,
         deferred_constraints=tuple(deferred),
         constraint_violations=tuple(violations),
-        fingerprint=_fingerprint(times, network.project_start, project_finish),
+        fingerprint=_fingerprint(
+            times,
+            network.project_start,
+            project_finish,
+            snap_milestones,
+        ),
         network_fingerprint=network.fingerprint(),
         progress_policy=progress_policy,
         unbounded_starts=tuple(unbounded_starts),
+        snap_milestones=snap_milestones,
     )
 
 
@@ -785,13 +798,17 @@ def _place_reported(
 
 
 def _fingerprint(
-    times: tuple[ActivityTimes, ...], project_start: int, project_finish: int
+    times: tuple[ActivityTimes, ...],
+    project_start: int,
+    project_finish: int,
+    snap_milestones: bool,
 ) -> str:
-    """A hash of the answer, so two runs are compared without comparing objects."""
+    """A hash of the answer and latent policy that can affect its consumers."""
 
     return canonical_sha256(
         {
             "profile": FORWARD_PASS_PROFILE,
+            "snap_milestones": snap_milestones,
             "project_start": project_start,
             "project_finish": project_finish,
             "times": sorted(

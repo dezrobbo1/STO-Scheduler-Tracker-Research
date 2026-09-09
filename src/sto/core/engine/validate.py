@@ -31,7 +31,7 @@ from collections import Counter
 from dataclasses import dataclass
 from uuid import UUID
 
-from sto.core.calendar.arithmetic import add_working, sub_working, working_between
+from sto.core.calendar.arithmetic import add_working, next_working, sub_working, working_between
 from sto.core.model.enums import ConstraintType, ProgressPolicy
 
 #: Constraints this check does not ask about: ASAP places nothing, and ALAP is
@@ -47,7 +47,7 @@ from .progress import ProgressState, relationship_binds, state_of
 __all__ = ["VALIDATOR_PROFILE", "Violation", "validate_result"]
 
 #: Named on a report so a stored one says which rules were applied.
-VALIDATOR_PROFILE = "sto-validator-v1"
+VALIDATOR_PROFILE = "sto-validator-v2"
 
 
 @dataclass(frozen=True, slots=True)
@@ -495,8 +495,10 @@ def validate_result(
         # the start of the calendar and leave the first question unanswerable;
         # the second question does not depend on the first, and it is the one
         # that catches an understated float.
-        holds = _edges_hold_after(reported, row, activity, edges, early, activities)
-        further = _edges_hold_after(reported + 1, row, activity, edges, early, activities)
+        holds = _edges_hold_after(reported, row, activity, edges, early, activities,
+                                  snap_milestones=forward.snap_milestones)
+        further = _edges_hold_after(reported + 1, row, activity, edges, early, activities,
+                                  snap_milestones=forward.snap_milestones)
         if further is True:
             # Asked first, because it answers on its own terms: one more unit
             # of slip moves nothing, so the reported number is understated
@@ -637,6 +639,8 @@ def _edges_hold_after(
     edges,
     early,
     activities,
+    *,
+    snap_milestones: bool = False,
 ) -> bool | None:
     """Would every outgoing edge still hold if this activity slipped that far?
 
@@ -647,15 +651,37 @@ def _edges_hold_after(
     rather than treats as a pass.
     """
 
-    start = _slipped(activity.float_calendar, row.early_start, slip)
+    start = (row.early_start if activity.has_started else
+             _slipped(activity.float_calendar, row.early_start, slip))
     finish = _slipped(activity.float_calendar, row.early_finish, slip)
     if start is None or finish is None:
         return None
+    exactly_pinned = (
+        row.state is ProgressState.NOT_STARTED
+        and activity.constraint_type in (ConstraintType.MSO, ConstraintType.MFO)
+    )
+    snapped_zero = (
+        snap_milestones and activity.remaining == 0
+        and row.state is not ProgressState.COMPLETE and not exactly_pinned
+    )
+    # Apply the forward placement domain to the independently slipped anchor.
+    # An exclusive interval end is a finish, but a start bound there advances
+    # to the next interval. Actual starts and exact pins are not snapped.
+    if (row.state is ProgressState.NOT_STARTED and not exactly_pinned
+            and (activity.remaining > 0 or snapped_zero)):
+        start = next_working(activity.calendar, start)
+    if snapped_zero:
+        finish = next_working(activity.calendar, finish)
     for edge in edges:
         successor = early.get(edge.successor_uid)
         if successor is None:
             return None
+        # A historical start cannot consume a nonzero start-side slip.
+        if activity.has_started and not edge.anchors_predecessor_finish and slip != 0:
+            return False
         anchor = finish if edge.anchors_predecessor_finish else start
+        if anchor is None:
+            return False  # No placement exists at or after this bound.
         available = (
             (successor.remaining_start if successor.remaining_start is not None
              else successor.early_start)

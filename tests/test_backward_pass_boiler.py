@@ -433,7 +433,12 @@ class NotClaimedTests(unittest.TestCase):
             # inverted the lag rather than shifting it: both counts are our
             # own float against the file's stored FreeSlack.
             "kiln": (416, 0, 4, 305),
-            "calciner": (1763, 1572, 1488, 1695),
+            # Four SS predecessors previously counted the exclusive end of a
+            # working interval as a movable start. C2 now pulls that inverse
+            # back to the latest valid start coordinate, so those four
+            # one-second boundary overstatements no longer match the stored
+            # whole-unit free slack.
+            "calciner": (1763, 1572, 1488, 1691),
         }
         for name, (compared_expected, late_expected, total_expected, free_expected) in (
             expected.items()
