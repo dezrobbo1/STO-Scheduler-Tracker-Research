@@ -102,7 +102,8 @@ from .progress import ProgressState
 #: rather than silently substituting the lag calendar's final productive
 #: coordinate. That placement reserves a complete remaining span and, when the
 #: forward pass snapped zero-length spans, remains on a productive coordinate.
-CRITICALITY_PROFILE = "sto-criticality-v3"
+#: Version four bounds progressed start anchors at their immutable actual start.
+CRITICALITY_PROFILE = "sto-criticality-v4"
 
 
 class CriticalityError(NetworkError):
@@ -381,6 +382,9 @@ def float_analysis(
         and activity.uid not in exactly_pinned
         and (activity.remaining > 0 or activity.uid in snapped_zero_spans)
     )
+    # Only the remaining finish can move after work has started. SS/SF
+    # relationships retain the recorded actual start, including across a
+    # finite lag calendar's constant tail.
     movement_limits: dict[UUID, tuple[int, int]] = {}
     for activity in network.activities:
         if activity.remaining == 0:
@@ -400,7 +404,10 @@ def float_analysis(
                         "no snapped milestone coordinate fits inside the network horizon",
                     )
                 limit = snapped_limit
-            movement_limits[activity.uid] = (limit, limit)
+            movement_limits[activity.uid] = (
+                early[activity.uid].early_start if activity.has_started else limit,
+                limit,
+            )
             continue
         floor = activity.calendar.first
         latest = (
@@ -423,7 +430,10 @@ def float_analysis(
                 activity.uid,
                 "no complete predecessor span fits inside the network horizon",
             )
-        movement_limits[activity.uid] = latest
+        movement_limits[activity.uid] = (
+            early[activity.uid].early_start if activity.has_started else latest[0],
+            latest[1],
+        )
     released = frozenset(backward.overridden_relationships)
     outgoing = {
         uid: tuple(edge for edge in edges if edge.uid not in released)

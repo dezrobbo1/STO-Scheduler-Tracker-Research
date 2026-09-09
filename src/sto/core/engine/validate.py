@@ -582,7 +582,8 @@ def _edges_hold_after(
     rather than treats as a pass.
     """
 
-    start = _slipped(activity.float_calendar, row.early_start, slip)
+    start = (row.early_start if activity.has_started else
+             _slipped(activity.float_calendar, row.early_start, slip))
     finish = _slipped(activity.float_calendar, row.early_finish, slip)
     if start is None or finish is None:
         return None
@@ -606,6 +607,9 @@ def _edges_hold_after(
         successor = early.get(edge.successor_uid)
         if successor is None:
             return None
+        # A historical start cannot consume a nonzero start-side slip.
+        if activity.has_started and not edge.anchors_predecessor_finish and slip != 0:
+            return False
         anchor = finish if edge.anchors_predecessor_finish else start
         if anchor is None:
             return False  # No placement exists at or after this bound.

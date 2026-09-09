@@ -507,6 +507,28 @@ class CalendarTailSchedulingConsequencesTests(unittest.TestCase):
                 self.assertEqual(floats.by_uid()[uid("P")].free_float, 0)
                 self.assertEqual(validate_result(net, forward, backward, floats), ())
 
+    def test_actual_start_has_no_movable_float_across_lag_domains(self):
+        for remaining in (0, 2):
+            for kind in (RelationshipType.SS, RelationshipType.SF):
+                for lag in (-5, 0, 5):
+                    for snap in (False, True):
+                        with self.subTest(remaining=remaining, kind=kind, lag=lag, snap=snap):
+                            lag_calendar = (CompiledIntervals.of(((0, 5),))
+                                            if lag < 0 else CONTINUOUS)
+                            net = network(
+                                activity("P", 2, CompiledIntervals.of(((0, 5), (10, 15))),
+                                         actual_start=7, remaining_duration=remaining),
+                                activity("S", 0, constraint_type=ConstraintType.SNET,
+                                         constraint_coordinate=0 if lag < 0 else 12),
+                                relationships=(link("R1", "P", "S", kind, lag, lag_calendar),),
+                                status_time=7, horizon=20,
+                            )
+                            forward = forward_pass(net, snap_milestones=snap)
+                            backward = backward_pass(net, forward)
+                            floats = float_analysis(net, forward, backward)
+                            self.assertEqual(floats.by_uid()[uid("P")].free_float, 0)
+                            self.assertEqual(validate_result(net, forward, backward, floats), ())
+
     def test_validator_checks_start_placement_at_exclusive_boundary(self):
         for kind in (RelationshipType.SS, RelationshipType.SF):
             for duration, snap in ((2, False), (0, True)):
