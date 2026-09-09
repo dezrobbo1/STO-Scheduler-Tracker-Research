@@ -15,6 +15,7 @@ from uuid import NAMESPACE_URL, UUID, uuid5
 
 from sto.core.calendar.arithmetic import CompiledIntervals
 from sto.core.engine import (
+    BackwardPassError,
     ForwardPassError,
     Network,
     PlannedActivity,
@@ -22,10 +23,12 @@ from sto.core.engine import (
     backward_pass,
     float_analysis,
     forward_pass,
+    signed_working,
     shift_lag,
     unshift_lag,
 )
 from sto.core.model.enums import ConstraintType, ProgressPolicy, RelationshipType
+from sto.core.engine.validate import validate_result
 
 CONTINUOUS = CompiledIntervals.of(((0, 200),))
 
@@ -52,6 +55,31 @@ def network(*activities, relationships=(), project_start=0, horizon=200, status_
         horizon=horizon,
         status_time=status_time,
     )
+
+
+def exhaustive_unshift(
+    calendar: CompiledIntervals,
+    anchor: int,
+    lag: int,
+    *,
+    floor: int,
+    ceiling: int,
+) -> int | None:
+    """Reference inverse over one deliberately finite integer domain.
+
+    This is intentionally only the contract written out as enumeration: apply
+    the production forward lag to every coordinate the caller permits, retain
+    the coordinates that land at or before the relationship bound, and choose
+    the greatest.  It shares no inverse arithmetic with ``unshift_lag``.
+    """
+
+    feasible = [
+        candidate
+        for candidate in range(floor, ceiling + 1)
+        if (landing := shift_lag(calendar, candidate, lag)) is not None
+        and landing <= anchor
+    ]
+    return max(feasible, default=None)
 
 
 class FreeFloatIsWhatThisActivityCanAbsorbTests(unittest.TestCase):
@@ -165,6 +193,494 @@ class TheInverseAnswersTheCallerNotTheCalendarTests(unittest.TestCase):
         answer = unshift_lag(calendar, -10, -5)
         self.assertEqual(answer, 0)
         self.assertEqual(shift_lag(calendar, answer, -5), -10)
+
+    def test_an_exact_final_work_landing_keeps_the_caller_tail_plateau(self):
+        calendar = CompiledIntervals.of(((0, 5),))
+        self.assertEqual(shift_lag(calendar, 5, -5), 0)
+        self.assertEqual(shift_lag(calendar, 20, -5), 0)
+        self.assertEqual(unshift_lag(calendar, 0, -5, ceiling=20), 20)
+
+    def test_a_ceiling_before_the_first_feasible_lead_returns_no_answer(self):
+        calendar = CompiledIntervals.of(((0, 5),))
+        self.assertIsNone(unshift_lag(calendar, 0, -5, ceiling=4))
+
+
+class TheBoundedInverseAgreesWithAnExhaustiveOracleTests(unittest.TestCase):
+    """The optimized inverse solves the declared caller-bounded inequality."""
+
+    CALENDARS = (
+        CompiledIntervals.of(((0, 5),)),
+        CompiledIntervals.of(((0, 2), (4, 7))),
+        CompiledIntervals.of(((-5, 0), (2, 6))),
+    )
+
+    def test_positive_negative_and_zero_lags_across_boundaries_and_tails(self):
+        floor = -12
+        for calendar in self.CALENDARS:
+            for lag in (-3, -1, 0, 1, 3):
+                for anchor in range(-6, 16):
+                    for ceiling in range(-6, 21):
+                        expected = exhaustive_unshift(
+                            calendar,
+                            anchor,
+                            lag,
+                            floor=floor,
+                            ceiling=ceiling,
+                        )
+                        with self.subTest(
+                            intervals=calendar.intervals,
+                            lag=lag,
+                            anchor=anchor,
+                            ceiling=ceiling,
+                        ):
+                            self.assertEqual(
+                                unshift_lag(calendar, anchor, lag, ceiling=ceiling),
+                                expected,
+                            )
+
+
+class CalendarTailSchedulingConsequencesTests(unittest.TestCase):
+    def test_backward_pass_keeps_float_beyond_the_lag_calendars_final_work(self):
+        predecessor_calendar = CompiledIntervals.of(((0, 20),))
+        lag_calendar = CompiledIntervals.of(((0, 5),))
+        net = network(
+            activity("P", 5, predecessor_calendar),
+            activity(
+                "S",
+                0,
+                predecessor_calendar,
+                constraint_type=ConstraintType.SNLT,
+                constraint_coordinate=0,
+            ),
+            relationships=(link("R1", "P", "S", lag=-5, lag_calendar=lag_calendar),),
+            horizon=20,
+        )
+        forward = forward_pass(net)
+        backward = backward_pass(net, forward, project_late_finish=20)
+        predecessor = backward.by_uid()[uid("P")]
+        self.assertEqual(predecessor.late_finish, 20)
+        self.assertEqual(
+            shift_lag(lag_calendar, predecessor.late_finish, -5),
+            0,
+        )
+
+    def test_free_float_uses_the_callers_horizon_not_the_lag_calendar_tail(self):
+        scheduling = CompiledIntervals.of(((0, 200),))
+        lag_calendar = CompiledIntervals.of(((0, 50),))
+        net = network(
+            activity("P", 90, scheduling),
+            activity(
+                "S",
+                1,
+                scheduling,
+                constraint_type=ConstraintType.SNET,
+                constraint_coordinate=90,
+            ),
+            relationships=(link("R1", "P", "S", lag=-10, lag_calendar=lag_calendar),),
+            horizon=200,
+        )
+        forward = forward_pass(net)
+        backward = backward_pass(net, forward)
+        predecessor = float_analysis(net, forward, backward).by_uid()[uid("P")]
+        self.assertEqual(predecessor.total_float, 1)
+        self.assertEqual(predecessor.free_float, 110)
+
+    def test_start_anchored_float_reserves_room_for_the_predecessor_span(self):
+        scheduling = CompiledIntervals.of(((0, 20),))
+        lag_calendar = CompiledIntervals.of(((0, 12),))
+        net = network(
+            activity(
+                "P",
+                2,
+                scheduling,
+                constraint_type=ConstraintType.SNET,
+                constraint_coordinate=5,
+            ),
+            activity(
+                "S",
+                1,
+                scheduling,
+                constraint_type=ConstraintType.SNET,
+                constraint_coordinate=14,
+            ),
+            relationships=(
+                link("R1", "P", "S", RelationshipType.SS, -2, lag_calendar),
+            ),
+            horizon=20,
+        )
+        forward = forward_pass(net)
+        predecessor = float_analysis(
+            net,
+            forward,
+            backward_pass(net, forward),
+        ).by_uid()[uid("P")]
+        self.assertEqual(predecessor.free_float, 13)
+        self.assertEqual(
+            forward_pass(
+                network(
+                    activity(
+                        "P",
+                        2,
+                        scheduling,
+                        constraint_type=ConstraintType.SNET,
+                        constraint_coordinate=18,
+                    ),
+                    activity(
+                        "S",
+                        1,
+                        scheduling,
+                        constraint_type=ConstraintType.SNET,
+                        constraint_coordinate=14,
+                    ),
+                    relationships=(
+                        link("R1", "P", "S", RelationshipType.SS, -2, lag_calendar),
+                    ),
+                    horizon=20,
+                )
+            ).by_uid()[uid("P")].early_finish,
+            20,
+        )
+
+    def test_snapped_milestone_stops_before_its_calendars_exclusive_tail(self):
+        scheduling = CompiledIntervals.of(((0, 5), (10, 15)))
+        lag_calendar = CompiledIntervals.of(((0, 5),))
+        successor_calendar = CompiledIntervals.of(((0, 20),))
+        net = network(
+            activity("P", 0, scheduling),
+            activity("S", 0, successor_calendar),
+            relationships=(
+                link("R1", "P", "S", RelationshipType.SS, -5, lag_calendar),
+            ),
+            project_start=5,
+            horizon=20,
+        )
+        forward = forward_pass(net, snap_milestones=True)
+        predecessor = float_analysis(
+            net,
+            forward,
+            backward_pass(net, forward, snap_milestones=True),
+        ).by_uid()[uid("P")]
+
+        self.assertEqual(forward.by_uid()[uid("P")].early_start, 10)
+        self.assertEqual(predecessor.free_float, 4)
+        self.assertEqual(
+            forward_pass(
+                network(
+                    activity("P", 0, scheduling),
+                    activity("S", 0, successor_calendar),
+                    relationships=(
+                        link(
+                            "R1",
+                            "P",
+                            "S",
+                            RelationshipType.SS,
+                            -5,
+                            lag_calendar,
+                        ),
+                    ),
+                    project_start=14,
+                    horizon=20,
+                ),
+                snap_milestones=True,
+            ).by_uid()[uid("P")].early_start,
+            14,
+        )
+        with self.assertRaisesRegex(ForwardPassError, "SCHEDULE_HORIZON_EXCEEDED"):
+            forward_pass(
+                network(
+                    activity("P", 0, scheduling),
+                    activity("S", 0, successor_calendar),
+                    relationships=(
+                        link(
+                            "R1",
+                            "P",
+                            "S",
+                            RelationshipType.SS,
+                            -5,
+                            lag_calendar,
+                        ),
+                    ),
+                    project_start=15,
+                    horizon=20,
+                ),
+                snap_milestones=True,
+            )
+
+    def test_snapped_milestone_inverse_does_not_stop_inside_a_calendar_gap(self):
+        scheduling = CompiledIntervals.of(((0, 5), (10, 15)))
+        successor_calendar = CompiledIntervals.of(((0, 20),))
+        net = network(
+            activity("P", 0, scheduling),
+            activity(
+                "S",
+                0,
+                successor_calendar,
+                constraint_type=ConstraintType.SNET,
+                constraint_coordinate=7,
+            ),
+            relationships=(
+                link(
+                    "R1",
+                    "P",
+                    "S",
+                    RelationshipType.SS,
+                    0,
+                    successor_calendar,
+                ),
+            ),
+            horizon=20,
+        )
+        forward = forward_pass(net, snap_milestones=True)
+        predecessor = float_analysis(
+            net,
+            forward,
+            backward_pass(net, forward, snap_milestones=True),
+        ).by_uid()[uid("P")]
+
+        self.assertEqual(forward.by_uid()[uid("P")].early_start, 0)
+        # Coordinate seven is inside the 5-10 gap. A snapped milestone bound
+        # there would move to ten and delay S, so only the four productive
+        # units through coordinate four are free.
+        self.assertEqual(predecessor.free_float, 4)
+
+    def test_milestone_snap_policy_is_part_of_the_forward_fingerprint(self):
+        scheduling = CompiledIntervals.of(((0, 5), (10, 15)))
+        net = network(activity("P", 0, scheduling), horizon=20)
+        unsnapped = forward_pass(net, snap_milestones=False)
+        snapped = forward_pass(net, snap_milestones=True)
+
+        self.assertEqual(unsnapped.times, snapped.times)
+        self.assertNotEqual(unsnapped.fingerprint, snapped.fingerprint)
+
+    def test_nonzero_start_anchor_does_not_stop_inside_a_calendar_gap(self):
+        scheduling = CompiledIntervals.of(((0, 5), (10, 15)))
+        successor_calendar = CompiledIntervals.of(((0, 20),))
+        net = network(
+            activity("P", 2, scheduling),
+            activity(
+                "S",
+                0,
+                successor_calendar,
+                constraint_type=ConstraintType.SNET,
+                constraint_coordinate=7,
+            ),
+            relationships=(
+                link(
+                    "R1",
+                    "P",
+                    "S",
+                    RelationshipType.SS,
+                    0,
+                    successor_calendar,
+                ),
+            ),
+            horizon=20,
+        )
+        forward = forward_pass(net)
+        predecessor = float_analysis(
+            net,
+            forward,
+            backward_pass(net, forward),
+        ).by_uid()[uid("P")]
+
+        self.assertEqual(
+            (forward.by_uid()[uid("P")].early_start, forward.by_uid()[uid("P")].early_finish),
+            (0, 2),
+        )
+        self.assertEqual(predecessor.free_float, 4)
+
+    def test_started_zero_remaining_keeps_actual_start_anchor(self):
+        for kind in (RelationshipType.SS, RelationshipType.SF):
+            with self.subTest(kind=kind):
+                net = network(
+                    activity("P", 2, CompiledIntervals.of(((0, 5), (10, 15))),
+                             actual_start=7, remaining_duration=0),
+                    activity("S", 0, constraint_type=ConstraintType.SNET,
+                             constraint_coordinate=7),
+                    relationships=(link("R1", "P", "S", kind, 0, CONTINUOUS),),
+                    status_time=7, horizon=20,
+                )
+                forward = forward_pass(net, snap_milestones=True)
+                backward = backward_pass(net, forward)
+                floats = float_analysis(net, forward, backward)
+                self.assertEqual(forward.by_uid()[uid("P")].early_start, 7)
+                self.assertEqual(floats.by_uid()[uid("P")].free_float, 0)
+                self.assertEqual(validate_result(net, forward, backward, floats), ())
+
+    def test_actual_start_has_no_movable_float_across_lag_domains(self):
+        for remaining in (0, 2):
+            for kind in (RelationshipType.SS, RelationshipType.SF):
+                for lag in (-5, 0, 5):
+                    for snap in (False, True):
+                        with self.subTest(remaining=remaining, kind=kind, lag=lag, snap=snap):
+                            lag_calendar = (CompiledIntervals.of(((0, 5),))
+                                            if lag < 0 else CONTINUOUS)
+                            net = network(
+                                activity("P", 2, CompiledIntervals.of(((0, 5), (10, 15))),
+                                         actual_start=7, remaining_duration=remaining),
+                                activity("S", 0, constraint_type=ConstraintType.SNET,
+                                         constraint_coordinate=0 if lag < 0 else 12),
+                                relationships=(link("R1", "P", "S", kind, lag, lag_calendar),),
+                                status_time=7, horizon=20,
+                            )
+                            forward = forward_pass(net, snap_milestones=snap)
+                            backward = backward_pass(net, forward)
+                            floats = float_analysis(net, forward, backward)
+                            self.assertEqual(floats.by_uid()[uid("P")].free_float, 0)
+                            self.assertEqual(validate_result(net, forward, backward, floats), ())
+
+    def test_validator_checks_start_placement_at_exclusive_boundary(self):
+        for kind in (RelationshipType.SS, RelationshipType.SF):
+            for duration, snap in ((2, False), (0, True)):
+                with self.subTest(kind=kind, duration=duration):
+                    net = network(
+                        activity("P", duration, CompiledIntervals.of(((5, 10), (15, 20)))),
+                        activity("S", 0, constraint_type=ConstraintType.SNET,
+                                 constraint_coordinate=12),
+                        relationships=(link("R1", "P", "S", kind, 0, CONTINUOUS),),
+                        horizon=20,
+                    )
+                    forward = forward_pass(net, snap_milestones=snap)
+                    backward = backward_pass(net, forward)
+                    floats = float_analysis(net, forward, backward)
+                    self.assertEqual(floats.by_uid()[uid("P")].free_float, 4)
+                    self.assertEqual(validate_result(net, forward, backward, floats), ())
+
+    def test_backward_pass_inherits_and_binds_the_forward_snap_policy(self):
+        scheduling = CompiledIntervals.of(((0, 5), (10, 15)))
+        successor_calendar = CompiledIntervals.of(((0, 20),))
+        net = network(
+            activity("P", 0, scheduling),
+            activity(
+                "S",
+                0,
+                successor_calendar,
+                constraint_type=ConstraintType.SNET,
+                constraint_coordinate=7,
+            ),
+            relationships=(
+                link(
+                    "R1",
+                    "P",
+                    "S",
+                    RelationshipType.SS,
+                    0,
+                    successor_calendar,
+                ),
+            ),
+            horizon=20,
+        )
+        snapped_forward = forward_pass(net, snap_milestones=True)
+        inherited = backward_pass(net, snapped_forward)
+
+        self.assertTrue(inherited.snap_milestones)
+        self.assertEqual(inherited.by_uid()[uid("P")].late_start, 4)
+        with self.assertRaisesRegex(BackwardPassError, "SCHEDULE_POLICY_MISMATCH"):
+            backward_pass(net, snapped_forward, snap_milestones=False)
+
+        unsnapped_forward = forward_pass(net, snap_milestones=False)
+        unsnapped_backward = backward_pass(net, unsnapped_forward)
+        self.assertNotEqual(inherited.fingerprint, unsnapped_backward.fingerprint)
+
+    def test_exactly_pinned_milestone_is_not_reclassified_as_snapped(self):
+        scheduling = CompiledIntervals.of(((0, 5), (10, 15)))
+        successor_calendar = CompiledIntervals.of(((0, 20),))
+        net = network(
+            activity(
+                "P",
+                0,
+                scheduling,
+                constraint_type=ConstraintType.MSO,
+                constraint_coordinate=7,
+            ),
+            activity(
+                "S",
+                0,
+                successor_calendar,
+                constraint_type=ConstraintType.SNET,
+                constraint_coordinate=7,
+            ),
+            relationships=(
+                link(
+                    "R1",
+                    "P",
+                    "S",
+                    RelationshipType.SS,
+                    0,
+                    successor_calendar,
+                ),
+            ),
+            horizon=20,
+        )
+        forward = forward_pass(net, snap_milestones=True)
+        backward = backward_pass(net, forward, snap_milestones=True)
+        predecessor = float_analysis(net, forward, backward).by_uid()[uid("P")]
+
+        self.assertEqual(forward.by_uid()[uid("P")].early_start, 7)
+        self.assertEqual(backward.by_uid()[uid("P")].late_start, 7)
+        self.assertEqual(predecessor.free_float, 0)
+
+    def test_every_relationship_type_and_lag_sign_uses_the_same_bounded_contract(self):
+        scheduling = CompiledIntervals.of(((0, 20),))
+        lag_calendar = CompiledIntervals.of(((0, 12),))
+        for kind in RelationshipType:
+            for lag in (-2, 0, 2):
+                successor_constraint = (
+                    ConstraintType.SNET
+                    if kind in (RelationshipType.FS, RelationshipType.SS)
+                    else ConstraintType.FNET
+                )
+                successor_coordinate = 14 if successor_constraint is ConstraintType.SNET else 15
+                net = network(
+                    activity(
+                        "P",
+                        2,
+                        scheduling,
+                        constraint_type=ConstraintType.SNET,
+                        constraint_coordinate=5,
+                    ),
+                    activity(
+                        "S",
+                        1,
+                        scheduling,
+                        constraint_type=successor_constraint,
+                        constraint_coordinate=successor_coordinate,
+                    ),
+                    relationships=(link("R1", "P", "S", kind, lag, lag_calendar),),
+                    horizon=20,
+                )
+                forward = forward_pass(net)
+                backward = backward_pass(net, forward)
+                floats = float_analysis(net, forward, backward)
+                early = forward.by_uid()
+                predecessor_anchor = (
+                    early[uid("P")].early_finish
+                    if kind in (RelationshipType.FS, RelationshipType.FF)
+                    else early[uid("P")].early_start
+                )
+                successor_bound = (
+                    early[uid("S")].early_start
+                    if kind in (RelationshipType.FS, RelationshipType.SS)
+                    else early[uid("S")].early_finish
+                )
+                permitted = exhaustive_unshift(
+                    lag_calendar,
+                    successor_bound,
+                    lag,
+                    floor=-5,
+                    ceiling=(
+                        net.horizon
+                        if kind in (RelationshipType.FS, RelationshipType.FF)
+                        else net.horizon - 2
+                    ),
+                )
+                self.assertIsNotNone(permitted)
+                expected = signed_working(scheduling, predecessor_anchor, permitted)
+                with self.subTest(kind=kind.value, lag=lag):
+                    self.assertEqual(
+                        floats.by_uid()[uid("P")].free_float,
+                        expected,
+                    )
 
 
 class AReleasedEdgeCannotRefuseTheScheduleTests(unittest.TestCase):
