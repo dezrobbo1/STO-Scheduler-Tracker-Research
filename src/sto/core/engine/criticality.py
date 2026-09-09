@@ -283,7 +283,7 @@ def _free_float(
                 f"lag {relationship.lag} back from {available} leaves the calendar",
             )
         if (
-            uid in snapped_zero_spans
+            (uid in snapped_zero_spans and relationship.anchors_predecessor_finish)
             or (
                 not relationship.anchors_predecessor_finish
                 and uid in calendar_placed_starts

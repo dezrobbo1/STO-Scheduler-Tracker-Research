@@ -28,6 +28,7 @@ from sto.core.engine import (
     unshift_lag,
 )
 from sto.core.model.enums import ConstraintType, ProgressPolicy, RelationshipType
+from sto.core.engine.validate import validate_result
 
 CONTINUOUS = CompiledIntervals.of(((0, 200),))
 
@@ -487,6 +488,41 @@ class CalendarTailSchedulingConsequencesTests(unittest.TestCase):
             (0, 2),
         )
         self.assertEqual(predecessor.free_float, 4)
+
+    def test_started_zero_remaining_keeps_actual_start_anchor(self):
+        for kind in (RelationshipType.SS, RelationshipType.SF):
+            with self.subTest(kind=kind):
+                net = network(
+                    activity("P", 2, CompiledIntervals.of(((0, 5), (10, 15))),
+                             actual_start=7, remaining_duration=0),
+                    activity("S", 0, constraint_type=ConstraintType.SNET,
+                             constraint_coordinate=7),
+                    relationships=(link("R1", "P", "S", kind, 0, CONTINUOUS),),
+                    status_time=7, horizon=20,
+                )
+                forward = forward_pass(net, snap_milestones=True)
+                backward = backward_pass(net, forward)
+                floats = float_analysis(net, forward, backward)
+                self.assertEqual(forward.by_uid()[uid("P")].early_start, 7)
+                self.assertEqual(floats.by_uid()[uid("P")].free_float, 0)
+                self.assertEqual(validate_result(net, forward, backward, floats), ())
+
+    def test_validator_checks_start_placement_at_exclusive_boundary(self):
+        for kind in (RelationshipType.SS, RelationshipType.SF):
+            for duration, snap in ((2, False), (0, True)):
+                with self.subTest(kind=kind, duration=duration):
+                    net = network(
+                        activity("P", duration, CompiledIntervals.of(((5, 10), (15, 20)))),
+                        activity("S", 0, constraint_type=ConstraintType.SNET,
+                                 constraint_coordinate=12),
+                        relationships=(link("R1", "P", "S", kind, 0, CONTINUOUS),),
+                        horizon=20,
+                    )
+                    forward = forward_pass(net, snap_milestones=snap)
+                    backward = backward_pass(net, forward)
+                    floats = float_analysis(net, forward, backward)
+                    self.assertEqual(floats.by_uid()[uid("P")].free_float, 4)
+                    self.assertEqual(validate_result(net, forward, backward, floats), ())
 
     def test_backward_pass_inherits_and_binds_the_forward_snap_policy(self):
         scheduling = CompiledIntervals.of(((0, 5), (10, 15)))
