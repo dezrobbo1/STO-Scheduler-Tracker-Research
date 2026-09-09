@@ -892,6 +892,26 @@ class AStoredCalculationComesBackTests(unittest.TestCase):
         with self.assertRaises(IntegrityError):
             workspace.read_calculation(project_id)
 
+    def test_identical_reimport_cannot_take_an_existing_calculation(self):
+        workspace, project_id = self._imported()
+        stored = workspace.calculate(project_id)
+        workspace.import_file(project_id, filename="again.xml", data=FIXTURE.read_bytes())
+        second = workspace.load(project_id, refresh=True)
+        self.assertNotEqual(second.version_id, stored.version_id)
+        with self.connect() as conn:
+            hashes = conn.execute(
+                "SELECT canonical_hash FROM schedule_versions WHERE id IN (%s, %s)",
+                (stored.version_id, second.version_id),
+            ).fetchall()
+        self.assertEqual(hashes[0]["canonical_hash"], hashes[1]["canonical_hash"])
+        with self.assertRaises(psycopg.errors.CheckViolation):
+            with self.connect() as conn:
+                conn.execute("UPDATE schedule_calculations SET version_id = %s WHERE id = %s",
+                             (second.version_id, stored.calculation_id))
+                conn.commit()
+        reread = workspace.read_calculation(project_id, calculation_id=stored.calculation_id)
+        self.assertEqual(reread.version_id, stored.version_id)
+
     def test_a_calculation_that_names_the_wrong_hash_is_refused(self):
         from sto.scheduling.working_schedule import IntegrityError
 

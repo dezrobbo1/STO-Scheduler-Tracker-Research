@@ -200,7 +200,10 @@ def _seconds_of_day(value: Any) -> int:
     if isinstance(value, time):
         parsed = value
     else:
-        parsed = time.fromisoformat(str(value))
+        try:
+            parsed = time.fromisoformat(str(value))
+        except ValueError as error:
+            raise MigrationError(f"invalid working time: {value!r} ({error})") from None
     return parsed.hour * 3600 + parsed.minute * 60 + parsed.second
 
 

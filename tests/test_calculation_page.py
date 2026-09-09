@@ -10,6 +10,9 @@ from __future__ import annotations
 
 import os
 import re
+import json
+import shutil
+import subprocess
 import unittest
 from html.parser import HTMLParser
 from pathlib import Path
@@ -101,7 +104,34 @@ class ThePageIsSelfConsistentTests(unittest.TestCase):
         scale = self.script[self.script.index("function moments("):]
         scale = scale[: scale.index("function band(")]
         self.assertIn("if (!row.early_start) continue;", scale)
-        self.assertIn("if (!row.span_start) continue;", scale)
+        self.assertNotIn("result.summaries", scale)
+
+    def test_scale_and_status_behaviour(self):
+        node = shutil.which("node") or os.environ.get("CODEX_PRIMARY_RUNTIME_NODE")
+        if not node:
+            self.skipTest("Node is required to execute the page's JavaScript")
+        functions = "\n".join(
+            re.search(r"function " + name + r"\([\s\S]*?\n}", self.script).group(0)
+            for name in ("instant", "moments", "statusDate")
+        )
+        probe = r"""
+const day = '2026-09-09T08:00:00';
+const row = {early_start: day, early_finish: day, source_start: day, source_finish: day};
+const result = {activities: [row], summaries: []};
+const base = moments(result);
+result.summaries.push({span_start: day, source_start: '2000-01-01T00:00:00'});
+console.log(JSON.stringify({base, withSummary: moments(result),
+  empty: moments({activities: [], summaries: result.summaries}),
+  status: statusDate({status_time_outside_window: true})}));
+"""
+        completed = subprocess.run([node, "-e", functions + probe],
+                                   check=True, text=True, capture_output=True)
+        measured = json.loads(completed.stdout)
+        self.assertIsNotNone(measured["base"])
+        self.assertGreater(measured["base"]["span"], 0)
+        self.assertEqual(measured["base"], measured["withSummary"])
+        self.assertIsNone(measured["empty"])
+        self.assertIn("scheduling window policy", measured["status"])
 
     def test_it_drops_a_response_for_a_project_no_longer_selected(self):
         """Two requests can finish out of order while the selector stays live."""

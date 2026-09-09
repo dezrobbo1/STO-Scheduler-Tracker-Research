@@ -280,6 +280,27 @@ class VisibleCalculationTests(unittest.TestCase):
                 ).fetchone()
             self.assertGreater(failed["n"], 0, "no failed batch was recorded")
 
+    def test_malformed_working_time_records_a_failed_import(self):
+        with self._client() as client:
+            project = self._imported(client)
+            payload = FIXTURE.read_bytes()
+            import re
+            payload, replacements = re.subn(
+                rb"<FromTime>[^<]+</FromTime>",
+                b"<FromTime>not-a-time</FromTime>", payload, count=1,
+            )
+            self.assertEqual(replacements, 1)
+            refused = client.post(f"/api/projects/{project}/imports",
+                files={"file": ("invalid-time.xml", payload, "application/xml")})
+            self.assertEqual(refused.status_code, 422, refused.text)
+            with self.connect() as conn:
+                failed = conn.execute(
+                    "SELECT count(*) AS n FROM import_batches "
+                    "WHERE project_id = %s AND status = 'failed'",
+                    (uuid.UUID(project),),
+                ).fetchone()
+            self.assertGreater(failed["n"], 0)
+
     def test_an_oversized_upload_is_refused(self):
         from sto.api.app import MAX_UPLOAD_BYTES
 

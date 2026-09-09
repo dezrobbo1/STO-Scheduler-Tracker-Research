@@ -73,12 +73,12 @@ function describe(result) {
 }
 
 function statusDate(result) {
-  // A file whose status date fell outside the compiled window had it removed,
+  // A status date rejected by the scheduling window policy was removed,
   // so the passes ran without one. That is not the same as a file that never
   // carried one, and a page showing only "none" would say it was.
   if (result.status_time) return moment(result.status_time);
   if (result.status_time_outside_window) {
-    return "discarded — the file's status date fell outside the compiled window";
+    return "discarded by the scheduling window policy (before project start or outside the compiled window)";
   }
   return "none in the file";
 }
@@ -131,17 +131,13 @@ function moments(result) {
       if (row[key]) values.push(instant(row[key]));
     }
   }
-  for (const row of result.summaries) {
-    if (!row.span_start) continue;
-    for (const key of ["span_start", "span_finish", "source_start", "source_finish"]) {
-      if (row[key]) values.push(instant(row[key]));
-    }
-  }
   const finite = values.filter(Number.isFinite);
   if (finite.length === 0) return null;
   const from = Math.min(...finite);
   const to = Math.max(...finite);
-  return to > from ? { from, span: to - from } : null;
+  // Give coincident milestones an extent so their minimum-width bands draw.
+  const padding = 12 * 60 * 60 * 1000;
+  return to > from ? { from, span: to - from } : { from: from - padding, span: 2 * padding };
 }
 
 function band(scale, start, finish, className) {

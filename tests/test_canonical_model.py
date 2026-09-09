@@ -14,6 +14,8 @@ takes a deliberate act rather than an oversight.
 from __future__ import annotations
 
 import os
+import re
+import tempfile
 import unittest
 from datetime import datetime
 from pathlib import Path
@@ -194,6 +196,21 @@ class CodecTests(unittest.TestCase):
 
 
 class MigrationTests(unittest.TestCase):
+    def test_invalid_working_times_are_coded_migration_refusals(self):
+        for tag in ("FromTime", "ToTime"):
+            with self.subTest(tag=tag), tempfile.TemporaryDirectory() as folder:
+                payload, count = re.subn(
+                    f"<{tag}>[^<]+</{tag}>".encode(),
+                    f"<{tag}>not-a-time</{tag}>".encode(),
+                    SYNTHETIC.read_bytes(), count=1,
+                )
+                self.assertEqual(count, 1)
+                path = Path(folder) / "invalid.xml"
+                path.write_bytes(payload)
+                document = import_mspdi(str(path))
+                with self.assertRaisesRegex(MigrationError, "invalid working time"):
+                    migrate(document)
+
     def test_unknown_importer_profile_is_refused(self):
         with self.assertRaises(MigrationError):
             migrate({"importer_profile": "something-else"})

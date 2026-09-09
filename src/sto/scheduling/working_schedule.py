@@ -406,11 +406,10 @@ class Workspace:
                 f"calculation {header['id']} names version {header['version_id']}, "
                 "which is not in the database"
             )
-        # The calculation's own fingerprint says nothing about the document it
-        # was computed from -- so a version_id repointed after the insert, or a
-        # stored document altered under it, left the result verifiable and its
-        # input not. The named version is verified here, and it has to be this
-        # project's and the one the header says it hashed.
+        # V003 keeps the calculation's version association immutable, including
+        # across imports with identical document hashes. Verify the named
+        # document here as well: its contents must still be this project's
+        # and the ones the calculation header says it hashed.
         named = _verify(version["project_id"], version)
         if named.project_id != project_id:
             raise IntegrityError(
