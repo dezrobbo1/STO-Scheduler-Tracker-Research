@@ -23,7 +23,7 @@ function moment(value) {
   // The API returns wall-clock without an offset, which is what a schedule
   // date is; showing it verbatim keeps it that way rather than shifting it
   // into the reader's zone.
-  return value ? value.replace("T", " ").slice(0, 16) : "";
+  return value ? value.replace("T", " ").slice(0, 19) : "";
 }
 
 function hours(seconds) {
@@ -147,11 +147,12 @@ function band(scale, start, finish, className) {
   if (!Number.isFinite(from) || !Number.isFinite(to)) return null;
   const element = document.createElement("span");
   element.className = className;
-  const left = ((from - scale.from) / scale.span) * 100;
+  let left = ((from - scale.from) / scale.span) * 100;
   // A milestone has no width of its own; a hairline keeps it visible instead
   // of rendering as nothing at all.
   const width = Math.max(((to - from) / scale.span) * 100, 0.4);
-  element.style.left = Math.max(0, Math.min(100, left)) + "%";
+  left = Math.max(0, Math.min(100 - width, left));
+  element.style.left = left + "%";
   element.style.width = Math.max(0, Math.min(100 - left, width)) + "%";
   return element;
 }

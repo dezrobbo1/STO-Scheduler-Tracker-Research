@@ -34,6 +34,7 @@ from sto.core.engine import (
     relationship_binds,
     remaining_bound,
     state_of,
+    validate_result,
 )
 from sto.core.model.enums import ConstraintType, ProgressPolicy, RelationshipType
 
@@ -582,6 +583,46 @@ class CompletedWorkAndCriticalityTests(unittest.TestCase):
         self.assertEqual(row.total_float, 0)
         self.assertFalse(row.complete)
         self.assertTrue(row.critical)
+
+    def test_a_complete_span_cannot_absorb_float_through_its_finish(self):
+        """Actual finish is as immutable as actual start for FS and FF edges.
+
+        The finite lag calendar deliberately ends before the actual finish.
+        Its constant tail used to let the lag inverse move the completed
+        finish to the scheduling horizon and report thirteen units of free
+        float on a span that cannot move at all.
+        """
+
+        scheduling = CompiledIntervals.of(((0, 20),))
+        finite_lag = CompiledIntervals.of(((0, 5),))
+        for kind in (RelationshipType.FS, RelationshipType.FF):
+            with self.subTest(kind=kind):
+                net = network(
+                    activity(
+                        "A",
+                        2,
+                        scheduling,
+                        actual_start=5,
+                        actual_finish=7,
+                    ),
+                    activity("B", 1, scheduling),
+                    relationships=(
+                        PlannedRelationship(
+                            uid("R1"),
+                            uid("A"),
+                            uid("B"),
+                            kind,
+                            -5,
+                            finite_lag,
+                        ),
+                    ),
+                    horizon=20,
+                )
+                forward = forward_pass(net)
+                backward = backward_pass(net, forward)
+                floats = float_analysis(net, forward, backward)
+                self.assertEqual(floats.by_uid()[uid("A")].free_float, 0)
+                self.assertEqual(validate_result(net, forward, backward, floats), ())
 
 
 class DeterminismTests(unittest.TestCase):

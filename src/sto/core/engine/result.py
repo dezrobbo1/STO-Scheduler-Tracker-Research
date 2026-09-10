@@ -251,10 +251,11 @@ def project_result(
     slack = floats.by_uid()
     assumptions: dict[UUID, list[str]] = {}
     edges: list[RelationshipResult] = []
+    released = frozenset(backward.overridden_relationships)
     for row in plan.assumed:
         if row.kind == "activity":
             assumptions.setdefault(row.uid, []).append(row.code)
-        else:
+        elif row.uid not in released:
             edges.append(RelationshipResult(row.uid, SCHEDULED, row.code, row.detail))
     for dropped in plan.excluded:
         if dropped.kind != "activity":
@@ -264,10 +265,10 @@ def project_result(
     # force. The backward pass did not walk them and the float did not measure
     # across them, so a result that recorded only the plan's dispositions
     # showed a retained edge taking part in dates it took no part in.
-    for released in backward.overridden_relationships:
+    for released_uid in backward.overridden_relationships:
         edges.append(
             RelationshipResult(
-                released,
+                released_uid,
                 RELEASED,
                 "RELATIONSHIP_RELEASED_BY_PROGRESS",
                 plan.progress_policy.value,

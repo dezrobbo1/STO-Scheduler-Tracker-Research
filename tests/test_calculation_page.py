@@ -133,6 +133,36 @@ console.log(JSON.stringify({base, withSummary: moments(result),
         self.assertIsNone(measured["empty"])
         self.assertIn("scheduling window policy", measured["status"])
 
+    def test_second_precision_and_a_terminal_milestone_are_visible(self):
+        node = shutil.which("node") or os.environ.get("CODEX_PRIMARY_RUNTIME_NODE")
+        if not node:
+            self.skipTest("Node is required to execute the page's JavaScript")
+        functions = "\n".join(
+            re.search(r"function " + name + r"\([\s\S]*?\n}", self.script).group(0)
+            for name in ("moment", "instant", "band")
+        )
+        probe = r"""
+global.document = {createElement: () => ({className: '', style: {}})};
+const edge = band(
+  {from: Date.UTC(2026, 0, 1, 0, 0, 0), span: 1000},
+  '2026-01-01T00:00:01',
+  '2026-01-01T00:00:01',
+  'bar computed'
+);
+console.log(JSON.stringify({
+  timestamp: moment('2026-01-01T00:00:07'),
+  left: edge.style.left,
+  width: edge.style.width
+}));
+"""
+        completed = subprocess.run(
+            [node, "-e", functions + probe], check=True, text=True, capture_output=True
+        )
+        measured = json.loads(completed.stdout)
+        self.assertEqual(measured["timestamp"], "2026-01-01 00:00:07")
+        self.assertAlmostEqual(float(measured["left"].removesuffix("%")), 99.6)
+        self.assertAlmostEqual(float(measured["width"].removesuffix("%")), 0.4)
+
     def test_it_drops_a_response_for_a_project_no_longer_selected(self):
         """Two requests can finish out of order while the selector stays live."""
 

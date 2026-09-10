@@ -41,6 +41,7 @@ from sto.scheduling.working_schedule import (
     ImportRefused,
     IntegrityError,
     NoSchedule,
+    StaleSchedule,
     UnknownProject,
     Workspace,
 )
@@ -304,6 +305,8 @@ def create_app(workspace: Workspace | None = None) -> FastAPI:
             ) from None
         except UnknownProject:
             raise HTTPException(404, "no such project") from None
+        except StaleSchedule as error:
+            raise HTTPException(409, str(error)) from None
         except (NetworkError, CalendarCompileError) as error:
             # The engine's whole refusal family, not PlanError alone. A
             # schedule that imported cleanly and then would not compile -- one
