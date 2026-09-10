@@ -195,7 +195,7 @@ def main() -> int:
                 exported_provenance = {
                     "current_version_id": exported["current_version_id"],
                     "canonical_hash": exported["calculation"]["canonical_hash"],
-                    "calculation_id": exported["calculation"]["calculation_id"],
+                    "calculation_id": exported["calculation"]["id"],
                     "fingerprint": exported["calculation"]["fingerprint"],
                 }
                 if exported_provenance != expected_provenance:
