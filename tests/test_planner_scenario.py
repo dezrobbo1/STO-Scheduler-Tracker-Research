@@ -19,6 +19,7 @@ MIGRATIONS = ROOT / "infra" / "migrations"
 
 try:
     import psycopg
+    from psycopg.rows import dict_row
     from fastapi.testclient import TestClient
 except ImportError as error:
     if REQUIRE_DB:
@@ -164,7 +165,7 @@ class PlannerScenarioTests(unittest.TestCase):
             scenario_downstream["early_start"],
         )
 
-        with psycopg.connect(self.url) as conn:
+        with psycopg.connect(self.url, row_factory=dict_row) as conn:
             versions = conn.execute(
                 "SELECT id, kind, canonical_hash FROM schedule_versions WHERE project_id=%s "
                 "ORDER BY sequence",
