@@ -74,6 +74,11 @@ if os.environ.get("STO_REQUIRE_NATIVE") == "1":
         raise RuntimeError(
             f"STO_REQUIRE_NATIVE=1 but these native fixtures are not here: {absent}"
         )
+if os.environ.get("STO_REQUIRE_DAY5") == "1" and not FIXTURES["day5"].is_file():
+    raise RuntimeError(
+        "STO_REQUIRE_DAY5=1 but the day-5 fixture is not here: "
+        f"{FIXTURES['day5']}"
+    )
 if os.environ.get("STO_REQUIRE_BOILER") == "1":
     absent = sorted(
         name for name, path in FIXTURES.items()

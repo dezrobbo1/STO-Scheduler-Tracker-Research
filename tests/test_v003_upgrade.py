@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import os
 import secrets
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -39,6 +40,10 @@ except ImportError as error:
 def _reachable() -> bool:
     if psycopg is None:
         return False
+    if shutil.which("psql") is None:
+        if REQUIRE_DB:
+            raise RuntimeError("STO_REQUIRE_DB=1 but the psql executable is unavailable")
+        return False
     try:
         with psycopg.connect(ADMIN_URL, connect_timeout=3):
             return True
@@ -55,7 +60,7 @@ AVAILABLE = _reachable()
 
 @unittest.skipUnless(
     AVAILABLE,
-    "PostgreSQL or the api extra not available; set STO_REQUIRE_DB=1 to require it",
+    "PostgreSQL, psql, or the api extra not available; set STO_REQUIRE_DB=1 to require it",
 )
 class V003UpgradeTests(unittest.TestCase):
     def test_v002_data_survives_the_supported_v003_upgrade(self):
