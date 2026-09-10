@@ -80,27 +80,12 @@ function instant(value) {
   return Date.UTC(Number(parts[1]), Number(parts[2]) - 1, Number(parts[3]), Number(parts[4]), Number(parts[5]), Number(parts[6] ?? 0));
 }
 
-function moments(result) {
-  const values = [];
-  for (const row of result.activities) {
-    if (!row.early_start) continue;
-    for (const key of ["early_start", "early_finish", "source_start", "source_finish"]) {
-      if (row[key]) values.push(instant(row[key]));
-    }
-  }
-  const finite = values.filter(Number.isFinite);
-  if (finite.length === 0) return null;
-  const from = Math.min(...finite);
-  const to = Math.max(...finite);
-  const padding = 12 * 60 * 60 * 1000;
-  return to > from ? { from, span: to - from } : { from: from - padding, span: 2 * padding };
-}
-
 function comparisonMoments(state) {
   const values = [];
   for (const result of [state.baseline, state.scenario]) {
     if (!result) continue;
     for (const row of result.activities) {
+      if (!row.early_start) continue;
       for (const key of ["source_start", "source_finish", "early_start", "early_finish"]) {
         if (row[key]) values.push(instant(row[key]));
       }
@@ -146,6 +131,22 @@ function disposition(row) {
 function detail(row) {
   if (row.disposition === "excluded") return [row.exclusion_code, row.exclusion_detail].filter(Boolean).join(": ");
   return (row.assumptions ?? []).join(", ");
+}
+
+function calculationDetail(row) {
+  const values = [];
+  if (row.late_start) values.push("late " + span(row.late_start, row.late_finish));
+  if (row.total_float_seconds !== null) values.push("TF " + hours(row.total_float_seconds));
+  if (row.free_float_seconds !== null) values.push("FF " + hours(row.free_float_seconds));
+  if (row.critical !== null) values.push(row.critical ? "critical" : "not critical");
+  if (row.progress_state) values.push("progress " + row.progress_state);
+  if (row.placed_by) values.push("placed by " + row.placed_by);
+  if (row.late_placed_by) values.push("late bound " + row.late_placed_by);
+  if (row.constraint_override) values.push("constraint override " + row.constraint_override);
+  if (row.agrees_with_source !== null) {
+    values.push(row.agrees_with_source ? "source dates agree" : "source dates differ");
+  }
+  return values.join(" · ");
 }
 
 function describe(state) {
@@ -247,6 +248,7 @@ function renderRows(state) {
       [span(row.early_start, row.early_finish), ""],
       [scenario ? span(scenario.early_start, scenario.early_finish) : "—", ""],
       [movement === "edited" ? "duration edited" : movement === "downstream" ? "downstream moved" : "", ""],
+      [calculationDetail(active), "calculation-detail"],
       [detail(active), "detail"],
     ];
     for (const [value, className] of values) {
@@ -362,25 +364,33 @@ importForm.addEventListener("submit", async (event) => {
 scenarioForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (!currentState || !activitySelect.value) return;
+  const projectId = currentState.project_id;
+  const expectedVersionId = currentState.current_version_id;
+  const activityUid = activitySelect.value;
   const seconds = Math.round(Number(durationInput.value) * 3600);
   applyScenario.disabled = true; say("Calculating scenario…");
   try {
-    const state = await json("/api/projects/" + currentState.project_id + "/scenario", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({expected_version_id: currentState.current_version_id, activity_uid: activitySelect.value, planned_duration_seconds: seconds})});
+    const state = await json("/api/projects/" + projectId + "/scenario", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({expected_version_id: expectedVersionId, activity_uid: activityUid, planned_duration_seconds: seconds})});
+    if (projects.value !== projectId) return;
     render(state); say("Scenario calculated and stored. Changed and downstream rows are marked.");
   } catch (error) {
+    if (projects.value !== projectId) return;
     say(error.message + (error.status === 409 ? " Reloaded current state." : ""), "error");
     if (error.status === 409) await show(projects.value);
-  } finally { applyScenario.disabled = false; }
+  } finally { if (projects.value === projectId) applyScenario.disabled = false; }
 });
 
 resetScenario.addEventListener("click", async () => {
   if (!currentState) return;
+  const projectId = currentState.project_id;
+  const expectedVersionId = currentState.current_version_id;
   resetScenario.disabled = true; say("Resetting to baseline…");
   try {
-    const state = await json("/api/projects/" + currentState.project_id + "/scenario/reset", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({expected_version_id: currentState.current_version_id})});
+    const state = await json("/api/projects/" + projectId + "/scenario/reset", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({expected_version_id: expectedVersionId})});
+    if (projects.value !== projectId) return;
     render(state); say("Scenario reset. The baseline result is active again.");
-  } catch (error) { say(error.message, "error"); }
-  finally { resetScenario.disabled = false; }
+  } catch (error) { if (projects.value === projectId) say(error.message, "error"); }
+  finally { if (projects.value === projectId) resetScenario.disabled = false; }
 });
 
 activitySelect.addEventListener("change", syncDuration);

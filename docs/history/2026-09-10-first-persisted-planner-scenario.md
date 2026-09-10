@@ -42,11 +42,10 @@ movement result is reported.
 
 The KILN evidence fixture (SHA-256
 `b7c14b631ecc7c15db7731e4a5159ecefe68aaa1c10e76262f84db6b8c37d3ca`)
-produced 416 scheduled rows and 182 not-started, assumption-free structural
-candidates with successors. Increasing one candidate by 3,600 seconds moved
-24 downstream calculated spans. The chosen row had neither an assumption nor
-an exclusion. This is an internal production-engine scenario probe over real
-input, not a stored-XML agreement or Project-native result.
+was also used for one bounded local smoke check. An assumption-free supported
+activity was lengthened and the production engine moved its successor spans.
+This is an INTERNAL CONFORMANCE scenario probe over real input, not a pinned
+agreement measurement, stored-XML agreement or Project-native result.
 
 This is a scenario-state export, not Microsoft Project round-trip evidence.
 No Project-native session is part of PL14.

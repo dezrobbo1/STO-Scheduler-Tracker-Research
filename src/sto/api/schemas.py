@@ -189,7 +189,7 @@ class CalculationResponse(BaseModel):
 class ScenarioEdit(BaseModel):
     expected_version_id: uuid.UUID
     activity_uid: uuid.UUID
-    planned_duration_seconds: int = Field(gt=0)
+    planned_duration_seconds: int = Field(gt=0, strict=True)
 
 
 class ScenarioReset(BaseModel):

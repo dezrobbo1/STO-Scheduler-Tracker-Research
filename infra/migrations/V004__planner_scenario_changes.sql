@@ -46,20 +46,22 @@ DECLARE
   baseline_kind TEXT;
   scenario_project UUID;
   scenario_kind TEXT;
+  scenario_parent UUID;
   scenario_cause UUID;
   scenario_cause_type TEXT;
 BEGIN
   SELECT project_id, kind
     INTO baseline_project, baseline_kind
     FROM schedule_versions WHERE id = NEW.baseline_version_id;
-  SELECT project_id, kind, cause_id, cause_type
-    INTO scenario_project, scenario_kind, scenario_cause, scenario_cause_type
+  SELECT project_id, kind, parent_id, cause_id, cause_type
+    INTO scenario_project, scenario_kind, scenario_parent, scenario_cause, scenario_cause_type
     FROM schedule_versions WHERE id = NEW.scenario_version_id;
 
   IF baseline_project IS DISTINCT FROM NEW.project_id
      OR scenario_project IS DISTINCT FROM NEW.project_id
      OR baseline_kind <> 'baseline'
      OR scenario_kind <> 'scenario'
+     OR scenario_parent IS DISTINCT FROM NEW.baseline_version_id
      OR scenario_cause_type <> 'planner_edit'
      OR scenario_cause IS DISTINCT FROM NEW.id THEN
     RAISE EXCEPTION 'invalid scenario change lineage'

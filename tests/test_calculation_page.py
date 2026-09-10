@@ -103,7 +103,7 @@ class ThePageIsSelfConsistentTests(unittest.TestCase):
         track by a row the reader could not see.
         """
 
-        scale = self.script[self.script.index("function moments("):]
+        scale = self.script[self.script.index("function comparisonMoments("):]
         scale = scale[: scale.index("function band(")]
         self.assertIn("if (!row.early_start) continue;", scale)
         self.assertNotIn("result.summaries", scale)
@@ -114,16 +114,17 @@ class ThePageIsSelfConsistentTests(unittest.TestCase):
             self.skipTest("Node is required to execute the page's JavaScript")
         functions = "\n".join(
             re.search(r"function " + name + r"\([\s\S]*?\n}", self.script).group(0)
-            for name in ("instant", "moments", "statusDate")
+            for name in ("instant", "comparisonMoments", "statusDate")
         )
         probe = r"""
 const day = '2026-09-09T08:00:00';
 const row = {early_start: day, early_finish: day, source_start: day, source_finish: day};
-const result = {activities: [row], summaries: []};
-const base = moments(result);
-result.summaries.push({span_start: day, source_start: '2000-01-01T00:00:00'});
-console.log(JSON.stringify({base, withSummary: moments(result),
-  empty: moments({activities: [], summaries: result.summaries}),
+const hidden = {early_start: null, source_start: '2000-01-01T00:00:00'};
+const state = {baseline: {activities: [row]}, scenario: null};
+const base = comparisonMoments(state);
+state.baseline.activities.push(hidden);
+console.log(JSON.stringify({base, withHidden: comparisonMoments(state),
+  empty: comparisonMoments({baseline: {activities: [hidden]}, scenario: null}),
   status: statusDate({status_time_outside_window: true})}));
 """
         completed = subprocess.run([node, "-e", functions + probe],
@@ -131,7 +132,7 @@ console.log(JSON.stringify({base, withSummary: moments(result),
         measured = json.loads(completed.stdout)
         self.assertIsNotNone(measured["base"])
         self.assertGreater(measured["base"]["span"], 0)
-        self.assertEqual(measured["base"], measured["withSummary"])
+        self.assertEqual(measured["base"], measured["withHidden"])
         self.assertIsNone(measured["empty"])
         self.assertIn("scheduling window policy", measured["status"])
 
@@ -218,6 +219,20 @@ console.log(JSON.stringify({
 
         self.assertIn("awaiting", self.script)
         self.assertIn("if (awaiting !== projectId) return;", self.script)
+        self.assertGreaterEqual(
+            self.script.count("if (projects.value !== projectId) return;"), 3
+        )
+
+    def test_duration_control_and_calculation_detail_keep_the_existing_contract(self):
+        self.assertIn('id="duration-hours" type="number" min="0.0003" step="any"', self.html)
+        self.assertIn("Calculation details", self.html)
+        for field in (
+            "late_start", "late_finish", "total_float_seconds", "free_float_seconds",
+            "critical", "progress_state", "placed_by", "late_placed_by",
+            "constraint_override", "agrees_with_source",
+        ):
+            with self.subTest(field):
+                self.assertIn("row." + field, self.script)
 
     def test_every_element_the_script_reaches_for_exists_in_the_page(self):
         wanted = set(re.findall(r'querySelector\("#([\w-]+)', self.script))

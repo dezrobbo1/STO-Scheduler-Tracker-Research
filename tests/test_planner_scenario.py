@@ -252,6 +252,77 @@ class PlannerScenarioTests(unittest.TestCase):
             recovered["baseline"]["fingerprint"], reset_state["baseline"]["fingerprint"]
         )
 
+    def test_database_refuses_a_named_baseline_that_is_not_the_scenario_parent(self):
+        client, project, imported, _ = self.prepared("lineage-parent")
+        initial = client.get(f"/api/projects/{project}/planner").json()
+        target = initial["eligible_activities"][0]
+        scenario = client.post(
+            f"/api/projects/{project}/scenario",
+            json={
+                "expected_version_id": initial["current_version_id"],
+                "activity_uid": target["activity_uid"],
+                "planned_duration_seconds": target["planned_duration_seconds"] + 3600,
+            },
+        ).json()
+        alternate_baseline = uuid.uuid4()
+        bad_scenario = uuid.uuid4()
+        bad_change = uuid.uuid4()
+        with self.assertRaises(psycopg.errors.CheckViolation):
+            with psycopg.connect(self.url) as conn:
+                next_sequence = conn.execute(
+                    "SELECT max(sequence) + 1 FROM schedule_versions WHERE project_id=%s",
+                    (uuid.UUID(project),),
+                ).fetchone()[0]
+                conn.execute(
+                    """
+                    INSERT INTO schedule_versions
+                      (id, project_id, kind, sequence, parent_id, canonical_hash,
+                       schema_version, engine_profile, cause_type, cause_id,
+                       document, identity_map)
+                    SELECT %s, project_id, 'baseline', %s, id, canonical_hash,
+                           schema_version, engine_profile, 'import', NULL,
+                           document, identity_map
+                    FROM schedule_versions WHERE id=%s
+                    """,
+                    (alternate_baseline, next_sequence, uuid.UUID(imported["version_id"])),
+                )
+                conn.execute(
+                    """
+                    INSERT INTO schedule_versions
+                      (id, project_id, kind, sequence, parent_id, canonical_hash,
+                       schema_version, engine_profile, cause_type, cause_id,
+                       document, identity_map)
+                    SELECT %s, project_id, 'scenario', %s, %s, canonical_hash,
+                           schema_version, engine_profile, 'planner_edit', %s,
+                           document, identity_map
+                    FROM schedule_versions WHERE id=%s
+                    """,
+                    (
+                        bad_scenario,
+                        next_sequence + 1,
+                        uuid.UUID(imported["version_id"]),
+                        bad_change,
+                        uuid.UUID(scenario["current_version_id"]),
+                    ),
+                )
+                conn.execute(
+                    """
+                    INSERT INTO scenario_changes
+                      (id, project_id, baseline_version_id, scenario_version_id,
+                       activity_uid, before_seconds, after_seconds)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    """,
+                    (
+                        bad_change,
+                        uuid.UUID(project),
+                        alternate_baseline,
+                        bad_scenario,
+                        uuid.UUID(target["activity_uid"]),
+                        target["planned_duration_seconds"],
+                        target["planned_duration_seconds"] + 3600,
+                    ),
+                )
+
     def test_invalid_unsupported_and_cross_project_edits_are_controlled(self):
         client, first, _, _ = self.prepared("first")
         second_client, second, _, _ = self.prepared("second")
@@ -273,6 +344,15 @@ class PlannerScenarioTests(unittest.TestCase):
             },
         )
         self.assertEqual(invalid.status_code, 422)
+        boolean = client.post(
+            f"/api/projects/{first}/scenario",
+            json={
+                "expected_version_id": first_state["current_version_id"],
+                "activity_uid": first_state["eligible_activities"][0]["activity_uid"],
+                "planned_duration_seconds": True,
+            },
+        )
+        self.assertEqual(boolean.status_code, 422)
         unsupported = client.post(
             f"/api/projects/{first}/scenario",
             json={

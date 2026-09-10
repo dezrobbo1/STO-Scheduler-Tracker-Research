@@ -43,7 +43,7 @@
       <label for="activity">Supported leaf activity</label>
       <select id="activity"></select>
       <label for="duration-hours">Planned duration (hours)</label>
-      <input id="duration-hours" type="number" min="0.0003" step="0.25" required>
+      <input id="duration-hours" type="number" min="0.0003" step="any" required>
       <button id="apply-scenario" type="submit">Create scenario</button>
       <button id="reset-scenario" type="button">Reset to baseline</button>
       <a id="export-scenario" class="button" download>Export prototype state</a>
@@ -64,7 +64,7 @@
     <h2 id="rows-heading">Activities</h2>
     <p class="lede">Every row keeps its scheduling disposition visible. Select an eligible row to load it into the edit control.</p>
     <div class="scroll"><table id="rows">
-      <thead><tr><th scope="col">Edit</th><th scope="col">Code</th><th scope="col">Name</th><th scope="col">Disposition</th><th scope="col">Imported</th><th scope="col">Baseline calculated</th><th scope="col">Scenario calculated</th><th scope="col">Movement</th><th scope="col">Assumptions / exclusions</th></tr></thead>
+      <thead><tr><th scope="col">Edit</th><th scope="col">Code</th><th scope="col">Name</th><th scope="col">Disposition</th><th scope="col">Imported</th><th scope="col">Baseline calculated</th><th scope="col">Scenario calculated</th><th scope="col">Movement</th><th scope="col">Calculation details</th><th scope="col">Assumptions / exclusions</th></tr></thead>
       <tbody></tbody>
     </table></div>
   </section>

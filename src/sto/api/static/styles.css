@@ -34,6 +34,7 @@ th, td { text-align: left; padding: .42rem .5rem; border-bottom: 1px solid var(-
 th { position: sticky; top: 0; background: Canvas; }
 td.name { max-width: 17rem; overflow: hidden; text-overflow: ellipsis; }
 td.detail { max-width: 22rem; overflow: hidden; text-overflow: ellipsis; color: var(--muted); }
+td.calculation-detail { max-width: 32rem; overflow: hidden; text-overflow: ellipsis; color: var(--muted); }
 tr[data-disposition="excluded"] { opacity: .65; font-style: italic; }
 tr[data-movement="edited"] { background: color-mix(in srgb, var(--changed) 11%, transparent); }
 tr[data-movement="downstream"] { background: color-mix(in srgb, var(--accent) 8%, transparent); }
