@@ -519,15 +519,18 @@ class Workspace:
         expected_version_id: uuid.UUID,
         activity_uid: uuid.UUID,
         planned_duration_seconds: int,
-        before: timedelta = timedelta(days=90),
-        after: timedelta = timedelta(days=365),
+        before: timedelta | None = None,
+        after: timedelta | None = None,
     ) -> ScenarioResult:
         """Derive, calculate and atomically publish one duration scenario.
 
-        The imported baseline document is never updated.  Expensive engine
-        work happens before the transaction, then the expected active version
-        and baseline are checked again under the project lock.  A stale edit
-        therefore stores neither a version nor a calculation.
+        The imported baseline document is never updated. A scenario is a
+        comparison with one exact stored baseline calculation, so it reuses
+        that calculation's window and engine/policy context rather than the
+        method's current defaults. Expensive engine work happens before the
+        transaction, then both the active version and the baseline calculation
+        are checked again under the project lock. A stale edit therefore stores
+        neither a version nor a calculation.
         """
 
         if planned_duration_seconds <= 0:
@@ -643,7 +646,35 @@ class Workspace:
             schedule=schedule,
             identity=baseline.identity,
         )
-        result = self._calculate_working(candidate, before=before, after=after)
+
+        project_start = baseline.schedule.project.start
+        if project_start is None:
+            raise ScenarioRejected(
+                "BASELINE_CALCULATION_CONTEXT_UNAVAILABLE",
+                "the calculated baseline has no project start from which to reproduce its window",
+            )
+        baseline_provenance = baseline_calculation.result.provenance
+        baseline_before = project_start - baseline_provenance.horizon_start
+        baseline_after = baseline_provenance.horizon_finish - project_start
+        if before is not None and before != baseline_before:
+            raise ScenarioRejected(
+                "SCENARIO_CONTEXT_MUST_MATCH_BASELINE",
+                "a planner scenario must use the active baseline calculation window",
+            )
+        if after is not None and after != baseline_after:
+            raise ScenarioRejected(
+                "SCENARIO_CONTEXT_MUST_MATCH_BASELINE",
+                "a planner scenario must use the active baseline calculation window",
+            )
+        result = self._calculate_working(
+            candidate, before=baseline_before, after=baseline_after
+        )
+        if _result_context(result) != _result_context(baseline_calculation.result):
+            raise ScenarioRejected(
+                "BASELINE_CALCULATION_CONTEXT_INCOMPATIBLE",
+                "the active baseline was calculated under a different engine or policy context; "
+                "recalculate the baseline before creating a scenario",
+            )
 
         change_id = uuid.uuid4()
         with self.connect() as conn:
@@ -660,6 +691,13 @@ class Workspace:
                 if current_scenario_id is not None
                 else None if current_baseline is None else current_baseline["id"]
             )
+            current_baseline_calculation = (
+                None
+                if current_baseline is None
+                else repo.get_latest_calculation(
+                    conn, version_id=current_baseline["id"]
+                )
+            )
             if (
                 current_baseline is None
                 or current_baseline["id"] != baseline.version_id
@@ -668,6 +706,21 @@ class Workspace:
                 raise StaleSchedule(
                     f"planner state moved from {expected_version_id} to "
                     f"{current_active_id}; reload before applying the edit"
+                )
+            if (
+                current_baseline_calculation is None
+                or current_baseline_calculation["id"]
+                != baseline_calculation.calculation_id
+            ):
+                current_calculation_id = (
+                    None
+                    if current_baseline_calculation is None
+                    else current_baseline_calculation["id"]
+                )
+                raise StaleSchedule(
+                    "baseline calculation moved from "
+                    f"{baseline_calculation.calculation_id} to {current_calculation_id}; "
+                    "reload before applying the edit"
                 )
             sequence = repo.next_sequence(conn, project_id)
             scenario_version_id = repo.insert_version(
