@@ -407,19 +407,24 @@ class NotClaimedTests(unittest.TestCase):
     def test_our_late_dates_do_not_reproduce_the_ones_project_stored(self):
         boiler = _Loaded(FIXTURES["boiler_before"])
         late = boiler.backward.by_uid()
-        exact = 0
+        late_start = late_finish = exact = 0
         compared = 0
         for uid, row in boiler.observations.items():
             if row.late_start is None or row.late_finish is None:
                 continue
             compared += 1
+            late_start += boiler.plan.to_datetime(late[uid].late_start) == row.late_start
+            late_finish += boiler.plan.to_datetime(late[uid].late_finish) == row.late_finish
             if (
                 boiler.plan.to_datetime(late[uid].late_start) == row.late_start
                 and boiler.plan.to_datetime(late[uid].late_finish) == row.late_finish
             ):
                 exact += 1
-        self.assertEqual(compared, 451)
-        self.assertEqual(exact, 409, "the forward pass's remaining difference has moved")
+        self.assertEqual(
+            (compared, late_start, late_finish, exact),
+            (451, 409, 418, 409),
+            "the forward pass's remaining difference has moved",
+        )
 
     @unittest.skipUnless(FIXTURES["boiler_before"].is_file(), "BOILER baseline unavailable")
     def test_our_own_float_agrees_with_the_file_on_a_minority_of_rows(self):
@@ -434,16 +439,18 @@ class NotClaimedTests(unittest.TestCase):
 
         boiler = _Loaded(FIXTURES["boiler_before"])
         ours = boiler.floats.by_uid()
-        total = free = compared = 0
+        total = free = critical = compared = 0
         for uid, row in boiler.observations.items():
             if row.total_float_seconds is None or row.free_float_seconds is None:
                 continue
             compared += 1
             total += ours[uid].total_float == row.total_float_seconds
             free += ours[uid].free_float == row.free_float_seconds
+            critical += ours[uid].critical == row.critical
         self.assertEqual(compared, 451)
         self.assertEqual(total, 380)
         self.assertEqual(free, 435)
+        self.assertEqual(critical, 449)
 
     def test_the_other_two_files_are_pinned_at_what_they_are(self):
         """KILN and CALCINER, late dates and floats, so ADR-010's table is a pin.
@@ -459,25 +466,25 @@ class NotClaimedTests(unittest.TestCase):
             # KILN's free float rose by one and CALCINER's by six when C2
             # inverted the lag rather than shifting it: both counts are our
             # own float against the file's stored FreeSlack.
-            "kiln": (416, 0, 4, 305),
+            "kiln": (416, 0, 0, 0, 4, 305, 397),
             # Four SS predecessors previously counted the exclusive end of a
             # working interval as a movable start. C2 now pulls that inverse
             # back to the latest valid start coordinate, so those four
             # one-second boundary overstatements no longer match the stored
             # whole-unit free slack.
-            "calciner": (1763, 1572, 1488, 1691),
+            "calciner": (1763, 1572, 1577, 1572, 1488, 1691, 1763),
         }
         available = {
             name: values for name, values in expected.items() if FIXTURES[name].is_file()
         }
         if not available:
             self.skipTest("KILN and CALCINER are unavailable")
-        for name, (compared_expected, late_expected, total_expected, free_expected) in available.items():
+        for name, expected_counts in available.items():
             with self.subTest(name):
                 loaded = _Loaded(FIXTURES[name])
                 late = loaded.backward.by_uid()
                 ours = loaded.floats.by_uid()
-                compared = late_exact = total = free = 0
+                compared = late_start = late_finish = late_exact = total = free = critical = 0
                 for uid, row in loaded.observations.items():
                     if None in (
                         row.late_start,
@@ -487,15 +494,22 @@ class NotClaimedTests(unittest.TestCase):
                     ):
                         continue
                     compared += 1
+                    late_start += (
+                        loaded.plan.to_datetime(late[uid].late_start) == row.late_start
+                    )
+                    late_finish += (
+                        loaded.plan.to_datetime(late[uid].late_finish) == row.late_finish
+                    )
                     late_exact += (
                         loaded.plan.to_datetime(late[uid].late_start) == row.late_start
                         and loaded.plan.to_datetime(late[uid].late_finish) == row.late_finish
                     )
                     total += ours[uid].total_float == row.total_float_seconds
                     free += ours[uid].free_float == row.free_float_seconds
+                    critical += ours[uid].critical == row.critical
                 self.assertEqual(
-                    (compared, late_exact, total, free),
-                    (compared_expected, late_expected, total_expected, free_expected),
+                    (compared, late_start, late_finish, late_exact, total, free, critical),
+                    expected_counts,
                 )
 
 

@@ -216,12 +216,22 @@ def _agreement(path: Path) -> dict:
             and plan.to_datetime(row.early_finish) == stored.finish
         )
 
-    counts = {"compared": 0, "exact": 0, "first": 0, "inherited": 0}
+    counts = {
+        "compared": 0,
+        "early_start": 0,
+        "early_finish": 0,
+        "exact": 0,
+        "first": 0,
+        "inherited": 0,
+    }
     for activity in plan.network.activities:
         stored = activities[activity.uid].source_observations
         if stored is None or stored.start is None:
             continue
+        row = times[activity.uid]
         counts["compared"] += 1
+        counts["early_start"] += plan.to_datetime(row.early_start) == stored.start
+        counts["early_finish"] += plan.to_datetime(row.early_finish) == stored.finish
         if agrees(activity.uid):
             counts["exact"] += 1
         elif all(agrees(edge.predecessor_uid) for edge in predecessors[activity.uid]):
@@ -244,8 +254,15 @@ class StoredDateAgreementTests(unittest.TestCase):
     def test_boiler(self):
         counts = _agreement(FIXTURES["boiler_before"])
         self.assertEqual(
-            {k: counts[k] for k in ("compared", "exact", "first", "inherited")},
-            {"compared": 451, "exact": 384, "first": 8, "inherited": 59},
+            {k: counts[k] for k in ("compared", "early_start", "early_finish", "exact", "first", "inherited")},
+            {
+                "compared": 451,
+                "early_start": 389,
+                "early_finish": 384,
+                "exact": 384,
+                "first": 8,
+                "inherited": 59,
+            },
         )
         self.assertEqual(
             counts["assumed"],
@@ -267,8 +284,15 @@ class StoredDateAgreementTests(unittest.TestCase):
         # rather than scheduled as if it were automatic (C1). It was one of
         # the rows with a mismatching predecessor, so that count drops with it.
         self.assertEqual(
-            {k: counts[k] for k in ("compared", "exact", "first", "inherited")},
-            {"compared": 416, "exact": 247, "first": 6, "inherited": 163},
+            {k: counts[k] for k in ("compared", "early_start", "early_finish", "exact", "first", "inherited")},
+            {
+                "compared": 416,
+                "early_start": 249,
+                "early_finish": 247,
+                "exact": 247,
+                "first": 6,
+                "inherited": 163,
+            },
         )
 
     def test_no_real_row_rests_on_the_unmeasured_start_fallback(self):
@@ -299,8 +323,15 @@ class StoredDateAgreementTests(unittest.TestCase):
     def test_calciner(self):
         counts = _agreement(FIXTURES["calciner"])
         self.assertEqual(
-            {k: counts[k] for k in ("compared", "exact", "first", "inherited")},
-            {"compared": 1763, "exact": 1645, "first": 6, "inherited": 112},
+            {k: counts[k] for k in ("compared", "early_start", "early_finish", "exact", "first", "inherited")},
+            {
+                "compared": 1763,
+                "early_start": 1646,
+                "early_finish": 1645,
+                "exact": 1645,
+                "first": 6,
+                "inherited": 112,
+            },
         )
 
     @unittest.skipUnless(FIXTURES["boiler_before"].is_file(), "BOILER baseline unavailable")

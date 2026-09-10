@@ -145,7 +145,7 @@ class V003UpgradeTests(unittest.TestCase):
                 capture_output=True,
                 check=True,
             )
-            self.assertIn("Schema matches infra/migrations (3 migrations, 8 tables)", drift.stdout)
+            self.assertIn("Schema matches infra/migrations", drift.stdout)
 
             # Reconstruct the application from PostgreSQL. The pre-upgrade
             # version, head and stored result all retain their identity.

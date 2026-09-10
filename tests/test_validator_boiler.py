@@ -68,6 +68,12 @@ NATIVE = {
         )
     ),
 }
+if os.environ.get("STO_REQUIRE_NATIVE") == "1":
+    absent = sorted(name for name, path in NATIVE.items() if not path.is_file())
+    if absent:
+        raise RuntimeError(
+            f"STO_REQUIRE_NATIVE=1 but these native fixtures are not here: {absent}"
+        )
 if os.environ.get("STO_REQUIRE_BOILER") == "1":
     absent = sorted(
         name for name, path in FIXTURES.items()

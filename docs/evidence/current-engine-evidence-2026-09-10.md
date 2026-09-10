@@ -1,15 +1,16 @@
 # Current engine evidence — 2026-09-10
 
-This is the current-state evidence packet after PRs #44 and #43. It measures
-the correction branch at `9fd935c` over their combined tree. Customer task
+This is the current-state evidence packet after PRs #44 and #43. The original
+measurements are attached to reachable evidence commit `fc30bd34140ad813d7d08655a359d2136f6aa58f`
+over correction commit `9ec77db8c984d1b52347eb2906fb3046d3b303c8`. Customer task
 names and schedule contents are not recorded here; the real files remain
 outside git.
 
 ## Evidence levels
 
-- **INTERNAL CONFORMANCE.** The pinned semantic corpus has 47 cases executable
-  by this CPM engine. Its deterministic suite is the authority for the stated
-  supported semantics.
+- **INTERNAL CONFORMANCE.** The pinned semantic corpus executable by this CPM
+  engine is the authority for the stated supported semantics. Its derived case
+  census is machine-checked in `docs/goals/roadmap.json`.
 - **STORED PROJECT XML AGREEMENT.** The matrix below compares production engine
   output with fields already stored in MSPDI/XML. It does not prove that the
   files were recalculated immediately before export.
@@ -29,13 +30,13 @@ outside git.
 
 | Evidence role | Repository-approved external alias | Bytes | SHA-256 | Stored build |
 |---|---|---:|---|---|
-| BOILER untouched identity control | `boiler-untouched-source.xml` | 3,734,688 | `e6a3739976580e2144352011f818c0099c0dc0c278fb37a976c5b6a55fbc3420` | `16.0.20131.20152` |
-| BOILER resaved stored-field baseline | `boiler-before-no-progress.xml` | 3,361,935 | `e9b9b7994cc5cc50479807b82c452da742a91de9f7de52b172a6be6f4f399c70` | `16.0.20228.20188` |
-| BOILER Project-native progress | `boiler-after-native-progress.xml` | 3,871,501 | `9fabe70debd004aceabe749f3c13abe40823f43746d7db2b15572466c76739c7` | `16.0.20228.20188` |
-| BOILER tooling-written round-trip input | `boiler-roundtrip-candidate-task43.xml` | 3,264,344 | `7dcd4d828944db9b5284ae1e0b6694571a7ea38433fc20959ed3a130f328cdec` | `16.0.20228.20188` |
-| BOILER Project-saved round-trip output | `boiler-roundtrip-project-saved-task43.xml` | 3,362,829 | `aff57ce8466d619466c51cb6b0366d25933dc6080d256859a961a1154c4c2dc8` | `16.0.20228.20188` |
-| KILN stored-field comparison | `kiln-wg047k-source.xml` | 3,474,383 | `b7c14b631ecc7c15db7731e4a5159ecefe68aaa1c10e76262f84db6b8c37d3ca` | `16.0.19822.20180` |
-| CALCINER stored-field comparison | `calciner-wg050-source.xml` | 14,280,544 | `e952764512ae718e2701c0c79435025b07a5b09124fee4d51b385e92367ed18d` | `16.0.19530.20226` |
+| BOILER untouched identity control | STO_BOILER_UNTOUCHED alias: boiler-untouched-source.xml | 3,734,688 | `e6a3739976580e2144352011f818c0099c0dc0c278fb37a976c5b6a55fbc3420` | `16.0.20131.20152` |
+| BOILER resaved stored-field baseline | STO_BOILER_BEFORE alias: boiler-before-no-progress.xml | 3,361,935 | `e9b9b7994cc5cc50479807b82c452da742a91de9f7de52b172a6be6f4f399c70` | `16.0.20228.20188` |
+| BOILER Project-native progress | STO_BOILER_AFTER_NATIVE alias: boiler-after-native-progress.xml | 3,871,501 | `9fabe70debd004aceabe749f3c13abe40823f43746d7db2b15572466c76739c7` | `16.0.20228.20188` |
+| BOILER tooling-written round-trip input | external alias: boiler-roundtrip-candidate-task43.xml | 3,264,344 | `7dcd4d828944db9b5284ae1e0b6694571a7ea38433fc20959ed3a130f328cdec` | `16.0.20228.20188` |
+| BOILER Project-saved round-trip output | STO_BOILER_ROUNDTRIP_SAVED alias: boiler-roundtrip-project-saved-task43.xml | 3,362,829 | `aff57ce8466d619466c51cb6b0366d25933dc6080d256859a961a1154c4c2dc8` | `16.0.20228.20188` |
+| KILN stored-field comparison | STO_KILN alias: kiln-wg047k-source.xml | 3,474,383 | `b7c14b631ecc7c15db7731e4a5159ecefe68aaa1c10e76262f84db6b8c37d3ca` | `16.0.19822.20180` |
+| CALCINER stored-field comparison | STO_CALCINER alias: calciner-wg050-source.xml | 14,280,544 | `e952764512ae718e2701c0c79435025b07a5b09124fee4d51b385e92367ed18d` | `16.0.19530.20226` |
 
 The exact day-5 candidate, recorded as 3,747,935 bytes with SHA-256 beginning
 `a8d44aa23e20c510`, is **NOT AVAILABLE** in the supplied consolidation archive,

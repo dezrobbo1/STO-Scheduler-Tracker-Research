@@ -562,10 +562,11 @@ PYTHONPATH=src python3 -m unittest discover -s tests
 ```
 
 The file-oracle cases skip unless the real schedules are present; point
-`STO_BOILER_BEFORE`, `STO_BOILER_DAY5`, `STO_KILN` and `STO_CALCINER` at them to
-run them. `P1-G2` and `P1-G3` rest on those cases, so cross a gate with
-`STO_REQUIRE_BOILER=1` set — their absence then fails instead of skipping
-quietly. The float and criticality rules are evidence from KILN and CALCINER as
+`STO_BOILER_BEFORE`, `STO_KILN` and `STO_CALCINER` at the stored-XML matrix and
+set `STO_REQUIRE_BOILER=1` so its absence fails instead of skipping quietly.
+The exact day-5 pair is a separate `STO_REQUIRE_DAY5=1` gate, and the two files
+Project recalculated use `STO_REQUIRE_NATIVE=1`. `P1-G2` and `P1-G3` name those
+conditional dependencies in the roadmap. The float and criticality rules are evidence from KILN and CALCINER as
 much as from BOILER, which is why those two now have variables of their own.
 `fixtures/README.md` records every file's hash, what it proves and how to
 recover it — including two that cannot be recovered and need backing up.

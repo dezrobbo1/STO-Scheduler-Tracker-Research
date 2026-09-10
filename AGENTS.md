@@ -163,11 +163,15 @@ criteria rest on them. To include them:
 
 ```bash
 export STO_BOILER_BEFORE=/path/to/boiler-before-no-progress.xml
-export STO_BOILER_DAY5=/path/to/day5-candidate.mspdi.xml
-export STO_REQUIRE_BOILER=1     # their absence now fails instead of skipping
+export STO_KILN=/path/to/kiln-wg047k-source.xml
+export STO_CALCINER=/path/to/calciner-wg050-source.xml
+export STO_REQUIRE_BOILER=1     # the stored-XML matrix is required
 ```
 
-Cross a phase gate with `STO_REQUIRE_BOILER=1` set. `docs/goals/roadmap.json`
+Use `STO_REQUIRE_DAY5=1` with `STO_BOILER_DAY5` only when the exact day-5
+candidate is available, and `STO_REQUIRE_NATIVE=1` with both native files for
+Project-recalculated evidence. Cross the stored-XML evidence gate with
+`STO_REQUIRE_BOILER=1` set. `docs/goals/roadmap.json`
 records which criteria depend on evidence that does not always execute, and
 `sto roadmap status` and `sto roadmap gate` say so.
 
