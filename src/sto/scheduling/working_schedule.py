@@ -223,8 +223,24 @@ class Workspace:
         try:
             working = _verify(project_id, row)
         except IntegrityError as error:
-            self._resident.pop(project_id, None)
-            self.integrity_failures[project_id] = str(error)
+            # Verification happened outside the cache. An import can commit
+            # and publish a newer resident head while this older row is being
+            # checked, so only evict and diagnose the version that actually
+            # failed. If the database head moved before the resident was
+            # installed, the second head read closes that smaller window.
+            resident = self._resident.get(project_id)
+            if resident is None or resident.version_id == row["id"]:
+                with self.connect() as conn:
+                    current = repo.head_version(
+                        conn,
+                        project_id=project_id,
+                        kind="baseline",
+                        with_document=False,
+                    )
+                if current is not None and current["id"] == row["id"]:
+                    if resident is not None:
+                        self._resident.pop(project_id, None)
+                    self.integrity_failures[project_id] = str(error)
             raise
         self.integrity_failures.pop(project_id, None)
         # A refresh is a verified point-in-time read for calculation. It must
@@ -683,6 +699,9 @@ class Workspace:
             schedule=schedule,
             identity=identity,
         )
+        # A successful import supersedes any integrity diagnosis recorded for
+        # the previous head, including one racing this commit.
+        self.integrity_failures.pop(project_id, None)
         return ImportResult(
             project_id=project_id,
             import_batch_id=batch_id,
