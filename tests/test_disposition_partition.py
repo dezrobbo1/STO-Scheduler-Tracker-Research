@@ -49,10 +49,19 @@ FIXTURES = {
     ),
 }
 if os.environ.get("STO_REQUIRE_BOILER") == "1":
-    absent = sorted(name for name, path in FIXTURES.items() if not path.is_file())
+    absent = sorted(
+        name for name, path in FIXTURES.items()
+        if name != "day5" and not path.is_file()
+    )
     if absent:
         raise RuntimeError(f"STO_REQUIRE_BOILER=1 but these are not here: {absent}")
-ALL_PRESENT = all(path.is_file() for path in FIXTURES.values())
+
+
+def _available():
+    available = {name: path for name, path in FIXTURES.items() if path.is_file()}
+    if not available:
+        raise unittest.SkipTest("no real schedule fixture is available")
+    return available
 
 
 def _planned(path: Path):
@@ -63,14 +72,9 @@ def _planned(path: Path):
     )
 
 
-@unittest.skipUnless(
-    ALL_PRESENT,
-    "the real schedules are not present (they stay outside the repository); "
-    "set STO_REQUIRE_BOILER=1 to make this a failure",
-)
 class DispositionPartitionTests(unittest.TestCase):
     def test_every_activity_is_scheduled_or_excluded(self):
-        for name, path in FIXTURES.items():
+        for name, path in _available().items():
             with self.subTest(name):
                 schedule, plan = _planned(path)
                 scheduled = {row.uid for row in plan.network.activities}
@@ -83,7 +87,7 @@ class DispositionPartitionTests(unittest.TestCase):
                 self.assertEqual(undecided, [], "activities with no disposition at all")
 
     def test_and_never_both(self):
-        for name, path in FIXTURES.items():
+        for name, path in _available().items():
             with self.subTest(name):
                 _, plan = _planned(path)
                 scheduled = {row.uid for row in plan.network.activities}
@@ -93,14 +97,14 @@ class DispositionPartitionTests(unittest.TestCase):
     def test_and_never_excluded_twice(self):
         """Two codes for one row would make the reason for it ambiguous."""
 
-        for name, path in FIXTURES.items():
+        for name, path in _available().items():
             with self.subTest(name):
                 _, plan = _planned(path)
                 counted = Counter(row.uid for row in plan.excluded if row.kind == "activity")
                 self.assertEqual([uid for uid, n in counted.items() if n > 1], [])
 
     def test_an_assumption_names_a_row_the_plan_scheduled(self):
-        for name, path in FIXTURES.items():
+        for name, path in _available().items():
             with self.subTest(name):
                 _, plan = _planned(path)
                 scheduled = {row.uid for row in plan.network.activities}
@@ -114,7 +118,7 @@ class DispositionPartitionTests(unittest.TestCase):
     def test_every_relationship_is_planned_or_excluded(self):
         """The same partition, asked of the edges."""
 
-        for name, path in FIXTURES.items():
+        for name, path in _available().items():
             with self.subTest(name):
                 schedule, plan = _planned(path)
                 planned = {row.uid for row in plan.network.relationships}

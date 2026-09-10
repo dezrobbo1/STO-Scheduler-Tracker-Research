@@ -43,8 +43,6 @@ if REQUIRE_BOILER:
     absent = sorted(name for name, path in FIXTURES.items() if not path.is_file())
     if absent:
         raise RuntimeError(f"STO_REQUIRE_BOILER=1 but these are not here: {absent}")
-ALL_PRESENT = all(path.is_file() for path in FIXTURES.values())
-
 #: Every code the plan is allowed to exclude a row with. A new code appearing on
 #: a real file should be a deliberate decision, not a silent one.
 KNOWN_CODES = frozenset(
@@ -234,11 +232,6 @@ def _agreement(path: Path) -> dict:
     return counts
 
 
-@unittest.skipUnless(
-    ALL_PRESENT,
-    "the real schedules are not present (they stay outside the repository); "
-    "set STO_REQUIRE_BOILER=1 to make this a failure",
-)
 class StoredDateAgreementTests(unittest.TestCase):
     """How far the pass reproduces the dates Project stored, pinned (ADR-010).
 
@@ -247,6 +240,7 @@ class StoredDateAgreementTests(unittest.TestCase):
     regression and a rise is a history entry that has to be written.
     """
 
+    @unittest.skipUnless(FIXTURES["boiler_before"].is_file(), "BOILER baseline unavailable")
     def test_boiler(self):
         counts = _agreement(FIXTURES["boiler_before"])
         self.assertEqual(
@@ -266,6 +260,7 @@ class StoredDateAgreementTests(unittest.TestCase):
             },
         )
 
+    @unittest.skipUnless(FIXTURES["kiln"].is_file(), "KILN unavailable")
     def test_kiln(self):
         counts = _agreement(FIXTURES["kiln"])
         # 416, not 417: the file's one manually scheduled leaf is excluded
@@ -287,7 +282,10 @@ class StoredDateAgreementTests(unittest.TestCase):
         the horizon cannot move one.
         """
 
-        for name in FIXTURES:
+        available = {name: path for name, path in FIXTURES.items() if path.is_file()}
+        if not available:
+            self.skipTest("no real schedule fixture is available")
+        for name in available:
             with self.subTest(name):
                 schedule, _, _ = migrate(import_mspdi(str(FIXTURES[name])))
                 start = schedule.project.start or datetime(2026, 8, 1)
@@ -297,6 +295,7 @@ class StoredDateAgreementTests(unittest.TestCase):
                 result = forward_pass(plan.network, snap_milestones=plan.snap_milestones)
                 self.assertEqual(result.unbounded_starts, ())
 
+    @unittest.skipUnless(FIXTURES["calciner"].is_file(), "CALCINER unavailable")
     def test_calciner(self):
         counts = _agreement(FIXTURES["calciner"])
         self.assertEqual(
@@ -304,6 +303,7 @@ class StoredDateAgreementTests(unittest.TestCase):
             {"compared": 1763, "exact": 1645, "first": 6, "inherited": 112},
         )
 
+    @unittest.skipUnless(FIXTURES["boiler_before"].is_file(), "BOILER baseline unavailable")
     def test_the_calendar_rule_is_what_moved_boiler(self):
         """Off, the pass agrees with Project on one BOILER activity -- as it did
         when the forward-pass slice shipped -- so the rule is measurable from

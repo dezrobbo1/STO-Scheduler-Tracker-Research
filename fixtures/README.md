@@ -21,15 +21,19 @@ export STO_BOILER_UNTOUCHED=/path/to/boiler-untouched-source.xml   # the GUID co
 export STO_KILN=/path/to/kiln-wg047k-source.xml                    # the float rule
 export STO_CALCINER=/path/to/calciner-wg050-source.xml             # the float rule, and the
                                                                    # only declared slack limit
+export STO_BOILER_AFTER_NATIVE=/path/to/boiler-after-native-progress.xml
+export STO_BOILER_ROUNDTRIP_SAVED=/path/to/boiler-roundtrip-project-saved-task43.xml
 PYTHONPATH=src python3 -m unittest discover -s tests
 ```
 
-The defaults in the test module point at this machine's copies. Add
-`STO_REQUIRE_BOILER=1` and a missing file fails the run instead of skipping it —
-use that whenever a gate criterion is being crossed on these cases. It is one
-switch for all of them: the float and criticality rules in ADR-008 are evidence
-from KILN and CALCINER as much as from BOILER, so their absence has to fail the
-same way.
+The defaults in the test modules point at the original development machine's
+copies. Each cohort now runs from the files actually present: BOILER baseline
+does not wait for day-5, and KILN, CALCINER and native-completion evidence do
+not wait for one another. `STO_REQUIRE_BOILER=1` requires the current stored-XML
+matrix (BOILER baseline, KILN and CALCINER). `STO_REQUIRE_NATIVE=1` separately
+requires the two Project-recalculated completion files, and
+`STO_REQUIRE_DAY5=1` requires the exact day-5 candidate. Use only the switch
+for the evidence claim being gated.
 
 ## The BOILER family: at least four distinct files
 
@@ -104,3 +108,14 @@ Real schedules stay outside this repository. Record hashes and sanitized
 structural findings; keep the files elsewhere and reference them by environment
 variable. `docs/evidence/` holds the native round-trip register, which is keyed
 on target system **and application build**.
+
+## Availability checked 2026-09-10
+
+The source-consolidation archive supplied to the closure environment has
+SHA-256 `67f4766158c7b76284d8f997cd0345391bb270d4b762510bef59fe4a5ef4c730`.
+It contains the untouched BOILER, KILN and CALCINER files above. The four
+committed BOILER fixtures were recovered from the frozen repository and match
+their recorded hashes. The exact day-5 hash `a8d44aa23e20c510…` is **NOT
+AVAILABLE** in either authorized source; it was not reconstructed from task
+data. The current measurements and complete hashes are in
+`docs/evidence/current-engine-evidence-2026-09-10.md`.

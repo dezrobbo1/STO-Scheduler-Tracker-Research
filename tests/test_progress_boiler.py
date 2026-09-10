@@ -44,9 +44,10 @@ file here. That is asserted below so that a file which one day carries a usable
 status date makes this test fail and asks for the claim to be widened.
 
 The real schedules live outside the repository. ``STO_BOILER_DAY5``,
-``STO_BOILER_AFTER_NATIVE`` and ``STO_BOILER_ROUNDTRIP_SAVED`` name them and
-``STO_REQUIRE_BOILER=1`` turns their absence into a failure instead of a skip,
-which is what a gate run sets.
+``STO_BOILER_AFTER_NATIVE`` and ``STO_BOILER_ROUNDTRIP_SAVED`` name them.
+Each evidence cohort runs whenever its own files are present. The optional
+``STO_REQUIRE_DAY5=1`` and ``STO_REQUIRE_NATIVE=1`` switches turn absence of
+those specific oracles into a failure instead of suppressing unrelated tests.
 """
 
 from __future__ import annotations
@@ -92,15 +93,17 @@ FIXTURES = {
 #: The candidate is deliberately not one of them.
 NATIVELY_RECALCULATED = ("after_native", "roundtrip_saved")
 
-REQUIRE_BOILER = os.environ.get("STO_REQUIRE_BOILER") == "1"
-if REQUIRE_BOILER:
-    for _name, _path in FIXTURES.items():
-        if not _path.is_file():
+if os.environ.get("STO_REQUIRE_DAY5") == "1" and not FIXTURES["day5"].is_file():
+    raise RuntimeError(f"STO_REQUIRE_DAY5=1 but the oracle is not here: {FIXTURES['day5']}")
+if os.environ.get("STO_REQUIRE_NATIVE") == "1":
+    for _name in NATIVELY_RECALCULATED:
+        if not FIXTURES[_name].is_file():
             raise RuntimeError(
-                f"STO_REQUIRE_BOILER=1 but the real schedule is not here: {_path}"
+                f"STO_REQUIRE_NATIVE=1 but the native oracle is not here: {FIXTURES[_name]}"
             )
 
-_PRESENT = all(path.is_file() for path in FIXTURES.values())
+_ANY_PRESENT = any(path.is_file() for path in FIXTURES.values())
+_DAY5_PRESENT = FIXTURES["day5"].is_file()
 #: The tests on Project's own recalculation need only the two files Project
 #: recalculated; gating them on the candidate too would hide independent
 #: evidence whenever an unrelated file is absent.
@@ -148,16 +151,14 @@ def _completed(schedule):
     ]
 
 
-@unittest.skipUnless(
-    _PRESENT,
-    "the real BOILER schedules are not present (they stay outside the repository); "
-    "set STO_REQUIRE_BOILER=1 to make this a failure",
-)
 class ReportedWorkTests(unittest.TestCase):
     """Work that has happened is placed where the file says it happened."""
 
     def test_every_activity_with_an_actual_date_keeps_the_dates_project_stored(self):
-        for name in FIXTURES:
+        available = [name for name, path in FIXTURES.items() if path.is_file()]
+        if not available:
+            self.skipTest("no BOILER progress fixture is available")
+        for name in available:
             with self.subTest(name):
                 schedule, plan, forward, _, _ = _load(name)
                 times = forward.by_uid()
@@ -195,6 +196,8 @@ class ReportedWorkTests(unittest.TestCase):
         that it cannot again.
         """
 
+        if not _DAY5_PRESENT:
+            self.skipTest("the exact day-5 fixture is unavailable")
         schedule, plan, forward, _, _ = _load("day5")
         rows = [row for row in forward.times if row.state is ProgressState.IN_PROGRESS]
         self.assertEqual(len(rows), 1)
@@ -212,6 +215,8 @@ class ReportedWorkTests(unittest.TestCase):
         self.assertIsNone(activity.resume)
 
     def test_the_day_five_candidate_carries_the_progress_the_register_records(self):
+        if not _DAY5_PRESENT:
+            self.skipTest("the exact day-5 fixture is unavailable")
         schedule, plan, forward, _, _ = _load("day5")
         states = forward.by_state()
         self.assertEqual(len(states[ProgressState.COMPLETE]), 7)
@@ -232,7 +237,12 @@ class ReportedWorkTests(unittest.TestCase):
         read.
         """
 
-        for name in ("day5", "after_native"):
+        available = [
+            name for name in ("day5", "after_native") if FIXTURES[name].is_file()
+        ]
+        if not available:
+            self.skipTest("neither reported-work fixture is available")
+        for name in available:
             with self.subTest(name):
                 schedule, _, forward, _, _ = _load(name)
                 for activity in schedule.activities:
@@ -252,7 +262,7 @@ class ReportedWorkTests(unittest.TestCase):
 
 @unittest.skipUnless(
     _NATIVE_PRESENT,
-    "the two Project-recalculated BOILER files are not present; set STO_REQUIRE_BOILER=1",
+    "the two Project-recalculated BOILER files are not present; set STO_REQUIRE_NATIVE=1",
 )
 class NativeRecalculationTests(unittest.TestCase):
     """What Project itself did to completed work, and what that settles."""
@@ -319,8 +329,8 @@ class NativeRecalculationTests(unittest.TestCase):
 
 
 @unittest.skipUnless(
-    _PRESENT,
-    "the real BOILER schedules are not present; set STO_REQUIRE_BOILER=1",
+    _DAY5_PRESENT,
+    "the exact day-5 fixture is unavailable; set STO_REQUIRE_DAY5=1 to require it",
 )
 class CandidateIsNotALateDateOracleTests(unittest.TestCase):
     """The day-5 candidate's slack was never recalculated, and says so."""
@@ -352,14 +362,16 @@ class CandidateIsNotALateDateOracleTests(unittest.TestCase):
 
 
 @unittest.skipUnless(
-    _PRESENT,
-    "the real BOILER schedules are not present; set STO_REQUIRE_BOILER=1",
+    _ANY_PRESENT,
+    "no BOILER progress fixture is available",
 )
 class StatusDateIsNotMeasurableHereTests(unittest.TestCase):
     """No file in the estate carries a status date inside its own schedule."""
 
     def test_every_file_declares_a_status_date_before_its_own_project_start(self):
-        for name in FIXTURES:
+        for name, path in FIXTURES.items():
+            if not path.is_file():
+                continue
             with self.subTest(name):
                 schedule, _, _, _, _ = _load(name)
                 project = schedule.project
@@ -368,7 +380,9 @@ class StatusDateIsNotMeasurableHereTests(unittest.TestCase):
                 self.assertLess(project.status_date, project.start)
 
     def test_so_the_plan_reports_the_status_date_rather_than_using_it(self):
-        for name in FIXTURES:
+        for name, path in FIXTURES.items():
+            if not path.is_file():
+                continue
             with self.subTest(name):
                 _, plan, _, _, _ = _load(name)
                 self.assertTrue(plan.status_time_outside_window)
@@ -377,7 +391,9 @@ class StatusDateIsNotMeasurableHereTests(unittest.TestCase):
     def test_and_no_activity_is_held_at_a_status_date_it_does_not_have(self):
         from sto.core.engine import FROM_STATUS_TIME
 
-        for name in FIXTURES:
+        for name, path in FIXTURES.items():
+            if not path.is_file():
+                continue
             with self.subTest(name):
                 _, _, forward, _, _ = _load(name)
                 self.assertEqual(

@@ -8,6 +8,13 @@ number is part of the key, not a footnote.
 Real schedules and generated artifacts stay outside git. Record hashes,
 sanitized structural findings, and the decision.
 
+## Current engine packet
+
+`current-engine-evidence-2026-09-10.md` records the post-#44/#43 stored-XML
+matrix, native-completion boundary, exact fixture hashes and unavailable
+day-5/native-session evidence. It is the current measurement; historical ADRs
+and history entries remain the record of what earlier revisions showed.
+
 Every new target or build needs a **control run** first: put an untouched source
 through the target application, save, and re-import. Whatever moves is that
 build's own normalisation, and it is the baseline every later comparison is read

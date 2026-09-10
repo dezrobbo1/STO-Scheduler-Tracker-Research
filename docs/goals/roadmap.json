@@ -48,7 +48,7 @@
         "I13",
         "P3-G5"
       ],
-      "note": "Exists; three round trips ran on it in August. Each register entry costs about half a day and is outside the slice estimates.",
+      "note": "Exists; three round trips ran on it in August. It was not connected to the 2026-09-10 closure environment, so that run added no native claim. Each register entry costs about half a day and is outside the slice estimates.",
       "asked_on": null
     },
     {
@@ -79,7 +79,7 @@
         "S5",
         "P1-G2"
       ],
-      "note": "Present on this machine on 2026-09-08 (two read-only copies, one filesystem, no upstream); the 2026-09-07 comprehensive review could not obtain it and marked every claim resting on it not re-verified. The off-machine copy is an ask of the user, not a task: a copy into the Drive archive the untouched source was recovered from would close it. S5 measured what it is and is not evidence for: its early dates are its actuals, so it is an oracle for reported work, but its late dates were never recalculated by Project and its slack describes a plan that no longer exists. The criticality rules rest on boiler-after-native-progress.xml and boiler-roundtrip-project-saved-task43.xml instead, and both are recoverable from Shutdown-Tracker-Claude. What would be lost with this file is the estate's only in-progress row and its only eight-row progressed cohort.",
+      "note": "Present on the original development machine on 2026-09-08 (two read-only copies, one filesystem, no upstream), but NOT AVAILABLE to the authorized 2026-09-10 closure sources; the source-consolidation archive and frozen fixture repository do not contain its recorded hash. The off-machine copy is an ask of the user, not a task. S5 measured what it is and is not evidence for: its early dates are its actuals, so it is an oracle for reported work, but its late dates were never recalculated by Project and its slack describes a plan that no longer exists. The criticality rules rest on boiler-after-native-progress.xml and boiler-roundtrip-project-saved-task43.xml instead, and both are recoverable from Shutdown-Tracker-Claude. What is currently unavailable is the estate's only in-progress row and its only eight-row progressed cohort.",
       "asked_on": null
     }
   ],
@@ -99,8 +99,8 @@
           "met": true,
           "evidence": "tests/test_canonical_model.py",
           "evidence_conditional": {
-            "env": "STO_REQUIRE_BOILER",
-            "why": "the real BOILER schedules live outside the repository, so this evidence does not execute in CI unless they are present"
+            "env": "STO_REQUIRE_DAY5",
+            "why": "the real BOILER before/day-5 pair lives outside the repository, so this evidence does not execute in CI unless both files are present"
           }
         },
         {
@@ -115,8 +115,8 @@
           "met": true,
           "evidence": "tests/test_canonical_model.py",
           "evidence_conditional": {
-            "env": "STO_REQUIRE_BOILER",
-            "why": "the real BOILER schedules live outside the repository, so this evidence does not execute in CI unless they are present"
+            "env": "STO_REQUIRE_DAY5",
+            "why": "the real BOILER before/day-5 pair lives outside the repository, so this evidence does not execute in CI unless both files are present"
           }
         },
         {

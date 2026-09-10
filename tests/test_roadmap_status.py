@@ -152,7 +152,7 @@ class EvidenceExecutionTests(unittest.TestCase):
         env.update(
             {
                 "PYTHONPATH": str(REPO_ROOT / "src"),
-                "STO_REQUIRE_BOILER": "1",
+                "STO_REQUIRE_DAY5": "1",
                 "STO_BOILER_BEFORE": str(REPO_ROOT / "nope" / "absent-before.xml"),
                 "STO_BOILER_DAY5": str(REPO_ROOT / "nope" / "absent-day5.xml"),
             }
@@ -166,7 +166,7 @@ class EvidenceExecutionTests(unittest.TestCase):
             timeout=120,
         )
         self.assertNotEqual(result.returncode, 0, "absence was tolerated")
-        self.assertIn("STO_REQUIRE_BOILER=1 but", result.stderr)
+        self.assertIn("STO_REQUIRE_DAY5=1 but", result.stderr)
         self.assertIn("absent-before.xml", result.stderr)
 
     def test_the_boiler_criteria_declare_that_they_do_not_always_run(self):
