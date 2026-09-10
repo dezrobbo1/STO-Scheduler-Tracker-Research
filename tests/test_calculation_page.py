@@ -215,13 +215,48 @@ console.log(JSON.stringify({
         )
 
     def test_it_drops_a_response_for_a_project_no_longer_selected(self):
-        """Two requests can finish out of order while the selector stays live."""
+        """A generation distinguishes out-of-order A to B to A responses."""
 
-        self.assertIn("awaiting", self.script)
-        self.assertIn("awaiting !== projectId || !selectedProject(projectId)", self.script)
-        self.assertGreaterEqual(
-            self.script.count("selectedProject(projectId)"), 6
+        node = shutil.which("node") or os.environ.get("CODEX_PRIMARY_RUNTIME_NODE")
+        if not node:
+            self.skipTest("Node is required to execute the page's JavaScript")
+        functions = "\n".join(
+            re.search(r"function " + name + r"\([\s\S]*?\n}", self.script).group(0)
+            for name in ("selectedProject", "beginRefresh", "currentRefresh")
         )
+        probe = r"""
+const projects = {value: 'project-a'};
+let refreshGeneration = 0;
+const firstA = beginRefresh();
+projects.value = 'project-b';
+const projectB = beginRefresh();
+projects.value = 'project-a';
+const secondA = beginRefresh();
+console.log(JSON.stringify({
+  firstA: currentRefresh(firstA, 'project-a'),
+  projectB: currentRefresh(projectB, 'project-b'),
+  secondA: currentRefresh(secondA, 'project-a'),
+  generations: [firstA, projectB, secondA]
+}));
+"""
+        measured = json.loads(
+            subprocess.run(
+                [node, "-e", functions + probe],
+                check=True,
+                text=True,
+                capture_output=True,
+            ).stdout
+        )
+        self.assertEqual(
+            measured,
+            {
+                "firstA": False,
+                "projectB": False,
+                "secondA": True,
+                "generations": [1, 2, 3],
+            },
+        )
+        self.assertEqual(self.script.count("currentRefresh(generation, projectId)"), 3)
 
     def test_import_and_calculation_success_belong_to_the_rendered_project(self):
         """Execute the freshness decisions used after both awaited mutations."""

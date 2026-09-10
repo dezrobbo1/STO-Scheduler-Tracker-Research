@@ -26,7 +26,7 @@ const summariesSection = document.querySelector("#summaries-section");
 const summaryBody = document.querySelector("#summaries tbody");
 
 let currentState = null;
-let awaiting = null;
+let refreshGeneration = 0;
 
 function say(message, kind) {
   status.textContent = message;
@@ -332,19 +332,28 @@ function resetIsDisabled(state) {
   return !state || !state.scenario;
 }
 
+function beginRefresh() {
+  refreshGeneration += 1;
+  return refreshGeneration;
+}
+
+function currentRefresh(generation, projectId) {
+  return generation === refreshGeneration && selectedProject(projectId);
+}
+
 async function show(projectId) {
   if (!projectId || !selectedProject(projectId)) return null;
-  awaiting = projectId;
+  const generation = beginRefresh();
   currentState = null;
   for (const section of [scenarioSection, provenanceSection, chartSection, rowsSection, summariesSection]) section.hidden = true;
   try {
     const state = await json("/api/projects/" + projectId + "/planner");
-    if (awaiting !== projectId || !selectedProject(projectId)) return null;
+    if (!currentRefresh(generation, projectId)) return null;
     render(state);
     if (state.baseline) say("");
     return state;
   } catch (error) {
-    if (awaiting !== projectId || !selectedProject(projectId)) return null;
+    if (!currentRefresh(generation, projectId)) return null;
     if (error.status === 409) say("Import a schedule into this project.");
     else say("The planner state could not be served: " + error.message, "error");
     return null;
