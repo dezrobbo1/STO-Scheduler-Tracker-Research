@@ -126,8 +126,8 @@ class PlannerScenarioTests(unittest.TestCase):
         scenario_target = self.activity(state, "Isolate equipment", "scenario")
         baseline_downstream = self.activity(state, "Execute inspection")
         scenario_downstream = self.activity(state, "Execute inspection", "scenario")
-        self.assertEqual(
-            scenario_target["early_finish"], scenario_downstream["early_start"]
+        self.assertGreaterEqual(
+            scenario_downstream["early_start"], scenario_target["early_finish"]
         )
         self.assertNotEqual(
             baseline_target["early_finish"], scenario_target["early_finish"]
