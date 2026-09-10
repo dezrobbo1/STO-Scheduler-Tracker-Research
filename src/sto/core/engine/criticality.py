@@ -103,7 +103,9 @@ from .progress import ProgressState
 #: coordinate. That placement reserves a complete remaining span and, when the
 #: forward pass snapped zero-length spans, remains on a productive coordinate.
 #: Version four bounds progressed start anchors at their immutable actual start.
-CRITICALITY_PROFILE = "sto-criticality-v4"
+#: Version five also bounds completed finish anchors at their immutable actual
+#: finish. A completed span cannot absorb float on either coordinate.
+CRITICALITY_PROFILE = "sto-criticality-v5"
 
 
 class CriticalityError(NetworkError):
@@ -205,6 +207,7 @@ def _free_float(
     movement_limits: dict[UUID, tuple[int, int]],
     snapped_zero_spans: frozenset[UUID],
     calendar_placed_starts: frozenset[UUID],
+    immovable: frozenset[UUID],
     project_late_finish: int,
 ) -> int:
     """Slack against the successors' *early* dates, not the project's late finish.
@@ -241,6 +244,11 @@ def _free_float(
     """
 
     early_start, early_finish = early[uid].early_start, early[uid].early_finish
+    # A completed activity has no movable coordinate. This precedes the tail
+    # shortcut because a terminal completed row can otherwise inherit the gap
+    # to another path's finish as free float despite both actuals being fixed.
+    if uid in immovable:
+        return 0
     if not outgoing:
         return signed_working(calendar, early_finish, project_late_finish)
 
@@ -387,6 +395,12 @@ def float_analysis(
     # finite lag calendar's constant tail.
     movement_limits: dict[UUID, tuple[int, int]] = {}
     for activity in network.activities:
+        if early[activity.uid].state is ProgressState.COMPLETE:
+            movement_limits[activity.uid] = (
+                early[activity.uid].early_start,
+                early[activity.uid].early_finish,
+            )
+            continue
         if activity.remaining == 0:
             # An unsnapped zero-length span is a coordinate and consumes no
             # calendar, so it can occupy the horizon itself. A snapped one has
@@ -481,6 +495,7 @@ def float_analysis(
             movement_limits,
             snapped_zero_spans,
             calendar_placed_starts,
+            complete,
             backward.project_late_finish,
         )
         rows.append(

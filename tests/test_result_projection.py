@@ -20,6 +20,9 @@ import unittest
 from dataclasses import replace
 from datetime import datetime, timedelta
 from pathlib import Path
+from unittest.mock import patch
+from uuid import uuid4
+from threading import Event, Thread
 
 from calculation_fixture import _activity, _document, _relationship
 
@@ -366,7 +369,7 @@ class WhatElseDecidedTheseDatesTests(unittest.TestCase):
         second["percent_complete_source"] = 100
         document = _document(
             [(first, first_ext), (second, second_ext)],
-            relationships=[_relationship(1, 1, 2)],
+            relationships=[_relationship(1, 1, 2, lag=600)],
         )
         document["project"]["status_date"] = "2026-01-06T08:00:00"
         schedule, _, _ = migrate(document)
@@ -387,6 +390,14 @@ class WhatElseDecidedTheseDatesTests(unittest.TestCase):
             edge.uid for edge in result.relationships if edge.disposition == RELEASED
         }
         self.assertEqual(released, set(backward.overridden_relationships))
+        self.assertFalse(
+            [
+                edge
+                for edge in result.relationships
+                if edge.uid in released and edge.disposition == SCHEDULED
+            ],
+            "a released edge must not also be presented as an applied assumption",
+        )
 
     def test_both_float_components_reach_the_row(self):
         """Total float is the smaller of two readings; the other is kept."""
@@ -530,6 +541,143 @@ class TheProjectionAnswersForEveryRowTests(unittest.TestCase):
         self.assertNotEqual(
             narrow.provenance.horizon_start, wide.provenance.horizon_start
         )
+
+
+@unittest.skipUnless(psycopg is not None, "the persistence extra is not installed")
+class RefreshCacheTests(unittest.TestCase):
+    def test_a_point_in_time_refresh_does_not_replace_a_newer_resident_head(self):
+        """A slow calculation read must not undo an import's cache update."""
+
+        from sto.scheduling.working_schedule import WorkingSchedule, Workspace
+
+        project_id = uuid4()
+        older = WorkingSchedule(project_id, uuid4(), 1, "a" * 64, object(), object())
+        newer = WorkingSchedule(project_id, uuid4(), 2, "b" * 64, object(), object())
+
+        class Connection:
+            def __enter__(self):
+                return object()
+
+            def __exit__(self, *args):
+                return False
+
+        workspace = Workspace(connect=Connection)
+        workspace._resident[project_id] = newer
+        with (
+            patch("sto.scheduling.working_schedule.repo.get_project", return_value={}),
+            patch(
+                "sto.scheduling.working_schedule.repo.head_version",
+                return_value={"id": older.version_id},
+            ),
+            patch("sto.scheduling.working_schedule._verify", return_value=older),
+        ):
+            refreshed = workspace.load(project_id, refresh=True)
+
+        self.assertIs(refreshed, older)
+        self.assertIs(workspace._resident[project_id], newer)
+
+    def test_a_failed_old_refresh_does_not_evict_or_accuse_a_newer_resident_head(self):
+        """A corrupt snapshot cannot overwrite a concurrent import's cache state."""
+
+        from sto.scheduling.working_schedule import (
+            IntegrityError,
+            WorkingSchedule,
+            Workspace,
+        )
+
+        project_id = uuid4()
+        older = WorkingSchedule(project_id, uuid4(), 1, "a" * 64, object(), object())
+        newer = WorkingSchedule(project_id, uuid4(), 2, "b" * 64, object(), object())
+
+        class Connection:
+            def __enter__(self):
+                return object()
+
+            def __exit__(self, *args):
+                return False
+
+        workspace = Workspace(connect=Connection)
+
+        def fail_after_newer_head_was_published(*_args):
+            workspace._resident[project_id] = newer
+            raise IntegrityError("old head is corrupt")
+
+        with (
+            patch("sto.scheduling.working_schedule.repo.get_project", return_value={}),
+            patch(
+                "sto.scheduling.working_schedule.repo.head_version",
+                return_value={"id": older.version_id},
+            ),
+            patch(
+                "sto.scheduling.working_schedule._verify",
+                side_effect=fail_after_newer_head_was_published,
+            ),
+            self.assertRaises(IntegrityError),
+        ):
+            workspace.load(project_id, refresh=True)
+
+        self.assertIs(workspace._resident[project_id], newer)
+        self.assertNotIn(project_id, workspace.integrity_failures)
+
+    def test_import_publication_waiting_after_the_second_head_read_wins_atomically(self):
+        """The head check and quarantine publication are one cache operation."""
+
+        from sto.scheduling.working_schedule import (
+            IntegrityError,
+            WorkingSchedule,
+            Workspace,
+        )
+
+        project_id = uuid4()
+        older = WorkingSchedule(project_id, uuid4(), 1, "a" * 64, object(), object())
+        newer = WorkingSchedule(project_id, uuid4(), 2, "b" * 64, object(), object())
+        second_read = Event()
+        publication_waiting = Event()
+
+        class Connection:
+            def __enter__(self):
+                return object()
+
+            def __exit__(self, *args):
+                return False
+
+        workspace = Workspace(connect=Connection)
+
+        def head_version(_conn, *, with_document, **_kwargs):
+            if not with_document:
+                second_read.set()
+                self.assertTrue(publication_waiting.wait(2))
+            return {"id": older.version_id}
+
+        def publish_import():
+            self.assertTrue(second_read.wait(2))
+            publication_waiting.set()
+            with workspace._state_lock:
+                workspace._resident[project_id] = newer
+                workspace.integrity_failures.pop(project_id, None)
+
+        publisher = Thread(target=publish_import)
+        publisher.start()
+        try:
+            with (
+                patch("sto.scheduling.working_schedule.repo.get_project", return_value={}),
+                patch(
+                    "sto.scheduling.working_schedule.repo.head_version",
+                    side_effect=head_version,
+                ),
+                patch(
+                    "sto.scheduling.working_schedule._verify",
+                    side_effect=IntegrityError("old head is corrupt"),
+                ),
+                self.assertRaises(IntegrityError),
+            ):
+                workspace.load(project_id, refresh=True)
+        finally:
+            publisher.join(2)
+
+        self.assertFalse(publisher.is_alive())
+        self.assertIs(workspace._resident[project_id], newer)
+        self.assertNotIn(project_id, workspace.integrity_failures)
 
 
 @unittest.skipUnless(
@@ -781,6 +929,61 @@ class AStoredCalculationComesBackTests(unittest.TestCase):
             conn.commit()
         with self.assertRaises(IntegrityError):
             workspace.calculate(project_id)
+
+    def test_a_calculation_is_refused_when_import_moves_the_head_mid_run(self):
+        """The computed version cannot be reported as the new head's result."""
+
+        from sto.core.engine import forward_pass as engine_forward_pass
+        from sto.persistence import repositories as repo
+        from sto.scheduling.working_schedule import StaleSchedule
+
+        workspace, project_id = self._imported()
+        first = workspace.load(project_id)
+        second_import = workspace.import_file(
+            project_id,
+            filename="second.xml",
+            data=FIXTURE.read_bytes().replace(
+                b"<Name>Workspace chain</Name>",
+                b"<Name>Workspace chain two</Name>",
+                1,
+            ),
+        )
+        with self.connect() as conn:
+            repo.set_head(
+                conn,
+                project_id=project_id,
+                kind="baseline",
+                version_id=first.version_id,
+            )
+            conn.commit()
+
+        moved = False
+
+        def move_head_then_calculate(*args, **kwargs):
+            nonlocal moved
+            if not moved:
+                with self.connect() as conn:
+                    repo.set_head(
+                        conn,
+                        project_id=project_id,
+                        kind="baseline",
+                        version_id=second_import.version_id,
+                    )
+                    conn.commit()
+                moved = True
+            return engine_forward_pass(*args, **kwargs)
+
+        with patch(
+            "sto.scheduling.working_schedule.forward_pass",
+            side_effect=move_head_then_calculate,
+        ):
+            with self.assertRaises(StaleSchedule):
+                workspace.calculate(project_id)
+
+        with self.connect() as conn:
+            self.assertIsNone(
+                repo.get_latest_calculation(conn, version_id=first.version_id)
+            )
 
     def test_an_excluded_row_can_not_carry_a_remaining_start(self):
         """An excluded row has no dates at all, and the database says so."""

@@ -474,6 +474,16 @@ def validate_result(
             continue
         edges = [edge for edge in outgoing.get(uid, ()) if edge.uid not in released]
         reported = float_row.free_float
+        if row.state is ProgressState.COMPLETE:
+            if reported != 0:
+                violations.append(
+                    Violation(
+                        "FREE_FLOAT_MISMATCH",
+                        uid,
+                        f"reported {reported}, but completed work cannot move",
+                    )
+                )
+            continue
         if not edges:
             # An open-ended tail is measured against the project late finish,
             # which is what makes its free float equal its total float rather
@@ -653,7 +663,8 @@ def _edges_hold_after(
 
     start = (row.early_start if activity.has_started else
              _slipped(activity.float_calendar, row.early_start, slip))
-    finish = _slipped(activity.float_calendar, row.early_finish, slip)
+    finish = (row.early_finish if row.state is ProgressState.COMPLETE else
+              _slipped(activity.float_calendar, row.early_finish, slip))
     if start is None or finish is None:
         return None
     exactly_pinned = (
@@ -676,8 +687,12 @@ def _edges_hold_after(
         successor = early.get(edge.successor_uid)
         if successor is None:
             return None
-        # A historical start cannot consume a nonzero start-side slip.
-        if activity.has_started and not edge.anchors_predecessor_finish and slip != 0:
+        # Historical coordinates cannot consume float. Started work fixes its
+        # start; completed work fixes both ends.
+        immutable_anchor = (
+            activity.has_started and not edge.anchors_predecessor_finish
+        ) or row.state is ProgressState.COMPLETE
+        if immutable_anchor and slip != 0:
             return False
         anchor = finish if edge.anchors_predecessor_finish else start
         if anchor is None:

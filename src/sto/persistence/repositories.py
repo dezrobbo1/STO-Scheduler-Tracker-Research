@@ -200,6 +200,27 @@ def head_version(
     ).fetchone()
 
 
+def lock_head_version_id(
+    conn: psycopg.Connection, *, project_id: uuid.UUID, kind: str
+) -> uuid.UUID | None:
+    """Lock and return one head inside the caller's transaction.
+
+    A calculation uses this after its expensive engine work and before it
+    writes. If an import committed in between, the calculation is stale and
+    must not be reported as the current head's answer.
+    """
+
+    row = conn.execute(
+        """
+        SELECT version_id FROM schedule_heads
+        WHERE project_id = %s AND kind = %s
+        FOR UPDATE
+        """,
+        (project_id, kind),
+    ).fetchone()
+    return None if row is None else row["version_id"]
+
+
 def list_versions(conn: psycopg.Connection, *, project_id: uuid.UUID) -> list[dict[str, Any]]:
     return conn.execute(
         f"SELECT {_VERSION_SUMMARY} FROM schedule_versions v"

@@ -529,6 +529,26 @@ class CalendarTailSchedulingConsequencesTests(unittest.TestCase):
                             self.assertEqual(floats.by_uid()[uid("P")].free_float, 0)
                             self.assertEqual(validate_result(net, forward, backward, floats), ())
 
+    def test_a_completed_terminal_activity_has_no_movable_free_float(self):
+        net = network(
+            activity("P", 2, CONTINUOUS, actual_start=5, actual_finish=7),
+            activity(
+                "T",
+                1,
+                CONTINUOUS,
+                constraint_type=ConstraintType.SNET,
+                constraint_coordinate=15,
+            ),
+            status_time=7,
+            horizon=20,
+        )
+        forward = forward_pass(net)
+        backward = backward_pass(net, forward)
+        floats = float_analysis(net, forward, backward)
+        self.assertGreater(backward.project_late_finish, 7)
+        self.assertEqual(floats.by_uid()[uid("P")].free_float, 0)
+        self.assertEqual(validate_result(net, forward, backward, floats), ())
+
     def test_validator_checks_start_placement_at_exclusive_boundary(self):
         for kind in (RelationshipType.SS, RelationshipType.SF):
             for duration, snap in ((2, False), (0, True)):
