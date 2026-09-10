@@ -77,9 +77,11 @@ of them. Same policy: outside git, recorded by hash.
 
 **`BOILER-WG110-day5-candidate.mspdi.xml` has no upstream.** It exists in no
 repository, on no branch, in no other copy found on this machine. It is the only
-file carrying a status date and reported actuals, which makes it the only oracle
-for status-date scheduling, retained logic and progress override. If it is lost,
-engine slice S5 loses its verification and there is nothing to restore from.
+file carrying an activity that has started but not finished. Its actual dates
+and stored forecast finish are a reported-work oracle. Its status date precedes
+its project start and its late dates were not recalculated by Project, so it is
+not evidence for status-date scheduling, retained logic, late dates, float or
+criticality. If it is lost, the only real in-progress cohort cannot be rerun.
 
 As of 2026-09-03 a second copy sits beside the other four, and every file in
 that directory is read-only. Both copies are on one filesystem on one machine,
