@@ -474,6 +474,16 @@ def validate_result(
             continue
         edges = [edge for edge in outgoing.get(uid, ()) if edge.uid not in released]
         reported = float_row.free_float
+        if row.state is ProgressState.COMPLETE:
+            if reported != 0:
+                violations.append(
+                    Violation(
+                        "FREE_FLOAT_MISMATCH",
+                        uid,
+                        f"reported {reported}, but completed work cannot move",
+                    )
+                )
+            continue
         if not edges:
             # An open-ended tail is measured against the project late finish,
             # which is what makes its free float equal its total float rather

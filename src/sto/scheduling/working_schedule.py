@@ -26,6 +26,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 from pathlib import Path
+from threading import RLock
 from typing import Any
 
 import psycopg
@@ -169,6 +170,7 @@ class Workspace:
     #: Projects whose head failed verification at the last rebuild, with why.
     #: They are not resident; health reports them; their routes return 500.
     integrity_failures: dict[uuid.UUID, str] = field(default_factory=dict)
+    _state_lock: RLock = field(default_factory=RLock, repr=False)
 
     # --- reading ---------------------------------------------------------------
 
@@ -181,8 +183,9 @@ class Workspace:
         ``/api/health`` and by that project's own routes.
         """
 
-        self._resident.clear()
-        self.integrity_failures.clear()
+        with self._state_lock:
+            self._resident.clear()
+            self.integrity_failures.clear()
         with self.connect() as conn:
             heads = repo.heads_for_all_projects(conn)
         for head in heads:
@@ -190,12 +193,15 @@ class Workspace:
                 continue
             try:
                 self.load(head["project_id"])
-            except IntegrityError as error:
-                self.integrity_failures[head["project_id"]] = str(error)
+            except IntegrityError:
+                # ``load`` publishes the diagnosis only when the failed row is
+                # still the head. Repeating it here would undo that check.
+                pass
         return len(self._resident)
 
     def resident_ids(self) -> frozenset[uuid.UUID]:
-        return frozenset(self._resident)
+        with self._state_lock:
+            return frozenset(self._resident)
 
     def load(
         self, project_id: uuid.UUID, *, refresh: bool = False
@@ -209,7 +215,8 @@ class Workspace:
         on the bytes the row actually holds.
         """
 
-        cached = None if refresh else self._resident.get(project_id)
+        with self._state_lock:
+            cached = None if refresh else self._resident.get(project_id)
         if cached is not None:
             return cached
         with self.connect() as conn:
@@ -228,26 +235,28 @@ class Workspace:
             # checked, so only evict and diagnose the version that actually
             # failed. If the database head moved before the resident was
             # installed, the second head read closes that smaller window.
-            resident = self._resident.get(project_id)
-            if resident is None or resident.version_id == row["id"]:
-                with self.connect() as conn:
-                    current = repo.head_version(
-                        conn,
-                        project_id=project_id,
-                        kind="baseline",
-                        with_document=False,
-                    )
-                if current is not None and current["id"] == row["id"]:
-                    if resident is not None:
-                        self._resident.pop(project_id, None)
-                    self.integrity_failures[project_id] = str(error)
+            with self._state_lock:
+                resident = self._resident.get(project_id)
+                if resident is None or resident.version_id == row["id"]:
+                    with self.connect() as conn:
+                        current = repo.head_version(
+                            conn,
+                            project_id=project_id,
+                            kind="baseline",
+                            with_document=False,
+                        )
+                    if current is not None and current["id"] == row["id"]:
+                        if resident is not None:
+                            self._resident.pop(project_id, None)
+                        self.integrity_failures[project_id] = str(error)
             raise
-        self.integrity_failures.pop(project_id, None)
         # A refresh is a verified point-in-time read for calculation. It must
         # not replace the resident head: an import can commit and install a
         # newer resident version while this database read is being verified.
-        if not refresh:
-            self._resident[project_id] = working
+        with self._state_lock:
+            self.integrity_failures.pop(project_id, None)
+            if not refresh:
+                self._resident[project_id] = working
         return working
 
     def _record_failure(
@@ -691,17 +700,18 @@ class Workspace:
             repo.set_head(conn, project_id=project_id, kind="baseline", version_id=version_id)
             conn.commit()
 
-        self._resident[project_id] = WorkingSchedule(
-            project_id=project_id,
-            version_id=version_id,
-            sequence=sequence,
-            canonical_hash=digest,
-            schedule=schedule,
-            identity=identity,
-        )
-        # A successful import supersedes any integrity diagnosis recorded for
-        # the previous head, including one racing this commit.
-        self.integrity_failures.pop(project_id, None)
+        with self._state_lock:
+            self._resident[project_id] = WorkingSchedule(
+                project_id=project_id,
+                version_id=version_id,
+                sequence=sequence,
+                canonical_hash=digest,
+                schedule=schedule,
+                identity=identity,
+            )
+            # A successful import supersedes any integrity diagnosis recorded
+            # for the previous head, including one racing this commit.
+            self.integrity_failures.pop(project_id, None)
         return ImportResult(
             project_id=project_id,
             import_batch_id=batch_id,

@@ -22,6 +22,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
 from uuid import uuid4
+from threading import Event, Thread
 
 from calculation_fixture import _activity, _document, _relationship
 
@@ -615,6 +616,66 @@ class RefreshCacheTests(unittest.TestCase):
         ):
             workspace.load(project_id, refresh=True)
 
+        self.assertIs(workspace._resident[project_id], newer)
+        self.assertNotIn(project_id, workspace.integrity_failures)
+
+    def test_import_publication_waiting_after_the_second_head_read_wins_atomically(self):
+        """The head check and quarantine publication are one cache operation."""
+
+        from sto.scheduling.working_schedule import (
+            IntegrityError,
+            WorkingSchedule,
+            Workspace,
+        )
+
+        project_id = uuid4()
+        older = WorkingSchedule(project_id, uuid4(), 1, "a" * 64, object(), object())
+        newer = WorkingSchedule(project_id, uuid4(), 2, "b" * 64, object(), object())
+        second_read = Event()
+        publication_waiting = Event()
+
+        class Connection:
+            def __enter__(self):
+                return object()
+
+            def __exit__(self, *args):
+                return False
+
+        workspace = Workspace(connect=Connection)
+
+        def head_version(_conn, *, with_document, **_kwargs):
+            if not with_document:
+                second_read.set()
+                self.assertTrue(publication_waiting.wait(2))
+            return {"id": older.version_id}
+
+        def publish_import():
+            self.assertTrue(second_read.wait(2))
+            publication_waiting.set()
+            with workspace._state_lock:
+                workspace._resident[project_id] = newer
+                workspace.integrity_failures.pop(project_id, None)
+
+        publisher = Thread(target=publish_import)
+        publisher.start()
+        try:
+            with (
+                patch("sto.scheduling.working_schedule.repo.get_project", return_value={}),
+                patch(
+                    "sto.scheduling.working_schedule.repo.head_version",
+                    side_effect=head_version,
+                ),
+                patch(
+                    "sto.scheduling.working_schedule._verify",
+                    side_effect=IntegrityError("old head is corrupt"),
+                ),
+                self.assertRaises(IntegrityError),
+            ):
+                workspace.load(project_id, refresh=True)
+        finally:
+            publisher.join(2)
+
+        self.assertFalse(publisher.is_alive())
         self.assertIs(workspace._resident[project_id], newer)
         self.assertNotIn(project_id, workspace.integrity_failures)
 

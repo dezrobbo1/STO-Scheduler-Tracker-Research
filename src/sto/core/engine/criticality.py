@@ -207,6 +207,7 @@ def _free_float(
     movement_limits: dict[UUID, tuple[int, int]],
     snapped_zero_spans: frozenset[UUID],
     calendar_placed_starts: frozenset[UUID],
+    immovable: frozenset[UUID],
     project_late_finish: int,
 ) -> int:
     """Slack against the successors' *early* dates, not the project's late finish.
@@ -243,6 +244,11 @@ def _free_float(
     """
 
     early_start, early_finish = early[uid].early_start, early[uid].early_finish
+    # A completed activity has no movable coordinate. This precedes the tail
+    # shortcut because a terminal completed row can otherwise inherit the gap
+    # to another path's finish as free float despite both actuals being fixed.
+    if uid in immovable:
+        return 0
     if not outgoing:
         return signed_working(calendar, early_finish, project_late_finish)
 
@@ -489,6 +495,7 @@ def float_analysis(
             movement_limits,
             snapped_zero_spans,
             calendar_placed_starts,
+            complete,
             backward.project_late_finish,
         )
         rows.append(
