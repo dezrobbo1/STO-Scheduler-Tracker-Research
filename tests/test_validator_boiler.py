@@ -27,6 +27,8 @@ from collections import Counter
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from tests.real_fixture_guard import verify_available
+
 from sto.core.engine import (
     backward_pass,
     build_plan,
@@ -68,6 +70,8 @@ NATIVE = {
         )
     ),
 }
+verify_available(FIXTURES)
+verify_available(NATIVE)
 if os.environ.get("STO_REQUIRE_NATIVE") == "1":
     absent = sorted(name for name, path in NATIVE.items() if not path.is_file())
     if absent:

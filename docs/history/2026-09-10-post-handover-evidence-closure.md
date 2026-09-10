@@ -20,8 +20,10 @@ at least one module. BOILER baseline, KILN, CALCINER, Project-native completion
 and day-5 now gate independently. This mattered in the closure environment:
 the first seven files named in the current evidence packet were recovered and
 hash-verified, while the exact day-5 file was not in any authorized source.
-Its four specific assertions skip and say why; every other available cohort
-runs.
+The day-5 canonical, progress, disposition, validation and persistence cohorts
+remain conditional and say why; every other available cohort runs. Skip totals
+also include separately conditional database and PM-clone suites, so this
+record does not assign a fixed assertion count to the missing file.
 
 ## What was measured
 

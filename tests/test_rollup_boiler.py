@@ -22,6 +22,8 @@ import unittest
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from tests.real_fixture_guard import verify_available
+
 from sto.core.engine import build_plan, forward_pass, roll_up
 from sto.core.model.migrate.sto_v011 import migrate
 from sto.legacy import import_mspdi
@@ -35,6 +37,7 @@ FIXTURES = {
         os.environ.get("STO_CALCINER", "/home/dez/sto-fixtures/calciner-wg050-source.xml")
     ),
 }
+verify_available(FIXTURES)
 if os.environ.get("STO_REQUIRE_BOILER") == "1":
     absent = sorted(name for name, path in FIXTURES.items() if not path.is_file())
     if absent:
