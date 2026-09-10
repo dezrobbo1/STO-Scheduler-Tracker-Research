@@ -302,20 +302,40 @@ function render(state) {
   if (!state.baseline) say("Schedule imported. Calculate the baseline to enable supported duration edits.");
 }
 
+function selectedProject(projectId) {
+  return projects.value === projectId;
+}
+
+function renderedImport(state, imported) {
+  return Boolean(state && selectedProject(imported.project_id) &&
+    state.project_id === imported.project_id &&
+    state.baseline_version_id === imported.version_id);
+}
+
+function renderedCalculation(state, calculation) {
+  return Boolean(state && selectedProject(calculation.project_id) && state.baseline &&
+    state.project_id === calculation.project_id &&
+    state.baseline_version_id === calculation.version_id &&
+    state.baseline.version_id === calculation.version_id &&
+    state.baseline.calculation_id === calculation.calculation_id);
+}
+
 async function show(projectId) {
+  if (!projectId || !selectedProject(projectId)) return null;
   awaiting = projectId;
   currentState = null;
   for (const section of [scenarioSection, provenanceSection, chartSection, rowsSection, summariesSection]) section.hidden = true;
-  if (!projectId) return;
   try {
     const state = await json("/api/projects/" + projectId + "/planner");
-    if (awaiting !== projectId) return;
+    if (awaiting !== projectId || !selectedProject(projectId)) return null;
     render(state);
     if (state.baseline) say("");
+    return state;
   } catch (error) {
-    if (awaiting !== projectId) return;
+    if (awaiting !== projectId || !selectedProject(projectId)) return null;
     if (error.status === 409) say("Import a schedule into this project.");
     else say("The planner state could not be served: " + error.message, "error");
+    return null;
   }
 }
 
@@ -332,9 +352,15 @@ calculateButton.addEventListener("click", async () => {
   const projectId = projects.value; if (!projectId) return;
   calculateButton.disabled = true; say("Calculating immutable baseline…");
   try {
-    await json("/api/projects/" + projectId + "/calculations", {method: "POST"});
-    if (projects.value !== projectId) { say("Calculated. Select that project again to see it."); return; }
-    await show(projectId); say("Baseline calculated and stored.");
+    const calculation = await json("/api/projects/" + projectId + "/calculations", {method: "POST"});
+    if (!selectedProject(projectId)) return;
+    const state = await show(projectId);
+    if (!state) return;
+    if (!renderedCalculation(state, calculation)) {
+      say("The baseline changed before this calculation could be displayed. Review the current state and calculate it if needed.", "error");
+      return;
+    }
+    say("Baseline calculated and stored.");
   } catch (error) { if (projects.value === projectId) say(error.message, "error"); }
   finally { calculateButton.disabled = false; }
 });
@@ -356,8 +382,10 @@ importForm.addEventListener("submit", async (event) => {
   const data = new FormData(); data.append("file", file);
   say("Importing and preserving the source baseline…");
   try {
-    await json("/api/projects/" + projectId + "/imports", {method: "POST", body: data});
-    await show(projectId); say("Schedule imported. Calculate the baseline next.");
+    const imported = await json("/api/projects/" + projectId + "/imports", {method: "POST", body: data});
+    if (!selectedProject(projectId)) return;
+    const state = await show(projectId);
+    if (renderedImport(state, imported)) say("Schedule imported. Calculate the baseline next.");
   } catch (error) { say(error.message, "error"); }
 });
 

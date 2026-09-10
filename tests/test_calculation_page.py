@@ -218,10 +218,67 @@ console.log(JSON.stringify({
         """Two requests can finish out of order while the selector stays live."""
 
         self.assertIn("awaiting", self.script)
-        self.assertIn("if (awaiting !== projectId) return;", self.script)
+        self.assertIn("awaiting !== projectId || !selectedProject(projectId)", self.script)
         self.assertGreaterEqual(
             self.script.count("if (projects.value !== projectId) return;"), 3
         )
+
+    def test_import_and_calculation_success_belong_to_the_rendered_project(self):
+        """Execute the freshness decisions used after both awaited mutations."""
+
+        node = shutil.which("node") or os.environ.get("CODEX_PRIMARY_RUNTIME_NODE")
+        if not node:
+            self.skipTest("Node is required to execute the page's JavaScript")
+        functions = "\n".join(
+            re.search(r"function " + name + r"\([\s\S]*?\n}", self.script).group(0)
+            for name in ("selectedProject", "renderedImport", "renderedCalculation")
+        )
+        probe = r"""
+const projects = {value: 'project-a'};
+const imported = {project_id: 'project-a', version_id: 'version-a'};
+const calculation = {project_id: 'project-a', version_id: 'version-a',
+  calculation_id: 'calculation-a'};
+const state = {project_id: 'project-a', baseline_version_id: 'version-a',
+  baseline: {version_id: 'version-a', calculation_id: 'calculation-a'}};
+const measured = {
+  imported: renderedImport(state, imported),
+  calculated: renderedCalculation(state, calculation),
+  wrongCalculation: renderedCalculation(state,
+    {...calculation, calculation_id: 'calculation-old'})
+};
+projects.value = 'project-b';
+measured.importAfterSwitch = renderedImport(state, imported);
+measured.calculationAfterSwitch = renderedCalculation(state, calculation);
+console.log(JSON.stringify(measured));
+"""
+        measured = json.loads(
+            subprocess.run(
+                [node, "-e", functions + probe],
+                check=True,
+                text=True,
+                capture_output=True,
+            ).stdout
+        )
+        self.assertEqual(
+            measured,
+            {
+                "imported": True,
+                "calculated": True,
+                "wrongCalculation": False,
+                "importAfterSwitch": False,
+                "calculationAfterSwitch": False,
+            },
+        )
+        import_handler = self.script[self.script.index('importForm.addEventListener'):]
+        import_handler = import_handler[: import_handler.index('scenarioForm.addEventListener')]
+        self.assertIn("if (!selectedProject(projectId)) return;", import_handler)
+        self.assertIn("if (renderedImport(state, imported)) say", import_handler)
+        calculation_handler = self.script[
+            self.script.index('calculateButton.addEventListener'):
+            self.script.index('createProjectForm.addEventListener')
+        ]
+        self.assertIn("if (!state) return;", calculation_handler)
+        self.assertIn("if (!renderedCalculation(state, calculation))", calculation_handler)
 
     def test_duration_control_and_calculation_detail_keep_the_existing_contract(self):
         self.assertIn('id="duration-hours" type="number" min="0.0003" step="any"', self.html)
