@@ -214,30 +214,43 @@ console.log(JSON.stringify({
             },
         )
 
-    def test_it_drops_a_response_for_a_project_no_longer_selected(self):
-        """A generation distinguishes out-of-order A to B to A responses."""
+    def test_it_reconciles_a_committed_mutation_after_an_a_b_a_refresh_cycle(self):
+        """A stale mutation response may still represent newly committed state."""
 
         node = shutil.which("node") or os.environ.get("CODEX_PRIMARY_RUNTIME_NODE")
         if not node:
             self.skipTest("Node is required to execute the page's JavaScript")
         functions = "\n".join(
-            re.search(r"function " + name + r"\([\s\S]*?\n}", self.script).group(0)
-            for name in ("selectedProject", "beginRefresh", "currentRefresh")
+            re.search(r"(?:async )?function " + name + r"\([\s\S]*?\n}", self.script).group(0)
+            for name in (
+                "selectedProject",
+                "beginRefresh",
+                "currentRefresh",
+                "reconcileMutationResponse",
+            )
         )
         probe = r"""
 const projects = {value: 'project-a'};
 let refreshGeneration = 0;
-const firstA = beginRefresh();
-projects.value = 'project-b';
-const projectB = beginRefresh();
-projects.value = 'project-a';
-const secondA = beginRefresh();
-console.log(JSON.stringify({
-  firstA: currentRefresh(firstA, 'project-a'),
-  projectB: currentRefresh(projectB, 'project-b'),
-  secondA: currentRefresh(secondA, 'project-a'),
-  generations: [firstA, projectB, secondA]
-}));
+const refreshes = [];
+async function show(projectId) { refreshes.push(projectId); beginRefresh(); return {}; }
+(async () => {
+  const firstA = beginRefresh();
+  projects.value = 'project-b';
+  const projectB = beginRefresh();
+  projects.value = 'project-a';
+  const secondA = beginRefresh();
+  const before = {
+    firstA: currentRefresh(firstA, 'project-a'),
+    projectB: currentRefresh(projectB, 'project-b'),
+    secondA: currentRefresh(secondA, 'project-a')
+  };
+  const staleMutationAccepted = await reconcileMutationResponse(firstA, 'project-a');
+  const currentGeneration = refreshGeneration;
+  const currentMutationAccepted = await reconcileMutationResponse(currentGeneration, 'project-a');
+  console.log(JSON.stringify({before, staleMutationAccepted, currentMutationAccepted,
+    refreshes, generation: refreshGeneration}));
+})();
 """
         measured = json.loads(
             subprocess.run(
@@ -250,13 +263,17 @@ console.log(JSON.stringify({
         self.assertEqual(
             measured,
             {
-                "firstA": False,
-                "projectB": False,
-                "secondA": True,
-                "generations": [1, 2, 3],
+                "before": {"firstA": False, "projectB": False, "secondA": True},
+                "staleMutationAccepted": False,
+                "currentMutationAccepted": True,
+                "refreshes": ["project-a"],
+                "generation": 4,
             },
         )
-        self.assertEqual(self.script.count("currentRefresh(generation, projectId)"), 7)
+        self.assertEqual(
+            self.script.count("await reconcileMutationResponse(generation, projectId)"),
+            4,
+        )
 
     def test_import_and_calculation_success_belong_to_the_rendered_project(self):
         """Execute the freshness decisions used after both awaited mutations."""
@@ -330,21 +347,24 @@ console.log(JSON.stringify(measured));
         )
         import_handler = self.script[self.script.index('importForm.addEventListener'):]
         import_handler = import_handler[: import_handler.index('scenarioForm.addEventListener')]
-        self.assertIn("if (!currentRefresh(generation, projectId)) return;", import_handler)
+        self.assertIn("await reconcileMutationResponse(generation, projectId)", import_handler)
         self.assertIn("if (renderedImport(state, imported)) say", import_handler)
         calculation_handler = self.script[
             self.script.index('calculateButton.addEventListener'):
             self.script.index('createProjectForm.addEventListener')
         ]
+        self.assertIn("await reconcileMutationResponse(generation, projectId)", calculation_handler)
         self.assertIn("if (!state) return;", calculation_handler)
         self.assertIn("if (!renderedCalculation(state, calculation))", calculation_handler)
         scenario_handler = self.script[
             self.script.index('scenarioForm.addEventListener'):
             self.script.index('resetScenario.addEventListener')
         ]
+        self.assertIn("await reconcileMutationResponse(generation, projectId)", scenario_handler)
         self.assertIn("if (!renderedScenario(state, created, projectId, activityUid, seconds))", scenario_handler)
         self.assertIn("const state = await show(projectId);", scenario_handler)
         reset_handler = self.script[self.script.index('resetScenario.addEventListener'):]
+        self.assertIn("await reconcileMutationResponse(generation, projectId)", reset_handler)
         self.assertIn("if (!renderedReset(state, reset, projectId))", reset_handler)
         self.assertIn("resetScenario.disabled = resetIsDisabled(currentState)", reset_handler)
         self.assertIn('if (error.status === 409) await show(projectId);', reset_handler)
