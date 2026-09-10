@@ -564,13 +564,59 @@ class RefreshCacheTests(unittest.TestCase):
         workspace._resident[project_id] = newer
         with (
             patch("sto.scheduling.working_schedule.repo.get_project", return_value={}),
-            patch("sto.scheduling.working_schedule.repo.head_version", return_value={}),
+            patch(
+                "sto.scheduling.working_schedule.repo.head_version",
+                return_value={"id": older.version_id},
+            ),
             patch("sto.scheduling.working_schedule._verify", return_value=older),
         ):
             refreshed = workspace.load(project_id, refresh=True)
 
         self.assertIs(refreshed, older)
         self.assertIs(workspace._resident[project_id], newer)
+
+    def test_a_failed_old_refresh_does_not_evict_or_accuse_a_newer_resident_head(self):
+        """A corrupt snapshot cannot overwrite a concurrent import's cache state."""
+
+        from sto.scheduling.working_schedule import (
+            IntegrityError,
+            WorkingSchedule,
+            Workspace,
+        )
+
+        project_id = uuid4()
+        older = WorkingSchedule(project_id, uuid4(), 1, "a" * 64, object(), object())
+        newer = WorkingSchedule(project_id, uuid4(), 2, "b" * 64, object(), object())
+
+        class Connection:
+            def __enter__(self):
+                return object()
+
+            def __exit__(self, *args):
+                return False
+
+        workspace = Workspace(connect=Connection)
+
+        def fail_after_newer_head_was_published(*_args):
+            workspace._resident[project_id] = newer
+            raise IntegrityError("old head is corrupt")
+
+        with (
+            patch("sto.scheduling.working_schedule.repo.get_project", return_value={}),
+            patch(
+                "sto.scheduling.working_schedule.repo.head_version",
+                return_value={"id": older.version_id},
+            ),
+            patch(
+                "sto.scheduling.working_schedule._verify",
+                side_effect=fail_after_newer_head_was_published,
+            ),
+            self.assertRaises(IntegrityError),
+        ):
+            workspace.load(project_id, refresh=True)
+
+        self.assertIs(workspace._resident[project_id], newer)
+        self.assertNotIn(project_id, workspace.integrity_failures)
 
 
 @unittest.skipUnless(
