@@ -17,7 +17,7 @@ import tempfile
 import unittest
 from datetime import timedelta
 from pathlib import Path
-from urllib.parse import parse_qsl, unquote, urlparse, urlsplit, urlunsplit
+from urllib.parse import parse_qsl, unquote, urlparse, urlsplit
 
 REQUIRE_DB = os.environ.get("STO_REQUIRE_DB") == "1"
 ADMIN_URL = os.environ.get(
@@ -76,7 +76,9 @@ def _database_url(admin_url: str, dbname: str) -> str:
     """Change only the database path; retain every connection option."""
 
     parsed = urlsplit(admin_url)
-    return urlunsplit(parsed._replace(path="/" + dbname))
+    query = "" if not parsed.query else "?" + parsed.query
+    fragment = "" if not parsed.fragment else "#" + parsed.fragment
+    return f"{parsed.scheme}://{parsed.netloc}/{dbname}{query}{fragment}"
 
 
 def _migration_environment(url: str, dbname: str) -> dict[str, str]:
@@ -118,6 +120,12 @@ class UpgradeConnectionOptionTests(unittest.TestCase):
         self.assertEqual(environment["PGSSLMODE"], "require")
         self.assertEqual(environment["PGAPPNAME"], "upgrade-test")
         self.assertEqual(environment["PGCONNECT_TIMEOUT"], "11")
+
+    def test_authority_less_socket_url_keeps_its_three_slashes(self):
+        self.assertEqual(
+            _database_url("postgresql:///postgres?sslmode=disable", "sto_upgrade"),
+            "postgresql:///sto_upgrade?sslmode=disable",
+        )
 
 
 @unittest.skipUnless(
