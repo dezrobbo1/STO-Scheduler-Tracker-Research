@@ -17,6 +17,7 @@ import tempfile
 import unittest
 from datetime import timedelta
 from pathlib import Path
+from unittest.mock import patch
 from urllib.parse import parse_qsl, unquote, urlparse, urlsplit
 
 REQUIRE_DB = os.environ.get("STO_REQUIRE_DB") == "1"
@@ -82,17 +83,25 @@ def _database_url(admin_url: str, dbname: str) -> str:
 
 
 def _migration_environment(url: str, dbname: str) -> dict[str, str]:
+    """Translate only connection components the URL actually declares.
+
+    An authority-less URL such as ``postgresql:///postgres`` deliberately
+    leaves host, port and user unspecified so libpq can use its normal socket,
+    peer-authentication and environment defaults. Supplying loopback defaults
+    here would make the migration scripts connect differently from psycopg's
+    successful availability/database-creation connection.
+    """
+
     parsed = urlparse(url)
     environment = os.environ.copy()
-    environment.update(
-        {
-            "PGHOST": parsed.hostname or "127.0.0.1",
-            "PGPORT": str(parsed.port or 5432),
-            "PGUSER": unquote(parsed.username or "postgres"),
-            "PGDATABASE": dbname,
-        }
-    )
-    if parsed.password:
+    environment["PGDATABASE"] = dbname
+    if parsed.hostname is not None:
+        environment["PGHOST"] = parsed.hostname
+    if parsed.port is not None:
+        environment["PGPORT"] = str(parsed.port)
+    if parsed.username is not None:
+        environment["PGUSER"] = unquote(parsed.username)
+    if parsed.password is not None:
         environment["PGPASSWORD"] = unquote(parsed.password)
     for name, value in parse_qsl(parsed.query, keep_blank_values=True):
         variable = _LIBPQ_QUERY_ENV.get(name)
@@ -117,6 +126,11 @@ class UpgradeConnectionOptionTests(unittest.TestCase):
             "?sslmode=require&application_name=upgrade-test&connect_timeout=11",
         )
         environment = _migration_environment(changed, "sto_upgrade")
+        self.assertEqual(environment["PGHOST"], "db.example")
+        self.assertEqual(environment["PGPORT"], "6543")
+        self.assertEqual(environment["PGUSER"], "operator")
+        self.assertEqual(environment["PGPASSWORD"], "secret")
+        self.assertEqual(environment["PGDATABASE"], "sto_upgrade")
         self.assertEqual(environment["PGSSLMODE"], "require")
         self.assertEqual(environment["PGAPPNAME"], "upgrade-test")
         self.assertEqual(environment["PGCONNECT_TIMEOUT"], "11")
@@ -126,6 +140,33 @@ class UpgradeConnectionOptionTests(unittest.TestCase):
             _database_url("postgresql:///postgres?sslmode=disable", "sto_upgrade"),
             "postgresql:///sto_upgrade?sslmode=disable",
         )
+
+    def test_authority_less_socket_url_does_not_force_tcp_transport(self):
+        with patch.dict(os.environ, {}, clear=True):
+            environment = _migration_environment(
+                "postgresql:///sto_upgrade?sslmode=disable", "sto_upgrade"
+            )
+        self.assertNotIn("PGHOST", environment)
+        self.assertNotIn("PGPORT", environment)
+        self.assertNotIn("PGUSER", environment)
+        self.assertNotIn("PGPASSWORD", environment)
+        self.assertEqual(environment["PGDATABASE"], "sto_upgrade")
+        self.assertEqual(environment["PGSSLMODE"], "disable")
+
+    def test_authority_less_socket_url_preserves_existing_libpq_defaults(self):
+        inherited = {
+            "PGHOST": "/var/run/postgresql",
+            "PGPORT": "5544",
+            "PGUSER": "peer-user",
+        }
+        with patch.dict(os.environ, inherited, clear=True):
+            environment = _migration_environment(
+                "postgresql:///sto_upgrade", "sto_upgrade"
+            )
+        self.assertEqual(environment["PGHOST"], inherited["PGHOST"])
+        self.assertEqual(environment["PGPORT"], inherited["PGPORT"])
+        self.assertEqual(environment["PGUSER"], inherited["PGUSER"])
+        self.assertEqual(environment["PGDATABASE"], "sto_upgrade")
 
 
 @unittest.skipUnless(
