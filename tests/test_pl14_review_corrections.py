@@ -11,7 +11,6 @@ import os
 import secrets
 import tempfile
 import unittest
-import uuid
 from datetime import timedelta
 from pathlib import Path
 from unittest.mock import patch
@@ -170,10 +169,10 @@ class ScenarioCalculationContextTests(unittest.TestCase):
                 with_document=False,
             )
             scenario_versions = conn.execute(
-                "SELECT count(*) FROM schedule_versions "
+                "SELECT count(*) AS count FROM schedule_versions "
                 "WHERE project_id=%s AND kind='scenario'",
                 (project_id,),
-            ).fetchone()[0]
+            ).fetchone()["count"]
         self.assertIsNone(scenario_head)
         self.assertEqual(scenario_versions, 0)
 
