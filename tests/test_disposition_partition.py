@@ -27,6 +27,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from calculation_fixture import _activity, _document
+from tests.real_fixture_guard import verify_available
 
 from sto.core.engine import build_plan
 from sto.core.model.entities import Constraint, WbsNode
@@ -48,6 +49,7 @@ FIXTURES = {
         )
     ),
 }
+verify_available(FIXTURES)
 if os.environ.get("STO_REQUIRE_BOILER") == "1":
     absent = sorted(
         name for name, path in FIXTURES.items()

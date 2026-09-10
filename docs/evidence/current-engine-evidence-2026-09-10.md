@@ -1,10 +1,12 @@
 # Current engine evidence — 2026-09-10
 
-This is the current-state evidence packet after PRs #44 and #43. The original
+This is the current-state evidence packet after PRs #44 and #43. The initial
 measurements are attached to reachable evidence commit `fc30bd34140ad813d7d08655a359d2136f6aa58f`
-over correction commit `9ec77db8c984d1b52347eb2906fb3046d3b303c8`. Customer task
-names and schedule contents are not recorded here; the real files remain
-outside git.
+over correction commit `9ec77db8c984d1b52347eb2906fb3046d3b303c8`.
+Correction revision `ec6f433c64c12c08cd2fbfc3df0cfb0fe3be49b9` changes the
+early comparison to the matching MSPDI fields and establishes the current
+CALCINER value below. Customer task names and schedule contents are not
+recorded here; the real files remain outside git.
 
 ## Evidence levels
 
@@ -43,6 +45,17 @@ The exact day-5 candidate, recorded as 3,747,935 bytes with SHA-256 beginning
 the authorized external fixture directory or the frozen fixture repository. No
 synthetic replacement was made and no assertion requiring day-5 is claimed. A live
 Windows/Microsoft Project session was also not available to this run.
+
+Every configured file that is present is checked against the byte size and
+SHA-256 identity above before any evidence module accepts it. The unavailable
+day-5 record retains only its 16-character digest prefix, so the guard requires
+that prefix together with its exact byte size and does not pretend a full
+digest survived.
+
+When that exact candidate is recovered, `STO_REQUIRE_DAY5=1` makes its absence
+or wrong identity a hard failure for the P1-G2 evidence run. The native
+recalculation pair is independently required with `STO_REQUIRE_NATIVE=1` for
+P1-G3.
 
 ## Fresh stored-XML agreement matrix
 

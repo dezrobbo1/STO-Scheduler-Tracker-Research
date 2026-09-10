@@ -20,6 +20,8 @@ import unittest
 import uuid
 from pathlib import Path
 
+from tests.real_fixture_guard import verify_available
+
 REQUIRE_DB = os.environ.get("STO_REQUIRE_DB") == "1"
 ADMIN_URL = os.environ.get("STO_TEST_ADMIN_URL", "postgresql://postgres@127.0.0.1:5433/postgres")
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -27,6 +29,7 @@ FIXTURES = REPO_ROOT / "tests" / "fixtures"
 MIGRATIONS = REPO_ROOT / "infra" / "migrations"
 BOILER_BEFORE = Path(os.environ.get("STO_BOILER_BEFORE", "/home/dez/sto-fixtures/boiler-before-no-progress.xml"))
 BOILER_DAY5 = Path(os.environ.get("STO_BOILER_DAY5", "/home/dez/BOILER-WG110-day5-candidate.mspdi.xml"))
+verify_available({"boiler_before": BOILER_BEFORE, "day5": BOILER_DAY5})
 
 try:
     import psycopg

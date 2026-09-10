@@ -20,6 +20,8 @@ import unittest
 from datetime import datetime
 from pathlib import Path
 
+from tests.real_fixture_guard import verify_available
+
 from sto.core.hashing import CanonicalHashError, canonical_json_bytes, canonical_sha256
 from sto.core.model import decode_schedule, encode_schedule
 from sto.core.model.entities import (
@@ -48,6 +50,13 @@ BOILER_BEFORE = Path(os.environ.get("STO_BOILER_BEFORE", "/home/dez/sto-fixtures
 BOILER_DAY5 = Path(os.environ.get("STO_BOILER_DAY5", "/home/dez/BOILER-WG110-day5-candidate.mspdi.xml"))
 BOILER_UNTOUCHED = Path(
     os.environ.get("STO_BOILER_UNTOUCHED", "/home/dez/sto-fixtures/boiler-untouched-source.xml")
+)
+verify_available(
+    {
+        "boiler_before": BOILER_BEFORE,
+        "day5": BOILER_DAY5,
+        "boiler_untouched": BOILER_UNTOUCHED,
+    }
 )
 
 #: Named in the roadmap against every criterion whose evidence is this pair.

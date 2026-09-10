@@ -171,13 +171,21 @@
           "id": "P1-G2",
           "text": "Both BOILER snapshots: every leaf activity gets a disposition, and no difference is UNEXPLAINED across start, finish, late dates, float and criticality",
           "met": false,
-          "evidence": null
+          "evidence": "docs/evidence/current-engine-evidence-2026-09-10.md",
+          "evidence_conditional": {
+            "env": "STO_REQUIRE_DAY5",
+            "why": "the exact progressed BOILER candidate is unavailable; this criterion remains open and its file-oracle assertions must fail rather than skip when the gate is attempted"
+          }
         },
         {
           "id": "P1-G3",
           "text": "The genuine Project-recalculation oracle (before to after-native-progress) reports zero unexpected differences",
           "met": false,
-          "evidence": null
+          "evidence": "tests/test_progress_boiler.py",
+          "evidence_conditional": {
+            "env": "STO_REQUIRE_NATIVE",
+            "why": "the Microsoft Project recalculation files live outside the repository and must both be present for this gate"
+          }
         },
         {
           "id": "P1-G4",

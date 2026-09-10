@@ -26,10 +26,13 @@ not start until the previous gate passes.
 | | Gate criterion | Shown by |
 |---|---|---|
 | ✓ | The 47 executable conformance cases pass, byte-identically across three processes | `tests/test_conformance_determinism.py` |
-| · | Both BOILER snapshots: every leaf activity gets a disposition, and no difference is UNEXPLAINED across start, finish, late dates, float and criticality | — |
-| · | The genuine Project-recalculation oracle (before to after-native-progress) reports zero unexpected differences | — |
+| · | Both BOILER snapshots: every leaf activity gets a disposition, and no difference is UNEXPLAINED across start, finish, late dates, float and criticality | `docs/evidence/current-engine-evidence-2026-09-10.md` ‡ |
+| · | The genuine Project-recalculation oracle (before to after-native-progress) reports zero unexpected differences | `tests/test_progress_boiler.py` ‡ |
 | · | A persisted import shows calculated dates beside the ones it imported; one duration edit moves its successors; reset restores the baseline; the scenario exports; and a restart reproduces the same result from the same input hash | — |
 | · | Every API route rejects an unauthenticated request, and a project is readable only by an actor authorised on it | — |
+
+‡ the exact progressed BOILER candidate is unavailable; this criterion remains open and its file-oracle assertions must fail rather than skip when the gate is attempted; set `STO_REQUIRE_DAY5=1` to make their absence a failure rather than a skip.
+‡ the Microsoft Project recalculation files live outside the repository and must both be present for this gate; set `STO_REQUIRE_NATIVE=1` to make their absence a failure rather than a skip.
 
 <!-- roadmap:end now -->
 

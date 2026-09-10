@@ -38,6 +38,8 @@ from dataclasses import replace
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from tests.real_fixture_guard import verify_available
+
 from sto.core.calendar.arithmetic import working_between
 from sto.core.engine import (
     backward_pass,
@@ -61,6 +63,7 @@ FIXTURES = {
         os.environ.get("STO_CALCINER", "/home/dez/sto-fixtures/calciner-wg050-source.xml")
     ),
 }
+verify_available(FIXTURES)
 REQUIRE_BOILER = os.environ.get("STO_REQUIRE_BOILER") == "1"
 if REQUIRE_BOILER:
     absent = sorted(name for name, path in FIXTURES.items() if not path.is_file())

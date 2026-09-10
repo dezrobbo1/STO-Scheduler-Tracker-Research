@@ -57,6 +57,8 @@ import unittest
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from tests.real_fixture_guard import verify_available
+
 from sto.core.engine import (
     ProgressState,
     backward_pass,
@@ -88,6 +90,7 @@ FIXTURES = {
         )
     ),
 }
+verify_available(FIXTURES)
 
 #: The files Microsoft Project itself recalculated after progress was entered.
 #: The candidate is deliberately not one of them.
