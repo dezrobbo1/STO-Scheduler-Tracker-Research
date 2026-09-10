@@ -5,6 +5,8 @@ from __future__ import annotations
 import os
 import secrets
 import tempfile
+import threading
+import time
 import unittest
 import uuid
 from pathlib import Path
@@ -313,6 +315,81 @@ class PlannerScenarioTests(unittest.TestCase):
         self.assertNotEqual(state["current_version_id"], initial["current_version_id"])
         self.assertIsNone(state["baseline"])
         self.assertIsNone(state["scenario"])
+
+    def test_planner_reads_baseline_and_scenario_before_a_concurrent_import(self):
+        client, project, imported, _ = self.prepared("planner-read-snapshot")
+        initial = client.get(f"/api/projects/{project}/planner").json()
+        target = initial["eligible_activities"][0]
+        scenario = client.post(
+            f"/api/projects/{project}/scenario",
+            json={
+                "expected_version_id": initial["current_version_id"],
+                "activity_uid": target["activity_uid"],
+                "planned_duration_seconds": target["planned_duration_seconds"] + 3600,
+            },
+        ).json()
+        workspace = client.app.state.workspace
+        from sto.persistence import repositories as repo
+
+        original_head_version = repo.head_version
+        baseline_read = threading.Event()
+        importer_started = threading.Event()
+        read_result = []
+        failures = []
+
+        def observed_head_version(conn, **kwargs):
+            result = original_head_version(conn, **kwargs)
+            if (
+                threading.current_thread().name == "planner-read"
+                and kwargs["kind"] == "baseline"
+                and kwargs["with_document"]
+            ):
+                baseline_read.set()
+                if not importer_started.wait(2):
+                    raise AssertionError("concurrent importer did not start")
+                time.sleep(0.1)
+            return result
+
+        def read_planner():
+            try:
+                read_result.append(workspace.planner_state(uuid.UUID(project)))
+            except BaseException as error:  # preserve worker failure for the test thread
+                failures.append(error)
+
+        def import_new_baseline():
+            try:
+                if not baseline_read.wait(2):
+                    raise AssertionError("planner did not read its baseline")
+                importer_started.set()
+                workspace.import_file(
+                    uuid.UUID(project),
+                    filename="concurrent-planner-read.xml",
+                    data=FIXTURE.read_bytes(),
+                )
+            except BaseException as error:  # preserve worker failure for the test thread
+                failures.append(error)
+
+        with patch.object(repo, "head_version", side_effect=observed_head_version):
+            reader = threading.Thread(target=read_planner, name="planner-read")
+            importer = threading.Thread(target=import_new_baseline, name="planner-import")
+            reader.start()
+            importer.start()
+            reader.join(10)
+            importer.join(10)
+        self.assertFalse(reader.is_alive() or importer.is_alive(), "concurrent read hung")
+        self.assertEqual(failures, [])
+        self.assertEqual(len(read_result), 1)
+        observed = read_result[0]
+        self.assertEqual(str(observed["baseline_version_id"]), imported["version_id"])
+        self.assertEqual(
+            str(observed["change"]["baseline_version_id"]), imported["version_id"]
+        )
+        self.assertEqual(
+            str(observed["current_version_id"]), scenario["current_version_id"]
+        )
+        current = client.get(f"/api/projects/{project}/planner").json()
+        self.assertEqual(current["current_kind"], "baseline")
+        self.assertNotEqual(current["baseline_version_id"], imported["version_id"])
 
     def test_scenario_route_rejects_a_result_superseded_before_response(self):
         client, project, _, _ = self.prepared("superseded-response")

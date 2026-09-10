@@ -43,6 +43,11 @@ the exact baseline version and calculation selected under the project lock.
 A concurrent import or calculation produces a stale-state conflict rather
 than a false baseline-success message.
 
+Planner reads take the same project-row lock as head-moving writes while they
+select the baseline head, scenario head and change lineage. They also verify
+that the scenario change names that active baseline. The returned comparison
+therefore cannot combine heads from opposite sides of a concurrent import.
+
 The candidate runs through the production plan, passes, float calculation,
 result projection and WBS rollup before publication. Under one project lock,
 the operation then rechecks the caller's `expected_version_id` and the

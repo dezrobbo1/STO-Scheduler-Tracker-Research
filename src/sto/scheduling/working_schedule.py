@@ -943,9 +943,14 @@ class Workspace:
         """The active baseline/scenario pair used by the planner page."""
 
         with self.connect() as conn:
-            project = repo.get_project(conn, project_id)
-            if project is None:
+            # Every operation that moves a head takes this project-row lock.
+            # Keep it while reading both heads so READ COMMITTED cannot pair a
+            # baseline from before a concurrent import with a scenario from
+            # after it.
+            if not repo.lock_project(conn, project_id):
                 raise UnknownProject(str(project_id))
+            project = repo.get_project(conn, project_id)
+            assert project is not None
             baseline_head = repo.head_version(
                 conn, project_id=project_id, kind="baseline", with_document=True
             )
@@ -961,6 +966,15 @@ class Workspace:
             )
         if baseline_head is None:
             raise NoSchedule(str(project_id))
+        if scenario_head is not None and (
+            change is None
+            or change["baseline_version_id"] != baseline_head["id"]
+            or change["scenario_version_id"] != scenario_head["id"]
+        ):
+            raise IntegrityError(
+                f"scenario head {scenario_head['id']} is not derived from active "
+                f"baseline {baseline_head['id']}"
+            )
         baseline_working = _verify(project_id, baseline_head)
         baseline = self.latest_calculation(
             project_id, kind="baseline", version_id=baseline_head["id"]
