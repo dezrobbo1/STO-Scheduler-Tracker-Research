@@ -21,7 +21,10 @@ not-started leaf task that the baseline engine calculates without an
 assumption. Milestones, progressed tasks, manual or inactive tasks, excluded
 rows and assumed rows receive a controlled refusal. Planned and remaining
 duration move together where the source supplied both, because a not-started
-task's remaining work is its full work.
+task's remaining work is its full work. A source that explicitly says a
+not-started task has zero remaining duration is not offered for editing and a
+direct request receives a controlled refusal; PL14 does not reinterpret that
+contradictory progress state.
 
 An edit derives a complete canonical document from the current immutable
 baseline and stores it as a new immutable `scenario` version. The baseline
@@ -34,6 +37,11 @@ trigger verifies that the two versions belong to the project, have the
 required kinds and name that change as the scenario's `planner_edit` cause. A
 second trigger refuses an
 update or deletion of that lineage.
+
+Reset returns success only when the state read after publication still names
+the exact baseline version and calculation selected under the project lock.
+A concurrent import or calculation produces a stale-state conflict rather
+than a false baseline-success message.
 
 The candidate runs through the production plan, passes, float calculation,
 result projection and WBS rollup before publication. Under one project lock,

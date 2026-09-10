@@ -241,6 +241,79 @@ class PlannerScenarioTests(unittest.TestCase):
         self.assertEqual(change["remaining_before_seconds"], 4 * 3600)
         self.assertEqual(change["remaining_after_seconds"], 4 * 3600)
 
+    def test_zero_remaining_duration_is_a_controlled_unsupported_target(self):
+        client = self.client()
+        client.__enter__()
+        self.addCleanup(client.__exit__, None, None, None)
+        project = client.post("/api/projects", json={"name": "zero-remaining"}).json()["id"]
+        data = FIXTURE.read_bytes().replace(
+            b"<RemainingDuration>PT4H0M0S</RemainingDuration>",
+            b"<RemainingDuration>PT0H0M0S</RemainingDuration>",
+            1,
+        )
+        imported = client.post(
+            f"/api/projects/{project}/imports",
+            files={"file": (FIXTURE.name, data, "application/xml")},
+        )
+        self.assertEqual(imported.status_code, 201, imported.text)
+        calculated = client.post(f"/api/projects/{project}/calculations")
+        self.assertEqual(calculated.status_code, 201, calculated.text)
+        initial = client.get(f"/api/projects/{project}/planner").json()
+        target = self.activity(initial, "Isolate equipment")
+        self.assertNotIn(
+            target["activity_uid"],
+            {row["activity_uid"] for row in initial["eligible_activities"]},
+        )
+
+        response = client.post(
+            f"/api/projects/{project}/scenario",
+            json={
+                "expected_version_id": initial["current_version_id"],
+                "activity_uid": target["activity_uid"],
+                "planned_duration_seconds": 8 * 3600,
+            },
+        )
+        self.assertEqual(response.status_code, 422, response.text)
+        self.assertEqual(
+            response.json()["detail"]["code"], "ACTIVITY_REMAINING_DURATION_ZERO"
+        )
+
+    def test_reset_route_rejects_a_baseline_superseded_before_response(self):
+        client, project, _, _ = self.prepared("superseded-reset-response")
+        initial = client.get(f"/api/projects/{project}/planner").json()
+        target = initial["eligible_activities"][0]
+        scenario = client.post(
+            f"/api/projects/{project}/scenario",
+            json={
+                "expected_version_id": initial["current_version_id"],
+                "activity_uid": target["activity_uid"],
+                "planned_duration_seconds": target["planned_duration_seconds"] + 3600,
+            },
+        ).json()
+        workspace = client.app.state.workspace
+        original_state = workspace.planner_state
+
+        def import_then_read(project_id):
+            workspace.import_file(
+                project_id,
+                filename="concurrent-reset.xml",
+                data=FIXTURE.read_bytes(),
+            )
+            return original_state(project_id)
+
+        with patch.object(workspace, "planner_state", side_effect=import_then_read):
+            response = client.post(
+                f"/api/projects/{project}/scenario/reset",
+                json={"expected_version_id": scenario["current_version_id"]},
+            )
+        self.assertEqual(response.status_code, 409, response.text)
+        self.assertIn("superseded", response.text)
+        state = client.get(f"/api/projects/{project}/planner").json()
+        self.assertEqual(state["current_kind"], "baseline")
+        self.assertNotEqual(state["current_version_id"], initial["current_version_id"])
+        self.assertIsNone(state["baseline"])
+        self.assertIsNone(state["scenario"])
+
     def test_scenario_route_rejects_a_result_superseded_before_response(self):
         client, project, _, _ = self.prepared("superseded-response")
         initial = client.get(f"/api/projects/{project}/planner").json()

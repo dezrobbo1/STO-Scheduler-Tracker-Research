@@ -443,7 +443,11 @@ resetScenario.addEventListener("click", async () => {
     const state = await json("/api/projects/" + projectId + "/scenario/reset", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({expected_version_id: expectedVersionId})});
     if (projects.value !== projectId) return;
     render(state); say("Scenario reset. The baseline result is active again.");
-  } catch (error) { if (projects.value === projectId) say(error.message, "error"); }
+  } catch (error) {
+    if (projects.value !== projectId) return;
+    say(error.message + (error.status === 409 ? " Reloaded current state." : ""), "error");
+    if (error.status === 409) await show(projectId);
+  }
   finally { if (selectedProject(projectId)) resetScenario.disabled = resetIsDisabled(currentState); }
 });
 

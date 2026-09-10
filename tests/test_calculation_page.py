@@ -336,6 +336,7 @@ console.log(JSON.stringify(measured));
         self.assertIn("if (!renderedScenario(state, projectId, activityUid, seconds))", scenario_handler)
         reset_handler = self.script[self.script.index('resetScenario.addEventListener'):]
         self.assertIn("resetScenario.disabled = resetIsDisabled(currentState)", reset_handler)
+        self.assertIn('if (error.status === 409) await show(projectId);', reset_handler)
 
     def test_duration_control_and_calculation_detail_keep_the_existing_contract(self):
         self.assertIn('id="duration-hours" type="number" min="0.0003" step="any"', self.html)

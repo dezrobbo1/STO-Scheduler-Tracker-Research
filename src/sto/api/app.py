@@ -432,10 +432,31 @@ def create_app(workspace: Workspace | None = None) -> FastAPI:
         workspace: Workspace = Depends(ws),
     ) -> Any:
         try:
-            workspace.reset_scenario(
+            restored = workspace.reset_scenario(
                 project_id, expected_version_id=body.expected_version_id
             )
-            return schemas.PlannerState(**workspace.planner_state(project_id))
+            state = workspace.planner_state(project_id)
+            baseline = state.get("baseline")
+            if (
+                state.get("project_id") != restored.project_id
+                or state.get("current_kind") != "baseline"
+                or state.get("current_version_id") != restored.baseline_version_id
+                or state.get("scenario") is not None
+                or state.get("change") is not None
+                or (restored.calculation_id is None) != (baseline is None)
+                or (
+                    baseline is not None
+                    and (
+                        baseline.get("version_id") != restored.baseline_version_id
+                        or baseline.get("calculation_id") != restored.calculation_id
+                        or baseline.get("fingerprint") != restored.fingerprint
+                    )
+                )
+            ):
+                raise StaleSchedule(
+                    "the restored baseline was superseded before it could be returned; reload"
+                )
+            return schemas.PlannerState(**state)
         except UnknownProject:
             raise HTTPException(404, "no such project") from None
         except NoSchedule:

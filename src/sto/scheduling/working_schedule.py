@@ -148,6 +148,16 @@ class ScenarioResult:
 
 
 @dataclass(frozen=True, slots=True)
+class ScenarioResetResult:
+    """The exact baseline and calculation made active by a reset."""
+
+    project_id: uuid.UUID
+    baseline_version_id: uuid.UUID
+    calculation_id: uuid.UUID | None
+    fingerprint: str | None
+
+
+@dataclass(frozen=True, slots=True)
 class StoredCalculation:
     """A calculation read back from the database and checked against its rows."""
 
@@ -502,6 +512,14 @@ class Workspace:
                 "ACTIVITY_DURATION_UNAVAILABLE",
                 "the selected activity has no positive planned duration",
             )
+        if (
+            activity.remaining_duration is not None
+            and activity.remaining_duration.seconds == 0
+        ):
+            raise ScenarioRejected(
+                "ACTIVITY_REMAINING_DURATION_ZERO",
+                "PL14 cannot edit an activity whose imported remaining duration is zero",
+            )
 
         baseline_rows = baseline_calculation.result.by_uid()
         baseline_row = baseline_rows.get(activity_uid)
@@ -644,7 +662,7 @@ class Workspace:
 
     def reset_scenario(
         self, project_id: uuid.UUID, *, expected_version_id: uuid.UUID
-    ) -> uuid.UUID:
+    ) -> ScenarioResetResult:
         """Move the active planner state back to the current baseline."""
 
         with self.connect() as conn:
@@ -666,8 +684,16 @@ class Workspace:
                 )
             if scenario_id is not None:
                 repo.delete_head(conn, project_id=project_id, kind="scenario")
+            calculation = repo.get_latest_calculation(conn, version_id=baseline["id"])
             conn.commit()
-        return baseline["id"]
+        return ScenarioResetResult(
+            project_id=project_id,
+            baseline_version_id=baseline["id"],
+            calculation_id=None if calculation is None else calculation["id"],
+            fingerprint=(
+                None if calculation is None else calculation["result_fingerprint"]
+            ),
+        )
 
 
     def read_calculation(
@@ -964,6 +990,10 @@ class Workspace:
                     and activity.actual_finish is None
                     and activity.planned_duration is not None
                     and activity.planned_duration.seconds > 0
+                    and (
+                        activity.remaining_duration is None
+                        or activity.remaining_duration.seconds > 0
+                    )
                     and row is not None
                     and row["disposition"] == SCHEDULED
                     and not row["assumptions"]

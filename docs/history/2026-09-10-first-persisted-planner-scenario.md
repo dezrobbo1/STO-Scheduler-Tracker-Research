@@ -20,6 +20,12 @@ the canonical version, lineage, result rows and scenario head together after
 rechecking the current baseline and active planner version. A stale request
 writes none of them.
 
+The final review closure also pins the browser restart and export to the exact
+scenario version, canonical hash, calculation and result fingerprint observed
+before the process stops. Reset verifies the exact restored baseline result
+before returning success. An imported zero remaining duration is retained as
+canonical source data but is a controlled unsupported edit target.
+
 The page does not make evidence boundaries disappear. Each activity says
 whether it was calculated normally, calculated with an assumption, carries a
 deferred constraint, or was excluded. Source dates remain observations. The

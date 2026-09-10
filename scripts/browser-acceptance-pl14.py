@@ -136,6 +136,18 @@ def main() -> int:
                 page.locator("#duration-hours").fill("8")
                 page.locator("#apply-scenario").click()
                 expect(page.locator("#mode")).to_have_text("scenario")
+                before_restart = page.evaluate(
+                    """async () => {
+                      const project = document.querySelector('#project').value;
+                      return (await fetch('/api/projects/' + project + '/planner')).json();
+                    }"""
+                )
+                expected_provenance = {
+                    "current_version_id": before_restart["current_version_id"],
+                    "canonical_hash": before_restart["scenario"]["canonical_hash"],
+                    "calculation_id": before_restart["scenario"]["calculation_id"],
+                    "fingerprint": before_restart["scenario"]["fingerprint"],
+                }
 
                 # Stop and reconstruct the actual process. The browser keeps no
                 # scheduling state; after restart it must recover PostgreSQL.
@@ -146,6 +158,23 @@ def main() -> int:
                 expect(page.locator('tr[data-movement="edited"]')).to_have_count(1)
                 if page.locator('tr[data-movement="downstream"]').count() < 1:
                     raise AssertionError("downstream movement did not survive application restart")
+                after_restart = page.evaluate(
+                    """async () => {
+                      const project = document.querySelector('#project').value;
+                      return (await fetch('/api/projects/' + project + '/planner')).json();
+                    }"""
+                )
+                recovered_provenance = {
+                    "current_version_id": after_restart["current_version_id"],
+                    "canonical_hash": after_restart["scenario"]["canonical_hash"],
+                    "calculation_id": after_restart["scenario"]["calculation_id"],
+                    "fingerprint": after_restart["scenario"]["fingerprint"],
+                }
+                if recovered_provenance != expected_provenance:
+                    raise AssertionError(
+                        "restart changed scenario provenance: "
+                        f"{expected_provenance!r} != {recovered_provenance!r}"
+                    )
 
                 with page.expect_download() as download_info:
                     page.locator("#export-scenario").click()
@@ -163,6 +192,17 @@ def main() -> int:
                 ):
                     if not exported.get(required):
                         raise AssertionError(f"export has no {required}")
+                exported_provenance = {
+                    "current_version_id": exported["current_version_id"],
+                    "canonical_hash": exported["calculation"]["canonical_hash"],
+                    "calculation_id": exported["calculation"]["calculation_id"],
+                    "fingerprint": exported["calculation"]["fingerprint"],
+                }
+                if exported_provenance != expected_provenance:
+                    raise AssertionError(
+                        "export changed scenario provenance: "
+                        f"{expected_provenance!r} != {exported_provenance!r}"
+                    )
                 page.screenshot(path=EVIDENCE / "scenario-after-restart.png", full_page=True)
                 browser.close()
         finally:
