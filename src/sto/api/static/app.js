@@ -358,6 +358,12 @@ function currentRefresh(generation, projectId) {
   return generation === refreshGeneration && selectedProject(projectId);
 }
 
+async function reconcileMutationResponse(generation, projectId) {
+  if (currentRefresh(generation, projectId)) return true;
+  if (selectedProject(projectId)) await show(projectId);
+  return false;
+}
+
 async function show(projectId) {
   if (!projectId || !selectedProject(projectId)) return null;
   const generation = beginRefresh();
@@ -392,7 +398,7 @@ calculateButton.addEventListener("click", async () => {
   calculateButton.disabled = true; say("Calculating immutable baseline…");
   try {
     const calculation = await json("/api/projects/" + projectId + "/calculations", {method: "POST"});
-    if (!currentRefresh(generation, projectId)) return;
+    if (!(await reconcileMutationResponse(generation, projectId))) return;
     const state = await show(projectId);
     if (!state) return;
     if (!renderedCalculation(state, calculation)) {
@@ -423,7 +429,7 @@ importForm.addEventListener("submit", async (event) => {
   say("Importing and preserving the source baseline…");
   try {
     const imported = await json("/api/projects/" + projectId + "/imports", {method: "POST", body: data});
-    if (!currentRefresh(generation, projectId)) return;
+    if (!(await reconcileMutationResponse(generation, projectId))) return;
     const state = await show(projectId);
     if (renderedImport(state, imported)) say("Schedule imported. Calculate the baseline next.");
   } catch (error) { say(error.message, "error"); }
@@ -440,7 +446,7 @@ scenarioForm.addEventListener("submit", async (event) => {
   applyScenario.disabled = true; say("Calculating scenario…");
   try {
     const created = await json("/api/projects/" + projectId + "/scenario", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({expected_version_id: expectedVersionId, activity_uid: activityUid, planned_duration_seconds: seconds})});
-    if (!currentRefresh(generation, projectId)) return;
+    if (!(await reconcileMutationResponse(generation, projectId))) return;
     const state = await show(projectId);
     if (!state) return;
     if (!renderedScenario(state, created, projectId, activityUid, seconds)) {
@@ -463,7 +469,7 @@ resetScenario.addEventListener("click", async () => {
   resetScenario.disabled = true; say("Resetting to baseline…");
   try {
     const reset = await json("/api/projects/" + projectId + "/scenario/reset", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({expected_version_id: expectedVersionId})});
-    if (!currentRefresh(generation, projectId)) return;
+    if (!(await reconcileMutationResponse(generation, projectId))) return;
     const state = await show(projectId);
     if (!state) return;
     if (!renderedReset(state, reset, projectId)) {
