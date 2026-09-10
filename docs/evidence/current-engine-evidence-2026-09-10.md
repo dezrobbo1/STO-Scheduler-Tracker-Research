@@ -47,15 +47,17 @@ Windows/Microsoft Project session was also not available to this run.
 ## Fresh stored-XML agreement matrix
 
 The denominator is the scheduled activity cohort after coded exclusions. The
-early and late pair columns require both fields on the same row to agree. Float
-and critical columns compare the production result derived from the production
-passes, not a stored-date helper.
+early columns compare with MSPDI `EarlyStart`/`EarlyFinish`, rather than the
+task's potentially different `Start`/`Finish`; early and late pair columns
+require both matching fields on the same row. Float and critical columns
+compare the production result derived from the production passes, not a
+stored-date helper.
 
 | File | Early start | Early finish | Early pair | Late start | Late finish | Late pair | Total float | Free float | Critical | WBS pair |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | BOILER | 389/451 | 384/451 | 384/451 | 409/451 | 418/451 | 409/451 | 380/451 | 435/451 | 449/451 | 75/94 |
 | KILN | 249/416 | 247/416 | 247/416 | 0/416 | 0/416 | 0/416 | 4/416 | 305/416 | 397/416 | 36/86 |
-| CALCINER | 1,646/1,763 | 1,645/1,763 | 1,645/1,763 | 1,572/1,763 | 1,577/1,763 | 1,572/1,763 | 1,488/1,763 | 1,691/1,763 | 1,763/1,763 | 206/219 |
+| CALCINER | 1,647/1,763 | 1,645/1,763 | 1,645/1,763 | 1,572/1,763 | 1,577/1,763 | 1,572/1,763 | 1,488/1,763 | 1,691/1,763 | 1,763/1,763 | 206/219 |
 
 The separate stored-date semantic probe replaces both production pass
 coordinate sets with the XML's four stored dates and then calls production
@@ -67,11 +69,16 @@ the post-#44 bounded lag-inversion rule.
 
 ## Dispositions and first mismatches
 
-| File | Scheduled | Coded exclusions | Visible assumptions | First mismatch classes | Rows after a mismatch |
+| File | Scheduled | Coded exclusions | Visible assumptions | Observed first-mismatch structures | Rows after a mismatch |
 |---|---:|---|---|---|---:|
-| BOILER | 451 | 9 inactive activities; 15 relationships whose endpoint is not scheduled | 11 multi-resource calendar unions; 5 successors of inactive activities; 2 elapsed durations | 5 multi-resource calendar-union spans; 3 successors of inactive activities | 59 |
-| KILN | 416 | 11 inactive activities; 1 manually scheduled activity; 20 relationships whose endpoint is not scheduled | 133 multi-resource calendar unions; 14 project-calendar lag assumptions; 6 successors of inactive activities | 4 successors of inactive activities; 1 multi-resource calendar-union span; 1 single-resource long-span stored-field residue | 163 |
-| CALCINER | 1,763 | 2 relationships whose endpoint is not scheduled | 956 multi-resource calendar unions; 41 project-calendar lag assumptions; 2 elapsed durations | 3 multi-resource calendar-union spans; 1 task/resource-calendar FS residue; 1 convergence finish milestone; 1 finish-only FF boundary residue | 112 |
+| BOILER | 451 | 9 inactive activities; 15 relationships whose endpoint is not scheduled | 11 multi-resource calendar unions; 5 successors of inactive activities; 2 elapsed durations | multi-resource calendar-union spans; successors of inactive activities | 59 |
+| KILN | 416 | 11 inactive activities; 1 manually scheduled activity; 20 relationships whose endpoint is not scheduled | 133 multi-resource calendar unions; 14 project-calendar lag assumptions; 6 successors of inactive activities | successors of inactive activities; multi-resource calendar-union span; single-resource long-span stored-field residue | 163 |
+| CALCINER | 1,763 | 2 relationships whose endpoint is not scheduled | 956 multi-resource calendar unions; 41 project-calendar lag assumptions; 2 elapsed durations | multi-resource calendar-union spans; task/resource-calendar FS residue; convergence finish milestone; finish-only FF boundary residue | 112 |
+
+The scheduled, exclusion, assumption, and downstream-row counts above are
+regression-pinned by the real-file tests. The structural labels are the bounded
+analyst classification of those first mismatches; they are qualitative and do
+not claim a separately executable class census.
 
 "Rows after a mismatch" is dependency triage only. It does not claim that
 changing the first row would make every downstream row agree. The counterfactual

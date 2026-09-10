@@ -212,8 +212,11 @@ def _agreement(path: Path) -> dict:
         stored = activities[uid].source_observations
         row = times[uid]
         return (
-            plan.to_datetime(row.early_start) == stored.start
-            and plan.to_datetime(row.early_finish) == stored.finish
+            stored is not None
+            and stored.early_start is not None
+            and stored.early_finish is not None
+            and plan.to_datetime(row.early_start) == stored.early_start
+            and plan.to_datetime(row.early_finish) == stored.early_finish
         )
 
     counts = {
@@ -226,12 +229,20 @@ def _agreement(path: Path) -> dict:
     }
     for activity in plan.network.activities:
         stored = activities[activity.uid].source_observations
-        if stored is None or stored.start is None:
+        if (
+            stored is None
+            or stored.early_start is None
+            or stored.early_finish is None
+        ):
             continue
         row = times[activity.uid]
         counts["compared"] += 1
-        counts["early_start"] += plan.to_datetime(row.early_start) == stored.start
-        counts["early_finish"] += plan.to_datetime(row.early_finish) == stored.finish
+        counts["early_start"] += (
+            plan.to_datetime(row.early_start) == stored.early_start
+        )
+        counts["early_finish"] += (
+            plan.to_datetime(row.early_finish) == stored.early_finish
+        )
         if agrees(activity.uid):
             counts["exact"] += 1
         elif all(agrees(edge.predecessor_uid) for edge in predecessors[activity.uid]):
@@ -239,6 +250,7 @@ def _agreement(path: Path) -> dict:
         else:
             counts["inherited"] += 1
     counts["assumed"] = plan.assumed_by_code()
+    counts["excluded"] = plan.excluded_by_code()
     return counts
 
 
@@ -294,6 +306,22 @@ class StoredDateAgreementTests(unittest.TestCase):
                 "inherited": 163,
             },
         )
+        self.assertEqual(
+            counts["excluded"],
+            {
+                "ACTIVITY_INACTIVE": 11,
+                "ACTIVITY_MANUALLY_SCHEDULED": 1,
+                "RELATIONSHIP_ENDPOINT_NOT_SCHEDULED": 20,
+            },
+        )
+        self.assertEqual(
+            counts["assumed"],
+            {
+                "ACTIVITY_RESOURCE_CALENDARS_UNITED": 133,
+                "ACTIVITY_SUCCESSOR_OF_INACTIVE": 6,
+                "RELATIONSHIP_LAG_ON_PROJECT_CALENDAR": 14,
+            },
+        )
 
     def test_no_real_row_rests_on_the_unmeasured_start_fallback(self):
         """ADR-010's amendment, measured where it would apply.
@@ -326,11 +354,23 @@ class StoredDateAgreementTests(unittest.TestCase):
             {k: counts[k] for k in ("compared", "early_start", "early_finish", "exact", "first", "inherited")},
             {
                 "compared": 1763,
-                "early_start": 1646,
+                "early_start": 1647,
                 "early_finish": 1645,
                 "exact": 1645,
                 "first": 6,
                 "inherited": 112,
+            },
+        )
+        self.assertEqual(
+            counts["excluded"],
+            {"RELATIONSHIP_ENDPOINT_NOT_SCHEDULED": 2},
+        )
+        self.assertEqual(
+            counts["assumed"],
+            {
+                "ACTIVITY_RESOURCE_CALENDARS_UNITED": 956,
+                "ACTIVITY_DURATION_ELAPSED": 2,
+                "RELATIONSHIP_LAG_ON_PROJECT_CALENDAR": 41,
             },
         )
 
@@ -351,8 +391,10 @@ class StoredDateAgreementTests(unittest.TestCase):
             exact[apply] = sum(
                 1
                 for uid, row in times.items()
-                if plan.to_datetime(row.early_start) == activities[uid].source_observations.start
-                and plan.to_datetime(row.early_finish) == activities[uid].source_observations.finish
+                if plan.to_datetime(row.early_start)
+                == activities[uid].source_observations.early_start
+                and plan.to_datetime(row.early_finish)
+                == activities[uid].source_observations.early_finish
             )
         self.assertLess(exact[False], 60)
         self.assertEqual(exact[True], 384)

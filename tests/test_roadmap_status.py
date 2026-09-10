@@ -169,6 +169,34 @@ class EvidenceExecutionTests(unittest.TestCase):
         self.assertIn("STO_REQUIRE_DAY5=1 but", result.stderr)
         self.assertIn("absent-before.xml", result.stderr)
 
+    def test_the_validator_honours_the_day5_switch_too(self):
+        """Each independently runnable evidence module must fail when required."""
+
+        import os
+        import subprocess
+        import sys
+
+        missing = REPO_ROOT / "nope" / "absent-validator-day5.xml"
+        env = dict(os.environ)
+        env.update(
+            {
+                "PYTHONPATH": str(REPO_ROOT / "src"),
+                "STO_REQUIRE_DAY5": "1",
+                "STO_BOILER_DAY5": str(missing),
+            }
+        )
+        result = subprocess.run(
+            [sys.executable, "-m", "unittest", "tests.test_validator_boiler"],
+            cwd=REPO_ROOT,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        self.assertNotEqual(result.returncode, 0, "validator absence was tolerated")
+        self.assertIn("STO_REQUIRE_DAY5=1 but", result.stderr)
+        self.assertIn(missing.name, result.stderr)
+
     def test_the_boiler_criteria_declare_that_they_do_not_always_run(self):
         """The specific case this machinery was built for.
 
