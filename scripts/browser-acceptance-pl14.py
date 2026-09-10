@@ -90,6 +90,19 @@ def main() -> int:
                 page.locator("#project-timezone").fill("Australia/Perth")
                 page.locator("#create-project button").click()
                 expect(page.locator("#status")).to_contain_text("Project created")
+                # Opening a project before its first import intentionally asks
+                # the planner route for state and receives 409/NoSchedule; the
+                # page turns that into the import prompt. Chromium logs the
+                # controlled HTTP response as a console error, so account for
+                # it here while continuing to fail every later console error.
+                unexpected = [
+                    message for message in console_errors if "409 (Conflict)" not in message
+                ]
+                if unexpected:
+                    raise AssertionError(
+                        "browser console errors before import: " + "; ".join(unexpected)
+                    )
+                console_errors.clear()
 
                 page.locator("#schedule-file").set_input_files(FIXTURE)
                 page.locator("#import-schedule button").click()
