@@ -1071,7 +1071,9 @@ class Workspace:
         source_sha = hashlib.sha256(data).hexdigest()
         path = self._store_bytes(project_id, source_sha, data)
 
-        prior = self.load(project_id)
+        # Refresh from the durable head so a retry after another process's
+        # import does not keep deriving from this process's old resident copy.
+        prior = self.load(project_id, refresh=True)
         prior_identity = prior.identity if prior else None
 
         # Parse and migrate outside any transaction: the 14 MB files take
@@ -1108,6 +1110,16 @@ class Workspace:
         with self.connect() as conn:
             if not repo.lock_project(conn, project_id):
                 raise UnknownProject(str(project_id))
+            current_prior = repo.head_version(
+                conn, project_id=project_id, kind="baseline", with_document=False
+            )
+            expected_prior_id = None if prior is None else prior.version_id
+            current_prior_id = None if current_prior is None else current_prior["id"]
+            if current_prior_id != expected_prior_id:
+                raise StaleSchedule(
+                    f"baseline moved from {expected_prior_id} to {current_prior_id}; "
+                    "retry the import against the current schedule"
+                )
             source_id = _record_source(conn, project_id, filename, path, source_sha, data)
             batch_id = repo.insert_import_batch(
                 conn,

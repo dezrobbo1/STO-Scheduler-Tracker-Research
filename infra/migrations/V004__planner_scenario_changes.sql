@@ -26,8 +26,7 @@ CREATE TABLE scenario_changes (
   CONSTRAINT scenario_changes_remaining_pair_check CHECK (
     (remaining_before_seconds IS NULL AND remaining_after_seconds IS NULL)
     OR (remaining_before_seconds IS NOT NULL AND remaining_after_seconds IS NOT NULL
-        AND remaining_before_seconds > 0 AND remaining_after_seconds > 0
-        AND remaining_before_seconds <> remaining_after_seconds)
+        AND remaining_before_seconds > 0 AND remaining_after_seconds > 0)
   ),
   CONSTRAINT scenario_changes_changed_check CHECK (before_seconds <> after_seconds),
   CONSTRAINT scenario_changes_versions_differ_check

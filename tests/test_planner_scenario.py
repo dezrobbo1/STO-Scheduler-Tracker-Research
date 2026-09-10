@@ -8,6 +8,7 @@ import tempfile
 import unittest
 import uuid
 from pathlib import Path
+from unittest.mock import patch
 
 REQUIRE_DB = os.environ.get("STO_REQUIRE_DB") == "1"
 ADMIN_URL = os.environ.get(
@@ -199,6 +200,78 @@ class PlannerScenarioTests(unittest.TestCase):
         with self.assertRaises(psycopg.errors.CheckViolation):
             with psycopg.connect(self.url) as conn:
                 conn.execute("DELETE FROM scenario_changes WHERE id=%s", (lineage["id"],))
+
+    def test_planned_duration_can_change_to_an_unchanged_remaining_duration(self):
+        """A valid unstarted activity may already have a shorter remaining span."""
+
+        client = self.client()
+        client.__enter__()
+        self.addCleanup(client.__exit__, None, None, None)
+        project = client.post("/api/projects", json={"name": "remaining"}).json()["id"]
+        original = b"<Duration>PT4H0M0S</Duration><DurationFormat>5</DurationFormat>"
+        changed = b"<Duration>PT10H0M0S</Duration><DurationFormat>5</DurationFormat>"
+        data = FIXTURE.read_bytes().replace(original, changed, 1)
+        self.assertNotEqual(data, FIXTURE.read_bytes())
+        imported = client.post(
+            f"/api/projects/{project}/imports",
+            files={"file": (FIXTURE.name, data, "application/xml")},
+        )
+        self.assertEqual(imported.status_code, 201, imported.text)
+        calculated = client.post(f"/api/projects/{project}/calculations")
+        self.assertEqual(calculated.status_code, 201, calculated.text)
+        initial = client.get(f"/api/projects/{project}/planner").json()
+        target = next(
+            row for row in initial["eligible_activities"]
+            if row["name"] == "Isolate equipment"
+        )
+        self.assertEqual(target["planned_duration_seconds"], 10 * 3600)
+
+        response = client.post(
+            f"/api/projects/{project}/scenario",
+            json={
+                "expected_version_id": initial["current_version_id"],
+                "activity_uid": target["activity_uid"],
+                "planned_duration_seconds": 4 * 3600,
+            },
+        )
+        self.assertEqual(response.status_code, 201, response.text)
+        change = response.json()["change"]
+        self.assertEqual(change["before_seconds"], 10 * 3600)
+        self.assertEqual(change["after_seconds"], 4 * 3600)
+        self.assertEqual(change["remaining_before_seconds"], 4 * 3600)
+        self.assertEqual(change["remaining_after_seconds"], 4 * 3600)
+
+    def test_scenario_route_rejects_a_result_superseded_before_response(self):
+        client, project, _, _ = self.prepared("superseded-response")
+        initial = client.get(f"/api/projects/{project}/planner").json()
+        target = initial["eligible_activities"][0]
+        workspace = client.app.state.workspace
+        original_state = workspace.planner_state
+
+        def import_then_read(project_id):
+            workspace.import_file(
+                project_id,
+                filename="concurrent.xml",
+                data=FIXTURE.read_bytes(),
+            )
+            return original_state(project_id)
+
+        with patch.object(workspace, "planner_state", side_effect=import_then_read):
+            response = client.post(
+                f"/api/projects/{project}/scenario",
+                json={
+                    "expected_version_id": initial["current_version_id"],
+                    "activity_uid": target["activity_uid"],
+                    "planned_duration_seconds": (
+                        target["planned_duration_seconds"] + 3600
+                    ),
+                },
+            )
+        self.assertEqual(response.status_code, 409, response.text)
+        self.assertIn("superseded", response.text)
+        state = client.get(f"/api/projects/{project}/planner").json()
+        self.assertEqual(state["current_kind"], "baseline")
+        self.assertIsNone(state["scenario"])
 
     def test_stale_edit_reset_and_export_contract(self):
         client, project, imported, _ = self.prepared("conflict")

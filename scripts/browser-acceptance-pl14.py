@@ -129,6 +129,7 @@ def main() -> int:
                 page.locator("#reset-scenario").click()
                 expect(page.locator("#status")).to_contain_text("Scenario reset")
                 expect(page.locator("#mode")).to_have_text("baseline")
+                expect(page.locator("#reset-scenario")).to_be_disabled()
                 expect(page.locator("#chart .bar.scenario")).to_have_count(0)
 
                 page.locator("#activity").select_option(label="1.1 — Isolate equipment")

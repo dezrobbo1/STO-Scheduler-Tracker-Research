@@ -220,7 +220,7 @@ console.log(JSON.stringify({
         self.assertIn("awaiting", self.script)
         self.assertIn("awaiting !== projectId || !selectedProject(projectId)", self.script)
         self.assertGreaterEqual(
-            self.script.count("if (projects.value !== projectId) return;"), 3
+            self.script.count("selectedProject(projectId)"), 6
         )
 
     def test_import_and_calculation_success_belong_to_the_rendered_project(self):
@@ -231,7 +231,10 @@ console.log(JSON.stringify({
             self.skipTest("Node is required to execute the page's JavaScript")
         functions = "\n".join(
             re.search(r"function " + name + r"\([\s\S]*?\n}", self.script).group(0)
-            for name in ("selectedProject", "renderedImport", "renderedCalculation")
+            for name in (
+                "selectedProject", "renderedImport", "renderedCalculation",
+                "renderedScenario", "resetIsDisabled",
+            )
         )
         probe = r"""
 const projects = {value: 'project-a'};
@@ -240,11 +243,19 @@ const calculation = {project_id: 'project-a', version_id: 'version-a',
   calculation_id: 'calculation-a'};
 const state = {project_id: 'project-a', baseline_version_id: 'version-a',
   baseline: {version_id: 'version-a', calculation_id: 'calculation-a'}};
+const scenario = {...state, current_kind: 'scenario', current_version_id: 'scenario-a',
+  scenario: {version_id: 'scenario-a'},
+  change: {scenario_version_id: 'scenario-a', activity_uid: 'activity-a',
+    after_seconds: 28800}};
 const measured = {
   imported: renderedImport(state, imported),
   calculated: renderedCalculation(state, calculation),
   wrongCalculation: renderedCalculation(state,
-    {...calculation, calculation_id: 'calculation-old'})
+    {...calculation, calculation_id: 'calculation-old'}),
+  scenario: renderedScenario(scenario, 'project-a', 'activity-a', 28800),
+  wrongScenario: renderedScenario(scenario, 'project-a', 'activity-a', 14400),
+  resetWhileScenario: resetIsDisabled(scenario),
+  resetOnBaseline: resetIsDisabled({...state, scenario: null})
 };
 projects.value = 'project-b';
 measured.importAfterSwitch = renderedImport(state, imported);
@@ -265,6 +276,10 @@ console.log(JSON.stringify(measured));
                 "imported": True,
                 "calculated": True,
                 "wrongCalculation": False,
+                "scenario": True,
+                "wrongScenario": False,
+                "resetWhileScenario": False,
+                "resetOnBaseline": True,
                 "importAfterSwitch": False,
                 "calculationAfterSwitch": False,
             },
@@ -279,6 +294,13 @@ console.log(JSON.stringify(measured));
         ]
         self.assertIn("if (!state) return;", calculation_handler)
         self.assertIn("if (!renderedCalculation(state, calculation))", calculation_handler)
+        scenario_handler = self.script[
+            self.script.index('scenarioForm.addEventListener'):
+            self.script.index('resetScenario.addEventListener')
+        ]
+        self.assertIn("if (!renderedScenario(state, projectId, activityUid, seconds))", scenario_handler)
+        reset_handler = self.script[self.script.index('resetScenario.addEventListener'):]
+        self.assertIn("resetScenario.disabled = resetIsDisabled(currentState)", reset_handler)
 
     def test_duration_control_and_calculation_detail_keep_the_existing_contract(self):
         self.assertIn('id="duration-hours" type="number" min="0.0003" step="any"', self.html)

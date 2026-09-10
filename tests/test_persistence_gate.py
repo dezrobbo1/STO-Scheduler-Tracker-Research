@@ -18,7 +18,10 @@ import secrets
 import tempfile
 import unittest
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from threading import Barrier
+from unittest.mock import patch
 
 REQUIRE_DB = os.environ.get("STO_REQUIRE_DB") == "1"
 ADMIN_URL = os.environ.get("STO_TEST_ADMIN_URL", "postgresql://postgres@127.0.0.1:5433/postgres")
@@ -147,6 +150,83 @@ class PersistenceGateTests(unittest.TestCase):
         self.assertEqual(second["reconciliation"]["new"], 0)
         self.assertEqual(second["reconciliation"]["missing"], 0)
         self.assertGreater(second["reconciliation"]["matched"], 0)
+
+    def test_concurrent_import_rejects_the_stale_derivation(self):
+        """Only a candidate reconciled from the locked baseline may become head."""
+
+        from sto.scheduling import working_schedule
+        from sto.scheduling.working_schedule import StaleSchedule
+
+        with self._client() as client:
+            project = client.post("/api/projects", json={"name": "import-race"}).json()["id"]
+            first = self._import(client, project, FIXTURES / "synthetic-basic.mspdi.xml")
+            workspace = client.app.state.workspace
+            project_id = uuid.UUID(project)
+            source = (FIXTURES / "synthetic-basic.mspdi.xml").read_bytes()
+            candidates = [
+                source.replace(
+                    b"<Name>synthetic-basic.xml</Name>",
+                    b"<Name>candidate-one.xml</Name>",
+                    1,
+                ),
+                source.replace(
+                    b"<Name>synthetic-basic.xml</Name>",
+                    b"<Name>candidate-two.xml</Name>",
+                    1,
+                ),
+            ]
+            self.assertNotEqual(candidates[0], candidates[1])
+            rendezvous = Barrier(2)
+            real_migrate = working_schedule.migrate
+
+            def migrate_together(*args, **kwargs):
+                result = real_migrate(*args, **kwargs)
+                rendezvous.wait(timeout=5)
+                return result
+
+            with patch.object(working_schedule, "migrate", side_effect=migrate_together):
+                with ThreadPoolExecutor(max_workers=2) as pool:
+                    futures = [
+                        pool.submit(
+                            workspace.import_file,
+                            project_id,
+                            filename=f"candidate-{index}.xml",
+                            data=data,
+                        )
+                        for index, data in enumerate(candidates)
+                    ]
+                    outcomes = []
+                    for future in futures:
+                        try:
+                            outcomes.append(future.result(timeout=10))
+                        except StaleSchedule as error:
+                            outcomes.append(error)
+
+            accepted = [row for row in outcomes if not isinstance(row, Exception)]
+            refused = [row for row in outcomes if isinstance(row, StaleSchedule)]
+            self.assertEqual(len(accepted), 1)
+            self.assertEqual(len(refused), 1)
+            self.assertIn("retry the import", str(refused[0]))
+            with self.connect() as conn:
+                versions = conn.execute(
+                    "SELECT id, sequence, parent_id FROM schedule_versions "
+                    "WHERE project_id=%s ORDER BY sequence",
+                    (project_id,),
+                ).fetchall()
+            self.assertEqual([row["sequence"] for row in versions], [1, 2])
+            self.assertEqual(versions[1]["parent_id"], uuid.UUID(first["version_id"]))
+            self.assertEqual(workspace.load(project_id, refresh=True).version_id, versions[1]["id"])
+
+            with patch.object(
+                workspace,
+                "import_file",
+                side_effect=StaleSchedule("retry the import against the current schedule"),
+            ):
+                response = client.post(
+                    f"/api/projects/{project}/imports",
+                    files={"file": ("stale.xml", source, "application/xml")},
+                )
+            self.assertEqual(response.status_code, 409, response.text)
 
     def test_a_tampered_version_is_refused_on_load(self):
         with self._client() as client:

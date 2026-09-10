@@ -269,6 +269,8 @@ def create_app(workspace: Workspace | None = None) -> FastAPI:
             raise HTTPException(422, f"the file could not be read: {error}") from None
         except MigrationError as error:
             raise HTTPException(422, f"the file does not migrate: {error}") from None
+        except StaleSchedule as error:
+            raise HTTPException(409, str(error)) from None
         return schemas.ImportResponse(
             project_id=result.project_id,
             import_batch_id=result.import_batch_id,
@@ -385,13 +387,26 @@ def create_app(workspace: Workspace | None = None) -> FastAPI:
         workspace: Workspace = Depends(ws),
     ) -> Any:
         try:
-            workspace.create_duration_scenario(
+            created = workspace.create_duration_scenario(
                 project_id,
                 expected_version_id=body.expected_version_id,
                 activity_uid=body.activity_uid,
                 planned_duration_seconds=body.planned_duration_seconds,
             )
-            return schemas.PlannerState(**workspace.planner_state(project_id))
+            state = workspace.planner_state(project_id)
+            scenario = state.get("scenario")
+            change = state.get("change")
+            if (
+                state.get("current_version_id") != created.scenario_version_id
+                or scenario is None
+                or scenario.get("calculation_id") != created.calculation_id
+                or change is None
+                or change.get("scenario_version_id") != created.scenario_version_id
+            ):
+                raise StaleSchedule(
+                    "the scenario was superseded before it could be returned; reload"
+                )
+            return schemas.PlannerState(**state)
         except UnknownProject:
             raise HTTPException(404, "no such project") from None
         except NoSchedule:

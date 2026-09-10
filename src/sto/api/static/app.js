@@ -320,6 +320,18 @@ function renderedCalculation(state, calculation) {
     state.baseline.calculation_id === calculation.calculation_id);
 }
 
+function renderedScenario(state, projectId, activityUid, seconds) {
+  return Boolean(state && selectedProject(projectId) && state.scenario && state.change &&
+    state.project_id === projectId && state.current_kind === "scenario" &&
+    state.current_version_id === state.scenario.version_id &&
+    state.current_version_id === state.change.scenario_version_id &&
+    state.change.activity_uid === activityUid && state.change.after_seconds === seconds);
+}
+
+function resetIsDisabled(state) {
+  return !state || !state.scenario;
+}
+
 async function show(projectId) {
   if (!projectId || !selectedProject(projectId)) return null;
   awaiting = projectId;
@@ -399,7 +411,12 @@ scenarioForm.addEventListener("submit", async (event) => {
   applyScenario.disabled = true; say("Calculating scenario…");
   try {
     const state = await json("/api/projects/" + projectId + "/scenario", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({expected_version_id: expectedVersionId, activity_uid: activityUid, planned_duration_seconds: seconds})});
-    if (projects.value !== projectId) return;
+    if (!selectedProject(projectId)) return;
+    if (!renderedScenario(state, projectId, activityUid, seconds)) {
+      render(state);
+      say("The scenario was superseded before it could be displayed. Review the current state and try again.", "error");
+      return;
+    }
     render(state); say("Scenario calculated and stored. Changed and downstream rows are marked.");
   } catch (error) {
     if (projects.value !== projectId) return;
@@ -418,7 +435,7 @@ resetScenario.addEventListener("click", async () => {
     if (projects.value !== projectId) return;
     render(state); say("Scenario reset. The baseline result is active again.");
   } catch (error) { if (projects.value === projectId) say(error.message, "error"); }
-  finally { if (projects.value === projectId) resetScenario.disabled = false; }
+  finally { if (selectedProject(projectId)) resetScenario.disabled = resetIsDisabled(currentState); }
 });
 
 activitySelect.addEventListener("change", syncDuration);
