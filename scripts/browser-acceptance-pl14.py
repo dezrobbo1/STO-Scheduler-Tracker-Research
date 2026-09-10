@@ -110,6 +110,7 @@ def main() -> int:
                 page.locator("#calculate").click()
                 expect(page.locator("#status")).to_contain_text("Baseline calculated")
                 expect(page.locator("#mode")).to_have_text("baseline")
+                expect(page.locator("#provenance")).to_contain_text("Forward profile")
                 expect(page.locator("#chart .bar.baseline").first).to_be_visible()
                 expect(page.locator("#summaries tbody tr").first).to_be_visible()
 

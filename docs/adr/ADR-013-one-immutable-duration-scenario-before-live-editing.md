@@ -47,6 +47,11 @@ Planner reads take the same project-row lock as head-moving writes while they
 select the baseline head, scenario head and change lineage. They also verify
 that the scenario change names that active baseline. The returned comparison
 therefore cannot combine heads from opposite sides of a concurrent import.
+Baseline and scenario calculations must also share the same engine profiles,
+epoch, horizon, progress policy, critical threshold, status context and
+resource-calendar policy. Recalculating the baseline under a different context
+retires the scenario head while retaining its immutable version, result and
+change history.
 
 The candidate runs through the production plan, passes, float calculation,
 result projection and WBS rollup before publication. Under one project lock,
@@ -68,6 +73,11 @@ and excluded dispositions visible. Reload and process restart reconstruct the
 active state from PostgreSQL. Export is labelled
 `sto-prototype-scenario-state-1` and carries version, change, result and
 disposition provenance. It is not an MSPDI or `.mpp` export.
+
+Mutation responses are re-read through the shared refresh generation before
+the page announces success, so an older same-project response cannot overwrite
+a newer import. Calculation provenance includes every engine profile and the
+window and policy fields used to decide whether a comparison is valid.
 
 ## Consequences
 

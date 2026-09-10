@@ -158,12 +158,17 @@ function describe(state) {
     ["Active version", state.current_version_id + " (" + state.current_kind + ")"],
     ["Document", result.canonical_hash],
     ["Result", result.fingerprint],
+    ["Engine epoch", moment(result.epoch)],
     ["Window", moment(result.horizon_start) + " → " + moment(result.horizon_finish)],
     ["Progress policy", result.progress_policy],
+    ["Resource calendars", result.resource_calendars_apply ? "applied" : "ignored"],
     ["Status date", statusDate(result)],
     ["Activities", result.counts.activities + " (" + result.counts.scheduled + " scheduled)"],
     ["Relationships", edgeSummary(result.relationships) || "all in the ordinary cohort"],
   ];
+  for (const [name, value] of Object.entries(result.profiles).sort()) {
+    facts.push([name[0].toUpperCase() + name.slice(1) + " profile", value]);
+  }
   for (const [term, value] of facts) {
     const dt = document.createElement("dt"); dt.textContent = term;
     const dd = document.createElement("dd"); dd.textContent = value;
@@ -320,12 +325,24 @@ function renderedCalculation(state, calculation) {
     state.baseline.calculation_id === calculation.calculation_id);
 }
 
-function renderedScenario(state, projectId, activityUid, seconds) {
-  return Boolean(state && selectedProject(projectId) && state.scenario && state.change &&
+function renderedScenario(state, created, projectId, activityUid, seconds) {
+  return Boolean(state && created && selectedProject(projectId) && state.scenario && state.change &&
     state.project_id === projectId && state.current_kind === "scenario" &&
+    state.current_version_id === created.current_version_id &&
+    state.scenario.calculation_id === created.scenario?.calculation_id &&
     state.current_version_id === state.scenario.version_id &&
     state.current_version_id === state.change.scenario_version_id &&
     state.change.activity_uid === activityUid && state.change.after_seconds === seconds);
+}
+
+function renderedReset(state, reset, projectId) {
+  return Boolean(state && reset && selectedProject(projectId) && state.baseline &&
+    state.project_id === projectId && state.current_kind === "baseline" &&
+    state.current_version_id === reset.current_version_id &&
+    state.baseline.version_id === reset.baseline?.version_id &&
+    state.baseline.calculation_id === reset.baseline?.calculation_id &&
+    state.baseline.fingerprint === reset.baseline?.fingerprint &&
+    !state.scenario && !state.change);
 }
 
 function resetIsDisabled(state) {
@@ -371,10 +388,11 @@ async function refreshProjects(selected) {
 
 calculateButton.addEventListener("click", async () => {
   const projectId = projects.value; if (!projectId) return;
+  const generation = beginRefresh();
   calculateButton.disabled = true; say("Calculating immutable baseline…");
   try {
     const calculation = await json("/api/projects/" + projectId + "/calculations", {method: "POST"});
-    if (!selectedProject(projectId)) return;
+    if (!currentRefresh(generation, projectId)) return;
     const state = await show(projectId);
     if (!state) return;
     if (!renderedCalculation(state, calculation)) {
@@ -400,11 +418,12 @@ importForm.addEventListener("submit", async (event) => {
   const projectId = projects.value; const file = fileInput.files[0];
   if (!projectId) { say("Create or select a project first.", "error"); return; }
   if (!file) return;
+  const generation = beginRefresh();
   const data = new FormData(); data.append("file", file);
   say("Importing and preserving the source baseline…");
   try {
     const imported = await json("/api/projects/" + projectId + "/imports", {method: "POST", body: data});
-    if (!selectedProject(projectId)) return;
+    if (!currentRefresh(generation, projectId)) return;
     const state = await show(projectId);
     if (renderedImport(state, imported)) say("Schedule imported. Calculate the baseline next.");
   } catch (error) { say(error.message, "error"); }
@@ -417,16 +436,18 @@ scenarioForm.addEventListener("submit", async (event) => {
   const expectedVersionId = currentState.current_version_id;
   const activityUid = activitySelect.value;
   const seconds = Math.round(Number(durationInput.value) * 3600);
+  const generation = beginRefresh();
   applyScenario.disabled = true; say("Calculating scenario…");
   try {
-    const state = await json("/api/projects/" + projectId + "/scenario", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({expected_version_id: expectedVersionId, activity_uid: activityUid, planned_duration_seconds: seconds})});
-    if (!selectedProject(projectId)) return;
-    if (!renderedScenario(state, projectId, activityUid, seconds)) {
-      render(state);
+    const created = await json("/api/projects/" + projectId + "/scenario", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({expected_version_id: expectedVersionId, activity_uid: activityUid, planned_duration_seconds: seconds})});
+    if (!currentRefresh(generation, projectId)) return;
+    const state = await show(projectId);
+    if (!state) return;
+    if (!renderedScenario(state, created, projectId, activityUid, seconds)) {
       say("The scenario was superseded before it could be displayed. Review the current state and try again.", "error");
       return;
     }
-    render(state); say("Scenario calculated and stored. Changed and downstream rows are marked.");
+    say("Scenario calculated and stored. Changed and downstream rows are marked.");
   } catch (error) {
     if (projects.value !== projectId) return;
     say(error.message + (error.status === 409 ? " Reloaded current state." : ""), "error");
@@ -438,11 +459,18 @@ resetScenario.addEventListener("click", async () => {
   if (!currentState) return;
   const projectId = currentState.project_id;
   const expectedVersionId = currentState.current_version_id;
+  const generation = beginRefresh();
   resetScenario.disabled = true; say("Resetting to baseline…");
   try {
-    const state = await json("/api/projects/" + projectId + "/scenario/reset", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({expected_version_id: expectedVersionId})});
-    if (projects.value !== projectId) return;
-    render(state); say("Scenario reset. The baseline result is active again.");
+    const reset = await json("/api/projects/" + projectId + "/scenario/reset", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({expected_version_id: expectedVersionId})});
+    if (!currentRefresh(generation, projectId)) return;
+    const state = await show(projectId);
+    if (!state) return;
+    if (!renderedReset(state, reset, projectId)) {
+      say("The baseline moved before reset could be displayed. Review the current state.", "error");
+      return;
+    }
+    say("Scenario reset. The baseline result is active again.");
   } catch (error) {
     if (projects.value !== projectId) return;
     say(error.message + (error.status === 409 ? " Reloaded current state." : ""), "error");

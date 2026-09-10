@@ -256,7 +256,7 @@ console.log(JSON.stringify({
                 "generations": [1, 2, 3],
             },
         )
-        self.assertEqual(self.script.count("currentRefresh(generation, projectId)"), 3)
+        self.assertEqual(self.script.count("currentRefresh(generation, projectId)"), 7)
 
     def test_import_and_calculation_success_belong_to_the_rendered_project(self):
         """Execute the freshness decisions used after both awaited mutations."""
@@ -268,7 +268,7 @@ console.log(JSON.stringify({
             re.search(r"function " + name + r"\([\s\S]*?\n}", self.script).group(0)
             for name in (
                 "selectedProject", "renderedImport", "renderedCalculation",
-                "renderedScenario", "resetIsDisabled",
+                "renderedScenario", "renderedReset", "resetIsDisabled",
             )
         )
         probe = r"""
@@ -279,16 +279,23 @@ const calculation = {project_id: 'project-a', version_id: 'version-a',
 const state = {project_id: 'project-a', baseline_version_id: 'version-a',
   baseline: {version_id: 'version-a', calculation_id: 'calculation-a'}};
 const scenario = {...state, current_kind: 'scenario', current_version_id: 'scenario-a',
-  scenario: {version_id: 'scenario-a'},
+  scenario: {version_id: 'scenario-a', calculation_id: 'scenario-calculation'},
   change: {scenario_version_id: 'scenario-a', activity_uid: 'activity-a',
     after_seconds: 28800}};
+const created = structuredClone(scenario);
+const reset = {...state, current_kind: 'baseline', current_version_id: 'version-a',
+  scenario: null, change: null};
 const measured = {
   imported: renderedImport(state, imported),
   calculated: renderedCalculation(state, calculation),
   wrongCalculation: renderedCalculation(state,
     {...calculation, calculation_id: 'calculation-old'}),
-  scenario: renderedScenario(scenario, 'project-a', 'activity-a', 28800),
-  wrongScenario: renderedScenario(scenario, 'project-a', 'activity-a', 14400),
+  scenario: renderedScenario(scenario, created, 'project-a', 'activity-a', 28800),
+  wrongScenario: renderedScenario(scenario,
+    {...created, current_version_id: 'scenario-old'}, 'project-a', 'activity-a', 28800),
+  reset: renderedReset(reset, structuredClone(reset), 'project-a'),
+  wrongReset: renderedReset(reset,
+    {...reset, baseline: {...reset.baseline, calculation_id: 'calculation-old'}}, 'project-a'),
   resetWhileScenario: resetIsDisabled(scenario),
   resetOnBaseline: resetIsDisabled({...state, scenario: null})
 };
@@ -313,6 +320,8 @@ console.log(JSON.stringify(measured));
                 "wrongCalculation": False,
                 "scenario": True,
                 "wrongScenario": False,
+                "reset": True,
+                "wrongReset": False,
                 "resetWhileScenario": False,
                 "resetOnBaseline": True,
                 "importAfterSwitch": False,
@@ -321,7 +330,7 @@ console.log(JSON.stringify(measured));
         )
         import_handler = self.script[self.script.index('importForm.addEventListener'):]
         import_handler = import_handler[: import_handler.index('scenarioForm.addEventListener')]
-        self.assertIn("if (!selectedProject(projectId)) return;", import_handler)
+        self.assertIn("if (!currentRefresh(generation, projectId)) return;", import_handler)
         self.assertIn("if (renderedImport(state, imported)) say", import_handler)
         calculation_handler = self.script[
             self.script.index('calculateButton.addEventListener'):
@@ -333,10 +342,13 @@ console.log(JSON.stringify(measured));
             self.script.index('scenarioForm.addEventListener'):
             self.script.index('resetScenario.addEventListener')
         ]
-        self.assertIn("if (!renderedScenario(state, projectId, activityUid, seconds))", scenario_handler)
+        self.assertIn("if (!renderedScenario(state, created, projectId, activityUid, seconds))", scenario_handler)
+        self.assertIn("const state = await show(projectId);", scenario_handler)
         reset_handler = self.script[self.script.index('resetScenario.addEventListener'):]
+        self.assertIn("if (!renderedReset(state, reset, projectId))", reset_handler)
         self.assertIn("resetScenario.disabled = resetIsDisabled(currentState)", reset_handler)
         self.assertIn('if (error.status === 409) await show(projectId);', reset_handler)
+        self.assertIn("Object.entries(result.profiles)", self.script)
 
     def test_duration_control_and_calculation_detail_keep_the_existing_contract(self):
         self.assertIn('id="duration-hours" type="number" min="0.0003" step="any"', self.html)

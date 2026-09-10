@@ -9,6 +9,7 @@ import threading
 import time
 import unittest
 import uuid
+from datetime import timedelta
 from pathlib import Path
 from unittest.mock import patch
 
@@ -390,6 +391,46 @@ class PlannerScenarioTests(unittest.TestCase):
         current = client.get(f"/api/projects/{project}/planner").json()
         self.assertEqual(current["current_kind"], "baseline")
         self.assertNotEqual(current["baseline_version_id"], imported["version_id"])
+
+    def test_recalculation_retires_only_a_scenario_with_different_provenance(self):
+        client, project, _, _ = self.prepared("scenario-provenance")
+        initial = client.get(f"/api/projects/{project}/planner").json()
+        target = initial["eligible_activities"][0]
+        scenario = client.post(
+            f"/api/projects/{project}/scenario",
+            json={
+                "expected_version_id": initial["current_version_id"],
+                "activity_uid": target["activity_uid"],
+                "planned_duration_seconds": target["planned_duration_seconds"] + 3600,
+            },
+        ).json()
+        workspace = client.app.state.workspace
+
+        workspace.calculate(uuid.UUID(project))
+        retained = client.get(f"/api/projects/{project}/planner").json()
+        self.assertEqual(retained["current_version_id"], scenario["current_version_id"])
+        self.assertIsNotNone(retained["scenario"])
+
+        workspace.calculate(uuid.UUID(project), before=timedelta(days=30))
+        retired = client.get(f"/api/projects/{project}/planner").json()
+        self.assertEqual(retired["current_kind"], "baseline")
+        self.assertIsNone(retired["scenario"])
+        self.assertIsNone(retired["change"])
+        self.assertNotEqual(
+            retired["baseline"]["horizon_start"],
+            scenario["baseline"]["horizon_start"],
+        )
+        with psycopg.connect(self.url) as conn:
+            history = conn.execute(
+                "SELECT count(*) FROM schedule_versions WHERE project_id=%s AND kind='scenario'",
+                (uuid.UUID(project),),
+            ).fetchone()[0]
+            changes = conn.execute(
+                "SELECT count(*) FROM scenario_changes WHERE project_id=%s",
+                (uuid.UUID(project),),
+            ).fetchone()[0]
+        self.assertEqual(history, 1)
+        self.assertEqual(changes, 1)
 
     def test_scenario_route_rejects_a_result_superseded_before_response(self):
         client, project, _, _ = self.prepared("superseded-response")

@@ -169,6 +169,7 @@ class CalculationResponse(BaseModel):
     calculation_id: uuid.UUID
     canonical_hash: str
     fingerprint: str
+    epoch: datetime
     horizon_start: datetime
     horizon_finish: datetime
     progress_policy: str
@@ -178,6 +179,7 @@ class CalculationResponse(BaseModel):
     #: run with discarded progress context reads as a run that never had any.
     status_time: datetime | None = None
     status_time_outside_window: bool = False
+    resource_calendars_apply: bool
     profiles: dict[str, str]
     computed_at: datetime
     counts: dict[str, int]

@@ -64,6 +64,60 @@ PARSER_NAME = "sto.legacy.import_mspdi"
 PARSER_VERSION = "0.1.1"
 
 
+def _profiles(provenance: Provenance) -> dict[str, str]:
+    return {
+        "forward": provenance.forward_profile,
+        "backward": provenance.backward_profile,
+        "criticality": provenance.criticality_profile,
+        "rollup": provenance.rollup_profile,
+        "progress": provenance.progress_profile,
+        "result": provenance.result_profile,
+    }
+
+
+def _result_context(result: ScheduleResult) -> tuple[Any, ...]:
+    provenance = result.provenance
+    return (
+        provenance.epoch,
+        provenance.horizon_start,
+        provenance.horizon_finish,
+        provenance.progress_policy,
+        provenance.critical_float_threshold,
+        provenance.status_time,
+        provenance.status_time_outside_window,
+        provenance.resource_calendars_apply,
+        tuple(sorted(_profiles(provenance).items())),
+    )
+
+
+def _stored_context(row: dict[str, Any]) -> tuple[Any, ...]:
+    return (
+        row["epoch"],
+        row["horizon_start"],
+        row["horizon_finish"],
+        row["progress_policy"],
+        int(row["critical_float_threshold"]),
+        row["status_time"],
+        row["status_time_outside_window"],
+        row["resource_calendars_apply"],
+        tuple(sorted(row["profiles"].items())),
+    )
+
+
+def _projected_context(row: dict[str, Any]) -> tuple[Any, ...]:
+    return (
+        row["epoch"],
+        row["horizon_start"],
+        row["horizon_finish"],
+        row["progress_policy"],
+        row["critical_float_threshold"],
+        row["status_time"],
+        row["status_time_outside_window"],
+        row["resource_calendars_apply"],
+        tuple(sorted(row["profiles"].items())),
+    )
+
+
 class ImportRefused(ValueError):
     """A file the importer would not read. Recorded as a failed batch first."""
 
@@ -395,6 +449,8 @@ class Workspace:
         result = self._calculate_working(working, before=before, after=after)
         already_stored = False
         with self.connect() as conn:
+            if not repo.lock_project(conn, project_id):
+                raise UnknownProject(str(project_id))
             current_version = repo.lock_head_version_id(
                 conn, project_id=project_id, kind="baseline"
             )
@@ -421,6 +477,21 @@ class Workspace:
                 assert existing is not None
                 calculation_id = existing["id"]
                 already_stored = True
+            scenario_id = repo.lock_head_version_id(
+                conn, project_id=project_id, kind="scenario"
+            )
+            if scenario_id is not None:
+                scenario_calculation = repo.get_latest_calculation(
+                    conn, version_id=scenario_id
+                )
+                if (
+                    scenario_calculation is None
+                    or _stored_context(scenario_calculation) != _result_context(result)
+                ):
+                    # The scenario remains immutable history, but it can no
+                    # longer be displayed as a duration-only comparison with
+                    # this baseline calculation.
+                    repo.delete_head(conn, project_id=project_id, kind="scenario")
             conn.commit()
         if already_stored:
             # Reusing a stored calculation is serving it, so it goes through the
@@ -902,20 +973,15 @@ class Workspace:
             "calculation_id": stored.calculation_id,
             "canonical_hash": provenance.canonical_hash,
             "fingerprint": result.fingerprint,
+            "epoch": provenance.epoch,
             "horizon_start": provenance.horizon_start,
             "horizon_finish": provenance.horizon_finish,
             "progress_policy": provenance.progress_policy,
             "critical_float_threshold": provenance.critical_float_threshold,
             "status_time": provenance.status_time,
             "status_time_outside_window": provenance.status_time_outside_window,
-            "profiles": {
-                "forward": provenance.forward_profile,
-                "backward": provenance.backward_profile,
-                "criticality": provenance.criticality_profile,
-                "rollup": provenance.rollup_profile,
-                "progress": provenance.progress_profile,
-                "result": provenance.result_profile,
-            },
+            "resource_calendars_apply": provenance.resource_calendars_apply,
+            "profiles": _profiles(provenance),
             "computed_at": stored.computed_at,
             "counts": {
                 "activities": len(activity_rows),
@@ -989,6 +1055,13 @@ class Workspace:
         if scenario_head is not None and (change is None or scenario is None):
             raise IntegrityError(
                 f"scenario head {scenario_head['id']} has incomplete lineage or results"
+            )
+        if scenario is not None and baseline is not None and (
+            _projected_context(scenario) != _projected_context(baseline)
+        ):
+            raise IntegrityError(
+                f"scenario head {scenario_head['id']} was calculated under different "
+                "engine or window provenance from the active baseline result"
             )
 
         eligible: list[dict[str, Any]] = []
