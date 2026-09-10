@@ -197,6 +197,48 @@ class EvidenceExecutionTests(unittest.TestCase):
         self.assertIn("STO_REQUIRE_DAY5=1 but", result.stderr)
         self.assertIn(missing.name, result.stderr)
 
+    def test_every_day5_evidence_module_honours_the_required_switch(self):
+        """Focused cohorts must not borrow another module's import-time guard."""
+
+        import os
+        import subprocess
+        import sys
+
+        missing = REPO_ROOT / "nope" / "absent-focused-day5.xml"
+        env = dict(os.environ)
+        env.update(
+            {
+                "PYTHONPATH": str(REPO_ROOT / "src"),
+                "STO_REQUIRE_DAY5": "1",
+                "STO_BOILER_DAY5": str(missing),
+            }
+        )
+        for filename in (
+            "test_disposition_partition.py",
+            "test_persistence_gate.py",
+        ):
+            with self.subTest(filename):
+                result = subprocess.run(
+                    [
+                        sys.executable,
+                        "-m",
+                        "unittest",
+                        "discover",
+                        "-s",
+                        "tests",
+                        "-p",
+                        filename,
+                    ],
+                    cwd=REPO_ROOT,
+                    env=env,
+                    capture_output=True,
+                    text=True,
+                    timeout=120,
+                )
+                self.assertNotEqual(result.returncode, 0, "absence was tolerated")
+                self.assertIn("STO_REQUIRE_DAY5=1 but", result.stderr)
+                self.assertIn(missing.name, result.stderr)
+
     def test_the_boiler_criteria_declare_that_they_do_not_always_run(self):
         """The specific case this machinery was built for.
 

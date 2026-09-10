@@ -19,7 +19,11 @@ recorded here; the real files remain outside git.
 - **PROJECT NATIVE RECALCULATION.** Two BOILER files produced by Microsoft
   Project build `16.0.20228.20188` carry four completed-activity observations.
   They show actual dates pinned in both passes, stored total float zero and
-  `Critical=false`; the current production rules reproduce that contract.
+  `Critical=false`; the current production rules reproduce that contract. A
+  separate raw before/after-native inventory finds 447 shared source task UIDs,
+  19 only after, 13 only before and 420 shared rows with at least one changed
+  stored/progress field. Those broad changes are **NOT VERIFIED** as expected
+  or unexpected, so P1-G3 remains open rather than borrowing the four-row rule.
 - **NATIVE ROUND-TRIP.** The task-43 candidate and Project-saved result are a
   bounded single-edit round trip on build `16.0.20228.20188`. This is evidence
   for that transaction only, not general MSPDI writing or full engine parity.
@@ -118,6 +122,8 @@ The UI exposes source and calculated dates but not a relationship UID as a
 claimed driver. Binding-driver attribution remains with the later result
 explanation slice and does not block the PL14 duration scenario.
 
-The repository command in `docs/goals/ACTIVE.md` supplies the final test and
-skip accounting. The focused evidence commands and every available cohort were
-green; only assertions requiring the unavailable day-5 file were skipped.
+The repository command in `docs/goals/ACTIVE.md` supplies the final whole-suite
+test and skip accounting. The focused real-file cohorts were green; within
+those cohorts, only assertions requiring the unavailable day-5 file were
+skipped. Whole-suite skip totals additionally include the separately
+conditional PostgreSQL/API and external PM conformance repository cohorts.
