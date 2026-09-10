@@ -70,6 +70,12 @@ from sto.core.engine.progress import state_of
 from sto.core.model.migrate.sto_v011 import migrate
 from sto.legacy import import_mspdi
 
+BOILER_BEFORE = Path(
+    os.environ.get(
+        "STO_BOILER_BEFORE",
+        "/home/dez/sto-fixtures/boiler-before-no-progress.xml",
+    )
+)
 FIXTURES = {
     "day5": Path(
         os.environ.get(
@@ -90,19 +96,22 @@ FIXTURES = {
         )
     ),
 }
-verify_available(FIXTURES)
+ALL_FIXTURES = {"boiler_before": BOILER_BEFORE, **FIXTURES}
+verify_available(ALL_FIXTURES)
 
 #: The files Microsoft Project itself recalculated after progress was entered.
 #: The candidate is deliberately not one of them.
 NATIVELY_RECALCULATED = ("after_native", "roundtrip_saved")
+NATIVE_TRANSITION = ("boiler_before", "after_native")
 
 if os.environ.get("STO_REQUIRE_DAY5") == "1" and not FIXTURES["day5"].is_file():
     raise RuntimeError(f"STO_REQUIRE_DAY5=1 but the oracle is not here: {FIXTURES['day5']}")
 if os.environ.get("STO_REQUIRE_NATIVE") == "1":
-    for _name in NATIVELY_RECALCULATED:
-        if not FIXTURES[_name].is_file():
+    for _name in (*NATIVELY_RECALCULATED, *NATIVE_TRANSITION):
+        if not ALL_FIXTURES[_name].is_file():
             raise RuntimeError(
-                f"STO_REQUIRE_NATIVE=1 but the native oracle is not here: {FIXTURES[_name]}"
+                "STO_REQUIRE_NATIVE=1 but the transition/native oracle is not here: "
+                f"{ALL_FIXTURES[_name]}"
             )
 
 _ANY_PRESENT = any(path.is_file() for path in FIXTURES.values())
@@ -111,6 +120,9 @@ _DAY5_PRESENT = FIXTURES["day5"].is_file()
 #: recalculated; gating them on the candidate too would hide independent
 #: evidence whenever an unrelated file is absent.
 _NATIVE_PRESENT = all(FIXTURES[name].is_file() for name in NATIVELY_RECALCULATED)
+_NATIVE_TRANSITION_PRESENT = all(
+    ALL_FIXTURES[name].is_file() for name in NATIVE_TRANSITION
+)
 _LOADED: dict[str, tuple] = {}
 
 
@@ -118,7 +130,7 @@ def _load(name: str):
     """The schedule, its plan and the three passes, computed once per file."""
 
     if name not in _LOADED:
-        schedule, _, _ = migrate(import_mspdi(str(FIXTURES[name])))
+        schedule, _, _ = migrate(import_mspdi(str(ALL_FIXTURES[name])))
         start = schedule.project.start or datetime(2026, 8, 1)
         horizon = (start - timedelta(days=90), start + timedelta(days=365))
         plan = build_plan(schedule, horizon)
@@ -329,6 +341,55 @@ class NativeRecalculationTests(unittest.TestCase):
                     self.assertEqual(
                         plan.to_datetime(row.late_finish), activity.actual_finish
                     )
+
+
+@unittest.skipUnless(
+    _NATIVE_TRANSITION_PRESENT,
+    "the BOILER before/after-native pair is not present; set STO_REQUIRE_NATIVE=1",
+)
+class NativeTransitionInventoryTests(unittest.TestCase):
+    """The raw transition exists; its broad changes are not yet classified."""
+
+    @staticmethod
+    def _source_uid(activity):
+        return activity.external_refs[0].uid
+
+    @staticmethod
+    def _observed(activity):
+        observed = activity.source_observations
+        return (
+            observed.start,
+            observed.finish,
+            observed.early_start,
+            observed.early_finish,
+            observed.late_start,
+            observed.late_finish,
+            observed.total_float_seconds,
+            observed.free_float_seconds,
+            observed.critical,
+            activity.actual_start,
+            activity.actual_finish,
+            activity.remaining_duration,
+            activity.percent_complete,
+        )
+
+    def test_the_before_after_native_transition_is_measured_but_not_overclaimed(self):
+        before = {
+            self._source_uid(row): row
+            for row in _load("boiler_before")[0].activities
+        }
+        after = {
+            self._source_uid(row): row for row in _load("after_native")[0].activities
+        }
+        common = before.keys() & after.keys()
+        changed = {
+            uid for uid in common
+            if self._observed(before[uid]) != self._observed(after[uid])
+        }
+        self.assertEqual(len(common), 447)
+        self.assertEqual(len(after.keys() - before.keys()), 19)
+        self.assertEqual(len(before.keys() - after.keys()), 13)
+        self.assertEqual(len(changed), 420)
 
 
 @unittest.skipUnless(

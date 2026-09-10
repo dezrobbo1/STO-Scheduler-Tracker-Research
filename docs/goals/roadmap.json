@@ -184,7 +184,7 @@
           "evidence": "tests/test_progress_boiler.py",
           "evidence_conditional": {
             "env": "STO_REQUIRE_NATIVE",
-            "why": "the Microsoft Project recalculation files live outside the repository and must both be present for this gate"
+            "why": "the BOILER before file and Microsoft Project recalculation files live outside the repository; the raw before/after inventory is pinned, but its 420 changed common rows do not yet have an unexpected-difference classifier, so this criterion remains open"
           }
         },
         {

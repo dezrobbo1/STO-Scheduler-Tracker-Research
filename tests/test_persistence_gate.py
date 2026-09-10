@@ -33,6 +33,10 @@ MIGRATIONS = REPO_ROOT / "infra" / "migrations"
 BOILER_BEFORE = Path(os.environ.get("STO_BOILER_BEFORE", "/home/dez/sto-fixtures/boiler-before-no-progress.xml"))
 BOILER_DAY5 = Path(os.environ.get("STO_BOILER_DAY5", "/home/dez/BOILER-WG110-day5-candidate.mspdi.xml"))
 verify_available({"boiler_before": BOILER_BEFORE, "day5": BOILER_DAY5})
+if os.environ.get("STO_REQUIRE_DAY5") == "1" and not BOILER_DAY5.is_file():
+    raise RuntimeError(
+        f"STO_REQUIRE_DAY5=1 but the day-5 fixture is not here: {BOILER_DAY5}"
+    )
 
 try:
     import psycopg

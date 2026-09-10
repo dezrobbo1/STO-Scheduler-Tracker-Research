@@ -25,6 +25,13 @@ remain conditional and say why; every other available cohort runs. Skip totals
 also include separately conditional database and PM-clone suites, so this
 record does not assign a fixed assertion count to the missing file.
 
+The native completion rule is four Project-recalculated activity rows. It is
+not the broader P1-G3 transition claim. A direct before/after-native inventory
+now pins 447 common source task UIDs, 19 only after, 13 only before and 420
+changed common rows. No unexpected-difference classifier exists for those
+broad changes, so P1-G3 remains open and no production code was changed to
+force that transition to agree.
+
 ## What was measured
 
 `docs/evidence/current-engine-evidence-2026-09-10.md` carries exact hashes,

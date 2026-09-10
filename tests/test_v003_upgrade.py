@@ -17,7 +17,7 @@ import tempfile
 import unittest
 from datetime import timedelta
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import parse_qsl, unquote, urlparse, urlsplit, urlunsplit
 
 REQUIRE_DB = os.environ.get("STO_REQUIRE_DB") == "1"
 ADMIN_URL = os.environ.get(
@@ -57,6 +57,68 @@ def _reachable() -> bool:
 
 AVAILABLE = _reachable()
 
+_LIBPQ_QUERY_ENV = {
+    "application_name": "PGAPPNAME",
+    "channel_binding": "PGCHANNELBINDING",
+    "connect_timeout": "PGCONNECT_TIMEOUT",
+    "gssencmode": "PGGSSENCMODE",
+    "options": "PGOPTIONS",
+    "sslcert": "PGSSLCERT",
+    "sslcrl": "PGSSLCRL",
+    "sslkey": "PGSSLKEY",
+    "sslmode": "PGSSLMODE",
+    "sslrootcert": "PGSSLROOTCERT",
+    "target_session_attrs": "PGTARGETSESSIONATTRS",
+}
+
+
+def _database_url(admin_url: str, dbname: str) -> str:
+    """Change only the database path; retain every connection option."""
+
+    parsed = urlsplit(admin_url)
+    return urlunsplit(parsed._replace(path="/" + dbname))
+
+
+def _migration_environment(url: str, dbname: str) -> dict[str, str]:
+    parsed = urlparse(url)
+    environment = os.environ.copy()
+    environment.update(
+        {
+            "PGHOST": parsed.hostname or "127.0.0.1",
+            "PGPORT": str(parsed.port or 5432),
+            "PGUSER": unquote(parsed.username or "postgres"),
+            "PGDATABASE": dbname,
+        }
+    )
+    if parsed.password:
+        environment["PGPASSWORD"] = unquote(parsed.password)
+    for name, value in parse_qsl(parsed.query, keep_blank_values=True):
+        variable = _LIBPQ_QUERY_ENV.get(name)
+        if variable is None:
+            raise RuntimeError(
+                f"the V003 upgrade test cannot pass libpq URL option {name!r} to psql"
+            )
+        environment[variable] = value
+    return environment
+
+
+class UpgradeConnectionOptionTests(unittest.TestCase):
+    def test_database_url_and_psql_environment_retain_connection_options(self):
+        source = (
+            "postgresql://operator:secret@db.example:6543/postgres"
+            "?sslmode=require&application_name=upgrade-test&connect_timeout=11"
+        )
+        changed = _database_url(source, "sto_upgrade")
+        self.assertEqual(
+            changed,
+            "postgresql://operator:secret@db.example:6543/sto_upgrade"
+            "?sslmode=require&application_name=upgrade-test&connect_timeout=11",
+        )
+        environment = _migration_environment(changed, "sto_upgrade")
+        self.assertEqual(environment["PGSSLMODE"], "require")
+        self.assertEqual(environment["PGAPPNAME"], "upgrade-test")
+        self.assertEqual(environment["PGCONNECT_TIMEOUT"], "11")
+
 
 @unittest.skipUnless(
     AVAILABLE,
@@ -73,7 +135,7 @@ class V003UpgradeTests(unittest.TestCase):
         try:
             with psycopg.connect(ADMIN_URL, autocommit=True) as admin:
                 admin.execute(f'CREATE DATABASE "{dbname}"')
-            url = ADMIN_URL.rsplit("/", 1)[0] + "/" + dbname
+            url = _database_url(ADMIN_URL, dbname)
 
             # This is an existing, fully recorded V002 installation, not a
             # fresh database over which all three files are applied together.
@@ -121,18 +183,7 @@ class V003UpgradeTests(unittest.TestCase):
             self.assertEqual(readable_before.version_id, imported.version_id)
             self.assertEqual(readable_before.result.fingerprint, calculated.fingerprint)
 
-            parsed = urlparse(url)
-            environment = os.environ.copy()
-            environment.update(
-                {
-                    "PGHOST": parsed.hostname or "127.0.0.1",
-                    "PGPORT": str(parsed.port or 5432),
-                    "PGUSER": parsed.username or "postgres",
-                    "PGDATABASE": dbname,
-                }
-            )
-            if parsed.password:
-                environment["PGPASSWORD"] = parsed.password
+            environment = _migration_environment(url, dbname)
             applied = subprocess.run(
                 [str(ROOT / "scripts" / "db" / "apply-migrations.sh")],
                 cwd=ROOT,
