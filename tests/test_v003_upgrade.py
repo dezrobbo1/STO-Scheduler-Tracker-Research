@@ -137,6 +137,10 @@ class V003UpgradeTests(unittest.TestCase):
                 check=True,
             )
             self.assertIn("apply   V003__calculation_version_is_immutable.sql", applied.stdout)
+            # The supported command always advances to the repository's
+            # current schema. PL14 adds V004 after the V003 proof was first
+            # recorded, so an installation at V002 receives both in order.
+            self.assertIn("apply   V004__planner_scenario_changes.sql", applied.stdout)
             drift = subprocess.run(
                 [str(ROOT / "scripts" / "db" / "check-schema-drift.sh")],
                 cwd=ROOT,

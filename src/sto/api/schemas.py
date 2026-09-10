@@ -184,3 +184,45 @@ class CalculationResponse(BaseModel):
     relationships: list[RelationshipRow] = []
     activities: list[ActivityRow]
     summaries: list[SummaryRow]
+
+
+class ScenarioEdit(BaseModel):
+    expected_version_id: uuid.UUID
+    activity_uid: uuid.UUID
+    planned_duration_seconds: int = Field(gt=0)
+
+
+class ScenarioReset(BaseModel):
+    expected_version_id: uuid.UUID
+
+
+class ScenarioChange(BaseModel):
+    change_id: uuid.UUID
+    baseline_version_id: uuid.UUID
+    scenario_version_id: uuid.UUID
+    activity_uid: uuid.UUID
+    field: str
+    before_seconds: int
+    after_seconds: int
+    remaining_before_seconds: int | None = None
+    remaining_after_seconds: int | None = None
+    created_at: datetime
+
+
+class EligibleActivity(BaseModel):
+    activity_uid: uuid.UUID
+    code: str | None = None
+    name: str
+    planned_duration_seconds: int
+
+
+class PlannerState(BaseModel):
+    project_id: uuid.UUID
+    project_name: str
+    baseline_version_id: uuid.UUID
+    current_version_id: uuid.UUID
+    current_kind: str
+    baseline: CalculationResponse | None = None
+    scenario: CalculationResponse | None = None
+    change: ScenarioChange | None = None
+    eligible_activities: list[EligibleActivity] = []

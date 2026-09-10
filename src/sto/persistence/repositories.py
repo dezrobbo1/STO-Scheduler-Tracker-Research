@@ -180,6 +180,28 @@ def set_head(
     )
 
 
+def delete_head(
+    conn: psycopg.Connection, *, project_id: uuid.UUID, kind: str
+) -> None:
+    """Remove one movable pointer while preserving every immutable version."""
+
+    conn.execute(
+        "DELETE FROM schedule_heads WHERE project_id = %s AND kind = %s",
+        (project_id, kind),
+    )
+
+
+def lock_project(conn: psycopg.Connection, project_id: uuid.UUID) -> bool:
+    """Serialize version sequence allocation and head movement per project."""
+
+    return (
+        conn.execute(
+            "SELECT id FROM projects WHERE id = %s FOR UPDATE", (project_id,)
+        ).fetchone()
+        is not None
+    )
+
+
 _VERSION_SUMMARY = (
     "v.id, v.project_id, v.kind, v.sequence, v.parent_id, v.canonical_hash,"
     " v.schema_version, v.engine_profile, v.cause_type, v.cause_id, v.created_at"
@@ -249,6 +271,56 @@ def heads_for_all_projects(conn: psycopg.Connection) -> list[dict[str, Any]]:
         ORDER BY v.project_id, h.kind
         """
     ).fetchall()
+
+
+# --- planner scenario lineage -------------------------------------------------
+
+
+def insert_scenario_change(
+    conn: psycopg.Connection,
+    *,
+    change_id: uuid.UUID,
+    project_id: uuid.UUID,
+    baseline_version_id: uuid.UUID,
+    scenario_version_id: uuid.UUID,
+    activity_uid: uuid.UUID,
+    before_seconds: int,
+    after_seconds: int,
+    remaining_before_seconds: int | None,
+    remaining_after_seconds: int | None,
+) -> dict[str, Any]:
+    row = conn.execute(
+        """
+        INSERT INTO scenario_changes
+          (id, project_id, baseline_version_id, scenario_version_id,
+           activity_uid, before_seconds, after_seconds,
+           remaining_before_seconds, remaining_after_seconds)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        RETURNING *
+        """,
+        (
+            change_id,
+            project_id,
+            baseline_version_id,
+            scenario_version_id,
+            activity_uid,
+            before_seconds,
+            after_seconds,
+            remaining_before_seconds,
+            remaining_after_seconds,
+        ),
+    ).fetchone()
+    assert row is not None
+    return row
+
+
+def get_scenario_change(
+    conn: psycopg.Connection, *, scenario_version_id: uuid.UUID
+) -> dict[str, Any] | None:
+    return conn.execute(
+        "SELECT * FROM scenario_changes WHERE scenario_version_id = %s",
+        (scenario_version_id,),
+    ).fetchone()
 
 
 # --- calculated results --------------------------------------------------------

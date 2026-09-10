@@ -1,4 +1,4 @@
-"""The read-only page, checked against the API it claims to read (PL13).
+"""The PL14 planner page, checked against the API it claims to read.
 
 Not a browser test: nothing here renders anything. It asks the one question a
 static page can get wrong without anybody noticing, which is whether the routes
@@ -23,6 +23,7 @@ STATIC = Path(__file__).resolve().parents[1] / "src" / "sto" / "api" / "static"
 # response models needs pydantic, which the bare suite does not have; the api
 # job sets STO_REQUIRE_DB=1 and turns its absence into a failure there.
 try:
+    import fastapi  # noqa: F401 - the route contract needs the application too
     from sto.api import schemas
 except ImportError as error:  # the bare suite: no api extra
     if os.environ.get("STO_REQUIRE_DB") == "1":
@@ -83,11 +84,12 @@ class ThePageIsSelfConsistentTests(unittest.TestCase):
         self.assertNotIn("Date.parse(", code)
         self.assertIn("Date.UTC(", code)
 
-    def test_it_tells_an_absent_calculation_from_a_refused_one(self):
-        """Reporting an integrity refusal as an absence hides the refusal."""
+    def test_it_tells_an_absent_schedule_from_a_refused_one(self):
+        """A project awaiting import is distinct from an integrity refusal."""
 
-        self.assertIn("error.status === 404", self.script)
+        self.assertIn("error.status === 409", self.script)
         self.assertIn("failure.status = response.status", self.script)
+        self.assertIn("planner state could not be served", self.script)
 
     def test_it_does_not_show_a_calculation_for_a_project_left_behind(self):
         """`show` sets the freshness guard itself, so calling it is not safe."""
@@ -163,6 +165,54 @@ console.log(JSON.stringify({
         self.assertAlmostEqual(float(measured["left"].removesuffix("%")), 99.6)
         self.assertAlmostEqual(float(measured["width"].removesuffix("%")), 0.4)
 
+    def test_rendered_movement_and_disposition_contract(self):
+        """Execute the logic that marks the edited and downstream rows."""
+
+        node = shutil.which("node") or os.environ.get("CODEX_PRIMARY_RUNTIME_NODE")
+        if not node:
+            self.skipTest("Node is required to execute the page's JavaScript")
+        functions = "\n".join(
+            re.search(r"function " + name + r"\([\s\S]*?\n}", self.script).group(0)
+            for name in ("classifyMovement", "disposition")
+        )
+        probe = r"""
+const base = {activity_uid: 'a', early_start: '08:00', early_finish: '09:00',
+  disposition: 'scheduled', assumptions: []};
+const changed = {...base, early_finish: '10:00'};
+const movedBase = {...base, activity_uid: 'b'};
+const moved = {...movedBase, early_start: '10:00', early_finish: '11:00'};
+console.log(JSON.stringify({
+  edited: classifyMovement(base, changed, 'a'),
+  downstream: classifyMovement(movedBase, moved, 'a'),
+  reset: classifyMovement(base, null, 'a'),
+  normal: disposition(base).label,
+  assumed: disposition({...base, assumptions: ['ACTIVITY_DURATION_ELAPSED']}).label,
+  deferred: disposition({...base,
+    assumptions: ['ACTIVITY_SECONDARY_CONSTRAINT_NOT_APPLIED']}).label,
+  excluded: disposition({...base, disposition: 'excluded'}).label
+}));
+"""
+        measured = json.loads(
+            subprocess.run(
+                [node, "-e", functions + probe],
+                check=True,
+                text=True,
+                capture_output=True,
+            ).stdout
+        )
+        self.assertEqual(measured["edited"], "edited")
+        self.assertEqual(measured["downstream"], "downstream")
+        self.assertEqual(measured["reset"], "")
+        self.assertEqual(
+            {measured[key] for key in ("normal", "assumed", "deferred", "excluded")},
+            {
+                "calculated normally",
+                "calculated with assumption",
+                "deferred constraint support",
+                "unsupported / excluded",
+            },
+        )
+
     def test_it_drops_a_response_for_a_project_no_longer_selected(self):
         """Two requests can finish out of order while the selector stays live."""
 
@@ -191,6 +241,10 @@ class ThePageAndTheApiAgreeTests(unittest.TestCase):
             "/api/projects",
             "/api/projects/{project_id}/calculations",
             "/api/projects/{project_id}/calculations/latest",
+            "/api/projects/{project_id}/planner",
+            "/api/projects/{project_id}/scenario",
+            "/api/projects/{project_id}/scenario/reset",
+            "/api/projects/{project_id}/scenario/export",
         ):
             with self.subTest(path):
                 self.assertIn(path, routes)

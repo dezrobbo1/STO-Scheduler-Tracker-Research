@@ -2,8 +2,9 @@
 
 STO is becoming its own scheduler: import from a CMMS, Primavera P6 or Microsoft
 Project; track, manage and schedule in real time; export back to any of them.
-Today it imports Microsoft Project XML, calculates it, and stores it; the
-rest is the roadmap below, and the 2026-09-07 comprehensive repository review
+Today it imports Microsoft Project XML, stores and calculates an immutable
+baseline, and persists one duration scenario that makes downstream movement
+visible; the rest is the roadmap below, and the 2026-09-07 comprehensive review
 (`docs/history/2026-09-08-review-answered-and-roadmap-resequenced.md`) is
 the honest statement of the distance.
 `AGENTS.md` holds the boundaries, `docs/adr/` the decisions, and
@@ -21,15 +22,17 @@ not start until the previous gate passes.
 <!-- roadmap:begin now -->
 <!-- generated from docs/goals/roadmap.json by `sto roadmap render`; edit the JSON, not this -->
 
-**P1 — Engine and local planner trial** (in progress; 1 of 5 gate criteria met)
+**P1 — Engine and local planner trial** (in progress; 2 of 5 gate criteria met)
 
 | | Gate criterion | Shown by |
 |---|---|---|
 | ✓ | The 47 executable conformance cases pass, byte-identically across three processes | `tests/test_conformance_determinism.py` |
 | · | Both BOILER snapshots: every leaf activity gets a disposition, and no difference is UNEXPLAINED across start, finish, late dates, float and criticality | — |
 | · | The genuine Project-recalculation oracle (before to after-native-progress) reports zero unexpected differences | — |
-| · | A persisted import shows calculated dates beside the ones it imported; one duration edit moves its successors; reset restores the baseline; the scenario exports; and a restart reproduces the same result from the same input hash | — |
+| ✓ | A persisted import shows calculated dates beside the ones it imported; one duration edit moves its successors; reset restores the baseline; the scenario exports; and a restart reproduces the same result from the same input hash | `scripts/browser-acceptance-pl14.py` ‡ |
 | · | Every API route rejects an unauthenticated request, and a project is readable only by an actor authorised on it | — |
+
+‡ the API CI job supplies PostgreSQL and Chromium, drives the rendered workflow, restarts the application, and uploads its screenshots and export; set `STO_REQUIRE_DB=1` to make their absence a failure rather than a skip.
 
 <!-- roadmap:end now -->
 
@@ -109,6 +112,19 @@ here, where the recorded reconciliation counts come through the database
 unchanged. Third-party packages arrived behind the `api` extra; the bare suite
 and CI job stay stdlib-only (ADR-005). `sto serve` runs it on 8092 — 8090 is
 the deployed Java API until cut-over.
+
+**The first persisted planner scenario (PL14).** The same page can create a
+project, import and calculate its baseline, select one supported not-started
+leaf activity, change its planned duration, and show baseline and scenario
+dates together. The edited row and downstream movement are marked in both the
+task table and Gantt. Normal, assumed, deferred-constraint and excluded results
+stay visible. The scenario is a complete immutable canonical version with its
+own persisted calculation; V004 records the single changed input and validates
+its baseline/scenario lineage. Expected-version protection rejects a stale
+edit. Reset removes the scenario head without deleting its audit history, a
+new import retires a scenario based on the old baseline, and a process restart
+reconstructs the active result from PostgreSQL. The download is explicitly a
+prototype-state JSON export, not an MSPDI writer (ADR-013).
 
 **Calendars (S2).** `sto.core.calendar` compiles a canonical calendar — base
 inheritance, weekday overrides, dated exceptions with their recurrence, and
@@ -280,10 +296,9 @@ the writers that need it live):
    than a server error, uploads are bounded, and one malformed stored document
    quarantines its project rather than aborting the rebuild of every other
    (`docs/history/2026-09-08-the-calculation-made-visible.md`).
-10. **One planner scenario** (`PL14`): pick a supported task, change its
-    duration, see its successors move, reset to the baseline, export, restart.
-    The first consolidated vertical slice; the legacy workspace retires after
-    this loop is accepted, not before.
+10. ~~One planner scenario~~ (`PL14`) — done. Pick a supported task, change its
+    duration, see its successors move, reset to the baseline, export and
+    restart, all through the consolidated engine and persistence stack.
 11. **Real authentication** (`PL2`). Password with TOTP, server sessions,
     device tokens for the field app. Every route rejects an unauthenticated
     request, and a project is readable only by an actor authorised on it.
