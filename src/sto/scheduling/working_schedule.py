@@ -22,7 +22,7 @@ from __future__ import annotations
 import hashlib
 import os
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -116,6 +116,70 @@ def _projected_context(row: dict[str, Any]) -> tuple[Any, ...]:
         row["resource_calendars_apply"],
         tuple(sorted(row["profiles"].items())),
     )
+
+
+def _relationship_context_codes(
+    schedule: Schedule,
+    edges: Iterable[tuple[uuid.UUID, str]],
+) -> dict[uuid.UUID, tuple[str, ...]]:
+    """Map every exceptional relationship result back to both endpoint rows.
+
+    ``ScheduleResult.relationships`` contains exactly the edges that were not
+    ordinary measured precedence: assumed, excluded, or released by progress.
+    PL14 changes a duration and then interprets both the edited row and the
+    downstream movement, so an exceptional edge incident to the selected row is
+    part of that scenario's scheduling context even when the activity row itself
+    carries no activity-level assumption.
+    """
+
+    relationships = {row.uid: row for row in schedule.relationships}
+    by_activity: dict[uuid.UUID, set[str]] = {}
+    for relationship_uid, code in edges:
+        relationship = relationships.get(relationship_uid)
+        if relationship is None:
+            raise IntegrityError(
+                f"calculation relationship {relationship_uid} is not present in its schedule"
+            )
+        for activity_uid in (
+            relationship.predecessor_uid,
+            relationship.successor_uid,
+        ):
+            by_activity.setdefault(activity_uid, set()).add(code)
+    return {
+        activity_uid: tuple(sorted(codes))
+        for activity_uid, codes in by_activity.items()
+    }
+
+
+def _with_relationship_context(
+    schedule: Schedule,
+    projected: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    """Expose exceptional edge context on the endpoint rows the planner shows."""
+
+    if projected is None:
+        return None
+    context = _relationship_context_codes(
+        schedule,
+        (
+            (edge["relationship_uid"], edge["code"])
+            for edge in projected["relationships"]
+        ),
+    )
+    if not context:
+        return projected
+    rows: list[dict[str, Any]] = []
+    for row in projected["activities"]:
+        extra = context.get(row["activity_uid"], ())
+        if not extra:
+            rows.append(row)
+            continue
+        updated = dict(row)
+        updated["assumptions"] = sorted(set((*row["assumptions"], *extra)))
+        rows.append(updated)
+    decorated = dict(projected)
+    decorated["activities"] = rows
+    return decorated
 
 
 class ImportRefused(ValueError):
@@ -604,11 +668,28 @@ class Workspace:
                 "the selected activity is not calculated"
                 + (" (" + code + ")" if code else ""),
             )
-        if baseline_row.assumptions:
+        relationship_context = _relationship_context_codes(
+            baseline.schedule,
+            (
+                (edge.uid, edge.code)
+                for edge in baseline_calculation.result.relationships
+            ),
+        )
+        scenario_assumptions = tuple(
+            sorted(
+                set(
+                    (
+                        *baseline_row.assumptions,
+                        *relationship_context.get(activity_uid, ()),
+                    )
+                )
+            )
+        )
+        if scenario_assumptions:
             raise ScenarioRejected(
                 "ACTIVITY_HAS_ASSUMPTIONS",
                 "choose an activity calculated without assumptions; this one uses "
-                + ", ".join(baseline_row.assumptions),
+                + ", ".join(scenario_assumptions),
             )
 
         old_seconds = activity.planned_duration.seconds
@@ -818,7 +899,6 @@ class Workspace:
                 None if calculation is None else calculation["result_fingerprint"]
             ),
         )
-
 
     def read_calculation(
         self,
@@ -1116,6 +1196,15 @@ class Workspace:
                 f"scenario head {scenario_head['id']} was calculated under different "
                 "engine or window provenance from the active baseline result"
             )
+
+        # The result stores relationship assumptions/exclusions/releases beside
+        # the activity rows rather than on them. Surface that context on both
+        # endpoints before deciding whether a task is safe to edit, so the page
+        # cannot call an edge-dependent answer "calculated normally" and PL14
+        # cannot persist a scenario whose movement depends on an unevidenced
+        # relationship rule.
+        baseline = _with_relationship_context(baseline_working.schedule, baseline)
+        scenario = _with_relationship_context(baseline_working.schedule, scenario)
 
         eligible: list[dict[str, Any]] = []
         if baseline is not None:
