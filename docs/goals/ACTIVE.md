@@ -26,10 +26,13 @@ not start until the previous gate passes.
 | | Gate criterion | Shown by |
 |---|---|---|
 | ✓ | The 47 executable conformance cases pass, byte-identically across three processes | `tests/test_conformance_determinism.py` |
-| · | Both BOILER snapshots: every leaf activity gets a disposition, and no difference is UNEXPLAINED across start, finish, late dates, float and criticality | — |
-| · | The genuine Project-recalculation oracle (before to after-native-progress) reports zero unexpected differences | — |
+| · | Both BOILER snapshots: every leaf activity gets a disposition, and no difference is UNEXPLAINED across start, finish, late dates, float and criticality | `docs/evidence/current-engine-evidence-2026-09-10.md` ‡ |
+| · | The genuine Project-recalculation oracle (before to after-native-progress) reports zero unexpected differences | `tests/test_progress_boiler.py` ‡ |
 | · | A persisted import shows calculated dates beside the ones it imported; one duration edit moves its successors; reset restores the baseline; the scenario exports; and a restart reproduces the same result from the same input hash | — |
 | · | Every API route rejects an unauthenticated request, and a project is readable only by an actor authorised on it | — |
+
+‡ the exact progressed BOILER candidate is unavailable; this criterion remains open and its file-oracle assertions must fail rather than skip when the gate is attempted; set `STO_REQUIRE_DAY5=1` to make their absence a failure rather than a skip.
+‡ the BOILER before file and Microsoft Project recalculation files live outside the repository; the raw before/after inventory is pinned, but its 420 changed common rows do not yet have an unexpected-difference classifier, so this criterion remains open; set `STO_REQUIRE_NATIVE=1` to make their absence a failure rather than a skip.
 
 <!-- roadmap:end now -->
 
@@ -138,7 +141,7 @@ the diagnosis (`docs/history/2026-09-05-forward-pass-residue-diagnosed.md`,
 ADR-010) found four rules of Project's — the resource calendar places the
 work, the task or project calendar measures lags and slack, and the project
 start bounds only a task with no predecessors — and the pass now agrees on
-384 of BOILER's 451, 247 of KILN's 417 and 1,645 of CALCINER's 1,763, with
+384 of BOILER's 451, 247 of KILN's 416 and 1,645 of CALCINER's 1,763, with
 what remains named per row and pinned in `tests/test_forward_pass_boiler.py`.
 
 **Backward pass, float and criticality (S4).** `sto.core.engine.backward` is the
@@ -168,13 +171,14 @@ after all, because CALCINER is the one file in the estate that declares a
 `CriticalSlackLimit`, which reads as working days of the project's own day.
 That closes the importer gap this slice was carrying.
 
-Not claimed: our own late dates reproduce Project's on none of the file's
-activities and our own total float on nineteen, both inherited from the forward
-pass. Our *free* float agrees on three hundred and fifty-one, which is what a
-local quantity does when a global one is misplaced — the first evidence that
-what remains is placement rather than logic. Every count is pinned in
-`tests/test_backward_pass_boiler.py`, so closing the forward-pass difference
-fails those assertions rather than passing unnoticed.
+Not claimed: production dates and floats reproduce all fields Project stored.
+The 2026-09-10 packet measures late date pairs at BOILER 409/451, KILN 0/416
+and CALCINER 1,572/1,763; total float at 380/451, 4/416 and 1,488/1,763; and
+free float at 435/451, 305/416 and 1,691/1,763. These are stored-XML comparisons,
+not native recalculation. Every count is pinned in
+`tests/test_backward_pass_boiler.py` and recorded with field-level detail in
+`docs/evidence/current-engine-evidence-2026-09-10.md`, so a changed rule moves
+the evidence deliberately.
 
 **Status date and progress (S5).** `sto.core.engine.progress` reads three facts
 off each activity — an actual start, an actual finish, a remaining duration —
@@ -561,10 +565,11 @@ PYTHONPATH=src python3 -m unittest discover -s tests
 ```
 
 The file-oracle cases skip unless the real schedules are present; point
-`STO_BOILER_BEFORE`, `STO_BOILER_DAY5`, `STO_KILN` and `STO_CALCINER` at them to
-run them. `P1-G2` and `P1-G3` rest on those cases, so cross a gate with
-`STO_REQUIRE_BOILER=1` set — their absence then fails instead of skipping
-quietly. The float and criticality rules are evidence from KILN and CALCINER as
+`STO_BOILER_BEFORE`, `STO_KILN` and `STO_CALCINER` at the stored-XML matrix and
+set `STO_REQUIRE_BOILER=1` so its absence fails instead of skipping quietly.
+The exact day-5 pair is a separate `STO_REQUIRE_DAY5=1` gate, and the two files
+Project recalculated use `STO_REQUIRE_NATIVE=1`. `P1-G2` and `P1-G3` name those
+conditional dependencies in the roadmap. The float and criticality rules are evidence from KILN and CALCINER as
 much as from BOILER, which is why those two now have variables of their own.
 `fixtures/README.md` records every file's hash, what it proves and how to
 recover it — including two that cannot be recovered and need backing up.

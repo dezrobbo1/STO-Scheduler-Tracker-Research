@@ -15,6 +15,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from uuid import uuid4
 
+from tests.real_fixture_guard import verify_available
+
 from sto.core.calendar import (
     CalendarCompileError,
     add_working,
@@ -32,6 +34,7 @@ from sto.core.model.migrate.sto_v011 import MigrationError, migrate
 from sto.legacy import import_mspdi
 
 BOILER_BEFORE = Path(os.environ.get("STO_BOILER_BEFORE", "/home/dez/sto-fixtures/boiler-before-no-progress.xml"))
+verify_available({"boiler_before": BOILER_BEFORE})
 
 EIGHT_TO_FOUR = (TimeInterval(8 * 3600, 12 * 3600), TimeInterval(13 * 3600, 17 * 3600))
 

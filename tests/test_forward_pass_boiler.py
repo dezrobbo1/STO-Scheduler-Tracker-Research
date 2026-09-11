@@ -23,6 +23,8 @@ import unittest
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from tests.real_fixture_guard import verify_available
+
 from sto.core.engine import ForwardPassError, build_plan, forward_pass
 from sto.core.model.migrate.sto_v011 import migrate
 from sto.legacy import import_mspdi
@@ -38,13 +40,12 @@ FIXTURES = {
         os.environ.get("STO_CALCINER", "/home/dez/sto-fixtures/calciner-wg050-source.xml")
     ),
 }
+verify_available(FIXTURES)
 REQUIRE_BOILER = os.environ.get("STO_REQUIRE_BOILER") == "1"
 if REQUIRE_BOILER:
     absent = sorted(name for name, path in FIXTURES.items() if not path.is_file())
     if absent:
         raise RuntimeError(f"STO_REQUIRE_BOILER=1 but these are not here: {absent}")
-ALL_PRESENT = all(path.is_file() for path in FIXTURES.values())
-
 #: Every code the plan is allowed to exclude a row with. A new code appearing on
 #: a real file should be a deliberate decision, not a silent one.
 KNOWN_CODES = frozenset(
@@ -214,16 +215,37 @@ def _agreement(path: Path) -> dict:
         stored = activities[uid].source_observations
         row = times[uid]
         return (
-            plan.to_datetime(row.early_start) == stored.start
-            and plan.to_datetime(row.early_finish) == stored.finish
+            stored is not None
+            and stored.early_start is not None
+            and stored.early_finish is not None
+            and plan.to_datetime(row.early_start) == stored.early_start
+            and plan.to_datetime(row.early_finish) == stored.early_finish
         )
 
-    counts = {"compared": 0, "exact": 0, "first": 0, "inherited": 0}
+    counts = {
+        "compared": 0,
+        "early_start": 0,
+        "early_finish": 0,
+        "exact": 0,
+        "first": 0,
+        "inherited": 0,
+    }
     for activity in plan.network.activities:
         stored = activities[activity.uid].source_observations
-        if stored is None or stored.start is None:
+        if (
+            stored is None
+            or stored.early_start is None
+            or stored.early_finish is None
+        ):
             continue
+        row = times[activity.uid]
         counts["compared"] += 1
+        counts["early_start"] += (
+            plan.to_datetime(row.early_start) == stored.early_start
+        )
+        counts["early_finish"] += (
+            plan.to_datetime(row.early_finish) == stored.early_finish
+        )
         if agrees(activity.uid):
             counts["exact"] += 1
         elif all(agrees(edge.predecessor_uid) for edge in predecessors[activity.uid]):
@@ -231,14 +253,10 @@ def _agreement(path: Path) -> dict:
         else:
             counts["inherited"] += 1
     counts["assumed"] = plan.assumed_by_code()
+    counts["excluded"] = plan.excluded_by_code()
     return counts
 
 
-@unittest.skipUnless(
-    ALL_PRESENT,
-    "the real schedules are not present (they stay outside the repository); "
-    "set STO_REQUIRE_BOILER=1 to make this a failure",
-)
 class StoredDateAgreementTests(unittest.TestCase):
     """How far the pass reproduces the dates Project stored, pinned (ADR-010).
 
@@ -247,11 +265,19 @@ class StoredDateAgreementTests(unittest.TestCase):
     regression and a rise is a history entry that has to be written.
     """
 
+    @unittest.skipUnless(FIXTURES["boiler_before"].is_file(), "BOILER baseline unavailable")
     def test_boiler(self):
         counts = _agreement(FIXTURES["boiler_before"])
         self.assertEqual(
-            {k: counts[k] for k in ("compared", "exact", "first", "inherited")},
-            {"compared": 451, "exact": 384, "first": 8, "inherited": 59},
+            {k: counts[k] for k in ("compared", "early_start", "early_finish", "exact", "first", "inherited")},
+            {
+                "compared": 451,
+                "early_start": 389,
+                "early_finish": 384,
+                "exact": 384,
+                "first": 8,
+                "inherited": 59,
+            },
         )
         self.assertEqual(
             counts["assumed"],
@@ -266,14 +292,38 @@ class StoredDateAgreementTests(unittest.TestCase):
             },
         )
 
+    @unittest.skipUnless(FIXTURES["kiln"].is_file(), "KILN unavailable")
     def test_kiln(self):
         counts = _agreement(FIXTURES["kiln"])
         # 416, not 417: the file's one manually scheduled leaf is excluded
         # rather than scheduled as if it were automatic (C1). It was one of
         # the rows with a mismatching predecessor, so that count drops with it.
         self.assertEqual(
-            {k: counts[k] for k in ("compared", "exact", "first", "inherited")},
-            {"compared": 416, "exact": 247, "first": 6, "inherited": 163},
+            {k: counts[k] for k in ("compared", "early_start", "early_finish", "exact", "first", "inherited")},
+            {
+                "compared": 416,
+                "early_start": 249,
+                "early_finish": 247,
+                "exact": 247,
+                "first": 6,
+                "inherited": 163,
+            },
+        )
+        self.assertEqual(
+            counts["excluded"],
+            {
+                "ACTIVITY_INACTIVE": 11,
+                "ACTIVITY_MANUALLY_SCHEDULED": 1,
+                "RELATIONSHIP_ENDPOINT_NOT_SCHEDULED": 20,
+            },
+        )
+        self.assertEqual(
+            counts["assumed"],
+            {
+                "ACTIVITY_RESOURCE_CALENDARS_UNITED": 133,
+                "ACTIVITY_SUCCESSOR_OF_INACTIVE": 6,
+                "RELATIONSHIP_LAG_ON_PROJECT_CALENDAR": 14,
+            },
         )
 
     def test_no_real_row_rests_on_the_unmeasured_start_fallback(self):
@@ -287,7 +337,10 @@ class StoredDateAgreementTests(unittest.TestCase):
         the horizon cannot move one.
         """
 
-        for name in FIXTURES:
+        available = {name: path for name, path in FIXTURES.items() if path.is_file()}
+        if not available:
+            self.skipTest("no real schedule fixture is available")
+        for name in available:
             with self.subTest(name):
                 schedule, _, _ = migrate(import_mspdi(str(FIXTURES[name])))
                 start = schedule.project.start or datetime(2026, 8, 1)
@@ -297,13 +350,34 @@ class StoredDateAgreementTests(unittest.TestCase):
                 result = forward_pass(plan.network, snap_milestones=plan.snap_milestones)
                 self.assertEqual(result.unbounded_starts, ())
 
+    @unittest.skipUnless(FIXTURES["calciner"].is_file(), "CALCINER unavailable")
     def test_calciner(self):
         counts = _agreement(FIXTURES["calciner"])
         self.assertEqual(
-            {k: counts[k] for k in ("compared", "exact", "first", "inherited")},
-            {"compared": 1763, "exact": 1645, "first": 6, "inherited": 112},
+            {k: counts[k] for k in ("compared", "early_start", "early_finish", "exact", "first", "inherited")},
+            {
+                "compared": 1763,
+                "early_start": 1647,
+                "early_finish": 1645,
+                "exact": 1645,
+                "first": 6,
+                "inherited": 112,
+            },
+        )
+        self.assertEqual(
+            counts["excluded"],
+            {"RELATIONSHIP_ENDPOINT_NOT_SCHEDULED": 2},
+        )
+        self.assertEqual(
+            counts["assumed"],
+            {
+                "ACTIVITY_RESOURCE_CALENDARS_UNITED": 956,
+                "ACTIVITY_DURATION_ELAPSED": 2,
+                "RELATIONSHIP_LAG_ON_PROJECT_CALENDAR": 41,
+            },
         )
 
+    @unittest.skipUnless(FIXTURES["boiler_before"].is_file(), "BOILER baseline unavailable")
     def test_the_calendar_rule_is_what_moved_boiler(self):
         """Off, the pass agrees with Project on one BOILER activity -- as it did
         when the forward-pass slice shipped -- so the rule is measurable from
@@ -320,8 +394,10 @@ class StoredDateAgreementTests(unittest.TestCase):
             exact[apply] = sum(
                 1
                 for uid, row in times.items()
-                if plan.to_datetime(row.early_start) == activities[uid].source_observations.start
-                and plan.to_datetime(row.early_finish) == activities[uid].source_observations.finish
+                if plan.to_datetime(row.early_start)
+                == activities[uid].source_observations.early_start
+                and plan.to_datetime(row.early_finish)
+                == activities[uid].source_observations.early_finish
             )
         self.assertLess(exact[False], 60)
         self.assertEqual(exact[True], 384)

@@ -5,7 +5,7 @@ customer files and stay outside this repository by policy; the synthetic
 fixtures below carry the same assertions so CI still proves the behaviour.
 
 Two gate criteria cite this file, and a skipped case shows green. Set
-``STO_REQUIRE_BOILER=1`` and their absence becomes a failure instead --
+``STO_REQUIRE_DAY5=1`` and the pair's absence becomes a failure instead --
 `docs/goals/roadmap.json` records that dependence against those criteria, and
 `sto roadmap gate` prints it, so crossing a gate on evidence that never ran
 takes a deliberate act rather than an oversight.
@@ -19,6 +19,8 @@ import tempfile
 import unittest
 from datetime import datetime
 from pathlib import Path
+
+from tests.real_fixture_guard import verify_available
 
 from sto.core.hashing import CanonicalHashError, canonical_json_bytes, canonical_sha256
 from sto.core.model import decode_schedule, encode_schedule
@@ -49,15 +51,22 @@ BOILER_DAY5 = Path(os.environ.get("STO_BOILER_DAY5", "/home/dez/BOILER-WG110-day
 BOILER_UNTOUCHED = Path(
     os.environ.get("STO_BOILER_UNTOUCHED", "/home/dez/sto-fixtures/boiler-untouched-source.xml")
 )
+verify_available(
+    {
+        "boiler_before": BOILER_BEFORE,
+        "day5": BOILER_DAY5,
+        "boiler_untouched": BOILER_UNTOUCHED,
+    }
+)
 
-#: Named in the roadmap against every criterion whose evidence is these cases.
-REQUIRE_BOILER = os.environ.get("STO_REQUIRE_BOILER") == "1"
+#: Named in the roadmap against every criterion whose evidence is this pair.
+REQUIRE_DAY5 = os.environ.get("STO_REQUIRE_DAY5") == "1"
 _BOILER_PRESENT = BOILER_BEFORE.is_file() and BOILER_DAY5.is_file()
 
-if REQUIRE_BOILER and not _BOILER_PRESENT:
+if REQUIRE_DAY5 and not _BOILER_PRESENT:
     missing = [str(p) for p in (BOILER_BEFORE, BOILER_DAY5) if not p.is_file()]
     raise RuntimeError(
-        "STO_REQUIRE_BOILER=1 but the real schedules are not here: "
+        "STO_REQUIRE_DAY5=1 but the BOILER snapshot pair is not here: "
         + ", ".join(missing)
         + ". Point STO_BOILER_BEFORE and STO_BOILER_DAY5 at them; "
         "fixtures/README.md records every hash and how to recover them."
@@ -242,9 +251,8 @@ class MigrationTests(unittest.TestCase):
 
 
 @unittest.skipUnless(
-    _BOILER_PRESENT,
-    "real BOILER schedules not present (they stay outside the repository); "
-    "set STO_REQUIRE_BOILER=1 to make this a failure",
+    BOILER_BEFORE.is_file(),
+    "real BOILER baseline not present (it stays outside the repository)",
 )
 class BoilerSnapshotTests(unittest.TestCase):
     """The file oracle's first rung: a real 3.4 MB shutdown schedule."""
@@ -252,7 +260,9 @@ class BoilerSnapshotTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.before_document = import_mspdi(str(BOILER_BEFORE))
-        cls.day5_document = import_mspdi(str(BOILER_DAY5))
+        cls.day5_document = (
+            import_mspdi(str(BOILER_DAY5)) if BOILER_DAY5.is_file() else None
+        )
 
     def test_migration_round_trips_a_real_schedule(self):
         schedule, _, _ = migrate(self.before_document)
@@ -266,6 +276,7 @@ class BoilerSnapshotTests(unittest.TestCase):
             canonical_sha256(encode_schedule(second)),
         )
 
+    @unittest.skipUnless(_BOILER_PRESENT, "exact day-5 BOILER snapshot unavailable")
     def test_the_site_work_order_convention_survives_migration(self):
         """``Text4``/``Text5`` are aliased Work Order No. and Operation No.
 
@@ -281,10 +292,12 @@ class BoilerSnapshotTests(unittest.TestCase):
         ]
         self.assertTrue(linked, "no activity carried the work-order convention")
 
+    @unittest.skipUnless(_BOILER_PRESENT, "exact day-5 BOILER snapshot unavailable")
     def test_the_project_build_is_captured_for_the_evidence_register(self):
         schedule, _, _ = migrate(self.day5_document)
         self.assertRegex(schedule.snapshots[0].application_version or "", r"^16\.0\.")
 
+    @unittest.skipUnless(_BOILER_PRESENT, "exact day-5 BOILER snapshot unavailable")
     def test_a_later_snapshot_keeps_the_identifiers_of_surviving_rows(self):
         before, identity, _ = migrate(self.before_document)
         day5, _, report = migrate(
@@ -309,6 +322,7 @@ class BoilerSnapshotTests(unittest.TestCase):
         matched = sum(1 for entry in activity_entries if str(entry.outcome) == "matched")
         self.assertEqual(matched, len(shared))
 
+    @unittest.skipUnless(_BOILER_PRESENT, "exact day-5 BOILER snapshot unavailable")
     def test_every_new_or_missing_row_is_a_real_source_difference(self):
         """Reconciliation must report churn, never manufacture it.
 
@@ -361,6 +375,7 @@ class BoilerSnapshotTests(unittest.TestCase):
                         "in the later document: identity failed to match it",
                     )
 
+    @unittest.skipUnless(_BOILER_PRESENT, "exact day-5 BOILER snapshot unavailable")
     def test_every_matched_activity_changed_guid_between_the_snapshots(self):
         """Measured, not assumed: GUID is not a durable key for this source.
 
@@ -395,6 +410,7 @@ class BoilerSnapshotTests(unittest.TestCase):
         self.assertEqual(report.guid_changed, 0)
         self.assertEqual(report.new + report.missing + report.rekeyed, 0)
 
+    @unittest.skipUnless(_BOILER_PRESENT, "exact day-5 BOILER snapshot unavailable")
     def test_the_reconciliation_counts_are_pinned(self):
         """Pinned so a change in identity moves a number somebody re-reads.
 
@@ -417,6 +433,7 @@ class BoilerSnapshotTests(unittest.TestCase):
         self.assertEqual(counts(EntityKind.ACTIVITY), (447, 18, 13))
         self.assertEqual(counts(EntityKind.ASSIGNMENT), (341, 136, 131))
 
+    @unittest.skipUnless(_BOILER_PRESENT, "exact day-5 BOILER snapshot unavailable")
     def test_rows_dropped_between_snapshots_are_reported_not_lost(self):
         before, identity, _ = migrate(self.before_document)
         _, _, report = migrate(

@@ -27,6 +27,8 @@ from collections import Counter
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from tests.real_fixture_guard import verify_available
+
 from sto.core.engine import (
     backward_pass,
     build_plan,
@@ -68,12 +70,33 @@ NATIVE = {
         )
     ),
 }
+verify_available(FIXTURES)
+verify_available(NATIVE)
+if os.environ.get("STO_REQUIRE_NATIVE") == "1":
+    absent = sorted(name for name, path in NATIVE.items() if not path.is_file())
+    if absent:
+        raise RuntimeError(
+            f"STO_REQUIRE_NATIVE=1 but these native fixtures are not here: {absent}"
+        )
+if os.environ.get("STO_REQUIRE_DAY5") == "1" and not FIXTURES["day5"].is_file():
+    raise RuntimeError(
+        "STO_REQUIRE_DAY5=1 but the day-5 fixture is not here: "
+        f"{FIXTURES['day5']}"
+    )
 if os.environ.get("STO_REQUIRE_BOILER") == "1":
-    absent = sorted(name for name, path in FIXTURES.items() if not path.is_file())
-    absent += sorted(name for name, path in NATIVE.items() if not path.is_file())
+    absent = sorted(
+        name for name, path in FIXTURES.items()
+        if name != "day5" and not path.is_file()
+    )
     if absent:
         raise RuntimeError(f"STO_REQUIRE_BOILER=1 but these are not here: {absent}")
-ALL_PRESENT = all(path.is_file() for path in FIXTURES.values())
+
+
+def _available(fixtures):
+    available = {name: path for name, path in fixtures.items() if path.is_file()}
+    if not available:
+        raise unittest.SkipTest("no fixture in this evidence cohort is available")
+    return available
 
 
 def _validated(path: Path):
@@ -92,14 +115,9 @@ def _validated(path: Path):
     return validate_result(plan.network, forward, backward, floats)
 
 
-@unittest.skipUnless(
-    ALL_PRESENT,
-    "the real schedules are not present (they stay outside the repository); "
-    "set STO_REQUIRE_BOILER=1 to make this a failure",
-)
 class TheRealFilesValidateTests(unittest.TestCase):
     def test_every_real_schedule_reports_nothing(self):
-        for name, path in FIXTURES.items():
+        for name, path in _available(FIXTURES).items():
             with self.subTest(name):
                 violations = _validated(path)
                 self.assertEqual(
@@ -108,10 +126,6 @@ class TheRealFilesValidateTests(unittest.TestCase):
                     f"{name}: {dict(Counter(row.code for row in violations))}",
                 )
 
-    @unittest.skipUnless(
-        all(path.is_file() for path in NATIVE.values()),
-        "the natively recalculated files are not present",
-    )
     def test_the_natively_recalculated_files_too(self):
         """The files whose progress Project resolved rather than tooling.
 
@@ -121,7 +135,7 @@ class TheRealFilesValidateTests(unittest.TestCase):
         worth asking of.
         """
 
-        for name, path in NATIVE.items():
+        for name, path in _available(NATIVE).items():
             with self.subTest(name):
                 violations = _validated(path)
                 self.assertEqual(

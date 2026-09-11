@@ -22,6 +22,8 @@ import unittest
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from tests.real_fixture_guard import verify_available
+
 from sto.core.engine import build_plan, forward_pass, roll_up
 from sto.core.model.migrate.sto_v011 import migrate
 from sto.legacy import import_mspdi
@@ -35,11 +37,18 @@ FIXTURES = {
         os.environ.get("STO_CALCINER", "/home/dez/sto-fixtures/calciner-wg050-source.xml")
     ),
 }
+verify_available(FIXTURES)
 if os.environ.get("STO_REQUIRE_BOILER") == "1":
     absent = sorted(name for name, path in FIXTURES.items() if not path.is_file())
     if absent:
         raise RuntimeError(f"STO_REQUIRE_BOILER=1 but these are not here: {absent}")
-ALL_PRESENT = all(path.is_file() for path in FIXTURES.values())
+
+
+def _available():
+    available = {name: path for name, path in FIXTURES.items() if path.is_file()}
+    if not available:
+        raise unittest.SkipTest("no real schedule fixture is available")
+    return available
 
 #: Summaries whose span the rollup reproduces exactly, per file, and the
 #: summaries it does not. Pinned so that closing the forward pass's residue
@@ -64,21 +73,16 @@ def _rolled(path: Path):
     return schedule, plan, times, rollup
 
 
-@unittest.skipUnless(
-    ALL_PRESENT,
-    "the real schedules are not present (they stay outside the repository); "
-    "set STO_REQUIRE_BOILER=1 to make this a failure",
-)
 class RollupAgreementTests(unittest.TestCase):
     def test_every_summary_is_answered_or_named_empty(self):
-        for name, path in FIXTURES.items():
+        for name, path in _available().items():
             with self.subTest(name):
                 _, plan, _, rollup = _rolled(path)
                 answered = {row.uid for row in rollup.spans} | set(rollup.empty)
                 self.assertEqual(answered, set(plan.wbs_children))
 
     def test_the_counts_are_what_they_are(self):
-        for name, path in FIXTURES.items():
+        for name, path in _available().items():
             with self.subTest(name):
                 schedule, plan, _, rollup = _rolled(path)
                 observations = {node.uid: node.source_observations for node in schedule.wbs_nodes}
@@ -108,7 +112,7 @@ class RollupAgreementTests(unittest.TestCase):
         does, on any file here.
         """
 
-        for name, path in FIXTURES.items():
+        for name, path in _available().items():
             with self.subTest(name):
                 schedule, plan, times, rollup = _rolled(path)
                 activities = {a.uid: a for a in schedule.activities}

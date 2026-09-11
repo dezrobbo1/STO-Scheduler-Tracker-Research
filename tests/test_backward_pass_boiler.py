@@ -34,8 +34,11 @@ from __future__ import annotations
 
 import os
 import unittest
+from dataclasses import replace
 from datetime import datetime, timedelta
 from pathlib import Path
+
+from tests.real_fixture_guard import verify_available
 
 from sto.core.calendar.arithmetic import working_between
 from sto.core.engine import (
@@ -46,7 +49,6 @@ from sto.core.engine import (
     span_float,
 )
 from sto.core.engine.criticality import signed_working
-from sto.core.engine.network import shift_lag
 from sto.core.model.migrate.sto_v011 import migrate
 from sto.legacy import import_mspdi
 
@@ -61,13 +63,13 @@ FIXTURES = {
         os.environ.get("STO_CALCINER", "/home/dez/sto-fixtures/calciner-wg050-source.xml")
     ),
 }
+verify_available(FIXTURES)
 REQUIRE_BOILER = os.environ.get("STO_REQUIRE_BOILER") == "1"
 if REQUIRE_BOILER:
     absent = sorted(name for name, path in FIXTURES.items() if not path.is_file())
     if absent:
         raise RuntimeError(f"STO_REQUIRE_BOILER=1 but these are not here: {absent}")
 
-PRESENT = all(path.is_file() for path in FIXTURES.values())
 SKIP_REASON = (
     "the real schedules are not present (they stay outside the repository); "
     "set STO_REQUIRE_BOILER=1 to make this a failure"
@@ -145,50 +147,57 @@ class _Loaded:
         return counts
 
     def stored_free_float_agreement(self) -> dict[str, int]:
-        """How often our free-float rule reproduces the ``FreeSlack`` in the file."""
+        """Run the production float rule over Project's stored four dates.
 
-        outgoing = self.network.successors()
-        early = {}
-        for uid in self.calendars:
-            coordinates = self.stored(uid)
-            if coordinates is not None:
-                early[uid] = (coordinates[0], coordinates[1])
-        project_finish = max((finish for _, finish in early.values()), default=0)
+        Reimplementing the rule here left this evidence on the pre-C2
+        shift-then-measure algorithm after production moved to bounded lag
+        inversion. Replacing only the pass coordinates makes the comparison
+        call :func:`float_analysis` itself while keeping the file's dates as
+        the oracle.
+        """
 
-        counts = {"agreed": 0, "compared": 0}
-        for uid, calendar in self.calendars.items():
-            row = self.observations.get(uid)
-            if row is None or row.free_float_seconds is None or uid not in early:
-                continue
-            edges = [r for r in outgoing[uid] if r.successor_uid in early]
-            counts["compared"] += 1
-            if not edges:
-                ours = signed_working(calendar, early[uid][1], project_finish)
-            else:
-                slacks = []
-                for relationship in edges:
-                    anchor = (
-                        early[uid][1]
-                        if relationship.anchors_predecessor_finish
-                        else early[uid][0]
-                    )
-                    lag_calendar = (
-                        relationship.lag_calendar
-                        if relationship.lag_calendar is not None
-                        else self.calendars[relationship.successor_uid]
-                    )
-                    required = shift_lag(lag_calendar, anchor, relationship.lag)
-                    successor = early[relationship.successor_uid]
-                    available = (
-                        successor[0] if relationship.bounds_successor_start else successor[1]
-                    )
-                    slacks.append(signed_working(calendar, required, available))
-                ours = min(slacks)
-            counts["agreed"] += ours == row.free_float_seconds
-        return counts
+        early = tuple(
+            replace(row, early_start=stored[0], early_finish=stored[1])
+            for row in self.forward.times
+            if (stored := self.stored(row.uid)) is not None
+        )
+        late = tuple(
+            replace(row, late_start=stored[2], late_finish=stored[3])
+            for row in self.backward.times
+            if (stored := self.stored(row.uid)) is not None
+        )
+        stored_forward = replace(
+            self.forward,
+            times=early,
+            project_start=min(row.early_start for row in early),
+            project_finish=max(row.early_finish for row in early),
+        )
+        stored_backward = replace(
+            self.backward,
+            times=late,
+            project_late_finish=max(row.late_finish for row in late),
+        )
+        production = float_analysis(
+            self.network,
+            stored_forward,
+            stored_backward,
+            threshold=self.plan.critical_float_threshold,
+        )
+        compared = [
+            row
+            for row in production.rows
+            if self.observations[row.uid].free_float_seconds is not None
+        ]
+        return {
+            "agreed": sum(
+                row.free_float == self.observations[row.uid].free_float_seconds
+                for row in compared
+            ),
+            "compared": len(compared),
+        }
 
 
-@unittest.skipUnless(PRESENT, SKIP_REASON)
+@unittest.skipUnless(FIXTURES["boiler_before"].is_file(), SKIP_REASON)
 class BackwardPassRunsTests(unittest.TestCase):
     """Properties that hold whatever the dates turn out to be."""
 
@@ -261,7 +270,6 @@ class BackwardPassRunsTests(unittest.TestCase):
         self.assertEqual(self.boiler.floats.negative_float_activities(), ())
 
 
-@unittest.skipUnless(PRESENT, SKIP_REASON)
 class FloatRuleTests(unittest.TestCase):
     """Which reading of a float the real files support, measured on their own dates.
 
@@ -272,58 +280,79 @@ class FloatRuleTests(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls) -> None:
-        cls.boiler = _Loaded(FIXTURES["boiler_before"])
-        cls.kiln = _Loaded(FIXTURES["kiln"])
-        cls.calciner = _Loaded(FIXTURES["calciner"])
+        cls.loaded = {
+            name: _Loaded(path) for name, path in FIXTURES.items() if path.is_file()
+        }
+        if not cls.loaded:
+            raise unittest.SkipTest("no real schedule fixture is available")
 
+    @unittest.skipUnless(FIXTURES["boiler_before"].is_file(), "BOILER baseline unavailable")
     def test_the_working_time_reading_beats_the_elapsed_one_by_an_order_of_magnitude(self):
-        counts = self.boiler.stored_total_float_agreement()
+        counts = self.loaded["boiler_before"].stored_total_float_agreement()
         self.assertEqual(counts["compared"], 451)
         self.assertEqual(counts["elapsed"], 20)
         self.assertEqual(counts["working_start"], 316)
         self.assertEqual(counts["working_finish"], 361)
 
-    def test_the_smaller_of_the_two_working_floats_is_the_rule_project_uses(self):
+    @unittest.skipUnless(FIXTURES["boiler_before"].is_file(), "BOILER baseline unavailable")
+    def test_the_smaller_of_the_two_working_floats_is_the_rule_for_boiler(self):
         """Neither component alone reproduces the file; the minimum of them does."""
 
-        self.assertEqual(self.boiler.stored_total_float_agreement()["working_min"], 449)
-        kiln = self.kiln.stored_total_float_agreement()
+        self.assertEqual(
+            self.loaded["boiler_before"].stored_total_float_agreement()["working_min"], 449
+        )
+
+    @unittest.skipUnless(FIXTURES["kiln"].is_file(), "KILN unavailable")
+    def test_the_smaller_of_the_two_working_floats_is_the_rule_for_kiln(self):
+        kiln = self.loaded["kiln"].stored_total_float_agreement()
         # 416 of 416 since C1: the rule still explains every row it is asked
         # about, and KILN's manually scheduled leaf is no longer one of them.
         self.assertEqual((kiln["working_min"], kiln["compared"]), (416, 416))
-        calciner = self.calciner.stored_total_float_agreement()
+    @unittest.skipUnless(FIXTURES["calciner"].is_file(), "CALCINER unavailable")
+    def test_the_smaller_of_the_two_working_floats_is_the_rule_for_calciner(self):
+        calciner = self.loaded["calciner"].stored_total_float_agreement()
         self.assertEqual((calciner["working_min"], calciner["compared"]), (1763, 1763))
 
+    @unittest.skipUnless(FIXTURES["boiler_before"].is_file(), "BOILER baseline unavailable")
     def test_the_two_rows_the_rule_does_not_explain_are_counted_not_hidden(self):
-        counts = self.boiler.stored_total_float_agreement()
+        counts = self.loaded["boiler_before"].stored_total_float_agreement()
         self.assertEqual(counts["compared"] - counts["working_min"], 2)
 
     def test_our_free_float_rule_reproduces_the_stored_free_slack(self):
-        boiler = self.boiler.stored_free_float_agreement()
-        self.assertEqual((boiler["agreed"], boiler["compared"]), (448, 451))
-        kiln = self.kiln.stored_free_float_agreement()
-        self.assertEqual((kiln["agreed"], kiln["compared"]), (407, 416))
-        calciner = self.calciner.stored_free_float_agreement()
-        self.assertEqual((calciner["agreed"], calciner["compared"]), (1730, 1763))
+        expected = {
+            "boiler_before": (448, 451),
+            "kiln": (408, 416),
+            "calciner": (1732, 1763),
+        }
+        for name, loaded in self.loaded.items():
+            with self.subTest(name):
+                counts = loaded.stored_free_float_agreement()
+                self.assertEqual((counts["agreed"], counts["compared"]), expected[name])
 
 
-@unittest.skipUnless(PRESENT, SKIP_REASON)
 class CriticalityRuleTests(unittest.TestCase):
     """``total float <= threshold``, and the threshold the file itself declares."""
 
     @classmethod
     def setUpClass(cls) -> None:
-        cls.boiler = _Loaded(FIXTURES["boiler_before"])
-        cls.calciner = _Loaded(FIXTURES["calciner"])
+        cls.loaded = {
+            name: _Loaded(path)
+            for name, path in FIXTURES.items()
+            if name in {"boiler_before", "calciner"} and path.is_file()
+        }
+        if not cls.loaded:
+            raise unittest.SkipTest("no criticality fixture is available")
 
+    @unittest.skipUnless(FIXTURES["boiler_before"].is_file(), "BOILER baseline unavailable")
     def test_the_threshold_rule_reproduces_the_flag_the_file_stored(self):
         """From the file's own slack, so this is the rule and not our dates."""
 
-        threshold = self.boiler.plan.critical_float_threshold
+        boiler = self.loaded["boiler_before"]
+        threshold = boiler.plan.critical_float_threshold
         self.assertEqual(threshold, 0)
         rows = [
             row
-            for row in self.boiler.observations.values()
+            for row in boiler.observations.values()
             if row.critical is not None and row.total_float_seconds is not None
         ]
         self.assertEqual(len(rows), 451)
@@ -332,6 +361,7 @@ class CriticalityRuleTests(unittest.TestCase):
         ]
         self.assertEqual(disagreed, [], "the criticality rule is not the file's")
 
+    @unittest.skipUnless(FIXTURES["calciner"].is_file(), "CALCINER unavailable")
     def test_a_declared_critical_slack_limit_is_days_of_the_project_working_day(self):
         """CALCINER is the one file in the estate that sets a non-zero limit.
 
@@ -341,13 +371,14 @@ class CriticalityRuleTests(unittest.TestCase):
         threshold tightly enough to exclude both.
         """
 
-        threshold = self.calciner.plan.critical_float_threshold
+        calciner = self.loaded["calciner"]
+        threshold = calciner.plan.critical_float_threshold
         self.assertEqual(threshold, 172800)
-        self.assertEqual(self.calciner.schedule.project.minutes_per_day, 480)
+        self.assertEqual(calciner.schedule.project.minutes_per_day, 480)
 
         rows = [
             row
-            for row in self.calciner.observations.values()
+            for row in calciner.observations.values()
             if row.critical is not None and row.total_float_seconds is not None
         ]
         for name, candidate in (("declared", threshold), ("ignored", 0), ("calendar", 518400)):
@@ -365,7 +396,6 @@ class CriticalityRuleTests(unittest.TestCase):
         self.assertGreater(min(ordinary), threshold)
 
 
-@unittest.skipUnless(PRESENT, SKIP_REASON)
 class NotClaimedTests(unittest.TestCase):
     """What the engine does and does not reproduce, pinned so it cannot drift.
 
@@ -376,26 +406,30 @@ class NotClaimedTests(unittest.TestCase):
     was diagnosed (ADR-010) and are the numbers below since.
     """
 
-    @classmethod
-    def setUpClass(cls) -> None:
-        cls.boiler = _Loaded(FIXTURES["boiler_before"])
-
+    @unittest.skipUnless(FIXTURES["boiler_before"].is_file(), "BOILER baseline unavailable")
     def test_our_late_dates_do_not_reproduce_the_ones_project_stored(self):
-        late = self.boiler.backward.by_uid()
-        exact = 0
+        boiler = _Loaded(FIXTURES["boiler_before"])
+        late = boiler.backward.by_uid()
+        late_start = late_finish = exact = 0
         compared = 0
-        for uid, row in self.boiler.observations.items():
+        for uid, row in boiler.observations.items():
             if row.late_start is None or row.late_finish is None:
                 continue
             compared += 1
+            late_start += boiler.plan.to_datetime(late[uid].late_start) == row.late_start
+            late_finish += boiler.plan.to_datetime(late[uid].late_finish) == row.late_finish
             if (
-                self.boiler.plan.to_datetime(late[uid].late_start) == row.late_start
-                and self.boiler.plan.to_datetime(late[uid].late_finish) == row.late_finish
+                boiler.plan.to_datetime(late[uid].late_start) == row.late_start
+                and boiler.plan.to_datetime(late[uid].late_finish) == row.late_finish
             ):
                 exact += 1
-        self.assertEqual(compared, 451)
-        self.assertEqual(exact, 409, "the forward pass's remaining difference has moved")
+        self.assertEqual(
+            (compared, late_start, late_finish, exact),
+            (451, 409, 418, 409),
+            "the forward pass's remaining difference has moved",
+        )
 
+    @unittest.skipUnless(FIXTURES["boiler_before"].is_file(), "BOILER baseline unavailable")
     def test_our_own_float_agrees_with_the_file_on_a_minority_of_rows(self):
         """A local quantity survives a global misplacement better than a date does.
 
@@ -406,17 +440,20 @@ class NotClaimedTests(unittest.TestCase):
         remaining difference, which is why both are recorded.
         """
 
-        ours = self.boiler.floats.by_uid()
-        total = free = compared = 0
-        for uid, row in self.boiler.observations.items():
+        boiler = _Loaded(FIXTURES["boiler_before"])
+        ours = boiler.floats.by_uid()
+        total = free = critical = compared = 0
+        for uid, row in boiler.observations.items():
             if row.total_float_seconds is None or row.free_float_seconds is None:
                 continue
             compared += 1
             total += ours[uid].total_float == row.total_float_seconds
             free += ours[uid].free_float == row.free_float_seconds
+            critical += ours[uid].critical == row.critical
         self.assertEqual(compared, 451)
         self.assertEqual(total, 380)
         self.assertEqual(free, 435)
+        self.assertEqual(critical, 449)
 
     def test_the_other_two_files_are_pinned_at_what_they_are(self):
         """KILN and CALCINER, late dates and floats, so ADR-010's table is a pin.
@@ -432,22 +469,25 @@ class NotClaimedTests(unittest.TestCase):
             # KILN's free float rose by one and CALCINER's by six when C2
             # inverted the lag rather than shifting it: both counts are our
             # own float against the file's stored FreeSlack.
-            "kiln": (416, 0, 4, 305),
+            "kiln": (416, 0, 0, 0, 4, 305, 397),
             # Four SS predecessors previously counted the exclusive end of a
             # working interval as a movable start. C2 now pulls that inverse
             # back to the latest valid start coordinate, so those four
             # one-second boundary overstatements no longer match the stored
             # whole-unit free slack.
-            "calciner": (1763, 1572, 1488, 1691),
+            "calciner": (1763, 1572, 1577, 1572, 1488, 1691, 1763),
         }
-        for name, (compared_expected, late_expected, total_expected, free_expected) in (
-            expected.items()
-        ):
+        available = {
+            name: values for name, values in expected.items() if FIXTURES[name].is_file()
+        }
+        if not available:
+            self.skipTest("KILN and CALCINER are unavailable")
+        for name, expected_counts in available.items():
             with self.subTest(name):
                 loaded = _Loaded(FIXTURES[name])
                 late = loaded.backward.by_uid()
                 ours = loaded.floats.by_uid()
-                compared = late_exact = total = free = 0
+                compared = late_start = late_finish = late_exact = total = free = critical = 0
                 for uid, row in loaded.observations.items():
                     if None in (
                         row.late_start,
@@ -457,15 +497,22 @@ class NotClaimedTests(unittest.TestCase):
                     ):
                         continue
                     compared += 1
+                    late_start += (
+                        loaded.plan.to_datetime(late[uid].late_start) == row.late_start
+                    )
+                    late_finish += (
+                        loaded.plan.to_datetime(late[uid].late_finish) == row.late_finish
+                    )
                     late_exact += (
                         loaded.plan.to_datetime(late[uid].late_start) == row.late_start
                         and loaded.plan.to_datetime(late[uid].late_finish) == row.late_finish
                     )
                     total += ours[uid].total_float == row.total_float_seconds
                     free += ours[uid].free_float == row.free_float_seconds
+                    critical += ours[uid].critical == row.critical
                 self.assertEqual(
-                    (compared, late_exact, total, free),
-                    (compared_expected, late_expected, total_expected, free_expected),
+                    (compared, late_start, late_finish, late_exact, total, free, critical),
+                    expected_counts,
                 )
 
 

@@ -152,7 +152,7 @@ class EvidenceExecutionTests(unittest.TestCase):
         env.update(
             {
                 "PYTHONPATH": str(REPO_ROOT / "src"),
-                "STO_REQUIRE_BOILER": "1",
+                "STO_REQUIRE_DAY5": "1",
                 "STO_BOILER_BEFORE": str(REPO_ROOT / "nope" / "absent-before.xml"),
                 "STO_BOILER_DAY5": str(REPO_ROOT / "nope" / "absent-day5.xml"),
             }
@@ -166,8 +166,105 @@ class EvidenceExecutionTests(unittest.TestCase):
             timeout=120,
         )
         self.assertNotEqual(result.returncode, 0, "absence was tolerated")
-        self.assertIn("STO_REQUIRE_BOILER=1 but", result.stderr)
+        self.assertIn("STO_REQUIRE_DAY5=1 but", result.stderr)
         self.assertIn("absent-before.xml", result.stderr)
+
+    def test_the_validator_honours_the_day5_switch_too(self):
+        """Each independently runnable evidence module must fail when required."""
+
+        import os
+        import subprocess
+        import sys
+
+        missing = REPO_ROOT / "nope" / "absent-validator-day5.xml"
+        env = dict(os.environ)
+        env.update(
+            {
+                "PYTHONPATH": str(REPO_ROOT / "src"),
+                "STO_REQUIRE_DAY5": "1",
+                "STO_BOILER_DAY5": str(missing),
+            }
+        )
+        result = subprocess.run(
+            [sys.executable, "-m", "unittest", "tests.test_validator_boiler"],
+            cwd=REPO_ROOT,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        self.assertNotEqual(result.returncode, 0, "validator absence was tolerated")
+        self.assertIn("STO_REQUIRE_DAY5=1 but", result.stderr)
+        self.assertIn(missing.name, result.stderr)
+
+    def test_every_day5_evidence_module_honours_the_required_switch(self):
+        """Focused cohorts must not borrow another module's import-time guard."""
+
+        import os
+        import subprocess
+        import sys
+
+        missing = REPO_ROOT / "nope" / "absent-focused-day5.xml"
+        env = dict(os.environ)
+        env.update(
+            {
+                "PYTHONPATH": str(REPO_ROOT / "src"),
+                "STO_REQUIRE_DAY5": "1",
+                "STO_BOILER_DAY5": str(missing),
+            }
+        )
+        for filename in (
+            "test_disposition_partition.py",
+            "test_persistence_gate.py",
+        ):
+            with self.subTest(filename):
+                result = subprocess.run(
+                    [
+                        sys.executable,
+                        "-m",
+                        "unittest",
+                        "discover",
+                        "-s",
+                        "tests",
+                        "-p",
+                        filename,
+                    ],
+                    cwd=REPO_ROOT,
+                    env=env,
+                    capture_output=True,
+                    text=True,
+                    timeout=120,
+                )
+                self.assertNotEqual(result.returncode, 0, "absence was tolerated")
+                self.assertIn("STO_REQUIRE_DAY5=1 but", result.stderr)
+                self.assertIn(missing.name, result.stderr)
+
+        reverse = dict(env)
+        missing_before = REPO_ROOT / "nope" / "absent-focused-before.xml"
+        reverse["STO_BOILER_BEFORE"] = str(missing_before)
+        reverse["STO_BOILER_DAY5"] = str(
+            REPO_ROOT / "tests" / "fixtures" / "synthetic-basic.mspdi.xml"
+        )
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "unittest",
+                "discover",
+                "-s",
+                "tests",
+                "-p",
+                "test_persistence_gate.py",
+            ],
+            cwd=REPO_ROOT,
+            env=reverse,
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        self.assertNotEqual(result.returncode, 0, "missing before snapshot was tolerated")
+        self.assertIn("complete before/day-5 persistence pair", result.stderr)
+        self.assertIn(missing_before.name, result.stderr)
 
     def test_the_boiler_criteria_declare_that_they_do_not_always_run(self):
         """The specific case this machinery was built for.
