@@ -22,7 +22,7 @@ from __future__ import annotations
 import hashlib
 import os
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -54,6 +54,7 @@ from sto.core.hashing import canonical_sha256
 from sto.core.model import IdentityMap, ReconciliationReport, Schedule, decode_schedule
 from sto.core.model.codec import encode_schedule
 from sto.core.model.entities import SCHEMA_VERSION
+from sto.core.model.enums import ActivityKind
 from sto.core.model.ids import normalise_guid
 from sto.core.model.migrate.sto_v011 import MigrationError, migrate
 from sto.legacy import import_mspdi
@@ -61,6 +62,124 @@ from sto.persistence import repositories as repo
 
 PARSER_NAME = "sto.legacy.import_mspdi"
 PARSER_VERSION = "0.1.1"
+
+
+def _profiles(provenance: Provenance) -> dict[str, str]:
+    return {
+        "forward": provenance.forward_profile,
+        "backward": provenance.backward_profile,
+        "criticality": provenance.criticality_profile,
+        "rollup": provenance.rollup_profile,
+        "progress": provenance.progress_profile,
+        "result": provenance.result_profile,
+    }
+
+
+def _result_context(result: ScheduleResult) -> tuple[Any, ...]:
+    provenance = result.provenance
+    return (
+        provenance.epoch,
+        provenance.horizon_start,
+        provenance.horizon_finish,
+        provenance.progress_policy,
+        provenance.critical_float_threshold,
+        provenance.status_time,
+        provenance.status_time_outside_window,
+        provenance.resource_calendars_apply,
+        tuple(sorted(_profiles(provenance).items())),
+    )
+
+
+def _stored_context(row: dict[str, Any]) -> tuple[Any, ...]:
+    return (
+        row["epoch"],
+        row["horizon_start"],
+        row["horizon_finish"],
+        row["progress_policy"],
+        int(row["critical_float_threshold"]),
+        row["status_time"],
+        row["status_time_outside_window"],
+        row["resource_calendars_apply"],
+        tuple(sorted(row["profiles"].items())),
+    )
+
+
+def _projected_context(row: dict[str, Any]) -> tuple[Any, ...]:
+    return (
+        row["epoch"],
+        row["horizon_start"],
+        row["horizon_finish"],
+        row["progress_policy"],
+        row["critical_float_threshold"],
+        row["status_time"],
+        row["status_time_outside_window"],
+        row["resource_calendars_apply"],
+        tuple(sorted(row["profiles"].items())),
+    )
+
+
+def _relationship_context_codes(
+    schedule: Schedule,
+    edges: Iterable[tuple[uuid.UUID, str]],
+) -> dict[uuid.UUID, tuple[str, ...]]:
+    """Map every exceptional relationship result back to both endpoint rows.
+
+    ``ScheduleResult.relationships`` contains exactly the edges that were not
+    ordinary measured precedence: assumed, excluded, or released by progress.
+    PL14 changes a duration and then interprets both the edited row and the
+    downstream movement, so an exceptional edge incident to the selected row is
+    part of that scenario's scheduling context even when the activity row itself
+    carries no activity-level assumption.
+    """
+
+    relationships = {row.uid: row for row in schedule.relationships}
+    by_activity: dict[uuid.UUID, set[str]] = {}
+    for relationship_uid, code in edges:
+        relationship = relationships.get(relationship_uid)
+        if relationship is None:
+            raise IntegrityError(
+                f"calculation relationship {relationship_uid} is not present in its schedule"
+            )
+        for activity_uid in (
+            relationship.predecessor_uid,
+            relationship.successor_uid,
+        ):
+            by_activity.setdefault(activity_uid, set()).add(code)
+    return {
+        activity_uid: tuple(sorted(codes))
+        for activity_uid, codes in by_activity.items()
+    }
+
+
+def _with_relationship_context(
+    schedule: Schedule,
+    projected: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    """Expose exceptional edge context on the endpoint rows the planner shows."""
+
+    if projected is None:
+        return None
+    context = _relationship_context_codes(
+        schedule,
+        (
+            (edge["relationship_uid"], edge["code"])
+            for edge in projected["relationships"]
+        ),
+    )
+    if not context:
+        return projected
+    rows: list[dict[str, Any]] = []
+    for row in projected["activities"]:
+        extra = context.get(row["activity_uid"], ())
+        if not extra:
+            rows.append(row)
+            continue
+        updated = dict(row)
+        updated["assumptions"] = sorted(set((*row["assumptions"], *extra)))
+        rows.append(updated)
+    decorated = dict(projected)
+    decorated["activities"] = rows
+    return decorated
 
 
 class ImportRefused(ValueError):
@@ -92,6 +211,15 @@ class StaleSchedule(RuntimeError):
     """The project head changed while an operation was being prepared."""
 
 
+class ScenarioRejected(ValueError):
+    """A controlled refusal to create a planner scenario."""
+
+    def __init__(self, code: str, detail: str) -> None:
+        super().__init__(detail)
+        self.code = code
+        self.detail = detail
+
+
 @dataclass(frozen=True, slots=True)
 class WorkingSchedule:
     project_id: uuid.UUID
@@ -121,6 +249,30 @@ class CalculationResult:
     #: asking for the same one twice is not an error and does not make a second
     #: row; the caller is told which it got.
     already_stored: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class ScenarioResult:
+    project_id: uuid.UUID
+    baseline_version_id: uuid.UUID
+    scenario_version_id: uuid.UUID
+    sequence: int
+    canonical_hash: str
+    calculation_id: uuid.UUID
+    fingerprint: str
+    activity_uid: uuid.UUID
+    before_seconds: int
+    after_seconds: int
+
+
+@dataclass(frozen=True, slots=True)
+class ScenarioResetResult:
+    """The exact baseline and calculation made active by a reset."""
+
+    project_id: uuid.UUID
+    baseline_version_id: uuid.UUID
+    calculation_id: uuid.UUID | None
+    fingerprint: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -286,29 +438,15 @@ class Workspace:
 
     # --- calculating -----------------------------------------------------------
 
-    def calculate(
-        self,
-        project_id: uuid.UUID,
+    @staticmethod
+    def _calculate_working(
+        working: WorkingSchedule,
         *,
-        before: timedelta = timedelta(days=90),
-        after: timedelta = timedelta(days=365),
-    ) -> CalculationResult:
-        """Run the engine over a project's stored head and store the answer.
+        before: timedelta,
+        after: timedelta,
+    ) -> ScheduleResult:
+        """Run the one production engine over one verified immutable version."""
 
-        The horizon is the caller's, not the file's, so it is a parameter and
-        it is recorded on the row: the same document over a wider window is a
-        different calculation, and a stored result that did not say which
-        could not be read back a month later.
-
-        The document is re-read from PostgreSQL and its hash re-derived from
-        what came back, so a calculation is never computed over bytes that do
-        not hash to what they claim -- not even straight after the import that
-        put them there, whose in-memory copy the resident cache holds.
-        """
-
-        working = self.load(project_id, refresh=True)
-        if working is None:
-            raise NoSchedule(str(project_id))
         schedule = working.schedule
         start = schedule.project.start
         if start is None:
@@ -334,9 +472,12 @@ class Workspace:
         )
         rollup = roll_up(
             plan.wbs_children,
-            {uid: (row.early_start, row.early_finish) for uid, row in forward.by_uid().items()},
+            {
+                uid: (row.early_start, row.early_finish)
+                for uid, row in forward.by_uid().items()
+            },
         )
-        result = project_result(
+        return project_result(
             plan,
             forward,
             backward,
@@ -345,8 +486,35 @@ class Workspace:
             canonical_hash=working.canonical_hash,
             horizon=horizon,
         )
+
+    def calculate(
+        self,
+        project_id: uuid.UUID,
+        *,
+        before: timedelta = timedelta(days=90),
+        after: timedelta = timedelta(days=365),
+    ) -> CalculationResult:
+        """Run the engine over a project's stored head and store the answer.
+
+        The horizon is the caller's, not the file's, so it is a parameter and
+        it is recorded on the row: the same document over a wider window is a
+        different calculation, and a stored result that did not say which
+        could not be read back a month later.
+
+        The document is re-read from PostgreSQL and its hash re-derived from
+        what came back, so a calculation is never computed over bytes that do
+        not hash to what they claim -- not even straight after the import that
+        put them there, whose in-memory copy the resident cache holds.
+        """
+
+        working = self.load(project_id, refresh=True)
+        if working is None:
+            raise NoSchedule(str(project_id))
+        result = self._calculate_working(working, before=before, after=after)
         already_stored = False
         with self.connect() as conn:
+            if not repo.lock_project(conn, project_id):
+                raise UnknownProject(str(project_id))
             current_version = repo.lock_head_version_id(
                 conn, project_id=project_id, kind="baseline"
             )
@@ -373,6 +541,21 @@ class Workspace:
                 assert existing is not None
                 calculation_id = existing["id"]
                 already_stored = True
+            scenario_id = repo.lock_head_version_id(
+                conn, project_id=project_id, kind="scenario"
+            )
+            if scenario_id is not None:
+                scenario_calculation = repo.get_latest_calculation(
+                    conn, version_id=scenario_id
+                )
+                if (
+                    scenario_calculation is None
+                    or _stored_context(scenario_calculation) != _result_context(result)
+                ):
+                    # The scenario remains immutable history, but it can no
+                    # longer be displayed as a duration-only comparison with
+                    # this baseline calculation.
+                    repo.delete_head(conn, project_id=project_id, kind="scenario")
             conn.commit()
         if already_stored:
             # Reusing a stored calculation is serving it, so it goes through the
@@ -393,9 +576,336 @@ class Workspace:
             summaries=len(result.summaries) + len(result.empty_summaries),
         )
 
+    def create_duration_scenario(
+        self,
+        project_id: uuid.UUID,
+        *,
+        expected_version_id: uuid.UUID,
+        activity_uid: uuid.UUID,
+        planned_duration_seconds: int,
+        before: timedelta | None = None,
+        after: timedelta | None = None,
+    ) -> ScenarioResult:
+        """Derive, calculate and atomically publish one duration scenario.
+
+        The imported baseline document is never updated. A scenario is a
+        comparison with one exact stored baseline calculation, so it reuses
+        that calculation's window and engine/policy context rather than the
+        method's current defaults. Expensive engine work happens before the
+        transaction, then both the active version and the baseline calculation
+        are checked again under the project lock. A stale edit therefore stores
+        neither a version nor a calculation.
+        """
+
+        if planned_duration_seconds <= 0:
+            raise ScenarioRejected(
+                "DURATION_INVALID", "planned duration must be a positive number of seconds"
+            )
+
+        baseline = self.load(project_id, refresh=True)
+        if baseline is None:
+            raise NoSchedule(str(project_id))
+        baseline_calculation = self.read_calculation(project_id, kind="baseline")
+        if baseline_calculation is None:
+            raise ScenarioRejected(
+                "BASELINE_CALCULATION_REQUIRED",
+                "calculate the imported baseline before creating a scenario",
+            )
+
+        with self.connect() as conn:
+            scenario_head = repo.head_version(
+                conn, project_id=project_id, kind="scenario", with_document=False
+            )
+        active_version_id = (
+            scenario_head["id"] if scenario_head is not None else baseline.version_id
+        )
+        if active_version_id != expected_version_id:
+            raise StaleSchedule(
+                f"planner state moved from {expected_version_id} to {active_version_id}; "
+                "reload before applying the edit"
+            )
+
+        activities = baseline.schedule.activity_by_uid()
+        activity = activities.get(activity_uid)
+        if activity is None:
+            raise ScenarioRejected("ACTIVITY_NOT_FOUND", "the selected activity does not exist")
+        if activity.kind is not ActivityKind.TASK:
+            raise ScenarioRejected(
+                "ACTIVITY_NOT_LEAF_TASK", "only a schedulable leaf activity can be edited"
+            )
+        if not activity.active:
+            raise ScenarioRejected("ACTIVITY_INACTIVE", "the selected activity is inactive")
+        if activity.manual:
+            raise ScenarioRejected(
+                "ACTIVITY_MANUALLY_SCHEDULED",
+                "the selected activity is manually scheduled",
+            )
+        if activity.actual_start is not None or activity.actual_finish is not None:
+            raise ScenarioRejected(
+                "ACTIVITY_HAS_PROGRESS",
+                "PL14 edits only not-started activities with no actual dates",
+            )
+        if activity.planned_duration is None or activity.planned_duration.seconds <= 0:
+            raise ScenarioRejected(
+                "ACTIVITY_DURATION_UNAVAILABLE",
+                "the selected activity has no positive planned duration",
+            )
+        if (
+            activity.remaining_duration is not None
+            and activity.remaining_duration.seconds == 0
+        ):
+            raise ScenarioRejected(
+                "ACTIVITY_REMAINING_DURATION_ZERO",
+                "PL14 cannot edit an activity whose imported remaining duration is zero",
+            )
+
+        baseline_rows = baseline_calculation.result.by_uid()
+        baseline_row = baseline_rows.get(activity_uid)
+        if baseline_row is None or baseline_row.disposition != SCHEDULED:
+            code = None if baseline_row is None else baseline_row.exclusion_code
+            raise ScenarioRejected(
+                "ACTIVITY_NOT_SUPPORTED",
+                "the selected activity is not calculated"
+                + (" (" + code + ")" if code else ""),
+            )
+        relationship_context = _relationship_context_codes(
+            baseline.schedule,
+            (
+                (edge.uid, edge.code)
+                for edge in baseline_calculation.result.relationships
+            ),
+        )
+        scenario_assumptions = tuple(
+            sorted(
+                set(
+                    (
+                        *baseline_row.assumptions,
+                        *relationship_context.get(activity_uid, ()),
+                    )
+                )
+            )
+        )
+        if scenario_assumptions:
+            raise ScenarioRejected(
+                "ACTIVITY_HAS_ASSUMPTIONS",
+                "choose an activity calculated without assumptions; this one uses "
+                + ", ".join(scenario_assumptions),
+            )
+
+        old_seconds = activity.planned_duration.seconds
+        if old_seconds == planned_duration_seconds:
+            raise ScenarioRejected(
+                "DURATION_UNCHANGED", "the new planned duration equals the baseline duration"
+            )
+        changed = replace(
+            activity,
+            planned_duration=replace(
+                activity.planned_duration, seconds=planned_duration_seconds
+            ),
+            remaining_duration=(
+                None
+                if activity.remaining_duration is None
+                else replace(
+                    activity.remaining_duration, seconds=planned_duration_seconds
+                )
+            ),
+        )
+        schedule = replace(
+            baseline.schedule,
+            activities=tuple(
+                changed if row.uid == activity_uid else row
+                for row in baseline.schedule.activities
+            ),
+        )
+        payload = encode_schedule(schedule)
+        digest = canonical_sha256(payload)
+        candidate = WorkingSchedule(
+            project_id=project_id,
+            version_id=uuid.uuid4(),
+            sequence=0,
+            canonical_hash=digest,
+            schedule=schedule,
+            identity=baseline.identity,
+        )
+
+        project_start = baseline.schedule.project.start
+        if project_start is None:
+            raise ScenarioRejected(
+                "BASELINE_CALCULATION_CONTEXT_UNAVAILABLE",
+                "the calculated baseline has no project start from which to reproduce its window",
+            )
+        baseline_provenance = baseline_calculation.result.provenance
+        baseline_before = project_start - baseline_provenance.horizon_start
+        baseline_after = baseline_provenance.horizon_finish - project_start
+        if before is not None and before != baseline_before:
+            raise ScenarioRejected(
+                "SCENARIO_CONTEXT_MUST_MATCH_BASELINE",
+                "a planner scenario must use the active baseline calculation window",
+            )
+        if after is not None and after != baseline_after:
+            raise ScenarioRejected(
+                "SCENARIO_CONTEXT_MUST_MATCH_BASELINE",
+                "a planner scenario must use the active baseline calculation window",
+            )
+        result = self._calculate_working(
+            candidate, before=baseline_before, after=baseline_after
+        )
+        if _result_context(result) != _result_context(baseline_calculation.result):
+            raise ScenarioRejected(
+                "BASELINE_CALCULATION_CONTEXT_INCOMPATIBLE",
+                "the active baseline was calculated under a different engine or policy context; "
+                "recalculate the baseline before creating a scenario",
+            )
+
+        change_id = uuid.uuid4()
+        with self.connect() as conn:
+            if not repo.lock_project(conn, project_id):
+                raise UnknownProject(str(project_id))
+            current_baseline = repo.head_version(
+                conn, project_id=project_id, kind="baseline", with_document=False
+            )
+            current_scenario_id = repo.lock_head_version_id(
+                conn, project_id=project_id, kind="scenario"
+            )
+            current_active_id = (
+                current_scenario_id
+                if current_scenario_id is not None
+                else None if current_baseline is None else current_baseline["id"]
+            )
+            current_baseline_calculation = (
+                None
+                if current_baseline is None
+                else repo.get_latest_calculation(
+                    conn, version_id=current_baseline["id"]
+                )
+            )
+            if (
+                current_baseline is None
+                or current_baseline["id"] != baseline.version_id
+                or current_active_id != expected_version_id
+            ):
+                raise StaleSchedule(
+                    f"planner state moved from {expected_version_id} to "
+                    f"{current_active_id}; reload before applying the edit"
+                )
+            if (
+                current_baseline_calculation is None
+                or current_baseline_calculation["id"]
+                != baseline_calculation.calculation_id
+            ):
+                current_calculation_id = (
+                    None
+                    if current_baseline_calculation is None
+                    else current_baseline_calculation["id"]
+                )
+                raise StaleSchedule(
+                    "baseline calculation moved from "
+                    f"{baseline_calculation.calculation_id} to {current_calculation_id}; "
+                    "reload before applying the edit"
+                )
+            sequence = repo.next_sequence(conn, project_id)
+            scenario_version_id = repo.insert_version(
+                conn,
+                project_id=project_id,
+                kind="scenario",
+                sequence=sequence,
+                parent_id=baseline.version_id,
+                canonical_hash=digest,
+                schema_version=SCHEMA_VERSION,
+                cause_type="planner_edit",
+                cause_id=change_id,
+                document=payload,
+                identity_map=baseline.identity.to_dict(),
+            )
+            repo.insert_scenario_change(
+                conn,
+                change_id=change_id,
+                project_id=project_id,
+                baseline_version_id=baseline.version_id,
+                scenario_version_id=scenario_version_id,
+                activity_uid=activity_uid,
+                before_seconds=old_seconds,
+                after_seconds=planned_duration_seconds,
+                remaining_before_seconds=(
+                    None
+                    if activity.remaining_duration is None
+                    else activity.remaining_duration.seconds
+                ),
+                remaining_after_seconds=(
+                    None
+                    if activity.remaining_duration is None
+                    else planned_duration_seconds
+                ),
+            )
+            calculation_id = repo.insert_calculation(
+                conn,
+                project_id=project_id,
+                version_id=scenario_version_id,
+                result=result,
+            )
+            assert calculation_id is not None
+            repo.set_head(
+                conn,
+                project_id=project_id,
+                kind="scenario",
+                version_id=scenario_version_id,
+            )
+            conn.commit()
+
+        return ScenarioResult(
+            project_id=project_id,
+            baseline_version_id=baseline.version_id,
+            scenario_version_id=scenario_version_id,
+            sequence=sequence,
+            canonical_hash=digest,
+            calculation_id=calculation_id,
+            fingerprint=result.fingerprint,
+            activity_uid=activity_uid,
+            before_seconds=old_seconds,
+            after_seconds=planned_duration_seconds,
+        )
+
+    def reset_scenario(
+        self, project_id: uuid.UUID, *, expected_version_id: uuid.UUID
+    ) -> ScenarioResetResult:
+        """Move the active planner state back to the current baseline."""
+
+        with self.connect() as conn:
+            if not repo.lock_project(conn, project_id):
+                raise UnknownProject(str(project_id))
+            baseline = repo.head_version(
+                conn, project_id=project_id, kind="baseline", with_document=False
+            )
+            if baseline is None:
+                raise NoSchedule(str(project_id))
+            scenario_id = repo.lock_head_version_id(
+                conn, project_id=project_id, kind="scenario"
+            )
+            active_id = scenario_id if scenario_id is not None else baseline["id"]
+            if active_id != expected_version_id:
+                raise StaleSchedule(
+                    f"planner state moved from {expected_version_id} to {active_id}; "
+                    "reload before resetting"
+                )
+            if scenario_id is not None:
+                repo.delete_head(conn, project_id=project_id, kind="scenario")
+            calculation = repo.get_latest_calculation(conn, version_id=baseline["id"])
+            conn.commit()
+        return ScenarioResetResult(
+            project_id=project_id,
+            baseline_version_id=baseline["id"],
+            calculation_id=None if calculation is None else calculation["id"],
+            fingerprint=(
+                None if calculation is None else calculation["result_fingerprint"]
+            ),
+        )
 
     def read_calculation(
-        self, project_id: uuid.UUID, *, calculation_id: uuid.UUID | None = None
+        self,
+        project_id: uuid.UUID,
+        *,
+        calculation_id: uuid.UUID | None = None,
+        kind: str = "baseline",
     ) -> StoredCalculation | None:
         """A stored calculation, rebuilt from its rows and checked against them.
 
@@ -415,7 +925,7 @@ class Workspace:
                 raise UnknownProject(str(project_id))
             if calculation_id is None:
                 head = repo.head_version(
-                    conn, project_id=project_id, kind="baseline", with_document=False
+                    conn, project_id=project_id, kind=kind, with_document=False
                 )
                 if head is None:
                     return None
@@ -475,7 +985,13 @@ class Workspace:
             schedule=named.schedule,
         )
 
-    def latest_calculation(self, project_id: uuid.UUID) -> dict[str, Any] | None:
+    def latest_calculation(
+        self,
+        project_id: uuid.UUID,
+        *,
+        kind: str = "baseline",
+        version_id: uuid.UUID | None = None,
+    ) -> dict[str, Any] | None:
         """The stored calculation for a project's head, with the source dates beside it.
 
         Read through :meth:`read_calculation`, so the rows served here are the
@@ -488,7 +1004,18 @@ class Workspace:
         drift from. They are read off the schedule the calculation names.
         """
 
-        stored = self.read_calculation(project_id)
+        if version_id is None:
+            stored = self.read_calculation(project_id, kind=kind)
+        else:
+            with self.connect() as conn:
+                header = repo.get_latest_calculation(conn, version_id=version_id)
+            stored = (
+                None
+                if header is None
+                else self.read_calculation(
+                    project_id, calculation_id=header["id"], kind=kind
+                )
+            )
         if stored is None:
             return None
 
@@ -579,20 +1106,15 @@ class Workspace:
             "calculation_id": stored.calculation_id,
             "canonical_hash": provenance.canonical_hash,
             "fingerprint": result.fingerprint,
+            "epoch": provenance.epoch,
             "horizon_start": provenance.horizon_start,
             "horizon_finish": provenance.horizon_finish,
             "progress_policy": provenance.progress_policy,
             "critical_float_threshold": provenance.critical_float_threshold,
             "status_time": provenance.status_time,
             "status_time_outside_window": provenance.status_time_outside_window,
-            "profiles": {
-                "forward": provenance.forward_profile,
-                "backward": provenance.backward_profile,
-                "criticality": provenance.criticality_profile,
-                "rollup": provenance.rollup_profile,
-                "progress": provenance.progress_profile,
-                "result": provenance.result_profile,
-            },
+            "resource_calendars_apply": provenance.resource_calendars_apply,
+            "profiles": _profiles(provenance),
             "computed_at": stored.computed_at,
             "counts": {
                 "activities": len(activity_rows),
@@ -616,6 +1138,186 @@ class Workspace:
             "summaries": summary_rows,
         }
 
+    def planner_state(self, project_id: uuid.UUID) -> dict[str, Any]:
+        """The active baseline/scenario pair used by the planner page."""
+
+        with self.connect() as conn:
+            # Every operation that moves a head takes this project-row lock.
+            # Keep it while reading both heads so READ COMMITTED cannot pair a
+            # baseline from before a concurrent import with a scenario from
+            # after it.
+            if not repo.lock_project(conn, project_id):
+                raise UnknownProject(str(project_id))
+            project = repo.get_project(conn, project_id)
+            assert project is not None
+            baseline_head = repo.head_version(
+                conn, project_id=project_id, kind="baseline", with_document=True
+            )
+            scenario_head = repo.head_version(
+                conn, project_id=project_id, kind="scenario", with_document=False
+            )
+            change = (
+                None
+                if scenario_head is None
+                else repo.get_scenario_change(
+                    conn, scenario_version_id=scenario_head["id"]
+                )
+            )
+        if baseline_head is None:
+            raise NoSchedule(str(project_id))
+        if scenario_head is not None and (
+            change is None
+            or change["baseline_version_id"] != baseline_head["id"]
+            or change["scenario_version_id"] != scenario_head["id"]
+        ):
+            raise IntegrityError(
+                f"scenario head {scenario_head['id']} is not derived from active "
+                f"baseline {baseline_head['id']}"
+            )
+        baseline_working = _verify(project_id, baseline_head)
+        baseline = self.latest_calculation(
+            project_id, kind="baseline", version_id=baseline_head["id"]
+        )
+        scenario = (
+            None
+            if scenario_head is None
+            else self.latest_calculation(
+                project_id, kind="scenario", version_id=scenario_head["id"]
+            )
+        )
+        if scenario_head is not None and (change is None or scenario is None):
+            raise IntegrityError(
+                f"scenario head {scenario_head['id']} has incomplete lineage or results"
+            )
+        if scenario is not None and baseline is not None and (
+            _projected_context(scenario) != _projected_context(baseline)
+        ):
+            raise IntegrityError(
+                f"scenario head {scenario_head['id']} was calculated under different "
+                "engine or window provenance from the active baseline result"
+            )
+
+        # The result stores relationship assumptions/exclusions/releases beside
+        # the activity rows rather than on them. Surface that context on both
+        # endpoints before deciding whether a task is safe to edit, so the page
+        # cannot call an edge-dependent answer "calculated normally" and PL14
+        # cannot persist a scenario whose movement depends on an unevidenced
+        # relationship rule.
+        baseline = _with_relationship_context(baseline_working.schedule, baseline)
+        scenario = _with_relationship_context(baseline_working.schedule, scenario)
+
+        eligible: list[dict[str, Any]] = []
+        if baseline is not None:
+            results = {row["activity_uid"]: row for row in baseline["activities"]}
+            for activity in baseline_working.schedule.activities:
+                row = results.get(activity.uid)
+                if (
+                    activity.kind is ActivityKind.TASK
+                    and activity.active
+                    and not activity.manual
+                    and activity.actual_start is None
+                    and activity.actual_finish is None
+                    and activity.planned_duration is not None
+                    and activity.planned_duration.seconds > 0
+                    and (
+                        activity.remaining_duration is None
+                        or activity.remaining_duration.seconds > 0
+                    )
+                    and row is not None
+                    and row["disposition"] == SCHEDULED
+                    and not row["assumptions"]
+                ):
+                    eligible.append(
+                        {
+                            "activity_uid": activity.uid,
+                            "code": activity.code,
+                            "name": activity.name,
+                            "planned_duration_seconds": activity.planned_duration.seconds,
+                        }
+                    )
+        current = scenario_head if scenario_head is not None else baseline_head
+        return {
+            "project_id": project_id,
+            "project_name": project["name"],
+            "baseline_version_id": baseline_head["id"],
+            "current_version_id": current["id"],
+            "current_kind": "scenario" if scenario_head is not None else "baseline",
+            "baseline": baseline,
+            "scenario": scenario,
+            "change": (
+                None
+                if change is None
+                else {
+                    "change_id": change["id"],
+                    "baseline_version_id": change["baseline_version_id"],
+                    "scenario_version_id": change["scenario_version_id"],
+                    "activity_uid": change["activity_uid"],
+                    "field": change["field"],
+                    "before_seconds": int(change["before_seconds"]),
+                    "after_seconds": int(change["after_seconds"]),
+                    "remaining_before_seconds": (
+                        None
+                        if change["remaining_before_seconds"] is None
+                        else int(change["remaining_before_seconds"])
+                    ),
+                    "remaining_after_seconds": (
+                        None
+                        if change["remaining_after_seconds"] is None
+                        else int(change["remaining_after_seconds"])
+                    ),
+                    "created_at": change["created_at"],
+                }
+            ),
+            "eligible_activities": eligible,
+        }
+
+    def scenario_export(self, project_id: uuid.UUID) -> dict[str, Any]:
+        """A labelled prototype state export; this is not an MSPDI writer."""
+
+        state = self.planner_state(project_id)
+        current = state["scenario"] or state["baseline"]
+        if current is None:
+            raise ScenarioRejected(
+                "CALCULATION_REQUIRED", "calculate the baseline before exporting"
+            )
+        dispositions: dict[str, int] = {}
+        assumption_codes: dict[str, int] = {}
+        exclusion_codes: dict[str, int] = {}
+        for row in current["activities"]:
+            dispositions[row["disposition"]] = dispositions.get(row["disposition"], 0) + 1
+            for code in row["assumptions"]:
+                assumption_codes[code] = assumption_codes.get(code, 0) + 1
+            if row["exclusion_code"]:
+                code = row["exclusion_code"]
+                exclusion_codes[code] = exclusion_codes.get(code, 0) + 1
+        return {
+            "format": "sto-prototype-scenario-state-1",
+            "claim": "prototype scenario state; not a Microsoft Project round-trip",
+            "project": {
+                "id": state["project_id"],
+                "name": state["project_name"],
+            },
+            "baseline_version_id": state["baseline_version_id"],
+            "scenario_version_id": (
+                None if state["change"] is None else state["change"]["scenario_version_id"]
+            ),
+            "current_version_id": state["current_version_id"],
+            "current_kind": state["current_kind"],
+            "change": state["change"],
+            "calculation": {
+                "id": current["calculation_id"],
+                "canonical_hash": current["canonical_hash"],
+                "fingerprint": current["fingerprint"],
+                "profiles": current["profiles"],
+                "dispositions": dispositions,
+                "assumptions": assumption_codes,
+                "exclusions": exclusion_codes,
+            },
+            "activities": current["activities"],
+            "summaries": current["summaries"],
+            "relationships": current["relationships"],
+        }
+
     # --- importing -------------------------------------------------------------
 
     def import_file(
@@ -628,7 +1330,9 @@ class Workspace:
         source_sha = hashlib.sha256(data).hexdigest()
         path = self._store_bytes(project_id, source_sha, data)
 
-        prior = self.load(project_id)
+        # Refresh from the durable head so a retry after another process's
+        # import does not keep deriving from this process's old resident copy.
+        prior = self.load(project_id, refresh=True)
         prior_identity = prior.identity if prior else None
 
         # Parse and migrate outside any transaction: the 14 MB files take
@@ -663,6 +1367,18 @@ class Workspace:
         identity_payload = identity.to_dict()
 
         with self.connect() as conn:
+            if not repo.lock_project(conn, project_id):
+                raise UnknownProject(str(project_id))
+            current_prior = repo.head_version(
+                conn, project_id=project_id, kind="baseline", with_document=False
+            )
+            expected_prior_id = None if prior is None else prior.version_id
+            current_prior_id = None if current_prior is None else current_prior["id"]
+            if current_prior_id != expected_prior_id:
+                raise StaleSchedule(
+                    f"baseline moved from {expected_prior_id} to {current_prior_id}; "
+                    "retry the import against the current schedule"
+                )
             source_id = _record_source(conn, project_id, filename, path, source_sha, data)
             batch_id = repo.insert_import_batch(
                 conn,
@@ -698,6 +1414,10 @@ class Workspace:
                 identity_map=identity_payload,
             )
             repo.set_head(conn, project_id=project_id, kind="baseline", version_id=version_id)
+            # A scenario derives from one exact baseline.  A later import makes
+            # that scenario historic and removes only its movable head; both
+            # the scenario version and its calculation remain auditable.
+            repo.delete_head(conn, project_id=project_id, kind="scenario")
             conn.commit()
 
         with self._state_lock:

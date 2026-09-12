@@ -15,7 +15,8 @@ from typing import Any
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 #: The largest upload this API will read. A schedule of CALCINER's size is
@@ -41,6 +42,7 @@ from sto.scheduling.working_schedule import (
     ImportRefused,
     IntegrityError,
     NoSchedule,
+    ScenarioRejected,
     StaleSchedule,
     UnknownProject,
     Workspace,
@@ -267,6 +269,8 @@ def create_app(workspace: Workspace | None = None) -> FastAPI:
             raise HTTPException(422, f"the file could not be read: {error}") from None
         except MigrationError as error:
             raise HTTPException(422, f"the file does not migrate: {error}") from None
+        except StaleSchedule as error:
+            raise HTTPException(409, str(error)) from None
         return schemas.ImportResponse(
             project_id=result.project_id,
             import_batch_id=result.import_batch_id,
@@ -357,6 +361,135 @@ def create_app(workspace: Workspace | None = None) -> FastAPI:
         if payload is None:
             raise HTTPException(404, "the project has no calculation yet")
         return schemas.CalculationResponse(**payload)
+
+    @app.get(
+        "/api/projects/{project_id}/planner",
+        response_model=schemas.PlannerState,
+    )
+    def planner(project_id: uuid.UUID, workspace: Workspace = Depends(ws)) -> Any:
+        try:
+            return schemas.PlannerState(**workspace.planner_state(project_id))
+        except UnknownProject:
+            raise HTTPException(404, "no such project") from None
+        except NoSchedule:
+            raise HTTPException(409, "the project has no imported schedule") from None
+        except IntegrityError as error:
+            raise HTTPException(500, str(error)) from None
+
+    @app.post(
+        "/api/projects/{project_id}/scenario",
+        response_model=schemas.PlannerState,
+        status_code=201,
+    )
+    def create_scenario(
+        project_id: uuid.UUID,
+        body: schemas.ScenarioEdit,
+        workspace: Workspace = Depends(ws),
+    ) -> Any:
+        try:
+            created = workspace.create_duration_scenario(
+                project_id,
+                expected_version_id=body.expected_version_id,
+                activity_uid=body.activity_uid,
+                planned_duration_seconds=body.planned_duration_seconds,
+            )
+            state = workspace.planner_state(project_id)
+            scenario = state.get("scenario")
+            change = state.get("change")
+            if (
+                state.get("current_version_id") != created.scenario_version_id
+                or scenario is None
+                or scenario.get("calculation_id") != created.calculation_id
+                or change is None
+                or change.get("scenario_version_id") != created.scenario_version_id
+            ):
+                raise StaleSchedule(
+                    "the scenario was superseded before it could be returned; reload"
+                )
+            return schemas.PlannerState(**state)
+        except UnknownProject:
+            raise HTTPException(404, "no such project") from None
+        except NoSchedule:
+            raise HTTPException(409, "the project has no imported schedule") from None
+        except StaleSchedule as error:
+            raise HTTPException(409, str(error)) from None
+        except ScenarioRejected as error:
+            raise HTTPException(
+                422, {"code": error.code, "message": error.detail}
+            ) from None
+        except (NetworkError, CalendarCompileError) as error:
+            raise HTTPException(422, f"the scenario cannot be calculated: {error}") from None
+        except IntegrityError as error:
+            raise HTTPException(500, str(error)) from None
+
+    @app.post(
+        "/api/projects/{project_id}/scenario/reset",
+        response_model=schemas.PlannerState,
+    )
+    def reset_scenario(
+        project_id: uuid.UUID,
+        body: schemas.ScenarioReset,
+        workspace: Workspace = Depends(ws),
+    ) -> Any:
+        try:
+            restored = workspace.reset_scenario(
+                project_id, expected_version_id=body.expected_version_id
+            )
+            state = workspace.planner_state(project_id)
+            baseline = state.get("baseline")
+            if (
+                state.get("project_id") != restored.project_id
+                or state.get("current_kind") != "baseline"
+                or state.get("current_version_id") != restored.baseline_version_id
+                or state.get("scenario") is not None
+                or state.get("change") is not None
+                or (restored.calculation_id is None) != (baseline is None)
+                or (
+                    baseline is not None
+                    and (
+                        baseline.get("version_id") != restored.baseline_version_id
+                        or baseline.get("calculation_id") != restored.calculation_id
+                        or baseline.get("fingerprint") != restored.fingerprint
+                    )
+                )
+            ):
+                raise StaleSchedule(
+                    "the restored baseline was superseded before it could be returned; reload"
+                )
+            return schemas.PlannerState(**state)
+        except UnknownProject:
+            raise HTTPException(404, "no such project") from None
+        except NoSchedule:
+            raise HTTPException(409, "the project has no imported schedule") from None
+        except StaleSchedule as error:
+            raise HTTPException(409, str(error)) from None
+        except IntegrityError as error:
+            raise HTTPException(500, str(error)) from None
+
+    @app.get("/api/projects/{project_id}/scenario/export")
+    def export_scenario(
+        project_id: uuid.UUID, workspace: Workspace = Depends(ws)
+    ) -> Any:
+        try:
+            payload = workspace.scenario_export(project_id)
+        except UnknownProject:
+            raise HTTPException(404, "no such project") from None
+        except NoSchedule:
+            raise HTTPException(409, "the project has no imported schedule") from None
+        except ScenarioRejected as error:
+            raise HTTPException(
+                422, {"code": error.code, "message": error.detail}
+            ) from None
+        except IntegrityError as error:
+            raise HTTPException(500, str(error)) from None
+        return JSONResponse(
+            jsonable_encoder(payload),
+            headers={
+                "Content-Disposition": (
+                    f'attachment; filename="sto-scenario-{project_id}.json"'
+                )
+            },
+        )
 
     @app.get("/api/projects/{project_id}/schedule", response_model=schemas.ScheduleResponse)
     def get_schedule(

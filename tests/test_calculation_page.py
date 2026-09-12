@@ -1,4 +1,4 @@
-"""The read-only page, checked against the API it claims to read (PL13).
+"""The PL14 planner page, checked against the API it claims to read.
 
 Not a browser test: nothing here renders anything. It asks the one question a
 static page can get wrong without anybody noticing, which is whether the routes
@@ -23,6 +23,7 @@ STATIC = Path(__file__).resolve().parents[1] / "src" / "sto" / "api" / "static"
 # response models needs pydantic, which the bare suite does not have; the api
 # job sets STO_REQUIRE_DB=1 and turns its absence into a failure there.
 try:
+    import fastapi  # noqa: F401 - the route contract needs the application too
     from sto.api import schemas
 except ImportError as error:  # the bare suite: no api extra
     if os.environ.get("STO_REQUIRE_DB") == "1":
@@ -83,11 +84,12 @@ class ThePageIsSelfConsistentTests(unittest.TestCase):
         self.assertNotIn("Date.parse(", code)
         self.assertIn("Date.UTC(", code)
 
-    def test_it_tells_an_absent_calculation_from_a_refused_one(self):
-        """Reporting an integrity refusal as an absence hides the refusal."""
+    def test_it_tells_an_absent_schedule_from_a_refused_one(self):
+        """A project awaiting import is distinct from an integrity refusal."""
 
-        self.assertIn("error.status === 404", self.script)
+        self.assertIn("error.status === 409", self.script)
         self.assertIn("failure.status = response.status", self.script)
+        self.assertIn("planner state could not be served", self.script)
 
     def test_it_does_not_show_a_calculation_for_a_project_left_behind(self):
         """`show` sets the freshness guard itself, so calling it is not safe."""
@@ -101,7 +103,7 @@ class ThePageIsSelfConsistentTests(unittest.TestCase):
         track by a row the reader could not see.
         """
 
-        scale = self.script[self.script.index("function moments("):]
+        scale = self.script[self.script.index("function comparisonMoments("):]
         scale = scale[: scale.index("function band(")]
         self.assertIn("if (!row.early_start) continue;", scale)
         self.assertNotIn("result.summaries", scale)
@@ -112,16 +114,17 @@ class ThePageIsSelfConsistentTests(unittest.TestCase):
             self.skipTest("Node is required to execute the page's JavaScript")
         functions = "\n".join(
             re.search(r"function " + name + r"\([\s\S]*?\n}", self.script).group(0)
-            for name in ("instant", "moments", "statusDate")
+            for name in ("instant", "comparisonMoments", "statusDate")
         )
         probe = r"""
 const day = '2026-09-09T08:00:00';
 const row = {early_start: day, early_finish: day, source_start: day, source_finish: day};
-const result = {activities: [row], summaries: []};
-const base = moments(result);
-result.summaries.push({span_start: day, source_start: '2000-01-01T00:00:00'});
-console.log(JSON.stringify({base, withSummary: moments(result),
-  empty: moments({activities: [], summaries: result.summaries}),
+const hidden = {early_start: null, source_start: '2000-01-01T00:00:00'};
+const state = {baseline: {activities: [row]}, scenario: null};
+const base = comparisonMoments(state);
+state.baseline.activities.push(hidden);
+console.log(JSON.stringify({base, withHidden: comparisonMoments(state),
+  empty: comparisonMoments({baseline: {activities: [hidden]}, scenario: null}),
   status: statusDate({status_time_outside_window: true})}));
 """
         completed = subprocess.run([node, "-e", functions + probe],
@@ -129,7 +132,7 @@ console.log(JSON.stringify({base, withSummary: moments(result),
         measured = json.loads(completed.stdout)
         self.assertIsNotNone(measured["base"])
         self.assertGreater(measured["base"]["span"], 0)
-        self.assertEqual(measured["base"], measured["withSummary"])
+        self.assertEqual(measured["base"], measured["withHidden"])
         self.assertIsNone(measured["empty"])
         self.assertIn("scheduling window policy", measured["status"])
 
@@ -163,11 +166,220 @@ console.log(JSON.stringify({
         self.assertAlmostEqual(float(measured["left"].removesuffix("%")), 99.6)
         self.assertAlmostEqual(float(measured["width"].removesuffix("%")), 0.4)
 
-    def test_it_drops_a_response_for_a_project_no_longer_selected(self):
-        """Two requests can finish out of order while the selector stays live."""
+    def test_rendered_movement_and_disposition_contract(self):
+        """Execute the logic that marks the edited and downstream rows."""
 
-        self.assertIn("awaiting", self.script)
-        self.assertIn("if (awaiting !== projectId) return;", self.script)
+        node = shutil.which("node") or os.environ.get("CODEX_PRIMARY_RUNTIME_NODE")
+        if not node:
+            self.skipTest("Node is required to execute the page's JavaScript")
+        functions = "\n".join(
+            re.search(r"function " + name + r"\([\s\S]*?\n}", self.script).group(0)
+            for name in ("classifyMovement", "disposition")
+        )
+        probe = r"""
+const base = {activity_uid: 'a', early_start: '08:00', early_finish: '09:00',
+  disposition: 'scheduled', assumptions: []};
+const changed = {...base, early_finish: '10:00'};
+const movedBase = {...base, activity_uid: 'b'};
+const moved = {...movedBase, early_start: '10:00', early_finish: '11:00'};
+console.log(JSON.stringify({
+  edited: classifyMovement(base, changed, 'a'),
+  downstream: classifyMovement(movedBase, moved, 'a'),
+  reset: classifyMovement(base, null, 'a'),
+  normal: disposition(base).label,
+  assumed: disposition({...base, assumptions: ['ACTIVITY_DURATION_ELAPSED']}).label,
+  deferred: disposition({...base,
+    assumptions: ['ACTIVITY_SECONDARY_CONSTRAINT_NOT_APPLIED']}).label,
+  excluded: disposition({...base, disposition: 'excluded'}).label
+}));
+"""
+        measured = json.loads(
+            subprocess.run(
+                [node, "-e", functions + probe],
+                check=True,
+                text=True,
+                capture_output=True,
+            ).stdout
+        )
+        self.assertEqual(measured["edited"], "edited")
+        self.assertEqual(measured["downstream"], "downstream")
+        self.assertEqual(measured["reset"], "")
+        self.assertEqual(
+            {measured[key] for key in ("normal", "assumed", "deferred", "excluded")},
+            {
+                "calculated normally",
+                "calculated with assumption",
+                "deferred constraint support",
+                "unsupported / excluded",
+            },
+        )
+
+    def test_it_reconciles_a_committed_mutation_after_an_a_b_a_refresh_cycle(self):
+        """A stale mutation response may still represent newly committed state."""
+
+        node = shutil.which("node") or os.environ.get("CODEX_PRIMARY_RUNTIME_NODE")
+        if not node:
+            self.skipTest("Node is required to execute the page's JavaScript")
+        functions = "\n".join(
+            re.search(r"(?:async )?function " + name + r"\([\s\S]*?\n}", self.script).group(0)
+            for name in (
+                "selectedProject",
+                "beginRefresh",
+                "currentRefresh",
+                "reconcileMutationResponse",
+            )
+        )
+        probe = r"""
+const projects = {value: 'project-a'};
+let refreshGeneration = 0;
+const refreshes = [];
+async function show(projectId) { refreshes.push(projectId); beginRefresh(); return {}; }
+(async () => {
+  const firstA = beginRefresh();
+  projects.value = 'project-b';
+  const projectB = beginRefresh();
+  projects.value = 'project-a';
+  const secondA = beginRefresh();
+  const before = {
+    firstA: currentRefresh(firstA, 'project-a'),
+    projectB: currentRefresh(projectB, 'project-b'),
+    secondA: currentRefresh(secondA, 'project-a')
+  };
+  const staleMutationAccepted = await reconcileMutationResponse(firstA, 'project-a');
+  const currentGeneration = refreshGeneration;
+  const currentMutationAccepted = await reconcileMutationResponse(currentGeneration, 'project-a');
+  console.log(JSON.stringify({before, staleMutationAccepted, currentMutationAccepted,
+    refreshes, generation: refreshGeneration}));
+})();
+"""
+        measured = json.loads(
+            subprocess.run(
+                [node, "-e", functions + probe],
+                check=True,
+                text=True,
+                capture_output=True,
+            ).stdout
+        )
+        self.assertEqual(
+            measured,
+            {
+                "before": {"firstA": False, "projectB": False, "secondA": True},
+                "staleMutationAccepted": False,
+                "currentMutationAccepted": True,
+                "refreshes": ["project-a"],
+                "generation": 4,
+            },
+        )
+        self.assertEqual(
+            self.script.count("await reconcileMutationResponse(generation, projectId)"),
+            4,
+        )
+
+    def test_import_and_calculation_success_belong_to_the_rendered_project(self):
+        """Execute the freshness decisions used after both awaited mutations."""
+
+        node = shutil.which("node") or os.environ.get("CODEX_PRIMARY_RUNTIME_NODE")
+        if not node:
+            self.skipTest("Node is required to execute the page's JavaScript")
+        functions = "\n".join(
+            re.search(r"function " + name + r"\([\s\S]*?\n}", self.script).group(0)
+            for name in (
+                "selectedProject", "renderedImport", "renderedCalculation",
+                "renderedScenario", "renderedReset", "resetIsDisabled",
+            )
+        )
+        probe = r"""
+const projects = {value: 'project-a'};
+const imported = {project_id: 'project-a', version_id: 'version-a'};
+const calculation = {project_id: 'project-a', version_id: 'version-a',
+  calculation_id: 'calculation-a'};
+const state = {project_id: 'project-a', baseline_version_id: 'version-a',
+  baseline: {version_id: 'version-a', calculation_id: 'calculation-a'}};
+const scenario = {...state, current_kind: 'scenario', current_version_id: 'scenario-a',
+  scenario: {version_id: 'scenario-a', calculation_id: 'scenario-calculation'},
+  change: {scenario_version_id: 'scenario-a', activity_uid: 'activity-a',
+    after_seconds: 28800}};
+const created = structuredClone(scenario);
+const reset = {...state, current_kind: 'baseline', current_version_id: 'version-a',
+  scenario: null, change: null};
+const measured = {
+  imported: renderedImport(state, imported),
+  calculated: renderedCalculation(state, calculation),
+  wrongCalculation: renderedCalculation(state,
+    {...calculation, calculation_id: 'calculation-old'}),
+  scenario: renderedScenario(scenario, created, 'project-a', 'activity-a', 28800),
+  wrongScenario: renderedScenario(scenario,
+    {...created, current_version_id: 'scenario-old'}, 'project-a', 'activity-a', 28800),
+  reset: renderedReset(reset, structuredClone(reset), 'project-a'),
+  wrongReset: renderedReset(reset,
+    {...reset, baseline: {...reset.baseline, calculation_id: 'calculation-old'}}, 'project-a'),
+  resetWhileScenario: resetIsDisabled(scenario),
+  resetOnBaseline: resetIsDisabled({...state, scenario: null})
+};
+projects.value = 'project-b';
+measured.importAfterSwitch = renderedImport(state, imported);
+measured.calculationAfterSwitch = renderedCalculation(state, calculation);
+console.log(JSON.stringify(measured));
+"""
+        measured = json.loads(
+            subprocess.run(
+                [node, "-e", functions + probe],
+                check=True,
+                text=True,
+                capture_output=True,
+            ).stdout
+        )
+        self.assertEqual(
+            measured,
+            {
+                "imported": True,
+                "calculated": True,
+                "wrongCalculation": False,
+                "scenario": True,
+                "wrongScenario": False,
+                "reset": True,
+                "wrongReset": False,
+                "resetWhileScenario": False,
+                "resetOnBaseline": True,
+                "importAfterSwitch": False,
+                "calculationAfterSwitch": False,
+            },
+        )
+        import_handler = self.script[self.script.index('importForm.addEventListener'):]
+        import_handler = import_handler[: import_handler.index('scenarioForm.addEventListener')]
+        self.assertIn("await reconcileMutationResponse(generation, projectId)", import_handler)
+        self.assertIn("if (renderedImport(state, imported)) say", import_handler)
+        calculation_handler = self.script[
+            self.script.index('calculateButton.addEventListener'):
+            self.script.index('createProjectForm.addEventListener')
+        ]
+        self.assertIn("await reconcileMutationResponse(generation, projectId)", calculation_handler)
+        self.assertIn("if (!state) return;", calculation_handler)
+        self.assertIn("if (!renderedCalculation(state, calculation))", calculation_handler)
+        scenario_handler = self.script[
+            self.script.index('scenarioForm.addEventListener'):
+            self.script.index('resetScenario.addEventListener')
+        ]
+        self.assertIn("await reconcileMutationResponse(generation, projectId)", scenario_handler)
+        self.assertIn("if (!renderedScenario(state, created, projectId, activityUid, seconds))", scenario_handler)
+        self.assertIn("const state = await show(projectId);", scenario_handler)
+        reset_handler = self.script[self.script.index('resetScenario.addEventListener'):]
+        self.assertIn("await reconcileMutationResponse(generation, projectId)", reset_handler)
+        self.assertIn("if (!renderedReset(state, reset, projectId))", reset_handler)
+        self.assertIn("resetScenario.disabled = resetIsDisabled(currentState)", reset_handler)
+        self.assertIn('if (error.status === 409) await show(projectId);', reset_handler)
+        self.assertIn("Object.entries(result.profiles)", self.script)
+
+    def test_duration_control_and_calculation_detail_keep_the_existing_contract(self):
+        self.assertIn('id="duration-hours" type="number" min="0.0003" step="any"', self.html)
+        self.assertIn("Calculation details", self.html)
+        for field in (
+            "late_start", "late_finish", "total_float_seconds", "free_float_seconds",
+            "critical", "progress_state", "placed_by", "late_placed_by",
+            "constraint_override", "agrees_with_source",
+        ):
+            with self.subTest(field):
+                self.assertIn("row." + field, self.script)
 
     def test_every_element_the_script_reaches_for_exists_in_the_page(self):
         wanted = set(re.findall(r'querySelector\("#([\w-]+)', self.script))
@@ -191,6 +403,10 @@ class ThePageAndTheApiAgreeTests(unittest.TestCase):
             "/api/projects",
             "/api/projects/{project_id}/calculations",
             "/api/projects/{project_id}/calculations/latest",
+            "/api/projects/{project_id}/planner",
+            "/api/projects/{project_id}/scenario",
+            "/api/projects/{project_id}/scenario/reset",
+            "/api/projects/{project_id}/scenario/export",
         ):
             with self.subTest(path):
                 self.assertIn(path, routes)

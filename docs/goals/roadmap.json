@@ -190,8 +190,12 @@
         {
           "id": "P1-G4",
           "text": "A persisted import shows calculated dates beside the ones it imported; one duration edit moves its successors; reset restores the baseline; the scenario exports; and a restart reproduces the same result from the same input hash",
-          "met": false,
-          "evidence": null
+          "met": true,
+          "evidence": "scripts/browser-acceptance-pl14.py",
+          "evidence_conditional": {
+            "env": "STO_REQUIRE_DB",
+            "why": "the API CI job supplies PostgreSQL and Chromium, drives the rendered workflow, restarts the application, and uploads its screenshots and export"
+          }
         },
         {
           "id": "P1-G5",
@@ -475,7 +479,7 @@
       "id": "PL14",
       "title": "One planner scenario: edit, move, reset, export, restart",
       "phase": "P1",
-      "status": "not_started",
+      "status": "done",
       "days": 3
     },
     {

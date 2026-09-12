@@ -169,6 +169,7 @@ class CalculationResponse(BaseModel):
     calculation_id: uuid.UUID
     canonical_hash: str
     fingerprint: str
+    epoch: datetime
     horizon_start: datetime
     horizon_finish: datetime
     progress_policy: str
@@ -178,9 +179,52 @@ class CalculationResponse(BaseModel):
     #: run with discarded progress context reads as a run that never had any.
     status_time: datetime | None = None
     status_time_outside_window: bool = False
+    resource_calendars_apply: bool
     profiles: dict[str, str]
     computed_at: datetime
     counts: dict[str, int]
     relationships: list[RelationshipRow] = []
     activities: list[ActivityRow]
     summaries: list[SummaryRow]
+
+
+class ScenarioEdit(BaseModel):
+    expected_version_id: uuid.UUID
+    activity_uid: uuid.UUID
+    planned_duration_seconds: int = Field(gt=0, strict=True)
+
+
+class ScenarioReset(BaseModel):
+    expected_version_id: uuid.UUID
+
+
+class ScenarioChange(BaseModel):
+    change_id: uuid.UUID
+    baseline_version_id: uuid.UUID
+    scenario_version_id: uuid.UUID
+    activity_uid: uuid.UUID
+    field: str
+    before_seconds: int
+    after_seconds: int
+    remaining_before_seconds: int | None = None
+    remaining_after_seconds: int | None = None
+    created_at: datetime
+
+
+class EligibleActivity(BaseModel):
+    activity_uid: uuid.UUID
+    code: str | None = None
+    name: str
+    planned_duration_seconds: int
+
+
+class PlannerState(BaseModel):
+    project_id: uuid.UUID
+    project_name: str
+    baseline_version_id: uuid.UUID
+    current_version_id: uuid.UUID
+    current_kind: str
+    baseline: CalculationResponse | None = None
+    scenario: CalculationResponse | None = None
+    change: ScenarioChange | None = None
+    eligible_activities: list[EligibleActivity] = []
