@@ -2,10 +2,24 @@
 
 from __future__ import annotations
 
+import os
 import unittest
 import uuid
 from datetime import datetime
 from unittest.mock import patch
+
+REQUIRE_DB = os.environ.get("STO_REQUIRE_DB") == "1"
+
+try:
+    import psycopg  # noqa: F401
+except ImportError as error:
+    if REQUIRE_DB:
+        raise RuntimeError(
+            f"STO_REQUIRE_DB=1 but the persistence extra is missing ({error.name})"
+        ) from error
+    raise unittest.SkipTest(
+        "persistence extra unavailable; STO_REQUIRE_DB=1 makes this a failure"
+    ) from error
 
 from sto.core.engine.result import (
     SCHEDULED,
