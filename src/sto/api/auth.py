@@ -23,6 +23,10 @@ from sto.persistence import auth_repositories as auth_repo
 
 ROLE_LEVEL = {"viewer": 1, "planner": 2, "admin": 3}
 SESSION_COOKIE = "sto_session"
+USERNAME_MIN_LENGTH = 1
+USERNAME_MAX_LENGTH = 200
+PASSWORD_MIN_LENGTH = 12
+PASSWORD_MAX_LENGTH = 1024
 
 
 class AuthenticationFailed(Exception):
@@ -133,6 +137,36 @@ def normalize_username(value: str) -> str:
     return unicodedata.normalize("NFKC", value).strip().casefold()
 
 
+def validate_username(value: str) -> str:
+    """Return the login identity, enforcing the shared enrollment boundary."""
+
+    if not USERNAME_MIN_LENGTH <= len(value) <= USERNAME_MAX_LENGTH:
+        raise ValueError(
+            f"username must contain between {USERNAME_MIN_LENGTH} and "
+            f"{USERNAME_MAX_LENGTH} characters"
+        )
+    normalized = normalize_username(value)
+    if not normalized:
+        raise ValueError("username must not be blank")
+    return normalized
+
+
+def validate_password(value: str) -> None:
+    """Apply the same password limits before enrollment and API validation."""
+
+    if not PASSWORD_MIN_LENGTH <= len(value) <= PASSWORD_MAX_LENGTH:
+        raise ValueError(
+            f"password must contain between {PASSWORD_MIN_LENGTH} and "
+            f"{PASSWORD_MAX_LENGTH} characters"
+        )
+
+
+def validate_credentials(username: str, password: str) -> str:
+    normalized = validate_username(username)
+    validate_password(password)
+    return normalized
+
+
 def role_allows(actual: str, required: str) -> bool:
     return ROLE_LEVEL.get(actual, 0) >= ROLE_LEVEL[required]
 
@@ -239,11 +273,7 @@ class AuthService:
         totp_secret: str,
         display_name: str | None = None,
     ) -> dict[str, Any]:
-        normalized = normalize_username(username)
-        if not normalized:
-            raise ValueError("username must not be blank")
-        if len(password) < 12:
-            raise ValueError("password must contain at least 12 characters")
+        normalized = validate_credentials(username, password)
         pyotp.TOTP(totp_secret, digits=6, interval=30)
         password_hash = self.password_hasher.hash(password)
         encrypted_secret = self.encrypt_totp_secret(totp_secret)
@@ -266,6 +296,9 @@ class AuthService:
         password: str,
         display_name: str | None = None,
     ) -> tuple[dict[str, Any], str, str]:
+        # Validate before generating enrollment material. The called method
+        # validates again so direct and CLI enrollment cannot drift apart.
+        validate_credentials(username, password)
         secret = pyotp.random_base32(length=32)
         row = self.create_user(
             username=username,
@@ -281,12 +314,8 @@ class AuthService:
     def bootstrap_admin(
         self, *, username: str, password: str, display_name: str | None = None
     ) -> tuple[dict[str, Any], str, str]:
+        normalized = validate_credentials(username, password)
         secret = pyotp.random_base32(length=32)
-        normalized = normalize_username(username)
-        if not normalized:
-            raise ValueError("username must not be blank")
-        if len(password) < 12:
-            raise ValueError("password must contain at least 12 characters")
         password_hash = self.password_hasher.hash(password)
         encrypted_secret = self.encrypt_totp_secret(secret)
         with self.connect() as conn:

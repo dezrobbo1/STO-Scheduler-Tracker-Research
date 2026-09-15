@@ -88,4 +88,8 @@ loopback HTTP default is `0`.
 Open [the local planner](http://127.0.0.1:8092) and sign in. The page creates projects,
 imports MSPDI/XML, calculates the baseline and edits the planned duration of
 one supported leaf activity. Its JSON download is prototype scenario state; it
-is not a Microsoft Project writer.
+is not a Microsoft Project writer. Scenario resets write an authenticated,
+append-only V006 event while preserving the immutable scenario and calculation.
+Disabling a user is refused while that account is the last enabled
+administrator of any project; grant another enabled administrator or reassign
+the membership first. There is no silent emergency-disable bypass.

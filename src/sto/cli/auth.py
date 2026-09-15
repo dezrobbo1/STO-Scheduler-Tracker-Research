@@ -25,8 +25,12 @@ def _password() -> str:
     second = getpass.getpass("Confirm password: ")
     if first != second:
         raise SystemExit("passwords do not match")
-    if len(first) < 12:
-        raise SystemExit("password must contain at least 12 characters")
+    try:
+        from sto.api.auth import validate_password
+
+        validate_password(first)
+    except ValueError as error:
+        raise SystemExit(str(error)) from None
     return first
 
 
@@ -116,12 +120,16 @@ def _disable_user(args: argparse.Namespace) -> int:
         user = auth_repo.get_user_by_username(conn, normalize_username(args.username))
         if user is None:
             raise SystemExit("no such user")
-        changed = auth_repo.disable_user(conn, user["id"])
-        sessions = auth_repo.revoke_user_sessions(conn, user["id"])
+        try:
+            result = auth_repo.disable_user(conn, user["id"])
+        except auth_repo.LastProjectAdministrator as error:
+            raise SystemExit(str(error)) from None
         conn.commit()
     print(
-        f"user {user['username']} {'disabled' if changed else 'was already disabled'}; "
-        f"revoked {sessions} active session(s)"
+        f"user {user['username']} "
+        f"{'disabled' if result.changed else 'was already disabled'}; "
+        f"revoked {result.sessions_revoked} active session(s) and "
+        f"{result.device_tokens_revoked} device token(s)"
     )
     return 0
 

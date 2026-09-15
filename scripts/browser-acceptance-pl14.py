@@ -262,12 +262,65 @@ def main() -> int:
                         "export changed scenario provenance: "
                         f"{expected_provenance!r} != {exported_provenance!r}"
                     )
-                # Logout revokes the persistent server session and clears all
-                # planner content. A second login then survives a real process
-                # restart with the same project/scenario provenance.
+                # Logout failures must clear the rendered schedule without
+                # claiming the server session was revoked. Recovery reads a
+                # fresh session-bound CSRF value before retrying the mutation.
+                logout_outcomes = iter(("network", 403, 500, "continue"))
+
+                def intercept_logout(route):
+                    outcome = next(logout_outcomes)
+                    if outcome == "network":
+                        route.abort("connectionfailed")
+                    elif isinstance(outcome, int):
+                        route.fulfill(
+                            status=outcome,
+                            content_type="application/json",
+                            body=json.dumps({"detail": "synthetic logout failure"}),
+                        )
+                    else:
+                        route.continue_()
+
+                page.route("**/api/auth/logout", intercept_logout)
                 page.locator("#logout").click()
                 expect(page.get_by_role("heading", name="Sign in")).to_be_visible()
                 expect(page.locator("#planner")).to_be_hidden()
+                expect(page.locator("#retry-logout")).to_be_visible()
+                expect(page.locator("#auth-status")).to_contain_text(
+                    "could not be confirmed"
+                )
+                self_status = page.evaluate(
+                    "async () => (await fetch('/api/auth/session')).status"
+                )
+                if self_status != 200:
+                    raise AssertionError("network logout failure revoked the session")
+                console_errors.clear()  # the deliberately aborted request
+
+                page.locator("#retry-logout").click()
+                expect(page.locator("#auth-status")).to_contain_text(
+                    "could not be confirmed"
+                )
+                if page.evaluate(
+                    "async () => (await fetch('/api/auth/session')).status"
+                ) != 200:
+                    raise AssertionError("403 logout failure revoked the session")
+                console_errors.clear()  # the deliberate 403 response
+
+                page.locator("#retry-logout").click()
+                expect(page.locator("#auth-status")).to_contain_text(
+                    "could not be confirmed"
+                )
+                if page.evaluate(
+                    "async () => (await fetch('/api/auth/session')).status"
+                ) != 200:
+                    raise AssertionError("500 logout failure revoked the session")
+                console_errors.clear()  # the deliberate 500 response
+
+                page.locator("#retry-logout").click()
+                expect(page.locator("#auth-status")).to_contain_text(
+                    "server session was revoked"
+                )
+                expect(page.locator("#retry-logout")).to_be_hidden()
+                page.unroute("**/api/auth/logout")
                 logged_out_status = page.evaluate(
                     "async () => (await fetch('/api/projects')).status"
                 )

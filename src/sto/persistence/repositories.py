@@ -363,6 +363,34 @@ def get_scenario_change(
     ).fetchone()
 
 
+def insert_scenario_reset_event(
+    conn: psycopg.Connection,
+    *,
+    project_id: uuid.UUID,
+    actor_user_id: uuid.UUID,
+    prior_scenario_version_id: uuid.UUID,
+    restored_baseline_version_id: uuid.UUID,
+) -> dict[str, Any]:
+    row = conn.execute(
+        """
+        INSERT INTO scenario_reset_events
+          (project_id, actor_user_id, prior_scenario_version_id,
+           restored_baseline_version_id)
+        VALUES (%s, %s, %s, %s)
+        RETURNING id, project_id, actor_user_id, prior_scenario_version_id,
+                  restored_baseline_version_id, created_at
+        """,
+        (
+            project_id,
+            actor_user_id,
+            prior_scenario_version_id,
+            restored_baseline_version_id,
+        ),
+    ).fetchone()
+    assert row is not None
+    return row
+
+
 # --- calculated results --------------------------------------------------------
 
 

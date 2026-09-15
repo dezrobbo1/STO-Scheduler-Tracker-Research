@@ -214,6 +214,91 @@ console.log(JSON.stringify({
             },
         )
 
+    def test_logout_outcomes_and_authenticated_retry_execute_in_javascript(self):
+        """Network/403/500 are not allowed to masquerade as revocation."""
+
+        node = shutil.which("node") or os.environ.get("CODEX_PRIMARY_RUNTIME_NODE")
+        if not node:
+            self.skipTest("Node is required to execute the page's JavaScript")
+        functions = "\n".join(
+            re.search(
+                r"async function " + name + r"\([\s\S]*?\n}", self.script
+            ).group(0)
+            for name in ("requestLogout", "recoverLogout")
+        )
+        probe = r"""
+function failed(status) {
+  const error = new Error('synthetic');
+  if (status !== undefined) error.status = status;
+  return error;
+}
+(async () => {
+  const successCalls = [];
+  const success = await requestLogout('csrf-success', async (url, options) => {
+    successCalls.push({url, method: options.method,
+      csrf: options.headers['X-CSRF-Token']});
+  });
+  const invalid = await requestLogout('csrf-invalid', async () => {
+    throw failed(401);
+  });
+  const network = await requestLogout('csrf-network', async () => {
+    throw failed();
+  });
+  const forbidden = await requestLogout('csrf-forbidden', async () => {
+    throw failed(403);
+  });
+  const server = await requestLogout('csrf-server', async () => {
+    throw failed(500);
+  });
+  const recoveryCalls = [];
+  const recovered = await recoverLogout(
+    async (url) => {
+      recoveryCalls.push({phase: 'load', url});
+      return {csrf_token: 'csrf-recovered'};
+    },
+    async (url, options) => recoveryCalls.push({phase: 'revoke', url,
+      csrf: options.headers['X-CSRF-Token']})
+  );
+  const recoveryInvalid = await recoverLogout(async () => {
+    throw failed(401);
+  }, async () => {});
+  console.log(JSON.stringify({success, invalid, network, forbidden, server,
+    recovered, recoveryInvalid, successCalls, recoveryCalls}));
+})();
+"""
+        measured = json.loads(
+            subprocess.run(
+                [node, "-e", functions + probe],
+                check=True,
+                text=True,
+                capture_output=True,
+            ).stdout
+        )
+        self.assertEqual(measured["success"], {"kind": "revoked"})
+        self.assertEqual(measured["invalid"], {"kind": "already-invalid"})
+        self.assertEqual(measured["network"], {"kind": "unconfirmed"})
+        self.assertEqual(measured["forbidden"], {"kind": "unconfirmed"})
+        self.assertEqual(measured["server"], {"kind": "unconfirmed"})
+        self.assertEqual(measured["recovered"], {"kind": "revoked"})
+        self.assertEqual(measured["recoveryInvalid"], {"kind": "already-invalid"})
+        self.assertEqual(
+            measured["successCalls"],
+            [{"url": "/api/auth/logout", "method": "POST", "csrf": "csrf-success"}],
+        )
+        self.assertEqual(
+            measured["recoveryCalls"],
+            [
+                {"phase": "load", "url": "/api/auth/session"},
+                {
+                    "phase": "revoke",
+                    "url": "/api/auth/logout",
+                    "csrf": "csrf-recovered",
+                },
+            ],
+        )
+        self.assertIn("showLogoutOutcome(await requestLogout(csrf))", self.script)
+        self.assertIn("showLogoutOutcome(await recoverLogout())", self.script)
+
     def test_it_reconciles_a_committed_mutation_after_an_a_b_a_refresh_cycle(self):
         """A stale mutation response may still represent newly committed state."""
 
