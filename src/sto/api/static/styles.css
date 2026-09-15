@@ -2,6 +2,13 @@
 * { box-sizing: border-box; }
 body { margin: 0 auto; padding: 2rem; max-width: 96rem; font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
 header { border-bottom: 1px solid var(--line); padding-bottom: 1.2rem; }
+.account { display: flex; gap: .7rem; align-items: center; justify-content: flex-end; }
+.login-panel { max-width: 34rem; margin: 2rem auto; padding: 1.2rem; border: 1px solid var(--line); border-radius: .55rem; background: var(--panel); }
+.login-panel h2 { margin-top: 0; }
+.login-form { display: grid; grid-template-columns: minmax(8rem, max-content) minmax(12rem, 1fr); gap: .7rem 1rem; align-items: center; }
+.login-form button { grid-column: 2; justify-self: start; }
+#auth-status { min-height: 1.5rem; margin-bottom: 0; }
+#auth-status[data-kind="error"] { color: var(--warn); }
 .eyebrow { margin: 0 0 .25rem; color: var(--accent); font-size: .75rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
 h1 { margin: 0 0 .4rem; font-size: clamp(1.7rem, 4vw, 2.5rem); line-height: 1.1; }
 h2 { margin: 1.8rem 0 .5rem; font-size: 1.05rem; }
@@ -53,4 +60,4 @@ tr[data-movement="downstream"] { background: color-mix(in srgb, var(--accent) 8%
 .bar.baseline { top: .28rem; height: .35rem; background: var(--muted); }
 .bar.scenario { bottom: .2rem; height: .42rem; background: var(--accent); }
 .gantt-row[data-movement="edited"] .bar.scenario { background: var(--changed); }
-@media (max-width: 700px) { body { padding: 1rem; } #chart { grid-template-columns: minmax(7rem, 10rem) 1fr; } .scenario-controls { align-items: stretch; flex-direction: column; } .scenario-controls > * { width: 100%; } }
+@media (max-width: 700px) { body { padding: 1rem; } #chart { grid-template-columns: minmax(7rem, 10rem) 1fr; } .scenario-controls { align-items: stretch; flex-direction: column; } .scenario-controls > * { width: 100%; } .login-form { grid-template-columns: 1fr; } .login-form button { grid-column: 1; } }

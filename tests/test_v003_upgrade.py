@@ -246,6 +246,10 @@ class V003UpgradeTests(unittest.TestCase):
             # current schema. PL14 adds V004 after the V003 proof was first
             # recorded, so an installation at V002 receives both in order.
             self.assertIn("apply   V004__planner_scenario_changes.sql", applied.stdout)
+            self.assertIn(
+                "apply   V005__authentication_and_project_authorization.sql",
+                applied.stdout,
+            )
             drift = subprocess.run(
                 [str(ROOT / "scripts" / "db" / "check-schema-drift.sh")],
                 cwd=ROOT,

@@ -26,6 +26,7 @@ from ..core.model.enums import EntityKind
 from ..core.model.ids import IdentityMap, ReconciliationReport, normalise_guid
 from ..core.model.migrate.sto_v011 import migrate
 from ..legacy.mspdi import import_mspdi
+from . import auth as _auth
 from . import roadmap as _roadmap
 
 _KINDS = (
@@ -280,6 +281,7 @@ def build_parser() -> argparse.ArgumentParser:
     reconcile.set_defaults(handler=_reconcile)
 
     _roadmap.add_subparser(subparsers)
+    _auth.add_subparser(subparsers)
 
     return parser
 

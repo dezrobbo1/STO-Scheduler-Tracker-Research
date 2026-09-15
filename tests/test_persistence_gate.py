@@ -88,6 +88,9 @@ class PersistenceGateTests(unittest.TestCase):
             conn.commit()
         cls.tmp = tempfile.TemporaryDirectory()
         cls.connect = staticmethod(lambda url=cls.url: connect(url))
+        from tests.auth_fixture import AuthTestContext
+
+        cls.auth = AuthTestContext(connect=cls.connect)
 
     @classmethod
     def tearDownClass(cls):
@@ -98,11 +101,10 @@ class PersistenceGateTests(unittest.TestCase):
     def _client(self):
         """A fresh app over the same database: nothing in memory survives."""
 
-        from sto.api.app import create_app
         from sto.scheduling.working_schedule import Workspace
 
         workspace = Workspace(connect=self.connect, source_dir=Path(self.tmp.name))
-        return TestClient(create_app(workspace))
+        return self.auth.client(workspace)
 
     def _import(self, client, project_id, path: Path):
         with path.open("rb") as handle:

@@ -419,11 +419,14 @@ class Workspace:
         source_sha: str,
         data: bytes,
         error: Exception,
+        actor_user_id: uuid.UUID | None = None,
     ) -> None:
         """Record a refused import, so the bytes on disk have something naming them."""
 
         with self.connect() as conn:
-            source_id = _record_source(conn, project_id, filename, path, source_sha, data)
+            source_id = _record_source(
+                conn, project_id, filename, path, source_sha, data, actor_user_id
+            )
             repo.insert_import_batch(
                 conn,
                 project_id=project_id,
@@ -433,6 +436,7 @@ class Workspace:
                 parser_version=PARSER_VERSION,
                 parse_summary={"error": str(error), "kind": type(error).__name__},
                 error_count=1,
+                created_by_user_id=actor_user_id,
             )
             conn.commit()
 
@@ -493,6 +497,7 @@ class Workspace:
         *,
         before: timedelta = timedelta(days=90),
         after: timedelta = timedelta(days=365),
+        actor_user_id: uuid.UUID | None = None,
     ) -> CalculationResult:
         """Run the engine over a project's stored head and store the answer.
 
@@ -533,6 +538,7 @@ class Workspace:
                 project_id=project_id,
                 version_id=working.version_id,
                 result=result,
+                created_by_user_id=actor_user_id,
             )
             if calculation_id is None:
                 existing = repo.find_calculation(
@@ -585,6 +591,7 @@ class Workspace:
         planned_duration_seconds: int,
         before: timedelta | None = None,
         after: timedelta | None = None,
+        actor_user_id: uuid.UUID | None = None,
     ) -> ScenarioResult:
         """Derive, calculate and atomically publish one duration scenario.
 
@@ -816,6 +823,7 @@ class Workspace:
                 cause_id=change_id,
                 document=payload,
                 identity_map=baseline.identity.to_dict(),
+                created_by_user_id=actor_user_id,
             )
             repo.insert_scenario_change(
                 conn,
@@ -836,12 +844,14 @@ class Workspace:
                     if activity.remaining_duration is None
                     else planned_duration_seconds
                 ),
+                created_by_user_id=actor_user_id,
             )
             calculation_id = repo.insert_calculation(
                 conn,
                 project_id=project_id,
                 version_id=scenario_version_id,
                 result=result,
+                created_by_user_id=actor_user_id,
             )
             assert calculation_id is not None
             repo.set_head(
@@ -1321,7 +1331,12 @@ class Workspace:
     # --- importing -------------------------------------------------------------
 
     def import_file(
-        self, project_id: uuid.UUID, *, filename: str, data: bytes
+        self,
+        project_id: uuid.UUID,
+        *,
+        filename: str,
+        data: bytes,
+        actor_user_id: uuid.UUID | None = None,
     ) -> ImportResult:
         with self.connect() as conn:
             if repo.get_project(conn, project_id) is None:
@@ -1345,7 +1360,9 @@ class Workspace:
         try:
             document = import_mspdi(str(path))
         except Exception as error:  # noqa: BLE001 - recorded, not hidden
-            self._record_failure(project_id, filename, path, source_sha, data, error)
+            self._record_failure(
+                project_id, filename, path, source_sha, data, error, actor_user_id
+            )
             raise ImportRefused(str(error)) from error
         warnings = tuple(
             str(item) for item in document.get("import_validation", {}).get("warnings", [])
@@ -1359,7 +1376,9 @@ class Workspace:
         try:
             schedule, identity, report = migrate(document, identity=prior_identity)
         except MigrationError as error:
-            self._record_failure(project_id, filename, path, source_sha, data, error)
+            self._record_failure(
+                project_id, filename, path, source_sha, data, error, actor_user_id
+            )
             raise
 
         payload = encode_schedule(schedule)
@@ -1379,7 +1398,9 @@ class Workspace:
                     f"baseline moved from {expected_prior_id} to {current_prior_id}; "
                     "retry the import against the current schedule"
                 )
-            source_id = _record_source(conn, project_id, filename, path, source_sha, data)
+            source_id = _record_source(
+                conn, project_id, filename, path, source_sha, data, actor_user_id
+            )
             batch_id = repo.insert_import_batch(
                 conn,
                 project_id=project_id,
@@ -1398,6 +1419,7 @@ class Workspace:
                     "warnings": list(warnings),
                 },
                 warning_count=len(warnings),
+                created_by_user_id=actor_user_id,
             )
             sequence = repo.next_sequence(conn, project_id)
             version_id = repo.insert_version(
@@ -1412,6 +1434,7 @@ class Workspace:
                 cause_id=batch_id,
                 document=payload,
                 identity_map=identity_payload,
+                created_by_user_id=actor_user_id,
             )
             repo.set_head(conn, project_id=project_id, kind="baseline", version_id=version_id)
             # A scenario derives from one exact baseline.  A later import makes
@@ -1555,6 +1578,7 @@ def _record_source(
     path: Path,
     sha: str,
     data: bytes,
+    actor_user_id: uuid.UUID | None = None,
 ) -> uuid.UUID:
     return repo.insert_source_file(
         conn,
@@ -1564,6 +1588,7 @@ def _record_source(
         storage_uri=path.as_uri(),
         content_hash=sha,
         size_bytes=len(data),
+        uploaded_by_user_id=actor_user_id,
     )
 
 

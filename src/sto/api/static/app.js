@@ -1,5 +1,16 @@
 "use strict";
 
+const planner = document.querySelector("#planner");
+const loginSection = document.querySelector("#login-section");
+const loginForm = document.querySelector("#login");
+const loginButton = document.querySelector("#login-button");
+const loginUsername = document.querySelector("#login-username");
+const loginPassword = document.querySelector("#login-password");
+const loginTotp = document.querySelector("#login-totp");
+const authStatus = document.querySelector("#auth-status");
+const account = document.querySelector("#account");
+const actorName = document.querySelector("#actor-name");
+const logoutButton = document.querySelector("#logout");
 const projects = document.querySelector("#project");
 const calculateButton = document.querySelector("#calculate");
 const createProjectForm = document.querySelector("#create-project");
@@ -27,6 +38,8 @@ const summaryBody = document.querySelector("#summaries tbody");
 
 let currentState = null;
 let refreshGeneration = 0;
+let csrfToken = null;
+let currentActor = null;
 
 function say(message, kind) {
   status.textContent = message;
@@ -46,8 +59,44 @@ function hours(seconds) {
   return seconds === null || seconds === undefined ? "" : (seconds / 3600).toFixed(2).replace(/0+$/, "").replace(/\.$/, "") + " h";
 }
 
+function clearPlanner(message) {
+  currentActor = null;
+  csrfToken = null;
+  currentState = null;
+  refreshGeneration += 1;
+  planner.hidden = true;
+  account.hidden = true;
+  loginSection.hidden = false;
+  actorName.textContent = "";
+  projects.replaceChildren(new Option("sign in to load projects", ""));
+  for (const section of [scenarioSection, provenanceSection, chartSection, rowsSection, summariesSection]) section.hidden = true;
+  body.replaceChildren(); chart.replaceChildren(); summaryBody.replaceChildren();
+  if (message) { authStatus.textContent = message; authStatus.dataset.kind = "error"; }
+}
+
+function showAuthenticated(session) {
+  currentActor = session.actor;
+  csrfToken = session.csrf_token;
+  actorName.textContent = session.actor.display_name || session.actor.username;
+  authStatus.textContent = ""; delete authStatus.dataset.kind;
+  loginSection.hidden = true;
+  account.hidden = false;
+  planner.hidden = false;
+}
+
+async function request(url, options) {
+  const settings = {...(options ?? {}), credentials: "same-origin"};
+  const method = (settings.method ?? "GET").toUpperCase();
+  const headers = new Headers(settings.headers ?? {});
+  if (["POST", "PUT", "PATCH", "DELETE"].includes(method) && csrfToken) headers.set("X-CSRF-Token", csrfToken);
+  settings.headers = headers;
+  const response = await fetch(url, settings);
+  if (response.status === 401 && url !== "/api/auth/login") clearPlanner("Your session is unavailable or has expired. Sign in again.");
+  return response;
+}
+
 async function json(url, options) {
-  const response = await fetch(url, options);
+  const response = await request(url, options);
   if (!response.ok) {
     let detail = response.statusText;
     try {
@@ -58,6 +107,7 @@ async function json(url, options) {
     failure.status = response.status;
     throw failure;
   }
+  if (response.status === 204) return null;
   return response.json();
 }
 
@@ -494,7 +544,66 @@ body.addEventListener("click", (event) => {
 });
 projects.addEventListener("change", () => show(projects.value));
 
+loginForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  loginButton.disabled = true;
+  authStatus.textContent = "Signing in…"; delete authStatus.dataset.kind;
+  try {
+    const session = await json("/api/auth/login", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        username: loginUsername.value,
+        password: loginPassword.value,
+        totp: loginTotp.value,
+      }),
+    });
+    showAuthenticated(session);
+    await refreshProjects();
+  } catch (error) {
+    clearPlanner("Authentication failed. Check your credentials and current authenticator code.");
+  } finally {
+    loginPassword.value = "";
+    loginTotp.value = "";
+    loginButton.disabled = false;
+  }
+});
+
+logoutButton.addEventListener("click", async () => {
+  logoutButton.disabled = true;
+  try { await json("/api/auth/logout", {method: "POST"}); }
+  catch (error) { /* Local state is cleared even if the session has expired. */ }
+  finally {
+    clearPlanner();
+    authStatus.textContent = "Signed out."; delete authStatus.dataset.kind;
+    logoutButton.disabled = false;
+  }
+});
+
+exportScenario.addEventListener("click", async (event) => {
+  event.preventDefault();
+  if (!currentState) return;
+  try {
+    const response = await request(exportScenario.href);
+    if (!response.ok) throw new Error("Export could not be downloaded.");
+    const blob = await response.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = objectUrl;
+    anchor.download = exportScenario.getAttribute("download");
+    anchor.click();
+    URL.revokeObjectURL(objectUrl);
+  } catch (error) {
+    if (currentActor) say(error.message, "error");
+  }
+});
+
 (async function start() {
-  try { await refreshProjects(); }
-  catch (error) { say(error.message, "error"); }
+  try {
+    const session = await json("/api/auth/session");
+    showAuthenticated(session);
+    await refreshProjects();
+  } catch (error) {
+    if (error.status !== 401) clearPlanner("The authentication service is unavailable.");
+  }
 })();

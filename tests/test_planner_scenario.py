@@ -67,6 +67,9 @@ class PlannerScenarioTests(unittest.TestCase):
             conn.commit()
         cls.tmp = tempfile.TemporaryDirectory()
         cls.connect = staticmethod(lambda url=cls.url: connect(url))
+        from tests.auth_fixture import AuthTestContext
+
+        cls.auth = AuthTestContext(connect=cls.connect)
 
     @classmethod
     def tearDownClass(cls):
@@ -75,11 +78,10 @@ class PlannerScenarioTests(unittest.TestCase):
             admin.execute(f'DROP DATABASE "{cls.dbname}" WITH (FORCE)')
 
     def client(self):
-        from sto.api.app import create_app
         from sto.scheduling.working_schedule import Workspace
 
         workspace = Workspace(connect=self.connect, source_dir=Path(self.tmp.name))
-        return TestClient(create_app(workspace))
+        return self.auth.client(workspace)
 
     def prepared(self, name="planner"):
         client = self.client()

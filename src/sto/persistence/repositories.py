@@ -26,14 +26,15 @@ def create_project(
     name: str,
     timezone: str = "UTC",
     description: str | None = None,
+    created_by_user_id: uuid.UUID | None = None,
 ) -> dict[str, Any]:
     row = conn.execute(
         """
-        INSERT INTO projects (name, timezone, description)
-        VALUES (%s, %s, %s)
+        INSERT INTO projects (name, timezone, description, created_by_user_id)
+        VALUES (%s, %s, %s, %s)
         RETURNING id, name, description, status, timezone, created_at, updated_at
         """,
-        (name, timezone, description),
+        (name, timezone, description, created_by_user_id),
     ).fetchone()
     assert row is not None
     return row
@@ -54,6 +55,28 @@ def list_projects(conn: psycopg.Connection) -> list[dict[str, Any]]:
     ).fetchall()
 
 
+def list_projects_for_user(
+    conn: psycopg.Connection,
+    *,
+    user_id: uuid.UUID,
+    project_id: uuid.UUID | None = None,
+) -> list[dict[str, Any]]:
+    """Only projects the actor may know exist; device actors can add a scope."""
+
+    return conn.execute(
+        """
+        SELECT p.id, p.name, p.description, p.status, p.timezone,
+               p.created_at, p.updated_at
+        FROM projects p
+        JOIN project_memberships m ON m.project_id = p.id
+        WHERE m.user_id = %s AND m.revoked_at IS NULL
+          AND (%s::uuid IS NULL OR p.id = %s)
+        ORDER BY p.created_at, p.id
+        """,
+        (user_id, project_id, project_id),
+    ).fetchall()
+
+
 # --- source files and import batches ------------------------------------------
 
 
@@ -66,15 +89,25 @@ def insert_source_file(
     storage_uri: str,
     content_hash: str,
     size_bytes: int,
+    uploaded_by_user_id: uuid.UUID | None = None,
 ) -> uuid.UUID:
     row = conn.execute(
         """
         INSERT INTO source_files
-          (project_id, original_filename, file_kind, storage_uri, content_hash, size_bytes)
-        VALUES (%s, %s, %s, %s, %s, %s)
+          (project_id, original_filename, file_kind, storage_uri, content_hash,
+           size_bytes, uploaded_by_user_id)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
         RETURNING id
         """,
-        (project_id, original_filename, file_kind, storage_uri, content_hash, size_bytes),
+        (
+            project_id,
+            original_filename,
+            file_kind,
+            storage_uri,
+            content_hash,
+            size_bytes,
+            uploaded_by_user_id,
+        ),
     ).fetchone()
     assert row is not None
     return row["id"]
@@ -91,13 +124,15 @@ def insert_import_batch(
     parse_summary: dict[str, Any],
     warning_count: int = 0,
     error_count: int = 0,
+    created_by_user_id: uuid.UUID | None = None,
 ) -> uuid.UUID:
     row = conn.execute(
         """
         INSERT INTO import_batches
           (project_id, source_file_id, status, parser_name, parser_version,
-           started_at, completed_at, warning_count, error_count, parse_summary)
-        VALUES (%s, %s, %s, %s, %s, now(), now(), %s, %s, %s)
+           started_at, completed_at, warning_count, error_count, parse_summary,
+           created_by_user_id)
+        VALUES (%s, %s, %s, %s, %s, now(), now(), %s, %s, %s, %s)
         RETURNING id
         """,
         (
@@ -109,6 +144,7 @@ def insert_import_batch(
             warning_count,
             error_count,
             Jsonb(parse_summary),
+            created_by_user_id,
         ),
     ).fetchone()
     assert row is not None
@@ -140,13 +176,14 @@ def insert_version(
     cause_id: uuid.UUID | None,
     document: dict[str, Any],
     identity_map: dict[str, Any],
+    created_by_user_id: uuid.UUID | None = None,
 ) -> uuid.UUID:
     row = conn.execute(
         """
         INSERT INTO schedule_versions
           (project_id, kind, sequence, parent_id, canonical_hash, schema_version,
-           cause_type, cause_id, document, identity_map)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+           cause_type, cause_id, document, identity_map, created_by_user_id)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         RETURNING id
         """,
         (
@@ -160,6 +197,7 @@ def insert_version(
             cause_id,
             Jsonb(document),
             Jsonb(identity_map),
+            created_by_user_id,
         ),
     ).fetchone()
     assert row is not None
@@ -288,14 +326,15 @@ def insert_scenario_change(
     after_seconds: int,
     remaining_before_seconds: int | None,
     remaining_after_seconds: int | None,
+    created_by_user_id: uuid.UUID | None = None,
 ) -> dict[str, Any]:
     row = conn.execute(
         """
         INSERT INTO scenario_changes
           (id, project_id, baseline_version_id, scenario_version_id,
            activity_uid, before_seconds, after_seconds,
-           remaining_before_seconds, remaining_after_seconds)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+           remaining_before_seconds, remaining_after_seconds, created_by_user_id)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         RETURNING *
         """,
         (
@@ -308,6 +347,7 @@ def insert_scenario_change(
             after_seconds,
             remaining_before_seconds,
             remaining_after_seconds,
+            created_by_user_id,
         ),
     ).fetchone()
     assert row is not None
@@ -332,6 +372,7 @@ def insert_calculation(
     project_id: uuid.UUID,
     version_id: uuid.UUID,
     result: Any,
+    created_by_user_id: uuid.UUID | None = None,
 ) -> uuid.UUID | None:
     """Store one engine run: the header, then its rows, or ``None``.
 
@@ -345,52 +386,65 @@ def insert_calculation(
     """
 
     provenance = result.provenance
+    columns = """
+          project_id, version_id, canonical_hash, result_fingerprint, epoch,
+          horizon_start, horizon_finish, progress_policy,
+          critical_float_threshold, status_time, status_time_outside_window,
+          resource_calendars_apply, relationship_dispositions, profiles
+    """
+    placeholders = ", ".join(["%s"] * 14)
+    values: tuple[Any, ...] = (
+        project_id,
+        version_id,
+        provenance.canonical_hash,
+        result.fingerprint,
+        provenance.epoch,
+        provenance.horizon_start,
+        provenance.horizon_finish,
+        provenance.progress_policy,
+        provenance.critical_float_threshold,
+        provenance.status_time,
+        provenance.status_time_outside_window,
+        provenance.resource_calendars_apply,
+        Jsonb(
+            [
+                {
+                    "uid": str(edge.uid),
+                    "disposition": edge.disposition,
+                    "code": edge.code,
+                    "detail": edge.detail,
+                }
+                for edge in result.relationships
+            ]
+        ),
+        Jsonb(
+            {
+                "forward": provenance.forward_profile,
+                "backward": provenance.backward_profile,
+                "criticality": provenance.criticality_profile,
+                "rollup": provenance.rollup_profile,
+                "progress": provenance.progress_profile,
+                "result": provenance.result_profile,
+            }
+        ),
+    )
+    # Keeping the null-actor shape compatible with V004 lets the upgrade test
+    # construct a genuine pre-V005 planner state with the current application
+    # code. Authenticated routes always supply an actor and therefore require
+    # V005 before the API starts serving traffic.
+    if created_by_user_id is not None:
+        columns += ", created_by_user_id"
+        placeholders += ", %s"
+        values += (created_by_user_id,)
     row = conn.execute(
-        """
+        f"""
         INSERT INTO schedule_calculations
-          (project_id, version_id, canonical_hash, result_fingerprint, epoch,
-           horizon_start, horizon_finish, progress_policy,
-           critical_float_threshold, status_time, status_time_outside_window,
-           resource_calendars_apply, relationship_dispositions, profiles)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+          ({columns})
+        VALUES ({placeholders})
         ON CONFLICT (version_id, result_fingerprint) DO NOTHING
         RETURNING id
         """,
-        (
-            project_id,
-            version_id,
-            provenance.canonical_hash,
-            result.fingerprint,
-            provenance.epoch,
-            provenance.horizon_start,
-            provenance.horizon_finish,
-            provenance.progress_policy,
-            provenance.critical_float_threshold,
-            provenance.status_time,
-            provenance.status_time_outside_window,
-            provenance.resource_calendars_apply,
-            Jsonb(
-                [
-                    {
-                        "uid": str(edge.uid),
-                        "disposition": edge.disposition,
-                        "code": edge.code,
-                        "detail": edge.detail,
-                    }
-                    for edge in result.relationships
-                ]
-            ),
-            Jsonb(
-                {
-                    "forward": provenance.forward_profile,
-                    "backward": provenance.backward_profile,
-                    "criticality": provenance.criticality_profile,
-                    "rollup": provenance.rollup_profile,
-                    "progress": provenance.progress_profile,
-                    "result": provenance.result_profile,
-                }
-            ),
-        ),
+        values,
     ).fetchone()
     if row is None:
         # Another caller stored this exact answer between any lookup and here.

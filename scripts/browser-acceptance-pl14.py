@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exercise PL14 through a rendered Chromium page and a real PostgreSQL."""
+"""Exercise PL14 behind PL2 authentication in Chromium and PostgreSQL."""
 
 from __future__ import annotations
 
@@ -12,11 +12,16 @@ import time
 from pathlib import Path
 from urllib.request import urlopen
 
+import pyotp
+from cryptography.fernet import Fernet
 from playwright.sync_api import expect, sync_playwright
+
+from sto.api.auth import AuthConfig, AuthService
+from sto.persistence.db import connect
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURE = ROOT / "tests" / "fixtures" / "synthetic-workspace-chain.mspdi.xml"
-EVIDENCE = ROOT / "artifacts" / "pl14-browser"
+EVIDENCE = ROOT / "artifacts" / "pl2-browser"
 PORT = 8092
 URL = f"http://127.0.0.1:{PORT}"
 
@@ -25,7 +30,7 @@ def wait_for_server() -> None:
     deadline = time.monotonic() + 30
     while time.monotonic() < deadline:
         try:
-            with urlopen(URL + "/api/health", timeout=1) as response:  # noqa: S310
+            with urlopen(URL + "/healthz", timeout=1) as response:  # noqa: S310
                 if response.status == 200:
                     return
         except OSError:
@@ -33,11 +38,15 @@ def wait_for_server() -> None:
     raise RuntimeError("the PL14 application did not become ready")
 
 
-def start_server(log) -> subprocess.Popen:
+def start_server(log, master_key: str) -> subprocess.Popen:
     process = subprocess.Popen(
         [sys.executable, "-m", "sto.cli", "serve", "--host", "127.0.0.1", "--port", str(PORT)],
         cwd=ROOT,
-        env={**os.environ, "PYTHONPATH": str(ROOT / "src")},
+        env={
+            **os.environ,
+            "PYTHONPATH": str(ROOT / "src"),
+            "STO_AUTH_MASTER_KEY": master_key,
+        },
         stdout=log,
         stderr=subprocess.STDOUT,
         start_new_session=True,
@@ -65,11 +74,36 @@ def main() -> int:
     EVIDENCE.mkdir(parents=True, exist_ok=True)
     log_path = EVIDENCE / "server.log"
     console_errors: list[str] = []
+    password = "synthetic-browser-password"
+    master_key = Fernet.generate_key().decode("ascii")
+    service = AuthService(connect=connect, config=AuthConfig(master_key=master_key.encode()))
+    user, totp_secret, _ = service.bootstrap_admin(
+        username="browser-planner", password=password, display_name="Browser Planner"
+    )
+
+    def otp_after_consumed() -> str:
+        with connect() as conn:
+            last = conn.execute(
+                "SELECT last_totp_counter FROM users WHERE id=%s", (user["id"],)
+            ).fetchone()["last_totp_counter"]
+        # A long browser run may span multiple TOTP steps, while a very fast
+        # one may still be inside the consumed step. Wait only when necessary
+        # and submit the real current code rather than manufacturing one from
+        # a future counter.
+        current = int(time.time()) // 30
+        if current <= last:
+            time.sleep((last + 1) * 30 - time.time() + 0.1)
+        return pyotp.TOTP(totp_secret).now()
+
     with log_path.open("w", encoding="utf-8") as log:
-        server = start_server(log)
+        server = start_server(log, master_key)
         try:
             with sync_playwright() as playwright:
-                browser = playwright.chromium.launch(headless=True)
+                executable = os.environ.get("STO_BROWSER_EXECUTABLE")
+                browser = playwright.chromium.launch(
+                    headless=True,
+                    executable_path=executable,
+                )
                 context = browser.new_context(
                     viewport={"width": 1440, "height": 1000}, accept_downloads=True
                 )
@@ -84,6 +118,30 @@ def main() -> int:
                 expect(
                     page.get_by_role("heading", name="Duration scenario planner")
                 ).to_be_visible()
+                expect(page.get_by_role("heading", name="Sign in")).to_be_visible()
+                anonymous_status = page.evaluate(
+                    "async () => (await fetch('/api/projects')).status"
+                )
+                if anonymous_status != 401:
+                    raise AssertionError("project API was available before login")
+                unexpected = [
+                    message for message in console_errors if "401 (Unauthorized)" not in message
+                ]
+                if unexpected:
+                    raise AssertionError(
+                        "browser console errors while logged out: " + "; ".join(unexpected)
+                    )
+                console_errors.clear()
+
+                page.locator("#login-username").fill(user["username"])
+                page.locator("#login-password").fill(password)
+                page.locator("#login-totp").fill(pyotp.TOTP(totp_secret).now())
+                page.locator("#login-button").click()
+                expect(page.locator("#account")).to_be_visible()
+                expect(page.locator("#actor-name")).to_have_text("Browser Planner")
+                expect(page.locator("#planner")).to_be_visible()
+                expect(page.locator("#login-password")).to_have_value("")
+                expect(page.locator("#login-totp")).to_have_value("")
 
                 page.get_by_text("Create a project", exact=True).click()
                 page.locator("#project-name").fill("PL14 browser acceptance")
@@ -153,7 +211,7 @@ def main() -> int:
                 # Stop and reconstruct the actual process. The browser keeps no
                 # scheduling state; after restart it must recover PostgreSQL.
                 stop_server(server)
-                server = start_server(log)
+                server = start_server(log, master_key)
                 page.reload(wait_until="networkidle")
                 expect(page.locator("#mode")).to_have_text("scenario")
                 expect(page.locator('tr[data-movement="edited"]')).to_have_count(1)
@@ -204,13 +262,63 @@ def main() -> int:
                         "export changed scenario provenance: "
                         f"{expected_provenance!r} != {exported_provenance!r}"
                     )
+                # Logout revokes the persistent server session and clears all
+                # planner content. A second login then survives a real process
+                # restart with the same project/scenario provenance.
+                page.locator("#logout").click()
+                expect(page.get_by_role("heading", name="Sign in")).to_be_visible()
+                expect(page.locator("#planner")).to_be_hidden()
+                logged_out_status = page.evaluate(
+                    "async () => (await fetch('/api/projects')).status"
+                )
+                if logged_out_status != 401:
+                    raise AssertionError("project API remained available after logout")
+                console_errors[:] = [
+                    message for message in console_errors if "401 (Unauthorized)" not in message
+                ]
+
+                page.locator("#login-username").fill(user["username"])
+                page.locator("#login-password").fill(password)
+                page.locator("#login-totp").fill(otp_after_consumed())
+                page.locator("#login-button").click()
+                expect(page.locator("#mode")).to_have_text("scenario")
+
+                stop_server(server)
+                server = start_server(log, master_key)
+                page.reload(wait_until="networkidle")
+                expect(page.locator("#actor-name")).to_have_text("Browser Planner")
+                expect(page.locator("#mode")).to_have_text("scenario")
+                expect(page.locator('tr[data-movement="edited"]')).to_have_count(1)
+                persisted = page.evaluate(
+                    """async () => {
+                      const project = document.querySelector('#project').value;
+                      return (await fetch('/api/projects/' + project + '/planner')).json();
+                    }"""
+                )
+                if persisted["current_version_id"] != expected_provenance["current_version_id"]:
+                    raise AssertionError("authenticated scenario did not survive the final restart")
                 page.screenshot(path=EVIDENCE / "scenario-after-restart.png", full_page=True)
                 browser.close()
         finally:
             stop_server(server)
-    if console_errors:
-        raise AssertionError("browser console errors: " + "; ".join(console_errors))
-    print("PL14 browser acceptance passed: create/import/calculate/edit/move/reset/restart/export")
+    # Chromium can report an in-flight resource fetch as connection-refused
+    # while this acceptance test deliberately stops the application process.
+    # The post-restart page/API/provenance assertions above still prove that
+    # both reconstructed processes became usable; retain every other console
+    # error as a failure.
+    unexpected_console_errors = [
+        message
+        for message in console_errors
+        if message != "Failed to load resource: net::ERR_CONNECTION_REFUSED"
+    ]
+    if unexpected_console_errors:
+        raise AssertionError(
+            "browser console errors: " + "; ".join(unexpected_console_errors)
+        )
+    print(
+        "PL2 browser acceptance passed: logged-out refusal/login/PL14 workflow/"
+        "logout/relogin/restart/export"
+    )
     return 0
 
 
