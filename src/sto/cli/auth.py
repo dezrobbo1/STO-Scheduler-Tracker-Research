@@ -91,13 +91,16 @@ def _grant_project(args: argparse.Namespace) -> int:
             raise SystemExit("no such project")
         if user is None or not user["enabled"]:
             raise SystemExit("no such enabled user")
-        membership = auth_repo.grant_membership(
-            conn,
-            project_id=args.project_id,
-            user_id=user["id"],
-            role=args.role,
-            created_by_user_id=None,
-        )
+        try:
+            membership = auth_repo.grant_membership(
+                conn,
+                project_id=args.project_id,
+                user_id=user["id"],
+                role=args.role,
+                created_by_user_id=None,
+            )
+        except auth_repo.DisabledUser:
+            raise SystemExit("no such enabled user") from None
         conn.commit()
     print(
         f"granted {membership['role']} on {membership['project_id']} "

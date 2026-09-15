@@ -329,12 +329,16 @@ def create_app(
     @app.post("/api/auth/login", response_model=schemas.SessionResponse)
     def login(
         body: schemas.LoginRequest,
+        request: Request,
         response: Response,
         service: AuthService = Depends(auth),
     ) -> Any:
         try:
             result = service.login(
-                username=body.username, password=body.password, otp=body.totp
+                username=body.username,
+                password=body.password,
+                otp=body.totp,
+                replace_raw_session=request.cookies.get(service.config.cookie_name),
             )
         except AuthenticationFailed:
             raise HTTPException(401, "authentication failed") from None
@@ -429,13 +433,16 @@ def create_app(
                 description=body.description,
                 created_by_user_id=actor.user_id,
             )
-            auth_repo.grant_membership(
-                conn,
-                project_id=row["id"],
-                user_id=actor.user_id,
-                role="admin",
-                created_by_user_id=actor.user_id,
-            )
+            try:
+                auth_repo.grant_membership(
+                    conn,
+                    project_id=row["id"],
+                    user_id=actor.user_id,
+                    role="admin",
+                    created_by_user_id=actor.user_id,
+                )
+            except auth_repo.DisabledUser:
+                raise HTTPException(401, "authentication required") from None
             conn.commit()
         return schemas.Project(**row)
 

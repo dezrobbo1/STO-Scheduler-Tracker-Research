@@ -210,6 +210,9 @@ class V006UpgradeTests(unittest.TestCase):
                     ).fetchone()["count"],
                     2,
                 )
+                with self.assertRaises(psycopg.errors.CheckViolation):
+                    conn.execute("TRUNCATE scenario_reset_events")
+                conn.rollback()
         finally:
             source_dir.cleanup()
             with psycopg.connect(ADMIN_URL, autocommit=True) as admin:

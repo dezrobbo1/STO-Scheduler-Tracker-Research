@@ -347,7 +347,14 @@ class AuthService:
                 return counter
         return None
 
-    def login(self, *, username: str, password: str, otp: str) -> LoginResult:
+    def login(
+        self,
+        *,
+        username: str,
+        password: str,
+        otp: str,
+        replace_raw_session: str | None = None,
+    ) -> LoginResult:
         now = self._now()
         normalized = normalize_username(username)
         with self.connect() as conn:
@@ -399,6 +406,13 @@ class AuthService:
                 token_prefix=prefix,
                 expires_at=expires,
             )
+            if replace_raw_session is not None:
+                # A login after an unconfirmed logout must not overwrite the
+                # browser's only copy of an older live token. Rotate it inside
+                # the same transaction that creates the replacement session.
+                auth_repo.revoke_session_by_hash(
+                    conn, self._token_hash(replace_raw_session)
+                )
             conn.commit()
         actor = Actor(
             user_id=user["id"],

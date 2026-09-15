@@ -363,6 +363,18 @@ def revoke_session(conn: psycopg.Connection, session_id: uuid.UUID) -> bool:
     return row is not None
 
 
+def revoke_session_by_hash(conn: psycopg.Connection, token_hash: str) -> bool:
+    row = conn.execute(
+        """
+        UPDATE server_sessions SET revoked_at = now()
+        WHERE token_hash = %s AND revoked_at IS NULL
+        RETURNING id
+        """,
+        (token_hash,),
+    ).fetchone()
+    return row is not None
+
+
 def revoke_user_sessions(conn: psycopg.Connection, user_id: uuid.UUID) -> int:
     cursor = conn.execute(
         """

@@ -23,7 +23,9 @@ session, and unconfirmed revocation. Every outcome immediately removes planner
 content from the page. Only the first is described as server revocation. An
 unconfirmed outcome exposes a retry action which first obtains the current
 session-bound CSRF value and then retries the protected mutation; no credential
-or token is stored in browser storage.
+or token is stored in browser storage. If the user signs in instead, issuing
+the replacement session and revoking the session token currently in the cookie
+commit atomically, so overwriting the cookie cannot orphan a live session.
 
 User disable, membership grant, demotion and revocation share a short
 transaction advisory lock. Disabling an account locks its administrative
@@ -41,7 +43,8 @@ persisting or generating TOTP enrollment material.
 V006 adds `scenario_reset_events`. A real scenario-to-baseline reset records
 the authenticated actor, project, prior scenario, restored baseline and time
 in the same transaction that removes the scenario head. The table is
-append-only and database-validated for same-project lineage. A stale refusal
+append-only against update, delete and truncate and database-validated for
+same-project lineage. A stale refusal
 records no event; an already-baseline request returns an explicit no-op receipt
 and records no reset. Immutable schedule versions and calculations remain.
 

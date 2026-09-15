@@ -787,6 +787,40 @@ class AuthenticationBoundaryTests(unittest.TestCase):
                 client.post("/api/projects", json={"name": "must-rollback"})
         self.assertEqual(client.get("/api/projects").json(), before)
 
+    def test_project_and_cli_grants_control_a_concurrent_disable_refusal(self):
+        from sto.cli.main import build_parser
+        from sto.persistence import auth_repositories as auth_repo
+        from sto.persistence import repositories as repo
+
+        client, actor, _, _ = self.authenticated("grant-disable-race")
+        before = client.get("/api/projects").json()
+        with patch.object(
+            auth_repo,
+            "grant_membership",
+            side_effect=auth_repo.DisabledUser("synthetic disable race"),
+        ):
+            refused = client.post("/api/projects", json={"name": "must-rollback"})
+        self.assertEqual(refused.status_code, 401, refused.text)
+        self.assertEqual(client.get("/api/projects").json(), before)
+
+        with self.connect() as conn:
+            project = repo.create_project(conn, name="grant-cli-race")
+            conn.commit()
+        args = build_parser().parse_args(
+            ["auth", "grant-project", str(project["id"]), actor["username"], "viewer"]
+        )
+        with (
+            patch("sto.persistence.db.connect", side_effect=self.connect),
+            patch.object(
+                auth_repo,
+                "grant_membership",
+                side_effect=auth_repo.DisabledUser("synthetic disable race"),
+            ),
+            self.assertRaises(SystemExit) as stopped,
+        ):
+            args.handler(args)
+        self.assertEqual(str(stopped.exception), "no such enabled user")
+
     def test_disable_refuses_last_admin_and_serializes_with_demotion(self):
         from sto.persistence import auth_repositories as auth_repo
 
@@ -1028,6 +1062,27 @@ class AuthenticationBoundaryTests(unittest.TestCase):
         self.assertEqual(failure_client.get("/api/auth/session").status_code, 200)
         self.assertEqual(failure_client.post("/api/auth/logout").status_code, 204)
         self.assertEqual(failure_client.get("/api/auth/session").status_code, 401)
+
+    def test_login_after_unconfirmed_logout_atomically_revokes_the_old_session(self):
+        client, row, secret, _ = self.authenticated("logout-login-rotation")
+        old_raw = client.cookies.get(self.auth.config.cookie_name)
+        self.assertIsNotNone(old_raw)
+
+        refused = client.post(
+            "/api/auth/logout", headers={"X-CSRF-Token": "wrong-session-value"}
+        )
+        self.assertEqual(refused.status_code, 403, refused.text)
+        self.assertEqual(client.get("/api/auth/session").status_code, 200)
+
+        self.advance()
+        replacement, _ = self.login(client, row, secret, advance=False)
+        self.assertEqual(replacement.status_code, 200, replacement.text)
+        self.assertNotEqual(client.cookies.get(self.auth.config.cookie_name), old_raw)
+
+        old = self.app_client()
+        old.cookies.set(self.auth.config.cookie_name, old_raw)
+        self.assertEqual(old.get("/api/auth/session").status_code, 401)
+        self.assertEqual(client.get("/api/auth/session").status_code, 200)
 
 
 if __name__ == "__main__":

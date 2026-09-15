@@ -59,6 +59,10 @@ CREATE TRIGGER scenario_reset_events_are_append_only
 BEFORE UPDATE OR DELETE ON scenario_reset_events
 FOR EACH ROW EXECUTE FUNCTION refuse_scenario_reset_event_mutation();
 
+CREATE TRIGGER scenario_reset_events_refuse_truncate
+BEFORE TRUNCATE ON scenario_reset_events
+FOR EACH STATEMENT EXECUTE FUNCTION refuse_scenario_reset_event_mutation();
+
 CREATE INDEX idx_scenario_reset_events_project_created
   ON scenario_reset_events(project_id, created_at DESC);
 
