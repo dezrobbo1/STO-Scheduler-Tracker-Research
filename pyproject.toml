@@ -23,6 +23,9 @@ api = [
 test = [
     "httpx2>=0.1",
 ]
+browser = [
+    "playwright>=1.55,<2",
+]
 
 [project.scripts]
 sto = "sto.cli:main"

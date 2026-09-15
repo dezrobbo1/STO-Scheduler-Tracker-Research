@@ -1,96 +1,79 @@
 <!doctype html>
 <meta charset="utf-8">
-<title>STO — calculated schedule</title>
+<title>STO — scenario planner</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" href="data:,">
 <link rel="stylesheet" href="styles.css">
 <header>
-  <h1>Calculated schedule</h1>
-  <p class="lede">
-    What the file said, and what this engine worked out, side by side. The two
-    are never blended: the imported dates come from the stored document and are
-    not recomputed, and the calculated ones are not written back over them.
-  </p>
+  <p class="eyebrow">STO scheduler + tracker</p>
+  <h1>Duration scenario planner</h1>
+  <p class="lede">Import a schedule, calculate its immutable baseline, then change one supported activity duration. The baseline stays intact while the scenario shows which downstream work moved.</p>
 </header>
-
-<section aria-labelledby="project-heading">
-  <h2 id="project-heading">Project</h2>
-  <div class="row">
-    <label for="project">Project</label>
-    <select id="project"><option value="">loading…</option></select>
-    <button id="calculate" type="button">Calculate</button>
-  </div>
-  <p id="status" role="status"></p>
-</section>
-
-<section id="provenance-section" hidden aria-labelledby="provenance-heading">
-  <h2 id="provenance-heading">What produced this answer</h2>
-  <dl id="provenance"></dl>
-</section>
-
-<section id="chart-section" hidden aria-labelledby="chart-heading">
-  <h2 id="chart-heading">The shape of it</h2>
-  <p class="lede">
-    Every placed activity against the whole calculation's extent, earliest
-    first. The outline is what the file said and the solid bar is what this
-    engine worked out, so a row that moved shows the movement. Critical rows
-    are marked.
-  </p>
-  <div id="chart"></div>
-</section>
-
-<section id="rows-section" hidden aria-labelledby="rows-heading">
-  <h2 id="rows-heading">Activities</h2>
-  <p class="lede">
-    The bar shows the calculated span against the whole schedule; the outline
-    behind it is what the file said. Where they do not line up, the placement
-    reason is what moved the row.
-  </p>
-  <div class="scroll">
-    <table id="rows">
-      <thead>
-        <tr>
-          <th scope="col">Code</th>
-          <th scope="col">Name</th>
-          <th scope="col">State</th>
-          <th scope="col">Imported start</th>
-          <th scope="col">Imported finish</th>
-          <th scope="col">Calculated start</th>
-          <th scope="col">Calculated finish</th>
-          <th scope="col">Placed by</th>
-          <th scope="col">Total float</th>
-          <th scope="col">Critical</th>
-          <th scope="col">Agrees</th>
-        </tr>
-      </thead>
+<main>
+  <section aria-labelledby="project-heading">
+    <h2 id="project-heading">1. Open or create a project</h2>
+    <div class="toolbar">
+      <label for="project">Project</label>
+      <select id="project"><option value="">loading…</option></select>
+      <button id="calculate" type="button">Calculate baseline</button>
+    </div>
+    <details>
+      <summary>Create a project</summary>
+      <form id="create-project" class="toolbar">
+        <label for="project-name">Name</label>
+        <input id="project-name" required maxlength="200" placeholder="Shutdown trial">
+        <label for="project-timezone">Site timezone</label>
+        <input id="project-timezone" value="UTC" required maxlength="64">
+        <button type="submit">Create</button>
+      </form>
+    </details>
+    <form id="import-schedule" class="toolbar">
+      <label for="schedule-file">MSPDI/XML schedule</label>
+      <input id="schedule-file" type="file" accept=".xml,.mspdi.xml,application/xml,text/xml" required>
+      <button type="submit">Import</button>
+    </form>
+    <p id="status" role="status"></p>
+  </section>
+  <section id="scenario-section" hidden aria-labelledby="scenario-heading">
+    <div class="section-title">
+      <div><h2 id="scenario-heading">2. Try one duration change</h2><p id="version-state" class="lede"></p></div>
+      <span id="mode" class="pill"></span>
+    </div>
+    <form id="scenario-form" class="scenario-controls">
+      <label for="activity">Supported leaf activity</label>
+      <select id="activity"></select>
+      <label for="duration-hours">Planned duration (hours)</label>
+      <input id="duration-hours" type="number" min="0.0003" step="any" required>
+      <button id="apply-scenario" type="submit">Create scenario</button>
+      <button id="reset-scenario" type="button">Reset to baseline</button>
+      <a id="export-scenario" class="button" download>Export prototype state</a>
+    </form>
+    <p id="change-summary" class="change-summary"></p>
+  </section>
+  <section id="provenance-section" hidden aria-labelledby="provenance-heading">
+    <h2 id="provenance-heading">Calculation provenance</h2><dl id="provenance"></dl>
+  </section>
+  <section id="chart-section" hidden aria-labelledby="chart-heading">
+    <div class="section-title">
+      <div><h2 id="chart-heading">3. See what moved</h2><p class="lede">Imported dates are outlined, baseline dates are grey, and the active scenario is blue. The edited activity is amber; downstream movement is labelled.</p></div>
+      <div class="legend" aria-label="Gantt legend"><span class="key imported"></span>Imported <span class="key baseline"></span>Baseline <span class="key scenario"></span>Scenario</div>
+    </div>
+    <div id="chart"></div>
+  </section>
+  <section id="rows-section" hidden aria-labelledby="rows-heading">
+    <h2 id="rows-heading">Activities</h2>
+    <p class="lede">Every row keeps its scheduling disposition visible. Select an eligible row to load it into the edit control.</p>
+    <div class="scroll"><table id="rows">
+      <thead><tr><th scope="col">Edit</th><th scope="col">Code</th><th scope="col">Name</th><th scope="col">Disposition</th><th scope="col">Imported</th><th scope="col">Baseline calculated</th><th scope="col">Scenario calculated</th><th scope="col">Movement</th><th scope="col">Calculation details</th><th scope="col">Assumptions / exclusions</th></tr></thead>
       <tbody></tbody>
-    </table>
-  </div>
-</section>
-
-<section id="summaries-section" hidden aria-labelledby="summaries-heading">
-  <h2 id="summaries-heading">Summaries</h2>
-  <p class="lede">
-    A summary's dates are its children's. A branch with nothing placed beneath
-    it is shown with no span rather than left out, because "nothing was
-    calculated here" and "this is not in the file" are different answers.
-  </p>
-  <div class="scroll">
-    <table id="summaries">
-      <thead>
-        <tr>
-          <th scope="col">Code</th>
-          <th scope="col">Name</th>
-          <th scope="col">Imported start</th>
-          <th scope="col">Imported finish</th>
-          <th scope="col">Rolled-up start</th>
-          <th scope="col">Rolled-up finish</th>
-          <th scope="col">Placed beneath</th>
-        </tr>
-      </thead>
+    </table></div>
+  </section>
+  <section id="summaries-section" hidden aria-labelledby="summaries-heading">
+    <h2 id="summaries-heading">WBS rollup</h2>
+    <div class="scroll"><table id="summaries">
+      <thead><tr><th scope="col">Code</th><th scope="col">Name</th><th scope="col">Imported span</th><th scope="col">Current calculated span</th><th scope="col">Placed beneath</th></tr></thead>
       <tbody></tbody>
-    </table>
-  </div>
-</section>
-
+    </table></div>
+  </section>
+</main>
 <script src="app.js"></script>

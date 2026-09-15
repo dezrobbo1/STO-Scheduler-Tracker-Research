@@ -27,7 +27,7 @@ jobs:
         with:
           python-version: "3.13"
       - uses: astral-sh/setup-uv@v5
-      - run: uv sync --frozen --extra api --extra test
+      - run: uv sync --frozen --extra api --extra test --extra browser
       - name: persistence gate and the rest of the suite, with absence a failure
         env:
           STO_REQUIRE_DB: "1"
@@ -43,6 +43,26 @@ jobs:
           psql -d postgres -c 'CREATE DATABASE sto_ci'
           scripts/db/apply-migrations.sh
           scripts/db/check-schema-drift.sh
+      - name: install browser for PL14 acceptance
+        run: .venv/bin/playwright install --with-deps chromium
+      - name: rendered PL14 workflow survives an application restart
+        env:
+          PGHOST: 127.0.0.1
+          PGPORT: "5433"
+          PGUSER: postgres
+          PGDATABASE: sto_browser
+          STO_DATABASE_URL: postgresql://postgres@127.0.0.1:5433/sto_browser
+          STO_REQUIRE_DB: "1"
+        run: |
+          psql -d postgres -c 'CREATE DATABASE sto_browser'
+          scripts/db/apply-migrations.sh
+          PYTHONPATH=src .venv/bin/python scripts/browser-acceptance-pl14.py
+      - name: upload PL14 browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pl14-browser-evidence
+          path: artifacts/pl14-browser
 
   test:
     runs-on: ubuntu-latest

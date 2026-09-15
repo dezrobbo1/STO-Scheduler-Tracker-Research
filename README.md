@@ -3,10 +3,9 @@
 STO is a shutdown, turnaround and outage scheduler being built to import from
 a CMMS, from Primavera P6 or from Microsoft Project; to track, manage and
 schedule execution in real time; and to export back to any of them. Today it
-does two of those separately: it imports Microsoft Project XML into a canonical
-model and stores it with a durable identity, and it has its own CPM engine over
-that model. Connecting the two — a stored schedule calculated and shown — is
-`PL13`, and `docs/goals/ACTIVE.md` says what is built and what is next.
+imports Microsoft Project XML into a canonical model, stores and calculates an
+immutable baseline, and creates one persisted duration scenario that shows
+downstream movement. `docs/goals/ACTIVE.md` says what is built and what is next.
 
 This repository is the product monorepo. `dezrobbo1/Shutdown-Tracker-Claude` and
 `dezrobbo1/Shutdown-Tracker` are frozen references being folded in here;
@@ -55,3 +54,20 @@ PYTHONPATH=src python3 -m sto.legacy workspace
 
 It binds to the loopback interface only and holds one in-memory session; nothing
 is persisted.
+
+## The consolidated local planner
+
+Apply every migration and run the FastAPI application against the local STO
+PostgreSQL database:
+
+```bash
+PGHOST=127.0.0.1 PGPORT=5433 PGUSER=postgres PGDATABASE=sto \
+  scripts/db/apply-migrations.sh
+STO_DATABASE_URL=postgresql://postgres@127.0.0.1:5433/sto \
+  uv run --extra api python -m sto.cli serve
+```
+
+Open [the local planner](http://127.0.0.1:8092). The page creates projects,
+imports MSPDI/XML, calculates the baseline and edits the planned duration of
+one supported leaf activity. Its JSON download is prototype scenario state; it
+is not a Microsoft Project writer.
