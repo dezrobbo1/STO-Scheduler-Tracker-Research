@@ -69,7 +69,8 @@ def list_projects_for_user(
                p.created_at, p.updated_at
         FROM projects p
         JOIN project_memberships m ON m.project_id = p.id
-        WHERE m.user_id = %s AND (%s::uuid IS NULL OR p.id = %s)
+        WHERE m.user_id = %s AND m.revoked_at IS NULL
+          AND (%s::uuid IS NULL OR p.id = %s)
         ORDER BY p.created_at, p.id
         """,
         (user_id, project_id, project_id),

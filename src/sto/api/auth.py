@@ -445,6 +445,7 @@ class AuthService:
         if role not in {"viewer", "planner"}:
             raise ValueError("device tokens are limited to viewer or planner")
         with self.connect() as conn:
+            target = auth_repo.get_user(conn, user_id, for_update=True)
             issuer_membership = auth_repo.get_membership(
                 conn, project_id=project_id, user_id=issuer.user_id
             )
@@ -454,6 +455,8 @@ class AuthService:
             if (
                 issuer_membership is None
                 or not role_allows(issuer_membership["role"], "admin")
+                or target is None
+                or not target["enabled"]
                 or target_membership is None
                 or not role_allows(issuer_membership["role"], role)
                 or not role_allows(target_membership["role"], role)

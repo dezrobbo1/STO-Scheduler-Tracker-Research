@@ -168,7 +168,7 @@ class V005UpgradeTests(unittest.TestCase):
                 capture_output=True,
                 check=True,
             )
-            self.assertIn("Schema matches infra/migrations (5 migrations, 13 tables)", drift.stdout)
+            self.assertIn("Schema matches infra/migrations (5 migrations, 14 tables)", drift.stdout)
 
             after = Workspace(connect=connect_v004, source_dir=Path(source_dir.name))
             self.assertEqual(after.rebuild(), 1)
@@ -254,7 +254,13 @@ class V005UpgradeTests(unittest.TestCase):
                     )
                 conn.rollback()
             self.assertTrue(
-                {"users", "project_memberships", "server_sessions", "device_tokens"}
+                {
+                    "users",
+                    "project_memberships",
+                    "project_membership_events",
+                    "server_sessions",
+                    "device_tokens",
+                }
                 <= tables
             )
             self.assertEqual(migration_count, 5)

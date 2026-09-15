@@ -270,6 +270,7 @@ class AuthenticationBoundaryTests(unittest.TestCase):
             ("POST", f"/api/projects/{marker}/memberships"): {
                 "json": {"user_id": str(marker), "role": "viewer"}
             },
+            ("DELETE", f"/api/projects/{marker}/memberships/{marker}"): {},
             ("GET", f"/api/projects/{marker}/device-tokens"): {},
             ("POST", f"/api/projects/{marker}/device-tokens"): {
                 "json": {"user_id": str(marker), "role": "viewer"}
@@ -324,6 +325,9 @@ class AuthenticationBoundaryTests(unittest.TestCase):
         self.assertEqual(wrong.status_code, 403)
         accepted = client.post("/api/projects", json={"name": "valid-csrf"})
         self.assertEqual(accepted.status_code, 201, accepted.text)
+        shown = client.get("/api/projects")
+        self.assertEqual(shown.headers["cache-control"], "private, no-store")
+        self.assertEqual(shown.headers["vary"], "Cookie, Authorization")
 
         other, _, _, other_login = self.authenticated("other-csrf")
         mismatch = client.post(
@@ -421,6 +425,76 @@ class AuthenticationBoundaryTests(unittest.TestCase):
         self.assertEqual(planner.post(f"/api/projects/{project}/calculations").status_code, 201)
         self.assertEqual(planner.get(f"/api/projects/{project}/memberships").status_code, 403)
 
+    def test_membership_revocation_is_audited_and_cannot_remove_the_last_admin(self):
+        admin, admin_user, _, _ = self.authenticated("membership-admin")
+        member, member_user, _, _ = self.authenticated("membership-user")
+        project = admin.post("/api/projects", json={"name": "membership-history"}).json()[
+            "id"
+        ]
+
+        self.assertEqual(
+            admin.post(
+                f"/api/projects/{project}/memberships",
+                json={"user_id": str(admin_user["id"]), "role": "viewer"},
+            ).status_code,
+            409,
+        )
+        self.assertEqual(
+            admin.delete(
+                f"/api/projects/{project}/memberships/{admin_user['id']}"
+            ).status_code,
+            409,
+        )
+
+        self.grant(admin, project, member_user, "viewer")
+        self.grant(admin, project, member_user, "planner")
+        issued = admin.post(
+            f"/api/projects/{project}/device-tokens",
+            json={"user_id": str(member_user["id"]), "role": "planner"},
+        )
+        self.assertEqual(issued.status_code, 201, issued.text)
+        raw = issued.json()["raw_token"]
+
+        revoked = admin.delete(
+            f"/api/projects/{project}/memberships/{member_user['id']}"
+        )
+        self.assertEqual(revoked.status_code, 204, revoked.text)
+        self.assertEqual(member.get(f"/api/projects/{project}").status_code, 404)
+        device = self.app_client()
+        device.headers["Authorization"] = f"Bearer {raw}"
+        self.assertEqual(device.get(f"/api/projects/{project}").status_code, 401)
+
+        with self.connect() as conn:
+            events = conn.execute(
+                """
+                SELECT id, action, previous_role, role, actor_user_id
+                FROM project_membership_events
+                WHERE project_id=%s AND user_id=%s
+                ORDER BY created_at, id
+                """,
+                (uuid.UUID(project), member_user["id"]),
+            ).fetchall()
+            token_revoked = conn.execute(
+                "SELECT revoked_at FROM device_tokens WHERE token_hash=%s",
+                (self.auth._token_hash(raw),),
+            ).fetchone()["revoked_at"]
+        self.assertEqual(
+            [row["action"] for row in events],
+            ["granted", "role_changed", "revoked"],
+        )
+        self.assertEqual(events[1]["previous_role"], "viewer")
+        self.assertEqual(events[1]["role"], "planner")
+        self.assertTrue(all(row["actor_user_id"] == admin_user["id"] for row in events))
+        self.assertIsNotNone(token_revoked)
+
+        with self.connect() as conn:
+            with self.assertRaises(psycopg.errors.CheckViolation):
+                conn.execute(
+                    "UPDATE project_membership_events SET role='viewer' WHERE id=%s",
+                    (events[0]["id"],),
+                )
+            conn.rollback()
+
     def test_sessions_expire_revoke_disable_and_persist_across_restart(self):
         from sto.persistence import auth_repositories as auth_repo
 
@@ -470,7 +544,7 @@ class AuthenticationBoundaryTests(unittest.TestCase):
             json={"user_id": str(target["id"]), "role": "viewer"},
         )
         self.assertEqual(issued.status_code, 201, issued.text)
-        self.assertEqual(issued.headers["cache-control"], "no-store")
+        self.assertEqual(issued.headers["cache-control"], "private, no-store")
         body = issued.json()
         raw = body["raw_token"]
         self.assertTrue(raw.startswith("sto_dev_"))
@@ -518,6 +592,11 @@ class AuthenticationBoundaryTests(unittest.TestCase):
         with self.connect() as conn:
             auth_repo.disable_user(conn, target["id"])
             conn.commit()
+        false_success = admin.post(
+            f"/api/projects/{first}/device-tokens",
+            json={"user_id": str(target["id"]), "role": "viewer"},
+        )
+        self.assertEqual(false_success.status_code, 403)
         self.assertEqual(field_client.get("/api/projects").status_code, 401)
         self.assertEqual(target_client.get("/api/projects").status_code, 401)
 

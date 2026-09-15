@@ -15,10 +15,14 @@ remain stdlib-only under ADR-005; identity is an API and persistence concern.
 
 ## Decision
 
-V005 adds four tables. `users` stores normalized unique usernames, Argon2id
+V005 adds five tables. `users` stores normalized unique usernames, Argon2id
 password hashes, encrypted TOTP seeds, the last consumed TOTP counter and the
 enabled state. `project_memberships` is the authoritative project/actor role
-mapping. `server_sessions` and `device_tokens` store only keyed SHA-256 hashes
+mapping; project-specific revocation is explicit and the last enabled project
+administrator cannot be demoted or removed. `project_membership_events`
+retains every grant, role change and revocation in an append-only,
+database-guarded history. `server_sessions` and `device_tokens` store only
+keyed SHA-256 hashes
 of high-entropy tokens plus independently random display prefixes. Foreign
 keys bind a device token to an existing user/project membership. Existing
 V004 projects and versions gain no implicit membership during migration.
@@ -57,7 +61,8 @@ planner state. Planners also import, calculate and create/reset the bounded
 duration scenario. Admins also manage membership and issue/revoke device
 tokens. Device tokens are project-scoped, limited to `viewer` or `planner`,
 and capped by the current membership of their user; they can never administer
-memberships or credentials.
+memberships or credentials. A disabled user cannot be issued a credential, and
+revoking their project membership also permanently revokes its device tokens.
 
 All project routes use one `require_project_role` dependency. Absence of
 membership and a token used against another project both return 404. The
@@ -66,7 +71,9 @@ if a future application route lacks the central authenticated or
 project-scoped dependency. GET /healthz is the sole public operational route and
 contains only `{status: ok}`; the detailed GET /api/health response is protected
 and filtered to projects visible to the actor. The unused FastAPI OpenAPI and
-interactive documentation routes are disabled in the trial deployment.
+interactive documentation routes are disabled in the trial deployment. Every
+application API response is marked `private, no-store` and varies on cookie and
+authorization, so an actor-filtered response cannot cross a shared cache.
 
 ## Consequences
 

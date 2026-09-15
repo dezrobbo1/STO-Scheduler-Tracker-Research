@@ -216,6 +216,17 @@ def create_app(
     # arriving rather than after it has been spooled.
     app.add_middleware(BoundedBody, limit=MAX_UPLOAD_BYTES + _MULTIPART_ALLOWANCE)
 
+    @app.middleware("http")
+    async def keep_actor_responses_out_of_shared_caches(request: Request, call_next):
+        response = await call_next(request)
+        if request.url.path.startswith("/api/"):
+            # These URLs are actor-specific even when their path is identical.
+            # no-store is the boundary; Vary is defence in depth for a proxy
+            # that mishandles or rewrites cache-control.
+            response.headers["Cache-Control"] = "private, no-store"
+            response.headers["Vary"] = "Cookie, Authorization"
+        return response
+
     def ws(request: Request) -> Workspace:
         return request.app.state.workspace
 
@@ -787,13 +798,16 @@ def create_app(
             user = auth_repo.get_user(conn, body.user_id)
             if user is None or not user["enabled"]:
                 raise HTTPException(404, "no such enabled user")
-            row = auth_repo.grant_membership(
-                conn,
-                project_id=project_id,
-                user_id=body.user_id,
-                role=body.role,
-                created_by_user_id=access.actor.user_id,
-            )
+            try:
+                row = auth_repo.grant_membership(
+                    conn,
+                    project_id=project_id,
+                    user_id=body.user_id,
+                    role=body.role,
+                    created_by_user_id=access.actor.user_id,
+                )
+            except auth_repo.LastProjectAdministrator as error:
+                raise HTTPException(409, str(error)) from None
             conn.commit()
         return schemas.MembershipResponse(
             **row,
@@ -801,6 +815,33 @@ def create_app(
             display_name=user["display_name"],
             enabled=user["enabled"],
         )
+
+    @app.delete(
+        "/api/projects/{project_id}/memberships/{user_id}",
+        status_code=204,
+    )
+    def revoke_membership(
+        project_id: uuid.UUID,
+        user_id: uuid.UUID,
+        response: Response,
+        access: ProjectAccess = Depends(require_admin),
+        workspace: Workspace = Depends(ws),
+    ) -> Response:
+        with workspace.connect() as conn:
+            try:
+                revoked = auth_repo.revoke_membership(
+                    conn,
+                    project_id=project_id,
+                    user_id=user_id,
+                    actor_user_id=access.actor.user_id,
+                )
+            except auth_repo.LastProjectAdministrator as error:
+                raise HTTPException(409, str(error)) from None
+            if revoked is None:
+                raise HTTPException(404, "no active project membership")
+            conn.commit()
+        response.status_code = 204
+        return response
 
     @app.get(
         "/api/projects/{project_id}/device-tokens",

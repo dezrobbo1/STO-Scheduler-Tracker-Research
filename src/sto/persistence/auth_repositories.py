@@ -9,6 +9,10 @@ from typing import Any
 import psycopg
 
 
+class LastProjectAdministrator(Exception):
+    """A membership change would leave an enabled project with no admin."""
+
+
 def lock_bootstrap(conn: psycopg.Connection) -> None:
     """Serialize the one-time zero-user bootstrap decision."""
 
@@ -59,13 +63,16 @@ def get_user_by_username(
     ).fetchone()
 
 
-def get_user(conn: psycopg.Connection, user_id: uuid.UUID) -> dict[str, Any] | None:
+def get_user(
+    conn: psycopg.Connection, user_id: uuid.UUID, *, for_update: bool = False
+) -> dict[str, Any] | None:
+    lock = " FOR UPDATE" if for_update else ""
     return conn.execute(
         """
         SELECT id, username, normalized_username, display_name, enabled, created_at,
                password_changed_at, last_authenticated_at, disabled_at
         FROM users WHERE id = %s
-        """,
+        """ + lock,
         (user_id,),
     ).fetchone()
 
@@ -118,31 +125,113 @@ def grant_membership(
     role: str,
     created_by_user_id: uuid.UUID | None,
 ) -> dict[str, Any]:
+    _lock_project(conn, project_id)
+    current = get_membership(
+        conn, project_id=project_id, user_id=user_id, include_revoked=True
+    )
+    if (
+        current is not None
+        and current["revoked_at"] is None
+        and current["role"] == "admin"
+        and role != "admin"
+        and _other_enabled_admins(conn, project_id=project_id, user_id=user_id) == 0
+    ):
+        raise LastProjectAdministrator("a project must retain an enabled administrator")
     row = conn.execute(
         """
         INSERT INTO project_memberships
-          (project_id, user_id, role, created_by_user_id)
-        VALUES (%s, %s, %s, %s)
+          (project_id, user_id, role, created_by_user_id, updated_by_user_id)
+        VALUES (%s, %s, %s, %s, %s)
         ON CONFLICT (project_id, user_id)
-        DO UPDATE SET role = EXCLUDED.role
-        RETURNING project_id, user_id, role, created_at, created_by_user_id
+        DO UPDATE SET role = EXCLUDED.role, revoked_at = NULL,
+                      updated_at = now(),
+                      updated_by_user_id = EXCLUDED.updated_by_user_id
+        RETURNING project_id, user_id, role, created_at, created_by_user_id,
+                  updated_at, updated_by_user_id, revoked_at
         """,
-        (project_id, user_id, role, created_by_user_id),
+        (project_id, user_id, role, created_by_user_id, created_by_user_id),
     ).fetchone()
     assert row is not None
     return row
 
 
 def get_membership(
-    conn: psycopg.Connection, *, project_id: uuid.UUID, user_id: uuid.UUID
+    conn: psycopg.Connection,
+    *,
+    project_id: uuid.UUID,
+    user_id: uuid.UUID,
+    include_revoked: bool = False,
 ) -> dict[str, Any] | None:
+    active = "" if include_revoked else " AND revoked_at IS NULL"
     return conn.execute(
         """
-        SELECT project_id, user_id, role, created_at, created_by_user_id
+        SELECT project_id, user_id, role, created_at, created_by_user_id,
+               updated_at, updated_by_user_id, revoked_at
         FROM project_memberships WHERE project_id = %s AND user_id = %s
+        """ + active,
+        (project_id, user_id),
+    ).fetchone()
+
+
+def revoke_membership(
+    conn: psycopg.Connection,
+    *,
+    project_id: uuid.UUID,
+    user_id: uuid.UUID,
+    actor_user_id: uuid.UUID | None,
+) -> dict[str, Any] | None:
+    _lock_project(conn, project_id)
+    current = get_membership(conn, project_id=project_id, user_id=user_id)
+    if current is None:
+        return None
+    if (
+        current["role"] == "admin"
+        and _other_enabled_admins(conn, project_id=project_id, user_id=user_id) == 0
+    ):
+        raise LastProjectAdministrator("a project must retain an enabled administrator")
+    row = conn.execute(
+        """
+        UPDATE project_memberships
+        SET revoked_at = now(), updated_at = now(), updated_by_user_id = %s
+        WHERE project_id = %s AND user_id = %s AND revoked_at IS NULL
+        RETURNING project_id, user_id, role, created_at, created_by_user_id,
+                  updated_at, updated_by_user_id, revoked_at
+        """,
+        (actor_user_id, project_id, user_id),
+    ).fetchone()
+    conn.execute(
+        """
+        UPDATE device_tokens SET revoked_at = now()
+        WHERE project_id = %s AND user_id = %s AND revoked_at IS NULL
+        """,
+        (project_id, user_id),
+    )
+    return row
+
+
+def _lock_project(conn: psycopg.Connection, project_id: uuid.UUID) -> None:
+    row = conn.execute(
+        "SELECT id FROM projects WHERE id = %s FOR UPDATE", (project_id,)
+    ).fetchone()
+    if row is None:
+        raise ValueError("no such project")
+
+
+def _other_enabled_admins(
+    conn: psycopg.Connection, *, project_id: uuid.UUID, user_id: uuid.UUID
+) -> int:
+    row = conn.execute(
+        """
+        SELECT count(*) AS count
+        FROM project_memberships m
+        JOIN users u ON u.id = m.user_id
+        WHERE m.project_id = %s AND m.user_id <> %s
+          AND m.role = 'admin' AND m.revoked_at IS NULL AND u.enabled
         """,
         (project_id, user_id),
     ).fetchone()
+    assert row is not None
+    return int(row["count"])
 
 
 def list_memberships(
@@ -154,7 +243,7 @@ def list_memberships(
                u.username, u.display_name, u.enabled
         FROM project_memberships m
         JOIN users u ON u.id = m.user_id
-        WHERE m.project_id = %s
+        WHERE m.project_id = %s AND m.revoked_at IS NULL
         ORDER BY u.normalized_username, u.id
         """,
         (project_id,),
@@ -264,7 +353,7 @@ def get_device_token_by_hash(
         JOIN users u ON u.id = t.user_id
         JOIN project_memberships m
           ON m.project_id = t.project_id AND m.user_id = t.user_id
-        WHERE t.token_hash = %s
+        WHERE t.token_hash = %s AND m.revoked_at IS NULL
         """,
         (token_hash,),
     ).fetchone()
