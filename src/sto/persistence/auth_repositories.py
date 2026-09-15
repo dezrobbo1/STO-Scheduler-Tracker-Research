@@ -263,7 +263,8 @@ def revoke_membership(
     ).fetchone()
     conn.execute(
         """
-        UPDATE device_tokens SET revoked_at = now()
+        UPDATE device_tokens
+        SET revoked_at = GREATEST(clock_timestamp(), issued_at)
         WHERE project_id = %s AND user_id = %s AND revoked_at IS NULL
         """,
         (project_id, user_id),
@@ -354,7 +355,8 @@ def get_session_by_hash(conn: psycopg.Connection, token_hash: str) -> dict[str, 
 def revoke_session(conn: psycopg.Connection, session_id: uuid.UUID) -> bool:
     row = conn.execute(
         """
-        UPDATE server_sessions SET revoked_at = now()
+        UPDATE server_sessions
+        SET revoked_at = GREATEST(clock_timestamp(), issued_at)
         WHERE id = %s AND revoked_at IS NULL
         RETURNING id
         """,
@@ -366,7 +368,8 @@ def revoke_session(conn: psycopg.Connection, session_id: uuid.UUID) -> bool:
 def revoke_session_by_hash(conn: psycopg.Connection, token_hash: str) -> bool:
     row = conn.execute(
         """
-        UPDATE server_sessions SET revoked_at = now()
+        UPDATE server_sessions
+        SET revoked_at = GREATEST(clock_timestamp(), issued_at)
         WHERE token_hash = %s AND revoked_at IS NULL
         RETURNING id
         """,
@@ -378,7 +381,8 @@ def revoke_session_by_hash(conn: psycopg.Connection, token_hash: str) -> bool:
 def revoke_user_sessions(conn: psycopg.Connection, user_id: uuid.UUID) -> int:
     cursor = conn.execute(
         """
-        UPDATE server_sessions SET revoked_at = now()
+        UPDATE server_sessions
+        SET revoked_at = GREATEST(clock_timestamp(), issued_at)
         WHERE user_id = %s AND revoked_at IS NULL
         """,
         (user_id,),
@@ -389,7 +393,8 @@ def revoke_user_sessions(conn: psycopg.Connection, user_id: uuid.UUID) -> int:
 def revoke_user_device_tokens(conn: psycopg.Connection, user_id: uuid.UUID) -> int:
     cursor = conn.execute(
         """
-        UPDATE device_tokens SET revoked_at = now()
+        UPDATE device_tokens
+        SET revoked_at = GREATEST(clock_timestamp(), issued_at)
         WHERE user_id = %s AND revoked_at IS NULL
         """,
         (user_id,),
@@ -471,7 +476,8 @@ def revoke_device_token(
 ) -> bool:
     row = conn.execute(
         """
-        UPDATE device_tokens SET revoked_at = now()
+        UPDATE device_tokens
+        SET revoked_at = GREATEST(clock_timestamp(), issued_at)
         WHERE id = %s AND project_id = %s AND revoked_at IS NULL
         RETURNING id
         """,

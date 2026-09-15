@@ -23,7 +23,8 @@ session, and unconfirmed revocation. Every outcome immediately removes planner
 content from the page. Only the first is described as server revocation. An
 unconfirmed outcome exposes a retry action which first obtains the current
 session-bound CSRF value and then retries the protected mutation; no credential
-or token is stored in browser storage. If the user signs in instead, issuing
+or token is stored in browser storage. Sign-in controls remain disabled until
+the retry reaches a confirmed outcome. If another client signs in instead, issuing
 the replacement session and revoking the session token currently in the cookie
 commit atomically, so overwriting the cookie cannot orphan a live session.
 
@@ -33,7 +34,9 @@ projects in stable order and refuses if any would be left without an enabled
 administrator. There is no ordinary or silent emergency bypass: another
 enabled administrator must be granted or the memberships deliberately
 reassigned first. An accepted disable revokes browser sessions and device
-tokens in the same transaction.
+tokens in the same transaction. Credential revocation uses a post-wait clock
+value bounded below by its issuance time, so a disable that waited behind
+concurrent issuance cannot violate the persisted timestamp invariant.
 
 Enrollment and login share one username/password boundary: usernames are 1 to
 200 input characters and must remain non-blank after NFKC normalization,

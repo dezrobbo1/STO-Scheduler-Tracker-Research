@@ -60,6 +60,12 @@ function hours(seconds) {
   return seconds === null || seconds === undefined ? "" : (seconds / 3600).toFixed(2).replace(/0+$/, "").replace(/\.$/, "") + " h";
 }
 
+function setLoginEnabled(enabled) {
+  for (const control of [loginUsername, loginPassword, loginTotp, loginButton]) {
+    control.disabled = !enabled;
+  }
+}
+
 function clearPlanner(message) {
   currentActor = null;
   csrfToken = null;
@@ -71,6 +77,7 @@ function clearPlanner(message) {
   actorName.textContent = "";
   retryLogoutButton.hidden = true;
   retryLogoutButton.disabled = false;
+  setLoginEnabled(true);
   projects.replaceChildren(new Option("sign in to load projects", ""));
   for (const section of [scenarioSection, provenanceSection, chartSection, rowsSection, summariesSection]) section.hidden = true;
   body.replaceChildren(); chart.replaceChildren(); summaryBody.replaceChildren();
@@ -151,6 +158,7 @@ function showLogoutOutcome(outcome) {
     authStatus.textContent = "Server sign-out could not be confirmed. Sensitive planner data was cleared; retry server sign-out before leaving this device.";
     authStatus.dataset.kind = "error";
     retryLogoutButton.hidden = false;
+    setLoginEnabled(false);
   }
 }
 
@@ -589,6 +597,7 @@ projects.addEventListener("change", () => show(projects.value));
 
 loginForm.addEventListener("submit", async (event) => {
   event.preventDefault();
+  if (loginButton.disabled) return;
   loginButton.disabled = true;
   authStatus.textContent = "Signing in…"; delete authStatus.dataset.kind;
   try {

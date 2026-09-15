@@ -298,6 +298,8 @@ function failed(status) {
         )
         self.assertIn("showLogoutOutcome(await requestLogout(csrf))", self.script)
         self.assertIn("showLogoutOutcome(await recoverLogout())", self.script)
+        self.assertIn("setLoginEnabled(false)", self.script)
+        self.assertIn("if (loginButton.disabled) return", self.script)
 
     def test_it_reconciles_a_committed_mutation_after_an_a_b_a_refresh_cycle(self):
         """A stale mutation response may still represent newly committed state."""

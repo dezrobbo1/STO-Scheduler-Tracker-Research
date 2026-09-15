@@ -928,6 +928,86 @@ class AuthenticationBoundaryTests(unittest.TestCase):
         self.assertEqual(device.get("/api/projects").status_code, 401)
         self.assertEqual(replacement.get(f"/api/projects/{project}").status_code, 200)
 
+    def test_disable_uses_post_wait_timestamps_for_concurrent_credentials(self):
+        from sto.persistence import auth_repositories as auth_repo
+
+        admin, admin_user, _, _ = self.authenticated("disable-clock-admin")
+        _, target, _, _ = self.authenticated("disable-clock-target")
+        project = admin.post("/api/projects", json={"name": "disable-clock"}).json()[
+            "id"
+        ]
+        self.grant(admin, project, target, "planner")
+
+        disable_began = threading.Event()
+        credentials_staged = threading.Event()
+        disable_attempting = threading.Event()
+        allow_credential_commit = threading.Event()
+
+        def disable_after_issuance_stages():
+            with self.connect() as conn:
+                transaction_started = conn.execute(
+                    "SELECT now() AS value"
+                ).fetchone()["value"]
+                disable_began.set()
+                self.assertTrue(credentials_staged.wait(timeout=10))
+                disable_attempting.set()
+                result = auth_repo.disable_user(conn, target["id"])
+                conn.commit()
+                return transaction_started, result
+
+        def issue_credentials_after_disable_begins():
+            self.assertTrue(disable_began.wait(timeout=10))
+            with self.connect() as conn:
+                auth_repo.get_user(conn, target["id"], for_update=True)
+                session = auth_repo.insert_session(
+                    conn,
+                    user_id=target["id"],
+                    token_hash=secrets.token_hex(32),
+                    token_prefix=f"sto_s_{secrets.token_urlsafe(6)[:8]}",
+                    expires_at=self.current + timedelta(hours=1),
+                )
+                token = auth_repo.insert_device_token(
+                    conn,
+                    user_id=target["id"],
+                    project_id=uuid.UUID(project),
+                    role="planner",
+                    token_hash=secrets.token_hex(32),
+                    token_prefix=f"sto_dev_{secrets.token_urlsafe(6)[:8]}",
+                    expires_at=self.current + timedelta(hours=1),
+                    issued_by_user_id=admin_user["id"],
+                )
+                issued_at = conn.execute(
+                    "SELECT issued_at FROM device_tokens WHERE id=%s", (token["id"],)
+                ).fetchone()["issued_at"]
+                credentials_staged.set()
+                self.assertTrue(allow_credential_commit.wait(timeout=10))
+                conn.commit()
+                return session["id"], token["id"], issued_at
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            disabling = pool.submit(disable_after_issuance_stages)
+            issuing = pool.submit(issue_credentials_after_disable_begins)
+            self.assertTrue(disable_attempting.wait(timeout=10))
+            allow_credential_commit.set()
+            session_id, token_id, issued_at = issuing.result(timeout=10)
+            transaction_started, result = disabling.result(timeout=10)
+
+        self.assertLess(transaction_started, issued_at)
+        self.assertTrue(result.changed)
+        self.assertGreaterEqual(result.sessions_revoked, 2)
+        self.assertEqual(result.device_tokens_revoked, 1)
+        with self.connect() as conn:
+            session = conn.execute(
+                "SELECT issued_at, revoked_at FROM server_sessions WHERE id=%s",
+                (session_id,),
+            ).fetchone()
+            token = conn.execute(
+                "SELECT issued_at, revoked_at FROM device_tokens WHERE id=%s",
+                (token_id,),
+            ).fetchone()
+        self.assertGreaterEqual(session["revoked_at"], session["issued_at"])
+        self.assertGreaterEqual(token["revoked_at"], token["issued_at"])
+
     def test_scenario_reset_is_attributed_atomic_and_distinguishes_noop(self):
         from sto.persistence import repositories as repo
 

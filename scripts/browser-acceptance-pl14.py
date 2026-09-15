@@ -285,6 +285,10 @@ def main() -> int:
                 expect(page.get_by_role("heading", name="Sign in")).to_be_visible()
                 expect(page.locator("#planner")).to_be_hidden()
                 expect(page.locator("#retry-logout")).to_be_visible()
+                expect(page.locator("#login-button")).to_be_disabled()
+                expect(page.locator("#login-username")).to_be_disabled()
+                expect(page.locator("#login-password")).to_be_disabled()
+                expect(page.locator("#login-totp")).to_be_disabled()
                 expect(page.locator("#auth-status")).to_contain_text(
                     "could not be confirmed"
                 )
@@ -320,6 +324,10 @@ def main() -> int:
                     "server session was revoked"
                 )
                 expect(page.locator("#retry-logout")).to_be_hidden()
+                expect(page.locator("#login-button")).to_be_enabled()
+                expect(page.locator("#login-username")).to_be_enabled()
+                expect(page.locator("#login-password")).to_be_enabled()
+                expect(page.locator("#login-totp")).to_be_enabled()
                 page.unroute("**/api/auth/logout")
                 logged_out_status = page.evaluate(
                     "async () => (await fetch('/api/projects')).status"
