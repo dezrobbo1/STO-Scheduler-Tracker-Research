@@ -22,7 +22,7 @@ not start until the previous gate passes.
 <!-- roadmap:begin now -->
 <!-- generated from docs/goals/roadmap.json by `sto roadmap render`; edit the JSON, not this -->
 
-**P1 — Engine and local planner trial** (in progress; 2 of 5 gate criteria met)
+**P1 — Engine and local planner trial** (in progress; 3 of 5 gate criteria met)
 
 | | Gate criterion | Shown by |
 |---|---|---|
@@ -30,11 +30,12 @@ not start until the previous gate passes.
 | · | Both BOILER snapshots: every leaf activity gets a disposition, and no difference is UNEXPLAINED across start, finish, late dates, float and criticality | `docs/evidence/current-engine-evidence-2026-09-10.md` ‡ |
 | · | The genuine Project-recalculation oracle (before to after-native-progress) reports zero unexpected differences | `tests/test_progress_boiler.py` ‡ |
 | ✓ | A persisted import shows calculated dates beside the ones it imported; one duration edit moves its successors; reset restores the baseline; the scenario exports; and a restart reproduces the same result from the same input hash | `scripts/browser-acceptance-pl14.py` ‡ |
-| · | Every API route rejects an unauthenticated request, and a project is readable only by an actor authorised on it | — |
+| ✓ | Every API route rejects an unauthenticated request, and a project is readable only by an actor authorised on it | `tests/test_authentication.py` ‡ |
 
 ‡ the exact progressed BOILER candidate is unavailable; this criterion remains open and its file-oracle assertions must fail rather than skip when the gate is attempted; set `STO_REQUIRE_DAY5=1` to make their absence a failure rather than a skip.
 ‡ the BOILER before file and Microsoft Project recalculation files live outside the repository; the raw before/after inventory is pinned, but its 420 changed common rows do not yet have an unexpected-difference classifier, so this criterion remains open; set `STO_REQUIRE_NATIVE=1` to make their absence a failure rather than a skip.
 ‡ the API CI job supplies PostgreSQL and Chromium, drives the rendered workflow, restarts the application, and uploads its screenshots and export; set `STO_REQUIRE_DB=1` to make their absence a failure rather than a skip.
+‡ the API CI job supplies PostgreSQL and runs the route inventory, two-user project matrix, session, CSRF and device-token acceptance with database absence treated as a failure; set `STO_REQUIRE_DB=1` to make their absence a failure rather than a skip.
 
 <!-- roadmap:end now -->
 

@@ -200,8 +200,12 @@
         {
           "id": "P1-G5",
           "text": "Every API route rejects an unauthenticated request, and a project is readable only by an actor authorised on it",
-          "met": false,
-          "evidence": null
+          "met": true,
+          "evidence": "tests/test_authentication.py",
+          "evidence_conditional": {
+            "env": "STO_REQUIRE_DB",
+            "why": "the API CI job supplies PostgreSQL and runs the route inventory, two-user project matrix, session, CSRF and device-token acceptance with database absence treated as a failure"
+          }
         }
       ]
     },
@@ -514,7 +518,7 @@
       "id": "PL2",
       "title": "Real authentication",
       "phase": "P1",
-      "status": "not_started",
+      "status": "done",
       "days": 4
     },
     {

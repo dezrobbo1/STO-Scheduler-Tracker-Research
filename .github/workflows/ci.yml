@@ -45,7 +45,7 @@ jobs:
           scripts/db/check-schema-drift.sh
       - name: install browser for PL14 acceptance
         run: .venv/bin/playwright install --with-deps chromium
-      - name: rendered PL14 workflow survives an application restart
+      - name: authenticated PL14 workflow survives logout and application restart
         env:
           PGHOST: 127.0.0.1
           PGPORT: "5433"
@@ -57,12 +57,12 @@ jobs:
           psql -d postgres -c 'CREATE DATABASE sto_browser'
           scripts/db/apply-migrations.sh
           PYTHONPATH=src .venv/bin/python scripts/browser-acceptance-pl14.py
-      - name: upload PL14 browser evidence
+      - name: upload PL2 browser evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: pl14-browser-evidence
-          path: artifacts/pl14-browser
+          name: pl2-browser-evidence
+          path: artifacts/pl2-browser
 
   test:
     runs-on: ubuntu-latest

@@ -14,6 +14,58 @@ class ProjectCreate(BaseModel):
     description: str | None = None
 
 
+class LoginRequest(BaseModel):
+    username: str = Field(min_length=1, max_length=200)
+    password: str = Field(min_length=1, max_length=1024)
+    totp: str = Field(min_length=6, max_length=6, pattern=r"^[0-9]{6}$")
+
+
+class ActorResponse(BaseModel):
+    user_id: uuid.UUID
+    username: str
+    display_name: str | None = None
+    authentication: str
+
+
+class SessionResponse(BaseModel):
+    actor: ActorResponse
+    csrf_token: str | None = None
+    expires_at: datetime | None = None
+
+
+class MembershipGrant(BaseModel):
+    user_id: uuid.UUID
+    role: str = Field(pattern=r"^(viewer|planner|admin)$")
+
+
+class MembershipResponse(BaseModel):
+    project_id: uuid.UUID
+    user_id: uuid.UUID
+    role: str
+    username: str | None = None
+    display_name: str | None = None
+    enabled: bool | None = None
+    created_at: datetime
+
+
+class DeviceTokenIssue(BaseModel):
+    user_id: uuid.UUID
+    role: str = Field(pattern=r"^(viewer|planner)$")
+    expires_in_days: int | None = Field(default=None, ge=1, le=365)
+
+
+class DeviceTokenResponse(BaseModel):
+    id: uuid.UUID
+    user_id: uuid.UUID
+    project_id: uuid.UUID
+    role: str
+    token_prefix: str
+    issued_at: datetime
+    expires_at: datetime | None = None
+    revoked_at: datetime | None = None
+    raw_token: str | None = None
+
+
 class ScheduleHead(BaseModel):
     version_id: uuid.UUID
     sequence: int

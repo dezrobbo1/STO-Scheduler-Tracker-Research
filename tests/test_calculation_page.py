@@ -396,8 +396,12 @@ class ThePageAndTheApiAgreeTests(unittest.TestCase):
 
     def test_the_routes_it_fetches_are_the_routes_that_exist(self):
         from sto.api.app import create_app
+        from sto.api.auth import AuthService
 
-        app = create_app(workspace=None)  # type: ignore[arg-type]
+        app = create_app(
+            workspace=None,  # type: ignore[arg-type]
+            auth_service=AuthService.for_tests(connect=lambda: None),
+        )
         routes = {getattr(route, "path", "") for route in app.routes}
         for path in (
             "/api/projects",

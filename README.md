@@ -5,7 +5,8 @@ a CMMS, from Primavera P6 or from Microsoft Project; to track, manage and
 schedule execution in real time; and to export back to any of them. Today it
 imports Microsoft Project XML into a canonical model, stores and calculates an
 immutable baseline, and creates one persisted duration scenario that shows
-downstream movement. `docs/goals/ACTIVE.md` says what is built and what is next.
+downstream movement behind real user/session/project authorization.
+`docs/goals/ACTIVE.md` says what is built and what is next.
 
 This repository is the product monorepo. `dezrobbo1/Shutdown-Tracker-Claude` and
 `dezrobbo1/Shutdown-Tracker` are frozen references being folded in here;
@@ -63,11 +64,28 @@ PostgreSQL database:
 ```bash
 PGHOST=127.0.0.1 PGPORT=5433 PGUSER=postgres PGDATABASE=sto \
   scripts/db/apply-migrations.sh
-STO_DATABASE_URL=postgresql://postgres@127.0.0.1:5433/sto \
-  uv run --extra api python -m sto.cli serve
+export STO_DATABASE_URL=postgresql://postgres@127.0.0.1:5433/sto
+export STO_AUTH_MASTER_KEY="$(uv run --extra api python -c \
+  'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')"
+uv run --extra api python -m sto.cli auth bootstrap-admin trial-admin
+uv run --extra api python -m sto.cli serve
 ```
 
-Open [the local planner](http://127.0.0.1:8092). The page creates projects,
+The bootstrap command prompts for the password without putting it in shell
+history and shows the TOTP enrolment material once. It does not grant access to
+projects that pre-date V005; grant each one deliberately:
+
+```bash
+uv run --extra api python -m sto.cli auth grant-project \
+  PROJECT_UUID trial-admin admin
+```
+
+Keep `STO_AUTH_MASTER_KEY` in the deployment's secret store and stable across
+restarts. `STO_SESSION_TTL_SECONDS` defaults to eight hours. Set
+`STO_COOKIE_SECURE=1` whenever the browser is served over TLS; the local
+loopback HTTP default is `0`.
+
+Open [the local planner](http://127.0.0.1:8092) and sign in. The page creates projects,
 imports MSPDI/XML, calculates the baseline and edits the planned duration of
 one supported leaf activity. Its JSON download is prototype scenario state; it
 is not a Microsoft Project writer.
