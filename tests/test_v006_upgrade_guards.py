@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 import os
+import shutil
+import subprocess
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 import test_v006_upgrade as upgrade
@@ -33,7 +37,7 @@ class V006UpgradeGuardTests(unittest.TestCase):
             "?sslmode=require&application_name=upgrade-test&connect_timeout=11"
         )
         with patch.object(upgrade, "ADMIN_URL", source), patch.dict(os.environ, {}, clear=True):
-            environment = upgrade._environment("sto_upgrade")
+            environment = upgrade._environment("sto_upgrade", host="db.example", port=6543, user="operator")
         self.assertEqual(environment["PGHOST"], "db.example")
         self.assertEqual(environment["PGPORT"], "6543")
         self.assertEqual(environment["PGUSER"], "operator")
@@ -50,9 +54,11 @@ class V006UpgradeGuardTests(unittest.TestCase):
     def test_socket_url_does_not_manufacture_tcp_defaults(self):
         source = "postgresql:///postgres?sslmode=disable"
         with patch.object(upgrade, "ADMIN_URL", source), patch.dict(os.environ, {}, clear=True):
-            environment = upgrade._environment("sto_upgrade")
-        for name in ("PGHOST", "PGPORT", "PGUSER", "PGPASSWORD"):
-            self.assertNotIn(name, environment)
+            environment = upgrade._environment("sto_upgrade", host="/var/run/postgresql", port=5432, user="peer-user")
+        self.assertEqual(environment["PGHOST"], "/var/run/postgresql")
+        self.assertEqual(environment["PGPORT"], "5432")
+        self.assertEqual(environment["PGUSER"], "peer-user")
+        self.assertNotIn("PGPASSWORD", environment)
         self.assertEqual(environment["PGDATABASE"], "sto_upgrade")
         self.assertEqual(environment["PGSSLMODE"], "disable")
         self.assertEqual(
@@ -66,7 +72,7 @@ class V006UpgradeGuardTests(unittest.TestCase):
             patch.object(upgrade, "ADMIN_URL", "postgresql:///postgres"),
             patch.dict(os.environ, inherited, clear=True),
         ):
-            environment = upgrade._environment("sto_upgrade")
+            environment = upgrade._environment("sto_upgrade", host=inherited["PGHOST"], port=5544, user=inherited["PGUSER"])
         for name, value in inherited.items():
             self.assertEqual(environment[name], value)
         self.assertEqual(environment["PGDATABASE"], "sto_upgrade")
@@ -76,7 +82,50 @@ class V006UpgradeGuardTests(unittest.TestCase):
             patch.object(upgrade, "ADMIN_URL", "postgresql:///postgres?unknown_option=value"),
             self.assertRaisesRegex(RuntimeError, "unknown_option"),
         ):
-            upgrade._environment("sto_upgrade")
+            upgrade._environment("sto_upgrade", host="/var/run/postgresql", port=5432, user="peer-user")
+
+    def test_resolved_endpoint_survives_both_real_shell_entry_points(self):
+        shell = shutil.which("sh")
+        if shell is None:
+            self.skipTest("POSIX sh is required for the migration-script boundary")
+        with tempfile.TemporaryDirectory() as directory:
+            temporary = Path(directory)
+            fake_psql = temporary / "psql"
+            # Stop before any database command: this probe inspects the actual
+            # scripts' subprocess environment, not a copy of their shell logic.
+            fake_psql.write_text(
+                '#!/bin/sh\nprintf "%s\\n" "$PGHOST" "$PGPORT" "$PGUSER" '
+                '"$PGDATABASE" "$PGSSLMODE" > "$STO_PSQL_CAPTURE"\nexit 73\n',
+                encoding="utf-8",
+            )
+            fake_psql.chmod(0o700)
+            cases = (
+                ("postgresql:///postgres?sslmode=disable", "/var/run/postgresql", 5432, "peer-user", "disable"),
+                ("postgresql://operator@db.example:6543/postgres?sslmode=require", "db.example", 6543, "operator", "require"),
+            )
+            for source, host, port, user, sslmode in cases:
+                with (
+                    patch.object(upgrade, "ADMIN_URL", source),
+                    patch.dict(os.environ, {"PATH": str(temporary) + os.pathsep + os.defpath}, clear=True),
+                ):
+                    environment = upgrade._environment(
+                        "sto_upgrade", host=host, port=port, user=user
+                    )
+                for name in ("apply-migrations.sh", "check-schema-drift.sh"):
+                    with self.subTest(source=source, script=name):
+                        capture = temporary / "connection.txt"
+                        capture.unlink(missing_ok=True)
+                        result = subprocess.run(
+                            [shell, str(upgrade.ROOT / "scripts" / "db" / name)],
+                            env=environment | {"STO_PSQL_CAPTURE": str(capture)},
+                            capture_output=True, text=True, timeout=10,
+                        )
+                        self.assertNotEqual(result.returncode, 0)
+                        self.assertTrue(capture.exists(), result.stdout + result.stderr)
+                        self.assertEqual(
+                            capture.read_text(encoding="utf-8").splitlines(),
+                            [host, str(port), user, "sto_upgrade", sslmode],
+                        )
 
 
 if __name__ == "__main__":

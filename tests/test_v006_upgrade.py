@@ -79,18 +79,20 @@ def _database_url(admin_url: str, dbname: str) -> str:
     return f"{parsed.scheme}://{parsed.netloc}/{dbname}{query}{fragment}"
 
 
-def _environment(dbname: str) -> dict[str, str]:
-    """Use the same server/options as preparation, retaining libpq defaults."""
+def _environment(dbname: str, *, host: str, port: int, user: str) -> dict[str, str]:
+    """Pin the successful connection endpoint before shell scripts add defaults.
+
+    libpq resolves omitted host/port/user, including its Unix socket directory.
+    Leaving those unset would let the migration scripts replace that choice
+    with their developer TCP defaults, so the preparation connection supplies
+    its actual values. URL password and supported options are retained too.
+    """
 
     parsed = urlparse(ADMIN_URL)
     environment = os.environ.copy()
-    environment["PGDATABASE"] = dbname
-    if parsed.hostname is not None:
-        environment["PGHOST"] = parsed.hostname
-    if parsed.port is not None:
-        environment["PGPORT"] = str(parsed.port)
-    if parsed.username is not None:
-        environment["PGUSER"] = unquote(parsed.username)
+    environment.update(
+        PGDATABASE=dbname, PGHOST=host, PGPORT=str(port), PGUSER=user
+    )
     if parsed.password is not None:
         environment["PGPASSWORD"] = unquote(parsed.password)
     for name, value in parse_qsl(parsed.query, keep_blank_values=True):
@@ -123,6 +125,9 @@ class V006UpgradeTests(unittest.TestCase):
                 admin.execute(f'CREATE DATABASE "{dbname}"')
             url = _database_url(ADMIN_URL, dbname)
             with psycopg.connect(url) as conn:
+                environment = _environment(
+                    dbname, host=conn.info.host, port=conn.info.port, user=conn.info.user
+                )
                 conn.execute(
                     """
                     CREATE TABLE schema_migration_log (
@@ -182,7 +187,7 @@ class V006UpgradeTests(unittest.TestCase):
             applied = subprocess.run(
                 [str(ROOT / "scripts" / "db" / "apply-migrations.sh")],
                 cwd=ROOT,
-                env=_environment(dbname),
+                env=environment,
                 text=True,
                 capture_output=True,
                 check=True,
@@ -191,7 +196,7 @@ class V006UpgradeTests(unittest.TestCase):
             drift = subprocess.run(
                 [str(ROOT / "scripts" / "db" / "check-schema-drift.sh")],
                 cwd=ROOT,
-                env=_environment(dbname),
+                env=environment,
                 text=True,
                 capture_output=True,
                 check=True,
