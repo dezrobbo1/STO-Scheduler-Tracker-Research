@@ -5,7 +5,15 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from .auth import (
+    PASSWORD_MAX_LENGTH,
+    PASSWORD_MIN_LENGTH,
+    USERNAME_MAX_LENGTH,
+    USERNAME_MIN_LENGTH,
+    validate_username,
+)
 
 
 class ProjectCreate(BaseModel):
@@ -15,9 +23,19 @@ class ProjectCreate(BaseModel):
 
 
 class LoginRequest(BaseModel):
-    username: str = Field(min_length=1, max_length=200)
-    password: str = Field(min_length=1, max_length=1024)
+    username: str = Field(
+        min_length=USERNAME_MIN_LENGTH, max_length=USERNAME_MAX_LENGTH
+    )
+    password: str = Field(
+        min_length=PASSWORD_MIN_LENGTH, max_length=PASSWORD_MAX_LENGTH
+    )
     totp: str = Field(min_length=6, max_length=6, pattern=r"^[0-9]{6}$")
+
+    @field_validator("username")
+    @classmethod
+    def username_is_a_login_identity(cls, value: str) -> str:
+        validate_username(value)
+        return value
 
 
 class ActorResponse(BaseModel):
@@ -280,3 +298,8 @@ class PlannerState(BaseModel):
     scenario: CalculationResponse | None = None
     change: ScenarioChange | None = None
     eligible_activities: list[EligibleActivity] = []
+
+
+class ScenarioResetResponse(PlannerState):
+    reset_performed: bool
+    reset_event_id: uuid.UUID | None = None

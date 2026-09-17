@@ -25,8 +25,12 @@ def _password() -> str:
     second = getpass.getpass("Confirm password: ")
     if first != second:
         raise SystemExit("passwords do not match")
-    if len(first) < 12:
-        raise SystemExit("password must contain at least 12 characters")
+    try:
+        from sto.api.auth import validate_password
+
+        validate_password(first)
+    except ValueError as error:
+        raise SystemExit(str(error)) from None
     return first
 
 
@@ -87,13 +91,16 @@ def _grant_project(args: argparse.Namespace) -> int:
             raise SystemExit("no such project")
         if user is None or not user["enabled"]:
             raise SystemExit("no such enabled user")
-        membership = auth_repo.grant_membership(
-            conn,
-            project_id=args.project_id,
-            user_id=user["id"],
-            role=args.role,
-            created_by_user_id=None,
-        )
+        try:
+            membership = auth_repo.grant_membership(
+                conn,
+                project_id=args.project_id,
+                user_id=user["id"],
+                role=args.role,
+                created_by_user_id=None,
+            )
+        except auth_repo.DisabledUser:
+            raise SystemExit("no such enabled user") from None
         conn.commit()
     print(
         f"granted {membership['role']} on {membership['project_id']} "
@@ -116,12 +123,16 @@ def _disable_user(args: argparse.Namespace) -> int:
         user = auth_repo.get_user_by_username(conn, normalize_username(args.username))
         if user is None:
             raise SystemExit("no such user")
-        changed = auth_repo.disable_user(conn, user["id"])
-        sessions = auth_repo.revoke_user_sessions(conn, user["id"])
+        try:
+            result = auth_repo.disable_user(conn, user["id"])
+        except auth_repo.LastProjectAdministrator as error:
+            raise SystemExit(str(error)) from None
         conn.commit()
     print(
-        f"user {user['username']} {'disabled' if changed else 'was already disabled'}; "
-        f"revoked {sessions} active session(s)"
+        f"user {user['username']} "
+        f"{'disabled' if result.changed else 'was already disabled'}; "
+        f"revoked {result.sessions_revoked} active session(s) and "
+        f"{result.device_tokens_revoked} device token(s)"
     )
     return 0
 

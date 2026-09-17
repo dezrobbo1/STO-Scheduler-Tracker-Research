@@ -7,8 +7,10 @@ import hashlib
 import os
 import secrets
 import tempfile
+import threading
 import unittest
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
@@ -237,6 +239,178 @@ class AuthenticationBoundaryTests(unittest.TestCase):
         self.assertNotIn(secret.encode(), stored["totp_secret_encrypted"])
         self.assertNotEqual(session_row["token_hash"], raw_session)
         self.assertNotIn(raw_session, str(session_row))
+
+    def test_enrollment_and_login_share_exact_credential_limits(self):
+        from sto.api.auth import AuthService
+
+        secret = "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP"
+        exact_username = "u" * 200
+        exact_password = "p" * 1024
+        row = self.auth.create_user(
+            username=exact_username,
+            password=exact_password,
+            totp_secret=secret,
+        )
+        client = self.app_client()
+        exact = client.post(
+            "/api/auth/login",
+            json={
+                "username": exact_username,
+                "password": exact_password,
+                "totp": pyotp.TOTP(secret).at(self.current),
+            },
+        )
+        self.assertEqual(exact.status_code, 200, exact.text)
+        self.advance()
+
+        minimum_password = "m" * 12
+        minimum_username = self.auth.create_user(
+            username="q",
+            password=minimum_password,
+            totp_secret=secret,
+        )
+        self.assertEqual(minimum_username["normalized_username"], "q")
+        normalized_label = uuid.uuid4().hex[:10]
+        normalized = self.auth.create_user(
+            username=f"  Ａlice-{normalized_label}  ",
+            password=minimum_password,
+            totp_secret=secret,
+        )
+        normalized_login = client.post(
+            "/api/auth/login",
+            json={
+                "username": f"alice-{normalized_label}",
+                "password": minimum_password,
+                "totp": pyotp.TOTP(secret).at(self.current),
+            },
+        )
+        self.assertEqual(normalized_login.status_code, 200, normalized_login.text)
+        self.assertEqual(normalized["normalized_username"], f"alice-{normalized_label}")
+
+        with self.connect() as conn:
+            before = conn.execute("SELECT count(*) AS count FROM users").fetchone()[
+                "count"
+            ]
+        for username, password in (
+            ("u" * 201, minimum_password),
+            (f"password-too-long-{uuid.uuid4().hex}", "p" * 1025),
+            (" \u3000 ", minimum_password),
+            (f"password-too-short-{uuid.uuid4().hex}", "p" * 11),
+        ):
+            with self.subTest(username_length=len(username), password_length=len(password)):
+                with self.assertRaises(ValueError):
+                    self.auth.create_user(
+                        username=username,
+                        password=password,
+                        totp_secret=secret,
+                    )
+        with self.connect() as conn:
+            self.assertEqual(
+                conn.execute("SELECT count(*) AS count FROM users").fetchone()["count"],
+                before,
+            )
+
+        for username, password in (
+            ("u" * 201, minimum_password),
+            (row["username"], "p" * 1025),
+            (" \u3000 ", minimum_password),
+            (row["username"], "p" * 11),
+        ):
+            with self.subTest(
+                login_username_length=len(username),
+                login_password_length=len(password),
+            ):
+                refused = client.post(
+                    "/api/auth/login",
+                    json={"username": username, "password": password, "totp": "123456"},
+                )
+                self.assertEqual(refused.status_code, 422, refused.text)
+
+        class HashSpy:
+            def __init__(self):
+                self.calls = []
+
+            def hash(self, password):
+                self.calls.append(password)
+                return "$argon2id$synthetic"
+
+        spy = HashSpy()
+        validating = AuthService(
+            connect=self.connect,
+            config=self.auth.config,
+            password_hasher=spy,  # type: ignore[arg-type]
+        )
+        spy.calls.clear()  # discard construction of the timing dummy hash
+        with self.assertRaises(ValueError):
+            validating.create_user(
+                username="u" * 201,
+                password=minimum_password,
+                totp_secret=secret,
+            )
+        with self.assertRaises(ValueError):
+            validating.bootstrap_admin(username="valid-name", password="p" * 1025)
+        self.assertEqual(spy.calls, [])
+
+    def test_failed_and_concurrent_bootstrap_are_atomic(self):
+        from sto.api.auth import AuthService, BootstrapClosed
+        from sto.persistence.db import connect
+
+        dbname = f"sto_bootstrap_{secrets.token_hex(4)}"
+        with psycopg.connect(ADMIN_URL, autocommit=True) as admin:
+            admin.execute(f'CREATE DATABASE "{dbname}"')
+        url = ADMIN_URL.rsplit("/", 1)[0] + "/" + dbname
+        try:
+            with psycopg.connect(url) as conn:
+                for path in sorted(MIGRATIONS.glob("V*.sql")):
+                    conn.execute(path.read_text(encoding="utf-8"))
+                conn.commit()
+            connection = lambda: connect(url)  # noqa: E731 - injected factory
+            service = AuthService.for_tests(connect=connection)
+            with self.assertRaises(ValueError):
+                service.bootstrap_admin(username="b" * 201, password="p" * 12)
+            with connection() as conn:
+                self.assertEqual(
+                    conn.execute("SELECT count(*) AS count FROM users").fetchone()[
+                        "count"
+                    ],
+                    0,
+                )
+
+            ready = threading.Barrier(2)
+
+            def bootstrap(label):
+                ready.wait(timeout=10)
+                try:
+                    row, secret, uri = service.bootstrap_admin(
+                        username=f"bootstrap-{label}", password="p" * 12
+                    )
+                    return ("created", row["id"], bool(secret), uri.startswith("otpauth://"))
+                except BootstrapClosed:
+                    return ("closed", None, False, False)
+
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                outcomes = [
+                    future.result(timeout=20)
+                    for future in (
+                        pool.submit(bootstrap, "first"),
+                        pool.submit(bootstrap, "second"),
+                    )
+                ]
+            self.assertEqual([row[0] for row in outcomes].count("created"), 1)
+            self.assertEqual([row[0] for row in outcomes].count("closed"), 1)
+            created = next(row for row in outcomes if row[0] == "created")
+            self.assertTrue(created[2])
+            self.assertTrue(created[3])
+            with connection() as conn:
+                self.assertEqual(
+                    conn.execute("SELECT count(*) AS count FROM users").fetchone()[
+                        "count"
+                    ],
+                    1,
+                )
+        finally:
+            with psycopg.connect(ADMIN_URL, autocommit=True) as admin:
+                admin.execute(f'DROP DATABASE IF EXISTS "{dbname}" WITH (FORCE)')
 
     def test_every_application_route_rejects_anonymous_requests_and_has_a_guard(self):
         client = self.app_client()
@@ -517,9 +691,12 @@ class AuthenticationBoundaryTests(unittest.TestCase):
 
         self.advance()
         self.login(client, row, secret)
+        replacement, replacement_user, _, _ = self.authenticated("session-replacement")
+        self.grant(client, project, replacement_user, "admin")
         with self.connect() as conn:
-            auth_repo.disable_user(conn, row["id"])
+            result = auth_repo.disable_user(conn, row["id"])
             conn.commit()
+        self.assertTrue(result.changed)
         self.assertEqual(client.get("/api/projects").status_code, 401)
 
         expiring, _, _, _ = self.authenticated("expiring")
@@ -610,6 +787,326 @@ class AuthenticationBoundaryTests(unittest.TestCase):
                 client.post("/api/projects", json={"name": "must-rollback"})
         self.assertEqual(client.get("/api/projects").json(), before)
 
+    def test_project_and_cli_grants_control_a_concurrent_disable_refusal(self):
+        from sto.cli.main import build_parser
+        from sto.persistence import auth_repositories as auth_repo
+        from sto.persistence import repositories as repo
+
+        client, actor, _, _ = self.authenticated("grant-disable-race")
+        before = client.get("/api/projects").json()
+        with patch.object(
+            auth_repo,
+            "grant_membership",
+            side_effect=auth_repo.DisabledUser("synthetic disable race"),
+        ):
+            refused = client.post("/api/projects", json={"name": "must-rollback"})
+        self.assertEqual(refused.status_code, 401, refused.text)
+        self.assertEqual(client.get("/api/projects").json(), before)
+
+        with self.connect() as conn:
+            project = repo.create_project(conn, name="grant-cli-race")
+            conn.commit()
+        args = build_parser().parse_args(
+            ["auth", "grant-project", str(project["id"]), actor["username"], "viewer"]
+        )
+        with (
+            patch("sto.persistence.db.connect", side_effect=self.connect),
+            patch.object(
+                auth_repo,
+                "grant_membership",
+                side_effect=auth_repo.DisabledUser("synthetic disable race"),
+            ),
+            self.assertRaises(SystemExit) as stopped,
+        ):
+            args.handler(args)
+        self.assertEqual(str(stopped.exception), "no such enabled user")
+
+    def test_disable_refuses_last_admin_and_serializes_with_demotion(self):
+        from sto.persistence import auth_repositories as auth_repo
+
+        admin_a, user_a, _, _ = self.authenticated("disable-admin-a")
+        _, user_b, _, _ = self.authenticated("disable-admin-b")
+        project = admin_a.post("/api/projects", json={"name": "disable-race"}).json()[
+            "id"
+        ]
+        self.grant(admin_a, project, user_b, "admin")
+
+        staged = threading.Event()
+        disable_started = threading.Event()
+        allow_commit = threading.Event()
+
+        def demote_b():
+            with self.connect() as conn:
+                auth_repo.grant_membership(
+                    conn,
+                    project_id=uuid.UUID(project),
+                    user_id=user_b["id"],
+                    role="planner",
+                    created_by_user_id=user_a["id"],
+                )
+                staged.set()
+                self.assertTrue(allow_commit.wait(timeout=10))
+                conn.commit()
+            return "demoted"
+
+        def disable_a():
+            self.assertTrue(staged.wait(timeout=10))
+            disable_started.set()
+            with self.connect() as conn:
+                try:
+                    auth_repo.disable_user(conn, user_a["id"])
+                    conn.commit()
+                    return "disabled"
+                except auth_repo.LastProjectAdministrator as error:
+                    conn.rollback()
+                    return str(error)
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            demotion = pool.submit(demote_b)
+            self.assertTrue(staged.wait(timeout=10))
+            disabling = pool.submit(disable_a)
+            self.assertTrue(disable_started.wait(timeout=10))
+            allow_commit.set()
+            self.assertEqual(demotion.result(timeout=10), "demoted")
+            refusal = disabling.result(timeout=10)
+        self.assertIn("grant another enabled administrator", refusal)
+
+        with self.connect() as conn:
+            enabled_admins = conn.execute(
+                """
+                SELECT count(*) AS count
+                FROM project_memberships m JOIN users u ON u.id=m.user_id
+                WHERE m.project_id=%s AND m.role='admin'
+                  AND m.revoked_at IS NULL AND u.enabled
+                """,
+                (uuid.UUID(project),),
+            ).fetchone()["count"]
+        self.assertEqual(enabled_admins, 1)
+
+    def test_disable_cli_reports_the_required_admin_action(self):
+        from sto.cli.main import build_parser
+
+        client, user, _, _ = self.authenticated("disable-cli")
+        project = client.post("/api/projects", json={"name": "disable-cli"}).json()[
+            "id"
+        ]
+        args = build_parser().parse_args(["auth", "disable-user", user["username"]])
+        with (
+            patch("sto.persistence.db.connect", side_effect=self.connect),
+            self.assertRaises(SystemExit) as stopped,
+        ):
+            args.handler(args)
+        self.assertIn("grant another enabled administrator", str(stopped.exception))
+        self.assertEqual(client.get(f"/api/projects/{project}").status_code, 200)
+
+    def test_accepted_disable_revokes_sessions_and_device_tokens(self):
+        from sto.persistence import auth_repositories as auth_repo
+
+        admin, user, _, _ = self.authenticated("disable-accepted")
+        replacement, replacement_user, _, _ = self.authenticated("disable-replacement")
+        project = admin.post("/api/projects", json={"name": "disable-accepted"}).json()[
+            "id"
+        ]
+        self.grant(admin, project, replacement_user, "admin")
+        issued = admin.post(
+            f"/api/projects/{project}/device-tokens",
+            json={"user_id": str(user["id"]), "role": "planner"},
+        )
+        self.assertEqual(issued.status_code, 201, issued.text)
+        raw_device = issued.json()["raw_token"]
+
+        with self.connect() as conn:
+            result = auth_repo.disable_user(conn, user["id"])
+            conn.commit()
+        self.assertTrue(result.changed)
+        self.assertGreaterEqual(result.sessions_revoked, 1)
+        self.assertEqual(result.device_tokens_revoked, 1)
+        self.assertEqual(admin.get("/api/projects").status_code, 401)
+        device = self.app_client()
+        device.headers["Authorization"] = f"Bearer {raw_device}"
+        device.headers.pop("X-CSRF-Token", None)
+        self.assertEqual(device.get("/api/projects").status_code, 401)
+        self.assertEqual(replacement.get(f"/api/projects/{project}").status_code, 200)
+
+    def test_disable_uses_post_wait_timestamps_for_concurrent_credentials(self):
+        from sto.persistence import auth_repositories as auth_repo
+
+        admin, admin_user, _, _ = self.authenticated("disable-clock-admin")
+        _, target, _, _ = self.authenticated("disable-clock-target")
+        project = admin.post("/api/projects", json={"name": "disable-clock"}).json()[
+            "id"
+        ]
+        self.grant(admin, project, target, "planner")
+
+        disable_began = threading.Event()
+        credentials_staged = threading.Event()
+        disable_attempting = threading.Event()
+        allow_credential_commit = threading.Event()
+
+        def disable_after_issuance_stages():
+            with self.connect() as conn:
+                transaction_started = conn.execute(
+                    "SELECT now() AS value"
+                ).fetchone()["value"]
+                disable_began.set()
+                self.assertTrue(credentials_staged.wait(timeout=10))
+                disable_attempting.set()
+                result = auth_repo.disable_user(conn, target["id"])
+                conn.commit()
+                return transaction_started, result
+
+        def issue_credentials_after_disable_begins():
+            self.assertTrue(disable_began.wait(timeout=10))
+            with self.connect() as conn:
+                auth_repo.get_user(conn, target["id"], for_update=True)
+                session = auth_repo.insert_session(
+                    conn,
+                    user_id=target["id"],
+                    token_hash=secrets.token_hex(32),
+                    token_prefix=f"sto_s_{secrets.token_urlsafe(6)[:8]}",
+                    expires_at=self.current + timedelta(hours=1),
+                )
+                token = auth_repo.insert_device_token(
+                    conn,
+                    user_id=target["id"],
+                    project_id=uuid.UUID(project),
+                    role="planner",
+                    token_hash=secrets.token_hex(32),
+                    token_prefix=f"sto_dev_{secrets.token_urlsafe(6)[:8]}",
+                    expires_at=self.current + timedelta(hours=1),
+                    issued_by_user_id=admin_user["id"],
+                )
+                issued_at = conn.execute(
+                    "SELECT issued_at FROM device_tokens WHERE id=%s", (token["id"],)
+                ).fetchone()["issued_at"]
+                credentials_staged.set()
+                self.assertTrue(allow_credential_commit.wait(timeout=10))
+                conn.commit()
+                return session["id"], token["id"], issued_at
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            disabling = pool.submit(disable_after_issuance_stages)
+            issuing = pool.submit(issue_credentials_after_disable_begins)
+            self.assertTrue(disable_attempting.wait(timeout=10))
+            allow_credential_commit.set()
+            session_id, token_id, issued_at = issuing.result(timeout=10)
+            transaction_started, result = disabling.result(timeout=10)
+
+        self.assertLess(transaction_started, issued_at)
+        self.assertTrue(result.changed)
+        self.assertGreaterEqual(result.sessions_revoked, 2)
+        self.assertEqual(result.device_tokens_revoked, 1)
+        with self.connect() as conn:
+            session = conn.execute(
+                "SELECT issued_at, revoked_at FROM server_sessions WHERE id=%s",
+                (session_id,),
+            ).fetchone()
+            token = conn.execute(
+                "SELECT issued_at, revoked_at FROM device_tokens WHERE id=%s",
+                (token_id,),
+            ).fetchone()
+        self.assertGreaterEqual(session["revoked_at"], session["issued_at"])
+        self.assertGreaterEqual(token["revoked_at"], token["issued_at"])
+
+    def test_scenario_reset_is_attributed_atomic_and_distinguishes_noop(self):
+        from sto.persistence import repositories as repo
+
+        client, actor, _, _ = self.authenticated("reset-audit")
+        project, scenario = self.project_with_scenario(client, "reset-audit")
+        baseline_id = scenario["baseline_version_id"]
+        scenario_id = scenario["current_version_id"]
+
+        stale = client.post(
+            f"/api/projects/{project}/scenario/reset",
+            json={"expected_version_id": str(uuid.uuid4())},
+        )
+        self.assertEqual(stale.status_code, 409, stale.text)
+        with self.connect() as conn:
+            self.assertEqual(
+                conn.execute(
+                    "SELECT count(*) AS count FROM scenario_reset_events WHERE project_id=%s",
+                    (uuid.UUID(project),),
+                ).fetchone()["count"],
+                0,
+            )
+
+        reset = client.post(
+            f"/api/projects/{project}/scenario/reset",
+            json={"expected_version_id": scenario_id},
+        )
+        self.assertEqual(reset.status_code, 200, reset.text)
+        self.assertTrue(reset.json()["reset_performed"])
+        event_id = uuid.UUID(reset.json()["reset_event_id"])
+        self.assertEqual(reset.json()["current_version_id"], baseline_id)
+
+        noop = client.post(
+            f"/api/projects/{project}/scenario/reset",
+            json={"expected_version_id": baseline_id},
+        )
+        self.assertEqual(noop.status_code, 200, noop.text)
+        self.assertFalse(noop.json()["reset_performed"])
+        self.assertIsNone(noop.json()["reset_event_id"])
+
+        with self.connect() as conn:
+            event = conn.execute(
+                "SELECT * FROM scenario_reset_events WHERE id=%s", (event_id,)
+            ).fetchone()
+            self.assertEqual(event["project_id"], uuid.UUID(project))
+            self.assertEqual(event["actor_user_id"], actor["id"])
+            self.assertEqual(event["prior_scenario_version_id"], uuid.UUID(scenario_id))
+            self.assertEqual(event["restored_baseline_version_id"], uuid.UUID(baseline_id))
+            self.assertEqual(
+                conn.execute(
+                    "SELECT count(*) AS count FROM scenario_reset_events WHERE project_id=%s",
+                    (uuid.UUID(project),),
+                ).fetchone()["count"],
+                1,
+            )
+            with self.assertRaises(psycopg.errors.CheckViolation):
+                conn.execute(
+                    "UPDATE scenario_reset_events SET actor_user_id=%s WHERE id=%s",
+                    (actor["id"], event_id),
+                )
+            conn.rollback()
+        with self.connect() as conn:
+            self.assertIsNotNone(
+                repo.get_version(
+                    conn, version_id=uuid.UUID(scenario_id), with_document=False
+                )
+            )
+
+    def test_detailed_health_contains_both_database_failures(self):
+        from sto.persistence import repositories as repo
+
+        client, _, _, _ = self.authenticated("health-failure")
+        client.post("/api/projects", json={"name": "health-private-project"})
+        workspace = client.app.state.workspace
+        with patch.object(
+            repo,
+            "list_projects_for_user",
+            side_effect=RuntimeError("postgresql://secret-connection"),
+        ):
+            second_read = client.get("/api/health")
+        self.assertEqual(second_read.status_code, 200, second_read.text)
+        self.assertEqual(second_read.json()["status"], "degraded")
+        self.assertEqual(second_read.json()["database"], "error: RuntimeError")
+        self.assertEqual(second_read.json()["resident_projects"], 0)
+        self.assertEqual(second_read.json()["integrity_failures"], {})
+        self.assertNotIn("secret-connection", second_read.text)
+
+        with patch.object(
+            workspace,
+            "connect",
+            side_effect=RuntimeError("postgresql://another-secret"),
+        ):
+            first_read = client.get("/api/health")
+            self.assertEqual(first_read.status_code, 200, first_read.text)
+            self.assertEqual(first_read.json()["database"], "error: RuntimeError")
+            self.assertNotIn("another-secret", first_read.text)
+            anonymous = self.app_client()
+            self.assertEqual(anonymous.get("/api/health").status_code, 401)
+            self.assertEqual(anonymous.get("/healthz").json(), {"status": "ok"})
+
     def test_logout_revokes_the_persisted_session(self):
         from sto.persistence import auth_repositories as auth_repo
 
@@ -620,6 +1117,52 @@ class AuthenticationBoundaryTests(unittest.TestCase):
         with self.connect() as conn:
             session = auth_repo.get_session_by_hash(conn, self.auth._token_hash(raw))
         self.assertIsNotNone(session["revoked_at"])
+
+    def test_logout_403_and_500_do_not_revoke_or_claim_success(self):
+        from fastapi.testclient import TestClient
+
+        client, _, _, login = self.authenticated("logout-failures")
+        raw = client.cookies.get(self.auth.config.cookie_name)
+        refused = client.post(
+            "/api/auth/logout", headers={"X-CSRF-Token": "wrong-session-value"}
+        )
+        self.assertEqual(refused.status_code, 403, refused.text)
+        self.assertEqual(client.get("/api/auth/session").status_code, 200)
+
+        failure_client = TestClient(client.app, raise_server_exceptions=False)
+        failure_client.__enter__()
+        self.addCleanup(failure_client.__exit__, None, None, None)
+        failure_client.cookies.set(self.auth.config.cookie_name, raw)
+        failure_client.headers["X-CSRF-Token"] = login.json()["csrf_token"]
+        with patch.object(
+            self.auth, "revoke_session", side_effect=RuntimeError("synthetic outage")
+        ):
+            failed = failure_client.post("/api/auth/logout")
+        self.assertEqual(failed.status_code, 500, failed.text)
+        self.assertEqual(failure_client.get("/api/auth/session").status_code, 200)
+        self.assertEqual(failure_client.post("/api/auth/logout").status_code, 204)
+        self.assertEqual(failure_client.get("/api/auth/session").status_code, 401)
+
+    def test_login_after_unconfirmed_logout_atomically_revokes_the_old_session(self):
+        client, row, secret, _ = self.authenticated("logout-login-rotation")
+        old_raw = client.cookies.get(self.auth.config.cookie_name)
+        self.assertIsNotNone(old_raw)
+
+        refused = client.post(
+            "/api/auth/logout", headers={"X-CSRF-Token": "wrong-session-value"}
+        )
+        self.assertEqual(refused.status_code, 403, refused.text)
+        self.assertEqual(client.get("/api/auth/session").status_code, 200)
+
+        self.advance()
+        replacement, _ = self.login(client, row, secret, advance=False)
+        self.assertEqual(replacement.status_code, 200, replacement.text)
+        self.assertNotEqual(client.cookies.get(self.auth.config.cookie_name), old_raw)
+
+        old = self.app_client()
+        old.cookies.set(self.auth.config.cookie_name, old_raw)
+        self.assertEqual(old.get("/api/auth/session").status_code, 401)
+        self.assertEqual(client.get("/api/auth/session").status_code, 200)
 
 
 if __name__ == "__main__":

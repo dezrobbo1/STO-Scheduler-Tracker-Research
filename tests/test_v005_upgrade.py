@@ -1,4 +1,4 @@
-"""A real persisted V004 planner scenario upgraded through V005."""
+"""A real persisted V004 planner scenario upgraded through the current schema."""
 
 from __future__ import annotations
 
@@ -160,6 +160,7 @@ class V005UpgradeTests(unittest.TestCase):
                 "apply   V005__authentication_and_project_authorization.sql",
                 applied.stdout,
             )
+            self.assertIn("apply   V006__scenario_reset_events.sql", applied.stdout)
             drift = subprocess.run(
                 [str(ROOT / "scripts" / "db" / "check-schema-drift.sh")],
                 cwd=ROOT,
@@ -168,7 +169,7 @@ class V005UpgradeTests(unittest.TestCase):
                 capture_output=True,
                 check=True,
             )
-            self.assertIn("Schema matches infra/migrations (5 migrations, 14 tables)", drift.stdout)
+            self.assertIn("Schema matches infra/migrations (6 migrations, 15 tables)", drift.stdout)
 
             after = Workspace(connect=connect_v004, source_dir=Path(source_dir.name))
             self.assertEqual(after.rebuild(), 1)
@@ -260,10 +261,11 @@ class V005UpgradeTests(unittest.TestCase):
                     "project_membership_events",
                     "server_sessions",
                     "device_tokens",
+                    "scenario_reset_events",
                 }
                 <= tables
             )
-            self.assertEqual(migration_count, 5)
+            self.assertEqual(migration_count, 6)
             self.assertGreaterEqual(historic_actors, 4)
         finally:
             source_dir.cleanup()

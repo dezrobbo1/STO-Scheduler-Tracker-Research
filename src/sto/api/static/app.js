@@ -11,6 +11,7 @@ const authStatus = document.querySelector("#auth-status");
 const account = document.querySelector("#account");
 const actorName = document.querySelector("#actor-name");
 const logoutButton = document.querySelector("#logout");
+const retryLogoutButton = document.querySelector("#retry-logout");
 const projects = document.querySelector("#project");
 const calculateButton = document.querySelector("#calculate");
 const createProjectForm = document.querySelector("#create-project");
@@ -59,6 +60,12 @@ function hours(seconds) {
   return seconds === null || seconds === undefined ? "" : (seconds / 3600).toFixed(2).replace(/0+$/, "").replace(/\.$/, "") + " h";
 }
 
+function setLoginEnabled(enabled) {
+  for (const control of [loginUsername, loginPassword, loginTotp, loginButton]) {
+    control.disabled = !enabled;
+  }
+}
+
 function clearPlanner(message) {
   currentActor = null;
   csrfToken = null;
@@ -68,6 +75,9 @@ function clearPlanner(message) {
   account.hidden = true;
   loginSection.hidden = false;
   actorName.textContent = "";
+  retryLogoutButton.hidden = true;
+  retryLogoutButton.disabled = false;
+  setLoginEnabled(true);
   projects.replaceChildren(new Option("sign in to load projects", ""));
   for (const section of [scenarioSection, provenanceSection, chartSection, rowsSection, summariesSection]) section.hidden = true;
   body.replaceChildren(); chart.replaceChildren(); summaryBody.replaceChildren();
@@ -78,6 +88,7 @@ function showAuthenticated(session) {
   currentActor = session.actor;
   csrfToken = session.csrf_token;
   actorName.textContent = session.actor.display_name || session.actor.username;
+  retryLogoutButton.hidden = true;
   authStatus.textContent = ""; delete authStatus.dataset.kind;
   loginSection.hidden = true;
   account.hidden = false;
@@ -109,6 +120,46 @@ async function json(url, options) {
   }
   if (response.status === 204) return null;
   return response.json();
+}
+
+async function requestLogout(csrf, perform = json) {
+  try {
+    await perform("/api/auth/logout", {
+      method: "POST",
+      headers: {"X-CSRF-Token": csrf},
+    });
+    return {kind: "revoked"};
+  } catch (error) {
+    if (error.status === 401) return {kind: "already-invalid"};
+    return {kind: "unconfirmed"};
+  }
+}
+
+async function recoverLogout(load = json, perform = json) {
+  try {
+    const session = await load("/api/auth/session");
+    if (!session.csrf_token) return {kind: "unconfirmed"};
+    return requestLogout(session.csrf_token, perform);
+  } catch (error) {
+    if (error.status === 401) return {kind: "already-invalid"};
+    return {kind: "unconfirmed"};
+  }
+}
+
+function showLogoutOutcome(outcome) {
+  clearPlanner();
+  if (outcome.kind === "revoked") {
+    authStatus.textContent = "Signed out. The server session was revoked.";
+    delete authStatus.dataset.kind;
+  } else if (outcome.kind === "already-invalid") {
+    authStatus.textContent = "The session was already unavailable. Sensitive planner data was cleared.";
+    delete authStatus.dataset.kind;
+  } else {
+    authStatus.textContent = "Server sign-out could not be confirmed. Sensitive planner data was cleared; retry server sign-out before leaving this device.";
+    authStatus.dataset.kind = "error";
+    retryLogoutButton.hidden = false;
+    setLoginEnabled(false);
+  }
 }
 
 function statusDate(result) {
@@ -546,6 +597,7 @@ projects.addEventListener("change", () => show(projects.value));
 
 loginForm.addEventListener("submit", async (event) => {
   event.preventDefault();
+  if (loginButton.disabled) return;
   loginButton.disabled = true;
   authStatus.textContent = "Signing in…"; delete authStatus.dataset.kind;
   try {
@@ -570,14 +622,17 @@ loginForm.addEventListener("submit", async (event) => {
 });
 
 logoutButton.addEventListener("click", async () => {
+  const csrf = csrfToken;
   logoutButton.disabled = true;
-  try { await json("/api/auth/logout", {method: "POST"}); }
-  catch (error) { /* Local state is cleared even if the session has expired. */ }
-  finally {
-    clearPlanner();
-    authStatus.textContent = "Signed out."; delete authStatus.dataset.kind;
-    logoutButton.disabled = false;
-  }
+  showLogoutOutcome(await requestLogout(csrf));
+  logoutButton.disabled = false;
+});
+
+retryLogoutButton.addEventListener("click", async () => {
+  retryLogoutButton.disabled = true;
+  authStatus.textContent = "Checking the server session and retrying sign-out…";
+  delete authStatus.dataset.kind;
+  showLogoutOutcome(await recoverLogout());
 });
 
 exportScenario.addEventListener("click", async (event) => {

@@ -7,6 +7,7 @@ header { border-bottom: 1px solid var(--line); padding-bottom: 1.2rem; }
 .login-panel h2 { margin-top: 0; }
 .login-form { display: grid; grid-template-columns: minmax(8rem, max-content) minmax(12rem, 1fr); gap: .7rem 1rem; align-items: center; }
 .login-form button { grid-column: 2; justify-self: start; }
+#retry-logout { margin-top: .8rem; }
 #auth-status { min-height: 1.5rem; margin-bottom: 0; }
 #auth-status[data-kind="error"] { color: var(--warn); }
 .eyebrow { margin: 0 0 .25rem; color: var(--accent); font-size: .75rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }

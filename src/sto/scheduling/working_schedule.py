@@ -273,6 +273,8 @@ class ScenarioResetResult:
     baseline_version_id: uuid.UUID
     calculation_id: uuid.UUID | None
     fingerprint: str | None
+    reset_performed: bool
+    reset_event_id: uuid.UUID | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -876,7 +878,11 @@ class Workspace:
         )
 
     def reset_scenario(
-        self, project_id: uuid.UUID, *, expected_version_id: uuid.UUID
+        self,
+        project_id: uuid.UUID,
+        *,
+        expected_version_id: uuid.UUID,
+        actor_user_id: uuid.UUID,
     ) -> ScenarioResetResult:
         """Move the active planner state back to the current baseline."""
 
@@ -897,7 +903,16 @@ class Workspace:
                     f"planner state moved from {expected_version_id} to {active_id}; "
                     "reload before resetting"
                 )
+            reset_event_id = None
             if scenario_id is not None:
+                event = repo.insert_scenario_reset_event(
+                    conn,
+                    project_id=project_id,
+                    actor_user_id=actor_user_id,
+                    prior_scenario_version_id=scenario_id,
+                    restored_baseline_version_id=baseline["id"],
+                )
+                reset_event_id = event["id"]
                 repo.delete_head(conn, project_id=project_id, kind="scenario")
             calculation = repo.get_latest_calculation(conn, version_id=baseline["id"])
             conn.commit()
@@ -908,6 +923,8 @@ class Workspace:
             fingerprint=(
                 None if calculation is None else calculation["result_fingerprint"]
             ),
+            reset_performed=scenario_id is not None,
+            reset_event_id=reset_event_id,
         )
 
     def read_calculation(

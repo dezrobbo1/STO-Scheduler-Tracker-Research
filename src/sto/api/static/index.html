@@ -20,11 +20,12 @@
     <label for="login-username">Username</label>
     <input id="login-username" name="username" required autocomplete="username" maxlength="200">
     <label for="login-password">Password</label>
-    <input id="login-password" name="password" type="password" required autocomplete="current-password">
+    <input id="login-password" name="password" type="password" required autocomplete="current-password" minlength="12" maxlength="1024">
     <label for="login-totp">Authenticator code</label>
     <input id="login-totp" name="totp" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" minlength="6" maxlength="6" required>
     <button id="login-button" type="submit">Sign in</button>
   </form>
+  <button id="retry-logout" type="button" hidden>Retry server sign-out</button>
   <p id="auth-status" role="status"></p>
 </section>
 <main id="planner" hidden>

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
@@ -11,6 +12,17 @@ import psycopg
 
 class LastProjectAdministrator(Exception):
     """A membership change would leave an enabled project with no admin."""
+
+
+class DisabledUser(Exception):
+    """A disabled account cannot receive active project authority."""
+
+
+@dataclass(frozen=True, slots=True)
+class DisableUserResult:
+    changed: bool
+    sessions_revoked: int
+    device_tokens_revoked: int
 
 
 def lock_bootstrap(conn: psycopg.Connection) -> None:
@@ -105,16 +117,61 @@ def record_login(
         )
 
 
-def disable_user(conn: psycopg.Connection, user_id: uuid.UUID) -> bool:
-    row = conn.execute(
-        """
-        UPDATE users SET enabled = FALSE, disabled_at = now()
-        WHERE id = %s AND enabled
-        RETURNING id
-        """,
-        (user_id,),
-    ).fetchone()
-    return row is not None
+def disable_user(conn: psycopg.Connection, user_id: uuid.UUID) -> DisableUserResult:
+    """Disable one account without orphaning any project's administration.
+
+    Membership grants, demotions, revocations and account disables share a
+    short transaction-level lock. A disable can therefore lock every affected
+    project in stable order, decide against committed authority, and invalidate
+    both credential types atomically.
+    """
+
+    _lock_admin_state(conn)
+    user = get_user(conn, user_id, for_update=True)
+    if user is None:
+        return DisableUserResult(False, 0, 0)
+    if user["enabled"]:
+        project_ids = [
+            row["project_id"]
+            for row in conn.execute(
+                """
+                SELECT project_id
+                FROM project_memberships
+                WHERE user_id = %s AND role = 'admin' AND revoked_at IS NULL
+                ORDER BY project_id
+                """,
+                (user_id,),
+            ).fetchall()
+        ]
+        for project_id in project_ids:
+            _lock_project(conn, project_id)
+        blocked = [
+            project_id
+            for project_id in project_ids
+            if _other_enabled_admins(
+                conn, project_id=project_id, user_id=user_id
+            ) == 0
+        ]
+        if blocked:
+            projects = ", ".join(str(project_id) for project_id in blocked)
+            raise LastProjectAdministrator(
+                "cannot disable the last enabled administrator for project(s) "
+                f"{projects}; grant another enabled administrator or reassign "
+                "the memberships first"
+            )
+        conn.execute(
+            """
+            UPDATE users SET enabled = FALSE, disabled_at = now()
+            WHERE id = %s
+            """,
+            (user_id,),
+        )
+        changed = True
+    else:
+        changed = False
+    sessions = revoke_user_sessions(conn, user_id)
+    device_tokens = revoke_user_device_tokens(conn, user_id)
+    return DisableUserResult(changed, sessions, device_tokens)
 
 
 def grant_membership(
@@ -125,7 +182,11 @@ def grant_membership(
     role: str,
     created_by_user_id: uuid.UUID | None,
 ) -> dict[str, Any]:
+    _lock_admin_state(conn)
     _lock_project(conn, project_id)
+    user = get_user(conn, user_id, for_update=True)
+    if user is None or not user["enabled"]:
+        raise DisabledUser("project authority requires an enabled user")
     current = get_membership(
         conn, project_id=project_id, user_id=user_id, include_revoked=True
     )
@@ -180,6 +241,7 @@ def revoke_membership(
     user_id: uuid.UUID,
     actor_user_id: uuid.UUID | None,
 ) -> dict[str, Any] | None:
+    _lock_admin_state(conn)
     _lock_project(conn, project_id)
     current = get_membership(conn, project_id=project_id, user_id=user_id)
     if current is None:
@@ -201,7 +263,8 @@ def revoke_membership(
     ).fetchone()
     conn.execute(
         """
-        UPDATE device_tokens SET revoked_at = now()
+        UPDATE device_tokens
+        SET revoked_at = GREATEST(clock_timestamp(), issued_at)
         WHERE project_id = %s AND user_id = %s AND revoked_at IS NULL
         """,
         (project_id, user_id),
@@ -215,6 +278,12 @@ def _lock_project(conn: psycopg.Connection, project_id: uuid.UUID) -> None:
     ).fetchone()
     if row is None:
         raise ValueError("no such project")
+
+
+def _lock_admin_state(conn: psycopg.Connection) -> None:
+    """Serialize the bounded set of account/project authority transitions."""
+
+    conn.execute("SELECT pg_advisory_xact_lock(hashtext('sto-auth-admin-state'))")
 
 
 def _other_enabled_admins(
@@ -286,7 +355,8 @@ def get_session_by_hash(conn: psycopg.Connection, token_hash: str) -> dict[str, 
 def revoke_session(conn: psycopg.Connection, session_id: uuid.UUID) -> bool:
     row = conn.execute(
         """
-        UPDATE server_sessions SET revoked_at = now()
+        UPDATE server_sessions
+        SET revoked_at = GREATEST(clock_timestamp(), issued_at)
         WHERE id = %s AND revoked_at IS NULL
         RETURNING id
         """,
@@ -295,10 +365,36 @@ def revoke_session(conn: psycopg.Connection, session_id: uuid.UUID) -> bool:
     return row is not None
 
 
+def revoke_session_by_hash(conn: psycopg.Connection, token_hash: str) -> bool:
+    row = conn.execute(
+        """
+        UPDATE server_sessions
+        SET revoked_at = GREATEST(clock_timestamp(), issued_at)
+        WHERE token_hash = %s AND revoked_at IS NULL
+        RETURNING id
+        """,
+        (token_hash,),
+    ).fetchone()
+    return row is not None
+
+
 def revoke_user_sessions(conn: psycopg.Connection, user_id: uuid.UUID) -> int:
     cursor = conn.execute(
         """
-        UPDATE server_sessions SET revoked_at = now()
+        UPDATE server_sessions
+        SET revoked_at = GREATEST(clock_timestamp(), issued_at)
+        WHERE user_id = %s AND revoked_at IS NULL
+        """,
+        (user_id,),
+    )
+    return cursor.rowcount
+
+
+def revoke_user_device_tokens(conn: psycopg.Connection, user_id: uuid.UUID) -> int:
+    cursor = conn.execute(
+        """
+        UPDATE device_tokens
+        SET revoked_at = GREATEST(clock_timestamp(), issued_at)
         WHERE user_id = %s AND revoked_at IS NULL
         """,
         (user_id,),
@@ -380,7 +476,8 @@ def revoke_device_token(
 ) -> bool:
     row = conn.execute(
         """
-        UPDATE device_tokens SET revoked_at = now()
+        UPDATE device_tokens
+        SET revoked_at = GREATEST(clock_timestamp(), issued_at)
         WHERE id = %s AND project_id = %s AND revoked_at IS NULL
         RETURNING id
         """,

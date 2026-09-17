@@ -329,12 +329,16 @@ def create_app(
     @app.post("/api/auth/login", response_model=schemas.SessionResponse)
     def login(
         body: schemas.LoginRequest,
+        request: Request,
         response: Response,
         service: AuthService = Depends(auth),
     ) -> Any:
         try:
             result = service.login(
-                username=body.username, password=body.password, otp=body.totp
+                username=body.username,
+                password=body.password,
+                otp=body.totp,
+                replace_raw_session=request.cookies.get(service.config.cookie_name),
             )
         except AuthenticationFailed:
             raise HTTPException(401, "authentication failed") from None
@@ -395,13 +399,13 @@ def create_app(
         try:
             with workspace.connect() as conn:
                 conn.execute("SELECT 1")
+                visible = repo.list_projects_for_user(
+                    conn, user_id=actor.user_id, project_id=actor.project_id
+                )
             database = "ok"
         except Exception as error:  # noqa: BLE001 - reported, not hidden
             database = f"error: {type(error).__name__}"
-        with workspace.connect() as conn:
-            visible = repo.list_projects_for_user(
-                conn, user_id=actor.user_id, project_id=actor.project_id
-            )
+            visible = []
         visible_ids = {row["id"] for row in visible}
         failures = {
             project_id: failure
@@ -429,13 +433,16 @@ def create_app(
                 description=body.description,
                 created_by_user_id=actor.user_id,
             )
-            auth_repo.grant_membership(
-                conn,
-                project_id=row["id"],
-                user_id=actor.user_id,
-                role="admin",
-                created_by_user_id=actor.user_id,
-            )
+            try:
+                auth_repo.grant_membership(
+                    conn,
+                    project_id=row["id"],
+                    user_id=actor.user_id,
+                    role="admin",
+                    created_by_user_id=actor.user_id,
+                )
+            except auth_repo.DisabledUser:
+                raise HTTPException(401, "authentication required") from None
             conn.commit()
         return schemas.Project(**row)
 
@@ -669,7 +676,7 @@ def create_app(
 
     @app.post(
         "/api/projects/{project_id}/scenario/reset",
-        response_model=schemas.PlannerState,
+        response_model=schemas.ScenarioResetResponse,
     )
     def reset_scenario(
         project_id: uuid.UUID,
@@ -679,7 +686,9 @@ def create_app(
     ) -> Any:
         try:
             restored = workspace.reset_scenario(
-                project_id, expected_version_id=body.expected_version_id
+                project_id,
+                expected_version_id=body.expected_version_id,
+                actor_user_id=access.actor.user_id,
             )
             state = workspace.planner_state(project_id)
             baseline = state.get("baseline")
@@ -702,7 +711,11 @@ def create_app(
                 raise StaleSchedule(
                     "the restored baseline was superseded before it could be returned; reload"
                 )
-            return schemas.PlannerState(**state)
+            return schemas.ScenarioResetResponse(
+                **state,
+                reset_performed=restored.reset_performed,
+                reset_event_id=restored.reset_event_id,
+            )
         except UnknownProject:
             raise HTTPException(404, "no such project") from None
         except NoSchedule:
@@ -808,6 +821,8 @@ def create_app(
                 )
             except auth_repo.LastProjectAdministrator as error:
                 raise HTTPException(409, str(error)) from None
+            except auth_repo.DisabledUser:
+                raise HTTPException(404, "no such enabled user") from None
             conn.commit()
         return schemas.MembershipResponse(
             **row,
