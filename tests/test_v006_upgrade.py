@@ -11,6 +11,7 @@ import tempfile
 import unittest
 from datetime import UTC, datetime
 from pathlib import Path
+from urllib.parse import parse_qsl, unquote, urlparse, urlsplit
 
 REQUIRE_DB = os.environ.get("STO_REQUIRE_DB") == "1"
 ADMIN_URL = os.environ.get(
@@ -35,7 +36,11 @@ except ImportError as error:
 
 
 def _reachable() -> bool:
-    if psycopg is None or shutil.which("psql") is None:
+    if psycopg is None:
+        return False
+    if shutil.which("psql") is None:
+        if REQUIRE_DB:
+            raise RuntimeError("STO_REQUIRE_DB=1 but the psql executable is unavailable")
         return False
     try:
         with psycopg.connect(ADMIN_URL, connect_timeout=3):
@@ -48,16 +53,53 @@ def _reachable() -> bool:
         return False
 
 
+# Keep the V003 upgrade test's explicit, fail-closed libpq translation.
+# Do not import its test module: each upgrade cohort owns its availability gate.
+_LIBPQ_QUERY_ENV = {
+    "application_name": "PGAPPNAME",
+    "channel_binding": "PGCHANNELBINDING",
+    "connect_timeout": "PGCONNECT_TIMEOUT",
+    "gssencmode": "PGGSSENCMODE",
+    "options": "PGOPTIONS",
+    "sslcert": "PGSSLCERT",
+    "sslcrl": "PGSSLCRL",
+    "sslkey": "PGSSLKEY",
+    "sslmode": "PGSSLMODE",
+    "sslrootcert": "PGSSLROOTCERT",
+    "target_session_attrs": "PGTARGETSESSIONATTRS",
+}
+
+
+def _database_url(admin_url: str, dbname: str) -> str:
+    """Change only the database path, including on authority-less socket URLs."""
+
+    parsed = urlsplit(admin_url)
+    query = "" if not parsed.query else "?" + parsed.query
+    fragment = "" if not parsed.fragment else "#" + parsed.fragment
+    return f"{parsed.scheme}://{parsed.netloc}/{dbname}{query}{fragment}"
+
+
 def _environment(dbname: str) -> dict[str, str]:
+    """Use the same server/options as preparation, retaining libpq defaults."""
+
+    parsed = urlparse(ADMIN_URL)
     environment = os.environ.copy()
-    environment.update(
-        {
-            "PGHOST": "127.0.0.1",
-            "PGPORT": "5433",
-            "PGUSER": "postgres",
-            "PGDATABASE": dbname,
-        }
-    )
+    environment["PGDATABASE"] = dbname
+    if parsed.hostname is not None:
+        environment["PGHOST"] = parsed.hostname
+    if parsed.port is not None:
+        environment["PGPORT"] = str(parsed.port)
+    if parsed.username is not None:
+        environment["PGUSER"] = unquote(parsed.username)
+    if parsed.password is not None:
+        environment["PGPASSWORD"] = unquote(parsed.password)
+    for name, value in parse_qsl(parsed.query, keep_blank_values=True):
+        variable = _LIBPQ_QUERY_ENV.get(name)
+        if variable is None:
+            raise RuntimeError(
+                f"the V006 upgrade test cannot pass libpq URL option {name!r} to psql"
+            )
+        environment[variable] = value
     return environment
 
 
@@ -79,7 +121,7 @@ class V006UpgradeTests(unittest.TestCase):
         try:
             with psycopg.connect(ADMIN_URL, autocommit=True) as admin:
                 admin.execute(f'CREATE DATABASE "{dbname}"')
-            url = ADMIN_URL.rsplit("/", 1)[0] + "/" + dbname
+            url = _database_url(ADMIN_URL, dbname)
             with psycopg.connect(url) as conn:
                 conn.execute(
                     """
@@ -154,10 +196,9 @@ class V006UpgradeTests(unittest.TestCase):
                 capture_output=True,
                 check=True,
             )
-            self.assertIn(
-                "Schema matches infra/migrations (6 migrations, 15 tables)",
-                drift.stdout,
-            )
+            # The supported migrator advances to the current schema, so later
+            # migrations must not invalidate this historical upgrade proof.
+            self.assertIn("Schema matches infra/migrations", drift.stdout)
 
             rebuilt = Workspace(connect=connection, source_dir=Path(source_dir.name))
             self.assertEqual(rebuilt.rebuild(), 1)

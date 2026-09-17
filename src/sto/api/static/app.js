@@ -624,6 +624,12 @@ loginForm.addEventListener("submit", async (event) => {
 logoutButton.addEventListener("click", async () => {
   const csrf = csrfToken;
   logoutButton.disabled = true;
+  // Clear the planner and invalidate pending renders before waiting on I/O.
+  // The captured CSRF value still authorizes this request after local clearing.
+  clearPlanner();
+  setLoginEnabled(false);
+  authStatus.textContent = "Signing out… Sensitive planner data was cleared.";
+  delete authStatus.dataset.kind;
   showLogoutOutcome(await requestLogout(csrf));
   logoutButton.disabled = false;
 });
