@@ -36,10 +36,18 @@ function deferred() {
   const promise = new Promise((yes, no) => { resolve = yes; reject = no; });
   return {promise, resolve, reject};
 }
+const bootstrapRead = deferred(), bootstrapLogout = deferred();
+const bootstrapping = process.argv[2] === 'bootstrap-refresh';
 const context = vm.createContext({
   document: {querySelector: node}, Headers, console,
   Option: function(text, value) { this.text = text; this.value = value; },
-  fetch: async () => response(401),
+  fetch: (url) => {
+    if (!bootstrapping) return Promise.resolve(response(401));
+    if (url.endsWith('/session')) return Promise.resolve(response(200, {
+      actor: {username: 'synthetic'}, csrf_token: 'captured-csrf',
+    }));
+    return url.endsWith('/projects') ? bootstrapRead.promise : bootstrapLogout.promise;
+  },
 });
 vm.runInContext(fs.readFileSync(process.argv[1], 'utf8'), context);
 const run = (code) => vm.runInContext(code, context);
@@ -130,6 +138,48 @@ function seed() {
     await retry;
     for (const selector of controls) assert.equal(node(selector).disabled, false);
     assert.equal(node('#retry-logout').hidden, true);
+  } else if (process.argv[2] === 'login-refresh') {
+    for (const outcome of ['success', 'network', 500]) {
+      run('clearPlanner()');
+      const reading = deferred(), loggingOut = deferred();
+      const calls = [];
+      context.fetch = (url) => {
+        calls.push(url);
+        if (url.endsWith('/login')) return Promise.resolve(response(200, {
+          actor: {username: 'synthetic'}, csrf_token: 'captured-csrf',
+        }));
+        if (url.endsWith('/projects')) return reading.promise;
+        if (url.endsWith('/logout')) return loggingOut.promise;
+        throw new Error('stale project list must not trigger a planner request');
+      };
+      const login = node('#login').handlers.submit({preventDefault() {}});
+      await new Promise(setImmediate);
+      assert.equal(node('#planner').hidden, false);
+      const logout = node('#logout').handlers.click();
+      assertCleared();
+      if (outcome === 'network') reading.reject(new TypeError('synthetic network failure'));
+      else reading.resolve(response(outcome === 'success' ? 200 : outcome,
+        [{id: 'synthetic-project', name: 'stale project'}]));
+      await login;
+      assertCleared();
+      for (const selector of controls) assert.equal(node(selector).disabled, true,
+        'old login completion must not enable sign-in during logout: ' + selector);
+      assert.equal(calls.length, 3);
+      assert.match(node('#auth-status').textContent, /Signing out/);
+      loggingOut.resolve(response(204));
+      await logout;
+    }
+  } else if (bootstrapping) {
+    assert.equal(node('#planner').hidden, false);
+    const logout = node('#logout').handlers.click();
+    assertCleared();
+    bootstrapRead.reject(new TypeError('synthetic bootstrap refresh failure'));
+    await new Promise(setImmediate);
+    assertCleared();
+    for (const selector of controls) assert.equal(node(selector).disabled, true);
+    assert.match(node('#auth-status').textContent, /Signing out/);
+    bootstrapLogout.resolve(response(204));
+    await logout;
   } else throw new Error('unknown probe');
   console.log('PASS ' + process.argv[2]);
 })().catch(error => { console.error(error); process.exitCode = 1; });
@@ -156,6 +206,12 @@ class PendingLogoutTests(unittest.TestCase):
 
     def test_retry_keeps_content_hidden_and_uses_fresh_csrf(self):
         self.probe("retry")
+
+    def test_old_login_refresh_cannot_overwrite_pending_logout(self):
+        self.probe("login-refresh")
+
+    def test_old_bootstrap_failure_cannot_overwrite_pending_logout(self):
+        self.probe("bootstrap-refresh")
 
 
 if __name__ == "__main__":
