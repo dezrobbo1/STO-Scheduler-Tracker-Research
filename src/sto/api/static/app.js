@@ -485,7 +485,9 @@ async function show(projectId) {
 }
 
 async function refreshProjects(selected) {
+  const generation = refreshGeneration;
   const rows = await json("/api/projects");
+  if (generation !== refreshGeneration || !currentActor) return;
   projects.replaceChildren();
   if (!rows.length) projects.append(new Option("no projects yet", ""));
   for (const project of rows) projects.append(new Option(project.name, project.id));
@@ -598,6 +600,7 @@ projects.addEventListener("change", () => show(projects.value));
 loginForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (loginButton.disabled) return;
+  const generation = refreshGeneration;
   loginButton.disabled = true;
   authStatus.textContent = "Signing in…"; delete authStatus.dataset.kind;
   try {
@@ -610,20 +613,28 @@ loginForm.addEventListener("submit", async (event) => {
         totp: loginTotp.value,
       }),
     });
+    if (generation !== refreshGeneration) return;
     showAuthenticated(session);
     await refreshProjects();
   } catch (error) {
+    if (generation !== refreshGeneration) return;
     clearPlanner("Authentication failed. Check your credentials and current authenticator code.");
   } finally {
     loginPassword.value = "";
     loginTotp.value = "";
-    loginButton.disabled = false;
+    if (generation === refreshGeneration) loginButton.disabled = false;
   }
 });
 
 logoutButton.addEventListener("click", async () => {
   const csrf = csrfToken;
   logoutButton.disabled = true;
+  // Clear the planner and invalidate pending renders before waiting on I/O.
+  // The captured CSRF value still authorizes this request after local clearing.
+  clearPlanner();
+  setLoginEnabled(false);
+  authStatus.textContent = "Signing out… Sensitive planner data was cleared.";
+  delete authStatus.dataset.kind;
   showLogoutOutcome(await requestLogout(csrf));
   logoutButton.disabled = false;
 });
@@ -654,11 +665,14 @@ exportScenario.addEventListener("click", async (event) => {
 });
 
 (async function start() {
+  const generation = refreshGeneration;
   try {
     const session = await json("/api/auth/session");
+    if (generation !== refreshGeneration) return;
     showAuthenticated(session);
     await refreshProjects();
   } catch (error) {
+    if (generation !== refreshGeneration) return;
     if (error.status !== 401) clearPlanner("The authentication service is unavailable.");
   }
 })();
