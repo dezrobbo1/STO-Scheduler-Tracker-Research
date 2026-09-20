@@ -104,8 +104,10 @@ from .progress import ProgressState
 #: forward pass snapped zero-length spans, remains on a productive coordinate.
 #: Version four bounds progressed start anchors at their immutable actual start.
 #: Version five also bounds completed finish anchors at their immutable actual
-#: finish. A completed span cannot absorb float on either coordinate.
-CRITICALITY_PROFILE = "sto-criticality-v5"
+#: finish. A completed span cannot absorb float on either coordinate. Version
+#: six measures an in-progress start component from its late remaining start
+#: while preserving the reported actual LateStart.
+CRITICALITY_PROFILE = "sto-criticality-v6"
 
 
 class CriticalityError(NetworkError):
@@ -480,7 +482,10 @@ def float_analysis(
         early_start = early[uid].remaining_start
         if early_start is None:
             early_start = early[uid].early_start
-        start_float = signed_working(calendar, early_start, late[uid].late_start)
+        late_start = late[uid].remaining_start
+        if late_start is None:
+            late_start = late[uid].late_start
+        start_float = signed_working(calendar, early_start, late_start)
         finish_float = signed_working(
             calendar, early[uid].early_finish, late[uid].late_finish
         )

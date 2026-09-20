@@ -27,13 +27,13 @@ not start until the previous gate passes.
 | | Gate criterion | Shown by |
 |---|---|---|
 | ✓ | The 47 executable conformance cases pass, byte-identically across three processes | `tests/test_conformance_determinism.py` |
-| · | Both BOILER snapshots: every leaf activity gets a disposition, and no difference is UNEXPLAINED across start, finish, late dates, float and criticality | `docs/evidence/current-engine-evidence-2026-09-10.md` ‡ |
-| · | The genuine Project-recalculation oracle (before to after-native-progress) reports zero unexpected differences | `tests/test_progress_boiler.py` ‡ |
+| · | The controlled BOILER baseline and Project output: every leaf activity gets a disposition, and no difference is UNEXPLAINED across start, finish, early and late dates, float and criticality | `docs/evidence/p1-final-native-progress-2026-09-20.md` ‡ |
+| · | The controlled Microsoft Project recalculation reports zero unexpected differences under the predeclared field contract | `tests/test_controlled_native_progress_boiler.py` ‡ |
 | ✓ | A persisted import shows calculated dates beside the ones it imported; one duration edit moves its successors; reset restores the baseline; the scenario exports; and a restart reproduces the same result from the same input hash | `scripts/browser-acceptance-pl14.py` ‡ |
 | ✓ | Every API route rejects an unauthenticated request, and a project is readable only by an actor authorised on it | `tests/test_authentication.py` ‡ |
 
-‡ the exact progressed BOILER candidate is unavailable; this criterion remains open and its file-oracle assertions must fail rather than skip when the gate is attempted; set `STO_REQUIRE_DAY5=1` to make their absence a failure rather than a skip.
-‡ the BOILER before file and Microsoft Project recalculation files live outside the repository; the bounded classifier finds only three exact documented completion rows, with 417 changed common rows still UNEXPLAINED and 32 one-sided identities unresolved, so this criterion remains open; set `STO_REQUIRE_NATIVE=1` to make their absence a failure rather than a skip.
+‡ the controlled files live outside the repository; the fixed comparison contract leaves three upstream late/float fields UNEXPLAINED, so this criterion remains open; set `STO_REQUIRE_CONTROLLED_NATIVE=1` to make their absence a failure rather than a skip.
+‡ the controlled files live outside the repository; 3 of 4,140 field slots remain UNEXPLAINED, so this criterion remains open; set `STO_REQUIRE_CONTROLLED_NATIVE=1` to make their absence a failure rather than a skip.
 ‡ the API CI job supplies PostgreSQL and Chromium, drives the rendered workflow, restarts the application, and uploads its screenshots and export; set `STO_REQUIRE_DB=1` to make their absence a failure rather than a skip.
 ‡ the API CI job supplies PostgreSQL and runs the route inventory, two-user project matrix, session, CSRF and device-token acceptance with database absence treated as a failure; set `STO_REQUIRE_DB=1` to make their absence a failure rather than a skip.
 
@@ -55,7 +55,7 @@ criterion a blocked dependency names cannot be marked met.
 | `DEP-PROJECT-SESSION` — A Windows machine running Microsoft Project, for one native session per evidence register entry | available | I13, P3-G5 | — |
 | `DEP-SITE-TEMPLATES` — The site's own confirmation-upload template for whichever CMMS is first | blocked | I11 | — |
 | `DEP-UNTOUCHED-SOURCE` — The untouched BOILER source e6a3739976580e21 that both evidence lines cite | available | I13 | 2026-09-03 |
-| `DEP-DAY5-BACKUP` — A durable off-machine copy of the day-5 candidate schedule, the only file carrying an activity that has started and not finished | at risk | S5, P1-G2 | — |
+| `DEP-DAY5-BACKUP` — A durable off-machine copy of the unique eight-row day-5 reported-work candidate | at risk | S5, P0-G1, P0-G3 | — |
 
 <!-- roadmap:end dependencies -->
 
@@ -202,8 +202,9 @@ and puts it in one of three states, from the dates alone (ADR-009). A complete
 activity is its two actual dates in both directions and nothing recomputes them;
 an in-progress one keeps its actual start while its *remaining* duration is
 placed as a fresh span, and its successors read the forecast finish that span
-ends at. Both passes place the remaining duration, so float is measured from the
-remaining start rather than from an actual start that cannot move. The
+ends at. The forward pass reports that remaining start. The backward pass keeps
+the movable late remaining span internally, while Project's public `LateStart`
+is the immutable actual start; float compares the two remaining-work spans. The
 out-of-sequence policies are the project's: retained logic keeps the
 predecessor's forecast finish over the remaining work, progress override
 replaces it with the status date, and `actual_dates` is refused rather than
@@ -524,10 +525,14 @@ until the parity checklist passes.
   conformance corpus alone. `tests/test_progress_boiler.py` asserts this, so a
   file that one day carries a usable status date fails and asks for the claim to
   be widened.
-- **The late dates of an in-progress activity are not measured.** No file here
-  carries a Project-recalculated late date for an activity that had started and
-  not finished, so the backward pass places its remaining duration as the mirror
-  of the forward pass and that is not claimed to be what Project does.
+- **Late dates for one in-progress shape are measured; broader shapes are not.**
+  The controlled UID 15 run in Microsoft Project build `16.0.20228.20186`
+  establishes that public `LateStart` stays on Actual Start, while a separate
+  latest feasible remaining-work span determines duration and float. It also
+  anchors already-satisfied incoming logic on Actual Start. The bounded rule is
+  recorded in `docs/evidence/p1-final-native-progress-2026-09-20.md`. Started
+  work with nonzero actual duration, Stop/Resume, finish-side constraints, or
+  other relationship shapes is still unmeasured.
 - **Remaining work is floored at the actual start, not at the end of the work
   already done.** The one in-progress row in the estate settles that started
   work is placed from its actual start rather than the project start — its
@@ -647,9 +652,12 @@ PYTHONPATH=src python3 -m unittest discover -s tests
 The file-oracle cases skip unless the real schedules are present; point
 `STO_BOILER_BEFORE`, `STO_KILN` and `STO_CALCINER` at the stored-XML matrix and
 set `STO_REQUIRE_BOILER=1` so its absence fails instead of skipping quietly.
-The exact day-5 pair is a separate `STO_REQUIRE_DAY5=1` gate, and the two files
-Project recalculated use `STO_REQUIRE_NATIVE=1`. `P1-G2` and `P1-G3` name those
-conditional dependencies in the roadmap. The float and criticality rules are evidence from KILN and CALCINER as
-much as from BOILER, which is why those two now have variables of their own.
+The exact day-5 pair remains a separate `STO_REQUIRE_DAY5=1` historical gate,
+and the two completion files Project recalculated use `STO_REQUIRE_NATIVE=1`.
+The controlled in-progress pair used by `P1-G2` and `P1-G3` is required with
+`STO_REQUIRE_CONTROLLED_NATIVE=1`; the roadmap names that conditional evidence.
+The float and criticality rules are evidence from KILN and CALCINER as much as
+from BOILER, which is why those two now have variables of their own.
 `fixtures/README.md` records every file's hash, what it proves and how to
-recover it — including two that cannot be recovered and need backing up.
+recover it — including the unavailable day-5 candidate that still needs a
+durable backup.

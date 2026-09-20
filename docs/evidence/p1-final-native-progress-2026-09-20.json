@@ -1,0 +1,72 @@
+{
+  "schema": "sto-p1-controlled-native-progress-evidence-v1",
+  "experiment_id": "P1-NATIVE-PROGRESS-BOILER-UID15-V1",
+  "repository_start": "0bb719fcd6ffc0672cc4d2751e99172c7a847547",
+  "baseline": {
+    "byte_size": 3361935,
+    "sha256": "e9b9b7994cc5cc50479807b82c452da742a91de9f7de52b172a6be6f4f399c70"
+  },
+  "native_output": {
+    "supplied_filename": "P1-CONTROLLED-NATIVE-PROGRESS-WORKING(1).xml",
+    "byte_size": 3362251,
+    "sha256": "31443027dedaf411c5c33b03806881c370f7f039ca520569a1fa0fa59f0b5278",
+    "writer": "Microsoft Project",
+    "build": "16.0.20228.20186",
+    "native_execution_evidenced": true,
+    "planning_wizard_warning_recorded": true
+  },
+  "controlled_update": {
+    "source_uid": "15",
+    "actual_start_before": null,
+    "actual_start_after": "2026-09-08T07:30:00",
+    "remaining_duration_seconds_before": 7200,
+    "remaining_duration_seconds_after": 3600,
+    "actual_finish_after": null,
+    "direct_controlled_edit_fields": 2,
+    "project_derived_progress_fields": 3
+  },
+  "cohort": {
+    "leaf_activities": 460,
+    "supported_calculated": 433,
+    "assumed_labelled": 18,
+    "excluded_coded": 9,
+    "changed_rows": 31,
+    "downstream_moved_rows": 6,
+    "field_slots": 4140,
+    "classifications": {
+      "UNCHANGED": 3928,
+      "ENGINE_NATIVE_AGREEMENT": 128,
+      "EXPLICIT_EXCLUSION": 81,
+      "UNEXPLAINED": 3
+    },
+    "unexplained": [
+      {"source_uid": "5", "field": "late_start"},
+      {"source_uid": "5", "field": "late_finish"},
+      {"source_uid": "5", "field": "total_float"}
+    ]
+  },
+  "defects": {
+    "engine": "in-progress LateStart was the late remaining-span start instead of Actual Start",
+    "evidence_tooling": "assignment Start/Finish outputs were treated as immutable inputs",
+    "correction_bounded": true
+  },
+  "gate": {
+    "P1-G1": true,
+    "P1-G2": false,
+    "P1-G3": false,
+    "P1-G4": true,
+    "P1-G5": true,
+    "met": 3,
+    "total": 5,
+    "phase": "P1",
+    "phase_status": "in_progress"
+  },
+  "next_experiment": {
+    "source_uid": "227",
+    "actual_start": "2026-09-14T11:00:00",
+    "remaining_duration_seconds_before": 28800,
+    "remaining_duration_seconds_after": 14400,
+    "sto_changed_supported_baseline_exact_rows": 12,
+    "sto_downstream_moved_rows": 6
+  }
+}

@@ -214,8 +214,10 @@ export STO_REQUIRE_BOILER=1     # the stored-XML matrix is required
 
 Use `STO_REQUIRE_DAY5=1` with `STO_BOILER_DAY5` only when the exact day-5
 candidate is available, and `STO_REQUIRE_NATIVE=1` with both native files for
-Project-recalculated evidence. Cross the stored-XML evidence gate with
-`STO_REQUIRE_BOILER=1` set. `docs/goals/roadmap.json`
+Project-recalculated completion evidence. Use
+`STO_REQUIRE_CONTROLLED_NATIVE=1` with `STO_BOILER_CONTROLLED_NATIVE` and
+`STO_BOILER_BEFORE` for the controlled in-progress evidence. Cross the
+stored-XML evidence gate with `STO_REQUIRE_BOILER=1` set. `docs/goals/roadmap.json`
 records which criteria depend on evidence that does not always execute, and
 `sto roadmap status` and `sto roadmap gate` say so.
 

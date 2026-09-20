@@ -147,3 +147,21 @@ P1-G3 therefore remains open. The hash-identical consolidation archive and the
 documented frozen recovery route still do not contain the exact day-five
 candidate, so P1-G2 remains open as well. No fresh native Project session was
 executed and no historical measurement is relabelled as one.
+
+## Controlled native progress amendment — 2026-09-20
+
+A later, independently evidenced Microsoft Project session applied one
+predeclared in-progress edit to the verified BOILER baseline. The returned file
+has SHA-256 `31443027dedaf411c5c33b03806881c370f7f039ca520569a1fa0fa59f0b5278`
+and identifies Project build `16.0.20228.20186`. It exposed a bounded engine
+defect: Project reports `LateStart` for started, unfinished work at Actual Start
+while separately placing the movable late remaining-work span. The corrected
+engine keeps both coordinates and preserves the existing retained-logic rule.
+
+The complete fixed-contract comparison classifies 3,928 of 4,140 field slots
+as unchanged, 128 as engine/native agreement, 81 as explicit exclusions and 3
+as unexplained. Those three fields occur on one upstream identity whose
+baseline late fields were already inexact, so they cannot be promoted after
+seeing the native result. P1 therefore remains 3/5. Full identities,
+classification rules, the correction boundary and the smallest repeat are in
+`docs/evidence/p1-final-native-progress-2026-09-20.md` and its JSON companion.

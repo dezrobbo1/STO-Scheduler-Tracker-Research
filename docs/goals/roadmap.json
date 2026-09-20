@@ -73,13 +73,14 @@
     },
     {
       "id": "DEP-DAY5-BACKUP",
-      "what": "A durable off-machine copy of the day-5 candidate schedule, the only file carrying an activity that has started and not finished",
+      "what": "A durable off-machine copy of the unique eight-row day-5 reported-work candidate",
       "status": "at_risk",
       "needed_by": [
         "S5",
-        "P1-G2"
+        "P0-G1",
+        "P0-G3"
       ],
-      "note": "Present on the original development machine on 2026-09-08 (two read-only copies, one filesystem, no upstream), but NOT AVAILABLE to the authorized 2026-09-10 closure sources; the source-consolidation archive and frozen fixture repository do not contain its recorded hash. The off-machine copy is an ask of the user, not a task. S5 measured what it is and is not evidence for: its early dates are its actuals, so it is an oracle for reported work, but its late dates were never recalculated by Project and its slack describes a plan that no longer exists. The criticality rules rest on boiler-after-native-progress.xml and boiler-roundtrip-project-saved-task43.xml instead, and both are recoverable from Shutdown-Tracker-Claude. What is currently unavailable is the estate's only in-progress row and its only eight-row progressed cohort.",
+      "note": "Present on the original development machine on 2026-09-08 (two read-only copies, one filesystem, no upstream), but NOT AVAILABLE to the authorized 2026-09-10 or 2026-09-20 closure sources; the source-consolidation archive and frozen fixture repository do not contain its recorded hash. The off-machine copy is an ask of the user, not a task. S5 measured what it is and is not evidence for: its early dates are its actuals, so it is an oracle for reported work, but its late dates were never recalculated by Project and its slack describes a plan that no longer exists. The controlled 2026-09-20 Project output now supplies a separate in-progress native artifact and a clean repeat is the route to P1-G2/P1-G3; the missing day-5 file remains the estate's unique eight-row progressed cohort and is still needed to reproduce the earlier P0/S5 evidence.",
       "asked_on": null
     }
   ],
@@ -169,22 +170,22 @@
         },
         {
           "id": "P1-G2",
-          "text": "Both BOILER snapshots: every leaf activity gets a disposition, and no difference is UNEXPLAINED across start, finish, late dates, float and criticality",
+          "text": "The controlled BOILER baseline and Project output: every leaf activity gets a disposition, and no difference is UNEXPLAINED across start, finish, early and late dates, float and criticality",
           "met": false,
-          "evidence": "docs/evidence/current-engine-evidence-2026-09-10.md",
+          "evidence": "docs/evidence/p1-final-native-progress-2026-09-20.md",
           "evidence_conditional": {
-            "env": "STO_REQUIRE_DAY5",
-            "why": "the exact progressed BOILER candidate is unavailable; this criterion remains open and its file-oracle assertions must fail rather than skip when the gate is attempted"
+            "env": "STO_REQUIRE_CONTROLLED_NATIVE",
+            "why": "the controlled files live outside the repository; the fixed comparison contract leaves three upstream late/float fields UNEXPLAINED, so this criterion remains open"
           }
         },
         {
           "id": "P1-G3",
-          "text": "The genuine Project-recalculation oracle (before to after-native-progress) reports zero unexpected differences",
+          "text": "The controlled Microsoft Project recalculation reports zero unexpected differences under the predeclared field contract",
           "met": false,
-          "evidence": "tests/test_progress_boiler.py",
+          "evidence": "tests/test_controlled_native_progress_boiler.py",
           "evidence_conditional": {
-            "env": "STO_REQUIRE_NATIVE",
-            "why": "the BOILER before file and Microsoft Project recalculation files live outside the repository; the bounded classifier finds only three exact documented completion rows, with 417 changed common rows still UNEXPLAINED and 32 one-sided identities unresolved, so this criterion remains open"
+            "env": "STO_REQUIRE_CONTROLLED_NATIVE",
+            "why": "the controlled files live outside the repository; 3 of 4,140 field slots remain UNEXPLAINED, so this criterion remains open"
           }
         },
         {

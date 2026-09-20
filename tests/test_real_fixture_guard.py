@@ -28,6 +28,13 @@ class RealFixtureIdentityGuardTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "does not match its evidence identity"):
                 verify_available({"after_native": wrong})
 
+    def test_wrong_controlled_native_fixture_identity_is_refused(self):
+        with tempfile.TemporaryDirectory() as directory:
+            wrong = Path(directory) / "controlled-native.xml"
+            wrong.write_bytes(b"not the recorded controlled native schedule")
+            with self.assertRaisesRegex(RuntimeError, "does not match its evidence identity"):
+                verify_available({"controlled_native": wrong})
+
     def test_required_native_mode_fails_when_a_fixture_is_missing(self):
         with tempfile.TemporaryDirectory() as directory:
             missing = Path(directory) / "missing.xml"
@@ -73,3 +80,31 @@ class RealFixtureIdentityGuardTests(unittest.TestCase):
             )
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("STO_REQUIRE_DAY5=1", result.stderr)
+
+    def test_required_controlled_native_mode_fails_when_a_fixture_is_missing(self):
+        with tempfile.TemporaryDirectory() as directory:
+            missing = Path(directory) / "missing.xml"
+            environment = os.environ.copy()
+            environment.update(
+                {
+                    "PYTHONPATH": "src",
+                    "STO_REQUIRE_CONTROLLED_NATIVE": "1",
+                    "STO_BOILER_BEFORE": str(missing),
+                    "STO_BOILER_CONTROLLED_NATIVE": str(missing),
+                }
+            )
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "unittest",
+                    "tests.test_controlled_native_progress_boiler",
+                ],
+                cwd=Path(__file__).resolve().parents[1],
+                env=environment,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("STO_REQUIRE_CONTROLLED_NATIVE=1", result.stderr)
