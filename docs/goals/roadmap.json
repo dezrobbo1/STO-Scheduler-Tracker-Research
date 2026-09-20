@@ -184,7 +184,7 @@
           "evidence": "tests/test_progress_boiler.py",
           "evidence_conditional": {
             "env": "STO_REQUIRE_NATIVE",
-            "why": "the BOILER before file and Microsoft Project recalculation files live outside the repository; the raw before/after inventory is pinned, but its 420 changed common rows do not yet have an unexpected-difference classifier, so this criterion remains open"
+            "why": "the BOILER before file and Microsoft Project recalculation files live outside the repository; the bounded classifier finds only three exact documented completion rows, with 417 changed common rows still UNEXPLAINED and 32 one-sided identities unresolved, so this criterion remains open"
           }
         },
         {

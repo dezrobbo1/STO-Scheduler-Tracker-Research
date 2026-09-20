@@ -1,0 +1,123 @@
+{
+  "schema": "sto-p1-gate-entry-decision-1",
+  "measured_at": "2026-09-20",
+  "repository_main": "1c5601e64201682c52775e3bb44a9b624ab06c74",
+  "sources": {
+    "consolidation_archive": {
+      "sha256": "67f4766158c7b76284d8f997cd0345391bb270d4b762510bef59fe4a5ef4c730",
+      "revision": null
+    },
+    "frozen_fixture_repository": {
+      "repository": "dezrobbo1/Shutdown-Tracker-Claude",
+      "revision": "135218f6f3a6f6fe91ce193d0ee3776ebf0eedbe"
+    }
+  },
+  "fixtures": {
+    "boiler_untouched": {
+      "available": true,
+      "bytes": 3734688,
+      "sha256": "e6a3739976580e2144352011f818c0099c0dc0c278fb37a976c5b6a55fbc3420",
+      "build": "16.0.20131.20152"
+    },
+    "boiler_before": {
+      "available": true,
+      "bytes": 3361935,
+      "sha256": "e9b9b7994cc5cc50479807b82c452da742a91de9f7de52b172a6be6f4f399c70",
+      "build": "16.0.20228.20188"
+    },
+    "boiler_after_native": {
+      "available": true,
+      "bytes": 3871501,
+      "sha256": "9fabe70debd004aceabe749f3c13abe40823f43746d7db2b15572466c76739c7",
+      "build": "16.0.20228.20188"
+    },
+    "boiler_task43_candidate": {
+      "available": true,
+      "bytes": 3264344,
+      "sha256": "7dcd4d828944db9b5284ae1e0b6694571a7ea38433fc20959ed3a130f328cdec",
+      "build": "16.0.20228.20188"
+    },
+    "boiler_task43_project_saved": {
+      "available": true,
+      "bytes": 3362829,
+      "sha256": "aff57ce8466d619466c51cb6b0366d25933dc6080d256859a961a1154c4c2dc8",
+      "build": "16.0.20228.20188"
+    },
+    "boiler_day5": {
+      "available": false,
+      "bytes_recorded": 3747935,
+      "sha256_recorded_prefix": "a8d44aa23e20c510",
+      "build_recorded": "16.0.20131.20152"
+    }
+  },
+  "native_transition": {
+    "comparison_executed": true,
+    "native_application_execution_this_run": false,
+    "field_contract": [
+      "start",
+      "finish",
+      "early_start",
+      "early_finish",
+      "late_start",
+      "late_finish",
+      "total_float",
+      "free_float",
+      "critical",
+      "actual_start",
+      "actual_finish",
+      "remaining_duration",
+      "percent_complete"
+    ],
+    "before_rows": 460,
+    "after_rows": 466,
+    "common_rows": 447,
+    "before_only_rows": 13,
+    "after_only_rows": 19,
+    "unchanged_common_rows": 27,
+    "changed_common_rows": 420,
+    "documented_completion_rows": 3,
+    "unexplained_changed_common_rows": 417,
+    "unresolved_identity_rows": 32,
+    "unresolved_rows": 449,
+    "field_change_counts": {
+      "start": 273,
+      "finish": 277,
+      "early_start": 251,
+      "early_finish": 277,
+      "late_start": 403,
+      "late_finish": 402,
+      "total_float": 395,
+      "free_float": 105,
+      "critical": 54,
+      "actual_start": 3,
+      "actual_finish": 3,
+      "remaining_duration": 17,
+      "percent_complete": 3
+    },
+    "confounding_input_observations": {
+      "common_rows_with_any_listed_input_or_progress_change": 79,
+      "common_rows_other_than_documented_completions": 76,
+      "activity_field_change_counts": {
+        "active": 11,
+        "planned_duration": 14,
+        "remaining_duration": 17,
+        "planned_work": 25,
+        "calendar_reference": 47,
+        "actual_duration": 3,
+        "percent_complete": 3,
+        "actual_start": 3,
+        "actual_finish": 3
+      },
+      "relationship_signatures_before": 600,
+      "relationship_signatures_after": 637,
+      "relationship_signatures_common": 577,
+      "relationship_signatures_before_only": 23,
+      "relationship_signatures_after_only": 60
+    }
+  },
+  "gate": {
+    "P1-G2": "open_missing_exact_day5_fixture",
+    "P1-G3": "open_unexplained_native_transition",
+    "decision": "limited_development_exception_proposed_not_enacted"
+  }
+}

@@ -33,7 +33,7 @@ not start until the previous gate passes.
 | ✓ | Every API route rejects an unauthenticated request, and a project is readable only by an actor authorised on it | `tests/test_authentication.py` ‡ |
 
 ‡ the exact progressed BOILER candidate is unavailable; this criterion remains open and its file-oracle assertions must fail rather than skip when the gate is attempted; set `STO_REQUIRE_DAY5=1` to make their absence a failure rather than a skip.
-‡ the BOILER before file and Microsoft Project recalculation files live outside the repository; the raw before/after inventory is pinned, but its 420 changed common rows do not yet have an unexpected-difference classifier, so this criterion remains open; set `STO_REQUIRE_NATIVE=1` to make their absence a failure rather than a skip.
+‡ the BOILER before file and Microsoft Project recalculation files live outside the repository; the bounded classifier finds only three exact documented completion rows, with 417 changed common rows still UNEXPLAINED and 32 one-sided identities unresolved, so this criterion remains open; set `STO_REQUIRE_NATIVE=1` to make their absence a failure rather than a skip.
 ‡ the API CI job supplies PostgreSQL and Chromium, drives the rendered workflow, restarts the application, and uploads its screenshots and export; set `STO_REQUIRE_DB=1` to make their absence a failure rather than a skip.
 ‡ the API CI job supplies PostgreSQL and runs the route inventory, two-user project matrix, session, CSRF and device-token acceptance with database absence treated as a failure; set `STO_REQUIRE_DB=1` to make their absence a failure rather than a skip.
 
@@ -302,9 +302,12 @@ the writers that need it live):
 10. ~~One planner scenario~~ (`PL14`) — done. Pick a supported task, change its
     duration, see its successors move, reset to the baseline, export and
     restart, all through the consolidated engine and persistence stack.
-11. **Real authentication** (`PL2`). Password with TOTP, server sessions,
-    device tokens for the field app. Every route rejects an unauthenticated
-    request, and a project is readable only by an actor authorised on it.
+11. ~~Real authentication~~ (`PL2`) — done. Password with TOTP, persistent
+    server sessions, CSRF protection, project membership and scoped revocable
+    device tokens now bound every application API route to a real actor. V005
+    introduced the authentication state; V006 records authenticated scenario
+    resets. The post-merge closure keeps failed logout truthful and preserves a
+    last enabled project administrator (ADR-014 and ADR-015).
 
 The MPXJ sidecar — carried from the frozen repository, widened to the full
 canonical document, cross-checked against the Python importer on every
