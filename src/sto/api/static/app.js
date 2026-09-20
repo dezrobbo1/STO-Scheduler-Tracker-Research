@@ -94,7 +94,21 @@ function clearPlanner(message) {
   setLoginEnabled(true);
   projects.replaceChildren(new Option("sign in to load projects", ""));
   for (const section of [scenarioSection, provenanceSection, chartSection, rowsSection, summariesSection]) section.hidden = true;
-  body.replaceChildren(); chart.replaceChildren(); summaryBody.replaceChildren();
+  // Hiding a section is not clearing its retained text, inputs or attributes.
+  for (const element of [body, chart, summaryBody, activitySelect, provenance]) element.replaceChildren();
+  durationInput.value = "";
+  for (const element of [mode, versionState, changeSummary, status]) element.textContent = "";
+  delete mode.dataset.kind;
+  delete status.dataset.kind;
+  exportScenario.removeAttribute("href");
+  exportScenario.removeAttribute("download");
+  activitySelect.disabled = true;
+  applyScenario.disabled = true;
+  resetScenario.disabled = true;
+  applyScenario.textContent = "Create scenario";
+  document.querySelector("#project-name").value = "";
+  document.querySelector("#project-timezone").value = "UTC";
+  fileInput.value = "";
   if (message && logoutState === "idle") { authStatus.textContent = message; authStatus.dataset.kind = "error"; }
 }
 
@@ -545,16 +559,24 @@ calculateButton.addEventListener("click", async () => {
 });
 
 createProjectForm.addEventListener("submit", async (event) => {
-  event.preventDefault(); say("Creating project…");
+  event.preventDefault();
+  if (!currentActor) return;
+  const epoch = authEpoch;
+  say("Creating project…");
   try {
     const created = await json("/api/projects", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({name: document.querySelector("#project-name").value, timezone: document.querySelector("#project-timezone").value})});
-    await refreshProjects(created.id); say("Project created. Import an MSPDI/XML schedule.");
+    if (epoch !== authEpoch) return;
+    await refreshProjects(created.id);
+    if (epoch !== authEpoch) return;
+    say("Project created. Import an MSPDI/XML schedule.");
     createProjectForm.reset(); document.querySelector("#project-timezone").value = "UTC";
-  } catch (error) { say(error.message, "error"); }
+  } catch (error) { if (epoch === authEpoch) say(error.message, "error"); }
 });
 
 importForm.addEventListener("submit", async (event) => {
   event.preventDefault();
+  if (!currentActor) return;
+  const epoch = authEpoch;
   const projectId = projects.value; const file = fileInput.files[0];
   if (!projectId) { say("Create or select a project first.", "error"); return; }
   if (!file) return;
@@ -563,10 +585,12 @@ importForm.addEventListener("submit", async (event) => {
   say("Importing and preserving the source baseline…");
   try {
     const imported = await json("/api/projects/" + projectId + "/imports", {method: "POST", body: data});
+    if (epoch !== authEpoch) return;
     if (!(await reconcileMutationResponse(generation, projectId))) return;
     const state = await show(projectId);
+    if (epoch !== authEpoch) return;
     if (renderedImport(state, imported)) say("Schedule imported. Calculate the baseline next.");
-  } catch (error) { say(error.message, "error"); }
+  } catch (error) { if (epoch === authEpoch) say(error.message, "error"); }
 });
 
 scenarioForm.addEventListener("submit", async (event) => {
@@ -679,19 +703,30 @@ retryLogoutButton.addEventListener("click", async () => {
 
 exportScenario.addEventListener("click", async (event) => {
   event.preventDefault();
-  if (!currentState) return;
+  if (!currentState || !currentActor || logoutState !== "idle") return;
+  const epoch = authEpoch;
+  const actor = currentActor;
+  const url = exportScenario.href;
+  const filename = exportScenario.getAttribute("download");
+  const ownsExport = () => epoch === authEpoch && actor === currentActor && logoutState === "idle";
   try {
-    const response = await request(exportScenario.href);
+    const response = await request(url);
+    if (!ownsExport()) return;
     if (!response.ok) throw new Error("Export could not be downloaded.");
     const blob = await response.blob();
+    // Logout can occur while either the response or its body is pending.
+    if (!ownsExport()) return;
     const objectUrl = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = objectUrl;
-    anchor.download = exportScenario.getAttribute("download");
-    anchor.click();
-    URL.revokeObjectURL(objectUrl);
+    try {
+      const anchor = document.createElement("a");
+      anchor.href = objectUrl;
+      anchor.download = filename;
+      anchor.click();
+    } finally {
+      URL.revokeObjectURL(objectUrl);
+    }
   } catch (error) {
-    if (currentActor) say(error.message, "error");
+    if (ownsExport()) say(error.message, "error");
   }
 });
 

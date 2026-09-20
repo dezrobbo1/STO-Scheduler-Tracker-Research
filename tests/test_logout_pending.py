@@ -23,6 +23,7 @@ function node(selector) {
     children: [], handlers: {},
     replaceChildren(...items) { this.children = items; this.value = items[0]?.value ?? ''; },
     append(...items) { this.children.push(...items); },
+    removeAttribute(name) { delete this[name]; },
     addEventListener(event, handler) { this.handlers[event] = handler; },
   });
   return nodes.get(selector);
