@@ -101,6 +101,10 @@ def _environment(dbname: str, *, host: str, port: int, user: str) -> dict[str, s
         if not separator:
             raise RuntimeError("the V006 upgrade test received a malformed libpq URL option")
         name, value = unquote(name), unquote(value)
+        if name in {"host", "port", "user"}:
+            # These query options were already resolved by the preparation
+            # connection; keep its actual endpoint pinned above.
+            continue
         variable = _LIBPQ_QUERY_ENV.get(name)
         if variable is None:
             raise RuntimeError(

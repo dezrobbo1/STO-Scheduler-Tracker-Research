@@ -151,6 +151,14 @@ class V006UpgradeGuardTests(unittest.TestCase):
             cases = (
                 ("postgresql:///postgres?sslmode=disable", "/var/run/postgresql", 5432, "peer-user", "disable"),
                 ("postgresql://operator@db.example:6543/postgres?sslmode=require", "db.example", 6543, "operator", "require"),
+                ("postgresql:///postgres?host=%2Fvar%2Frun%2Fpostgresql&sslmode=disable", "/var/run/postgresql", 5432, "peer-user", "disable"),
+                ("postgresql:///postgres?port=5544&sslmode=disable", "/var/run/postgresql", 5544, "peer-user", "disable"),
+                ("postgresql:///postgres?user=peer%2Duser&sslmode=disable", "/var/run/postgresql", 5432, "peer-user", "disable"),
+                (
+                    "postgresql://ignored@db.example:6543/postgres"
+                    "?host=%2Ftmp%2Fsto+socket&port=5544&user=peer%2Duser&sslmode=disable",
+                    "/tmp/sto+socket", 5544, "peer-user", "disable",
+                ),
             )
             for source, host, port, user, sslmode in cases:
                 with (
