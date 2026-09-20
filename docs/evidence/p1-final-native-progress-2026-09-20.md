@@ -83,7 +83,7 @@ spans move, including the selected assignment, while non-selected assignment
 identity, linkage, units, work and progress stay unchanged. The corrected guard
 continues to fail on changes to those inputs.
 
-## Gate decision
+## Interim gate decision after UID 15
 
 | Criterion | Status |
 |---|---|
@@ -109,3 +109,82 @@ fields. Actual Start `2026-09-14T11:00:00` plus Remaining Duration 14,400 second
 (from 28,800) makes STO change 12 supported baseline-exact rows and move six
 downstream activities. That repeat avoids the pre-existing inexact branch that
 prevents this experiment from closing the gate.
+
+## Clean repeat received — UID 227
+
+The predeclared repeat `P1-NATIVE-PROGRESS-BOILER-UID227-V1` was then executed
+against the same verified baseline and returned as a second external-only
+MSPDI object.
+
+| Object | Bytes | SHA-256 |
+|---|---:|---|
+| BOILER baseline | 3,361,935 | `e9b9b7994cc5cc50479807b82c452da742a91de9f7de52b172a6be6f4f399c70` |
+| Project-saved UID 227 repeat | 3,362,778 | `6e0e5321ecadf4b8d9e96685968112803975737a61444104b45ae8cfa522df66` |
+
+The returned XML and the independent About Project capture both identify build
+`16.0.20228.20186`. The task-field capture shows source UID 227 with Actual
+Start `2026-09-14T11:00:00`, blank Actual Finish and Remaining Duration 4 hours.
+A Planning Wizard capture records that recalculation moved one derived task
+before Project Start and that `Continue` was selected. The packaged
+`native-run-record.json` was not completed and returned separately; that
+provenance omission is recorded rather than silently filled. The executing
+build, saved-object identity, requested edit and prompt are nevertheless
+independently present in the returned XML and supplied captures.
+
+The exact operator-requested changes were again two fields: Actual Start from
+unset to `2026-09-14T11:00:00`, and Remaining Duration from 28,800 to 14,400
+seconds. Actual Finish stayed unset, task Actual Duration stayed zero, and
+assignment Actual Work stayed zero. Project normalized planned Duration, task
+Work and assignment Work to 14,400 seconds, and wrote zero-span Stop and Resume
+markers equal to Actual Start. The importer now preserves those markers so a
+later non-zero split cannot be mistaken for this measured shape. Project Start,
+relationships, calendars, resources, WBS and the other scheduling settings in
+the comparison signature remain unchanged; open/save metadata changed as
+expected.
+
+## Repeat comparison
+
+The same nine-field contract covers the same 460 common leaf identities and
+4,140 field slots. The classifier now also requires the engine result and the
+explicit coded exclusions to form an exact partition; a missing calculated row
+cannot be inferred to be an exclusion.
+
+| Classification | Field slots |
+|---|---:|
+| `UNCHANGED` | 4,016 |
+| `ENGINE_NATIVE_AGREEMENT` | 43 |
+| `EXPLICIT_EXCLUSION` | 81 |
+| `UNEXPLAINED` | 0 |
+
+Project changed 43 contract fields across exactly the 12 rows predicted before
+the run. Six downstream activities moved. All 43 changed fields reproduce the
+independent engine transition exactly from fields whose baseline values were
+already exact. Activity and relationship identity are unchanged, and the leaf
+partition remains 433 supported/calculated, 18 assumed/labelled and 9
+excluded/coded.
+
+The measured public-`LateStart` rule remains bounded. Canonical started-work
+rows with non-zero actual duration, a real Stop/Resume split, constraints,
+non-zero-lag or non-FS incident logic, a different progress policy, or without
+the measured predecessor-and-successor shape are emitted with
+`ACTIVITY_IN_PROGRESS_LATE_DATES_ASSUMED`; they are not published as ordinary
+native-evidenced results.
+
+## Final P1 gate decision
+
+| Criterion | Status |
+|---|---|
+| P1-G1 | PASS |
+| P1-G2 | PASS — every leaf is explicitly dispositioned and no result field is unexplained |
+| P1-G3 | PASS — the predeclared clean repeat has zero unexpected differences |
+| P1-G4 | PASS |
+| P1-G5 | PASS |
+
+P1 is **5/5 and passed**. P2 remains not started; this evidence change does not
+begin a P2 slice or enact the earlier limited-development exception.
+
+The repeat is executable in
+`tests/test_controlled_native_progress_repeat_boiler.py`. Set
+`STO_BOILER_BEFORE`, `STO_BOILER_CONTROLLED_NATIVE_REPEAT` and
+`STO_REQUIRE_CONTROLLED_NATIVE_REPEAT=1` so a missing or wrong-identity member
+of the repeat pair fails instead of skipping.

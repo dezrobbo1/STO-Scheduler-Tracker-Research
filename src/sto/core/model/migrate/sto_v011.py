@@ -854,6 +854,8 @@ def migrate(
                 percent_complete=_percent(row),
                 actual_start=_dt(row.get("actual_start_source")),
                 actual_finish=_dt(row.get("actual_finish_source")),
+                suspend=_dt(row.get("stop_source")),
+                resume=_dt(row.get("resume_source")),
                 calendar_uid=_calendar_uid(calendar_ref),
                 primary_constraint=_constraint(row),
                 deadline=_dt(row.get("deadline_source")),

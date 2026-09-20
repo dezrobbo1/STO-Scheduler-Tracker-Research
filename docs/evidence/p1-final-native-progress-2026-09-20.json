@@ -52,14 +52,14 @@
   },
   "gate": {
     "P1-G1": true,
-    "P1-G2": false,
-    "P1-G3": false,
+    "P1-G2": true,
+    "P1-G3": true,
     "P1-G4": true,
     "P1-G5": true,
-    "met": 3,
+    "met": 5,
     "total": 5,
     "phase": "P1",
-    "phase_status": "in_progress"
+    "phase_status": "passed"
   },
   "next_experiment": {
     "source_uid": "227",
@@ -68,5 +68,58 @@
     "remaining_duration_seconds_after": 14400,
     "sto_changed_supported_baseline_exact_rows": 12,
     "sto_downstream_moved_rows": 6
+  },
+  "repeat_result": {
+    "schema": "sto-p1-controlled-native-progress-repeat-v1",
+    "experiment_id": "P1-NATIVE-PROGRESS-BOILER-UID227-V1",
+    "native_output": {
+      "supplied_filename": "P1-CONTROLLED-NATIVE-PROGRESS-UID227-RETURNED(2).xml",
+      "embedded_project_name": "P1-CONTROLLED-NATIVE-PROGRESS-UID227-RETURNED.xml",
+      "byte_size": 3362778,
+      "sha256": "6e0e5321ecadf4b8d9e96685968112803975737a61444104b45ae8cfa522df66",
+      "writer": "Microsoft Project",
+      "build": "16.0.20228.20186",
+      "native_execution_evidenced": true,
+      "about_capture_matches_embedded_build": true,
+      "planning_wizard_warning_recorded": true,
+      "completed_native_run_record_returned": false
+    },
+    "controlled_update": {
+      "source_uid": "227",
+      "actual_start_before": null,
+      "actual_start_after": "2026-09-14T11:00:00",
+      "remaining_duration_seconds_before": 28800,
+      "remaining_duration_seconds_after": 14400,
+      "actual_duration_seconds_before": 0,
+      "actual_duration_seconds_after": 0,
+      "actual_finish_after": null,
+      "direct_controlled_edit_fields": 2,
+      "project_derived_quantitative_fields": 3,
+      "project_derived_zero_span_markers": 2
+    },
+    "cohort": {
+      "leaf_activities": 460,
+      "supported_calculated": 433,
+      "assumed_labelled": 18,
+      "excluded_coded": 9,
+      "changed_rows": 12,
+      "downstream_moved_rows": 6,
+      "field_slots": 4140,
+      "native_changed_field_slots": 43,
+      "classifications": {
+        "UNCHANGED": 4016,
+        "ENGINE_NATIVE_AGREEMENT": 43,
+        "EXPLICIT_EXCLUSION": 81,
+        "UNEXPLAINED": 0
+      },
+      "unexplained": []
+    },
+    "contract_result": "PASS",
+    "gate_effect": {
+      "P1-G2": true,
+      "P1-G3": true,
+      "P1": "passed",
+      "P2": "not_started"
+    }
   }
 }

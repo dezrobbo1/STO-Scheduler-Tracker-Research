@@ -66,13 +66,14 @@ from uuid import UUID
 
 from sto.core.calendar.arithmetic import CompiledIntervals, intersect_intervals, normalise
 from sto.core.calendar.compile import CompiledCalendar, Horizon, compile_calendars
-from sto.core.model.entities import Activity, Schedule
+from sto.core.model.entities import Activity, Assignment, Schedule
 from sto.core.model.enums import (
     ActivityKind,
     ConstraintType,
     LagCalendar,
     MilestoneSnapPolicy,
     ProgressPolicy,
+    RelationshipType,
     ScheduleDirection,
 )
 
@@ -294,8 +295,14 @@ def build_plan(
 
     resources = {resource.uid: resource for resource in schedule.resources}
     assignments_by_activity: dict[UUID, list[UUID]] = {}
+    assignment_rows_by_activity: dict[UUID, list[Assignment]] = {}
     for assignment in schedule.assignments:
-        if assignment.activity_uid is None or assignment.resource_uid is None:
+        if assignment.activity_uid is None:
+            continue
+        assignment_rows_by_activity.setdefault(assignment.activity_uid, []).append(
+            assignment
+        )
+        if assignment.resource_uid is None:
             continue
         assignments_by_activity.setdefault(assignment.activity_uid, []).append(
             assignment.resource_uid
@@ -305,6 +312,83 @@ def build_plan(
         return int((moment - shared_epoch).total_seconds())
 
     assumed: list[Assumed] = []
+
+    incident_by_activity = {activity.uid: [] for activity in schedule.activities}
+    for relationship in schedule.relationships:
+        if relationship.predecessor_uid in incident_by_activity:
+            incident_by_activity[relationship.predecessor_uid].append(relationship)
+        if relationship.successor_uid in incident_by_activity:
+            incident_by_activity[relationship.successor_uid].append(relationship)
+
+    def in_progress_late_rule_assumption(activity: Activity) -> Assumed | None:
+        """Label started-work shapes outside the two native Project trials.
+
+        The public-LateStart rule is measured on zero-actual-duration work with
+        no split, no applied constraint, and ordinary zero-lag FS logic on both
+        sides. The engine can still place the broader conformance shapes, but a
+        projected result must not present their late dates as native evidence.
+        """
+
+        if activity.actual_start is None or activity.actual_finish is not None:
+            return None
+        reasons: list[str] = []
+        actual = activity.actual_duration
+        if actual is None or actual.seconds != 0 or actual.elapsed:
+            reasons.append("actual duration is not measured zero")
+        split_markers = (activity.suspend, activity.resume)
+        if split_markers not in (
+            (None, None),
+            (activity.actual_start, activity.actual_start),
+        ):
+            reasons.append("Stop/Resume describes a split span")
+        if any(
+            value != 0
+            for value in (
+                activity.percent_complete.duration_permille,
+                activity.percent_complete.work_permille,
+                activity.percent_complete.physical_permille,
+                activity.percent_complete.units_permille,
+            )
+        ):
+            reasons.append("reported percentage progress is outside the measured shape")
+        if any(
+            row.work.actual_seconds != 0
+            or row.percent_work_complete_permille != 0
+            for row in assignment_rows_by_activity.get(activity.uid, ())
+        ):
+            reasons.append("assignment actual work is outside the measured shape")
+        primary = activity.primary_constraint
+        if (
+            primary is not None
+            and primary.type is not ConstraintType.ASAP
+        ) or activity.secondary_constraint is not None:
+            reasons.append("started work carries an unmeasured constraint")
+        if any(
+            duration is not None and duration.elapsed
+            for duration in (activity.planned_duration, activity.remaining_duration)
+        ):
+            reasons.append("remaining work is elapsed duration")
+        incident = incident_by_activity[activity.uid]
+        incoming = any(row.successor_uid == activity.uid for row in incident)
+        outgoing = any(row.predecessor_uid == activity.uid for row in incident)
+        if not incoming or not outgoing:
+            reasons.append("the measured predecessor/successor shape is absent")
+        if any(
+            row.type is not RelationshipType.FS
+            or (row.lag is not None and row.lag.seconds != 0)
+            for row in incident
+        ):
+            reasons.append("incident logic is not ordinary zero-lag FS")
+        if project.progress_policy is not ProgressPolicy.RETAINED_LOGIC:
+            reasons.append("the progress policy is not the measured retained logic")
+        if not reasons:
+            return None
+        return Assumed(
+            activity.uid,
+            "activity",
+            "ACTIVITY_IN_PROGRESS_LATE_DATES_ASSUMED",
+            "; ".join(reasons),
+        )
 
     def effective_calendar(
         activity: Activity,
@@ -584,6 +668,9 @@ def build_plan(
         scheduled.add(activity.uid)
         if pending_assumption is not None:
             assumed.append(pending_assumption)
+        progress_assumption = in_progress_late_rule_assumption(activity)
+        if progress_assumption is not None:
+            assumed.append(progress_assumption)
 
     # A row whose dates are unknown takes its successors with it. Walked to a
     # fixed point, so a chain behind one unreadable duration is reported rather

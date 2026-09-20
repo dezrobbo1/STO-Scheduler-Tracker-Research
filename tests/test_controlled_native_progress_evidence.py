@@ -30,13 +30,30 @@ def row(**changes: object) -> tuple[object, ...]:
 
 
 class ControlledNativeProgressEvidenceTests(unittest.TestCase):
-    def classify(self, *, before=None, native=None, base=None, control=None, recalculated=None):
+    def classify(
+        self,
+        *,
+        before=None,
+        native=None,
+        base=None,
+        control=None,
+        recalculated=None,
+        exclusions=None,
+    ):
         before = {"1": row()} if before is None else before
         native = {"1": row()} if native is None else native
         base = {"1": row()} if base is None else base
         control = {"1": row()} if control is None else control
         recalculated = {"1": row()} if recalculated is None else recalculated
-        return classify_controlled_transition(before, native, base, control, recalculated)
+        exclusions = {} if exclusions is None else exclusions
+        return classify_controlled_transition(
+            before,
+            native,
+            base,
+            control,
+            recalculated,
+            exclusions,
+        )
 
     def test_unchanged_row_stays_unchanged(self):
         summary = self.classify()
@@ -90,6 +107,7 @@ class ControlledNativeProgressEvidenceTests(unittest.TestCase):
             base={},
             control={},
             recalculated={},
+            exclusions={"1": "INACTIVE", "2": "INACTIVE"},
         )
         self.assertEqual(dict(summary.classifications)[EXPLICIT_EXCLUSION], 17)
         self.assertEqual(summary.unexplained, (("2", "start"),))
@@ -124,6 +142,25 @@ class ControlledNativeProgressEvidenceTests(unittest.TestCase):
                 recalculated={"1": row(), "not-observed": row()},
             )
 
+    def test_missing_engine_row_is_not_inferred_to_be_an_exclusion(self):
+        with self.assertRaisesRegex(ValueError, "scheduled/excluded partition"):
+            self.classify(
+                before={"1": row(), "2": row()},
+                native={"1": row(), "2": row()},
+                base={"1": row()},
+                control={"1": row()},
+                recalculated={"1": row()},
+            )
+        with self.assertRaisesRegex(ValueError, "no code"):
+            self.classify(
+                before={"1": row(), "2": row()},
+                native={"1": row(), "2": row()},
+                base={"1": row()},
+                control={"1": row()},
+                recalculated={"1": row()},
+                exclusions={"2": ""},
+            )
+
     def test_exact_progress_edit_and_derived_duration_are_recognized(self):
         reasons = dict(
             classify_selected_progress(
@@ -135,6 +172,7 @@ class ControlledNativeProgressEvidenceTests(unittest.TestCase):
                 expected_remaining=3600,
                 before_planned=7200,
                 after_planned=3600,
+                before_actual=0,
                 after_actual=0,
                 after_percent_permille=0,
                 after_actual_finish=None,
@@ -143,6 +181,7 @@ class ControlledNativeProgressEvidenceTests(unittest.TestCase):
                 after_task_work=7200,
                 before_assignment_work=14400,
                 after_assignment_work=7200,
+                before_assignment_actual_work=0,
                 after_assignment_actual_work=0,
                 after_assignment_remaining_work=7200,
             )
@@ -162,6 +201,7 @@ class ControlledNativeProgressEvidenceTests(unittest.TestCase):
                 expected_remaining=1,
                 before_planned=2,
                 after_planned=9,
+                before_actual=0,
                 after_actual=0,
                 after_percent_permille=0,
                 after_actual_finish=None,
@@ -170,11 +210,50 @@ class ControlledNativeProgressEvidenceTests(unittest.TestCase):
                 after_task_work=2,
                 before_assignment_work=4,
                 after_assignment_work=2,
+                before_assignment_actual_work=0,
                 after_assignment_actual_work=0,
                 after_assignment_remaining_work=2,
             )
         )
         self.assertEqual(reasons[UNEXPLAINED], 1)
+
+    def test_unrequested_actual_duration_or_work_is_unexplained(self):
+        common = dict(
+            before_actual_start=None,
+            after_actual_start="right",
+            expected_actual_start="right",
+            before_remaining=2,
+            after_remaining=1,
+            expected_remaining=1,
+            before_planned=2,
+            after_planned=9,
+            before_actual=0,
+            after_actual=0,
+            after_percent_permille=0,
+            after_actual_finish=None,
+            assignment_units_permille=2000,
+            before_task_work=4,
+            after_task_work=2,
+            before_assignment_work=4,
+            after_assignment_work=2,
+            before_assignment_actual_work=0,
+            after_assignment_actual_work=0,
+            after_assignment_remaining_work=2,
+        )
+        with_actual_duration = dict(common, after_actual=8)
+        with_actual_work = dict(
+            common,
+            after_assignment_actual_work=1,
+            after_assignment_remaining_work=1,
+        )
+        self.assertGreaterEqual(
+            dict(classify_selected_progress(**with_actual_duration))[UNEXPLAINED],
+            1,
+        )
+        self.assertGreaterEqual(
+            dict(classify_selected_progress(**with_actual_work))[UNEXPLAINED],
+            1,
+        )
 
 
 class ControlledNativeProgressEvidenceRecordTests(unittest.TestCase):
@@ -190,17 +269,27 @@ class ControlledNativeProgressEvidenceRecordTests(unittest.TestCase):
             digest, size = RECORDED[role]
             self.assertEqual(self.record[section]["sha256"], digest)
             self.assertEqual(self.record[section]["byte_size"], size)
+        digest, size = RECORDED["controlled_native_repeat"]
+        repeat = self.record["repeat_result"]["native_output"]
+        self.assertEqual(repeat["sha256"], digest)
+        self.assertEqual(repeat["byte_size"], size)
 
-    def test_record_reconciles_and_keeps_the_gate_open(self):
+    def test_record_preserves_the_first_result_and_closes_on_the_clean_repeat(self):
         cohort = self.record["cohort"]
         self.assertEqual(
             sum(cohort["classifications"].values()), cohort["field_slots"]
         )
         self.assertEqual(cohort["classifications"][UNEXPLAINED], 3)
         self.assertEqual(len(cohort["unexplained"]), 3)
-        self.assertEqual(self.record["gate"]["met"], 3)
-        self.assertFalse(self.record["gate"]["P1-G2"])
-        self.assertFalse(self.record["gate"]["P1-G3"])
+        repeat = self.record["repeat_result"]["cohort"]
+        self.assertEqual(
+            sum(repeat["classifications"].values()), repeat["field_slots"]
+        )
+        self.assertEqual(repeat["classifications"][UNEXPLAINED], 0)
+        self.assertEqual(repeat["unexplained"], [])
+        self.assertEqual(self.record["gate"]["met"], 5)
+        self.assertTrue(self.record["gate"]["P1-G2"])
+        self.assertTrue(self.record["gate"]["P1-G3"])
 
     def test_record_pins_the_clean_repeat_without_customer_names(self):
         repeat = self.record["next_experiment"]

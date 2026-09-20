@@ -32,6 +32,10 @@ RECORDED = {
         "31443027dedaf411c5c33b03806881c370f7f039ca520569a1fa0fa59f0b5278",
         3_362_251,
     ),
+    "controlled_native_repeat": (
+        "6e0e5321ecadf4b8d9e96685968112803975737a61444104b45ae8cfa522df66",
+        3_362_778,
+    ),
     "kiln": (
         "b7c14b631ecc7c15db7731e4a5159ecefe68aaa1c10e76262f84db6b8c37d3ca",
         3_474_383,

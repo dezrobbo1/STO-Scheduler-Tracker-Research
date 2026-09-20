@@ -168,6 +168,21 @@ def _engine(schedule, result) -> dict[str, tuple[object, ...]]:
     }
 
 
+def _excluded(plan, schedule) -> dict[str, str]:
+    """The coded activity identities omitted from the scheduled result."""
+
+    by_uid = {row.uid: _source_uid(row) for row in schedule.activities}
+    exclusions: dict[str, str] = {}
+    for row in plan.excluded:
+        if row.kind != "activity":
+            continue
+        source = by_uid[row.uid]
+        if source in exclusions:
+            raise ValueError(f"duplicate controlled-native exclusion: {source}")
+        exclusions[source] = row.code
+    return exclusions
+
+
 def _relationship_signature(schedule) -> tuple[tuple[object, ...], ...]:
     activities = {_source_uid(row): row.uid for row in schedule.activities}
     by_uid = {uid: source for source, uid in activities.items()}
@@ -398,6 +413,7 @@ class ControlledNativeProgressBoilerTests(unittest.TestCase):
                 expected_remaining=TARGET_REMAINING_SECONDS,
                 before_planned=_duration_seconds(before.planned_duration),
                 after_planned=_duration_seconds(native.planned_duration),
+                before_actual=_duration_seconds(before.actual_duration),
                 after_actual=_duration_seconds(native.actual_duration),
                 after_percent_permille=native.percent_complete.duration_permille,
                 after_actual_finish=native.actual_finish,
@@ -406,6 +422,7 @@ class ControlledNativeProgressBoilerTests(unittest.TestCase):
                 after_task_work=_duration_seconds(native.planned_work),
                 before_assignment_work=before_assignment.work.budgeted_seconds,
                 after_assignment_work=native_assignment.work.budgeted_seconds,
+                before_assignment_actual_work=before_assignment.work.actual_seconds,
                 after_assignment_actual_work=native_assignment.work.actual_seconds,
                 after_assignment_remaining_work=native_assignment.work.remaining_seconds,
             )
@@ -438,6 +455,7 @@ class ControlledNativeProgressBoilerTests(unittest.TestCase):
             _engine(self.before, self.base_result),
             _engine(self.before, self.control_result),
             _engine(self.native, self.native_result),
+            _excluded(self.base_plan, self.before),
         )
         self.assertEqual((summary.added_rows, summary.removed_rows), (0, 0))
         self.assertEqual(summary.field_slots, 4_140)

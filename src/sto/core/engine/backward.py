@@ -48,15 +48,18 @@ activity's late dates are its actual dates and no successor pulls them anywhere.
 That is measured rather than assumed: in the two files Microsoft Project itself
 recalculated after progress was entered, every completed activity's stored late
 start and late finish equal its actual ones, with a stored total slack of zero.
-The controlled native in-progress experiment recorded in
-``docs/evidence/p1-final-native-progress-2026-09-20.md`` settles the corresponding
-started-work rule. Project keeps ``LateStart`` on the immutable actual start,
+The two controlled native in-progress experiments recorded in
+``docs/evidence/p1-final-native-progress-2026-09-20.md`` settle the corresponding
+started-work rule for their shared zero-actual-duration, zero-lag FS shape.
+Project keeps ``LateStart`` on the immutable actual start,
 places the *remaining* duration at its latest feasible span, and uses that actual
 start as the backward FS/SS anchor. The two start coordinates therefore stay
 distinct: ``late_start`` is the reported Project field and ``remaining_start``
 is the internal start of the movable late remaining span. Collapsing them left
 the predecessor chain with float that Project removed; placing the full original
 duration would instead refuse valid remaining work.
+``build_plan`` labels broader started-work shapes as assumptions, so this pass's
+general conformance behavior is not published as broader native evidence.
 
 The progress policy reaches this pass too. Under ``progress_override`` with a
 status time the forward pass releases every predecessor's hold over an

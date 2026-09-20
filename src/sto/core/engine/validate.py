@@ -374,7 +374,7 @@ def validate_result(
                         f"actual start {activity.actual_start}",
                     )
                 )
-        elif late_row.remaining_start is not None:
+        if state is not ProgressState.IN_PROGRESS and late_row.remaining_start is not None:
             violations.append(
                 Violation(
                     "LATE_REMAINING_START_UNEXPECTED",
@@ -391,8 +391,9 @@ def validate_result(
         # activity bounded on its finish reaches back before the project start
         # on every real file here -- 56 rows on the un-progressed BOILER
         # snapshot alone. Asking it of them would reject sound results.
-        elif (
-            not incident[uid]
+        if (
+            state is ProgressState.NOT_STARTED
+            and not incident[uid]
             and activity.constraint_coordinate is None
             and row.early_start < network.project_start
         ):

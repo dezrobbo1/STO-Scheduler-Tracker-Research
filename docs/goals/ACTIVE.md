@@ -22,20 +22,16 @@ not start until the previous gate passes.
 <!-- roadmap:begin now -->
 <!-- generated from docs/goals/roadmap.json by `sto roadmap render`; edit the JSON, not this -->
 
-**P1 — Engine and local planner trial** (in progress; 3 of 5 gate criteria met)
+**P2 — Live execution loop** (not started; 0 of 6 gate criteria met)
 
 | | Gate criterion | Shown by |
 |---|---|---|
-| ✓ | The 47 executable conformance cases pass, byte-identically across three processes | `tests/test_conformance_determinism.py` |
-| · | The controlled BOILER baseline and Project output: every leaf activity gets a disposition, and no difference is UNEXPLAINED across start, finish, early and late dates, float and criticality | `docs/evidence/p1-final-native-progress-2026-09-20.md` ‡ |
-| · | The controlled Microsoft Project recalculation reports zero unexpected differences under the predeclared field contract | `tests/test_controlled_native_progress_boiler.py` ‡ |
-| ✓ | A persisted import shows calculated dates beside the ones it imported; one duration edit moves its successors; reset restores the baseline; the scenario exports; and a restart reproduces the same result from the same input hash | `scripts/browser-acceptance-pl14.py` ‡ |
-| ✓ | Every API route rejects an unauthenticated request, and a project is readable only by an actor authorised on it | `tests/test_authentication.py` ‡ |
-
-‡ the controlled files live outside the repository; the fixed comparison contract leaves three upstream late/float fields UNEXPLAINED, so this criterion remains open; set `STO_REQUIRE_CONTROLLED_NATIVE=1` to make their absence a failure rather than a skip.
-‡ the controlled files live outside the repository; 3 of 4,140 field slots remain UNEXPLAINED, so this criterion remains open; set `STO_REQUIRE_CONTROLLED_NATIVE=1` to make their absence a failure rather than a skip.
-‡ the API CI job supplies PostgreSQL and Chromium, drives the rendered workflow, restarts the application, and uploads its screenshots and export; set `STO_REQUIRE_DB=1` to make their absence a failure rather than a skip.
-‡ the API CI job supplies PostgreSQL and runs the route inventory, two-user project matrix, session, CSRF and device-token acceptance with database absence treated as a failure; set `STO_REQUIRE_DB=1` to make their absence a failure rather than a skip.
+| · | Incremental rescheduling equals a full recompute on a thousand random networks | — |
+| · | An accepted live execution update reaches a subscribed client in under a second at the 95th percentile on a real-sized schedule, with the workload and connected trial conditions recorded | — |
+| · | Replaying the update log from the baseline reproduces the head hash | — |
+| · | A two-device field trial queues supported execution reports for three tasks and communication operations while both devices are offline, survives application process termination and reopening, reconnects and synchronises without loss or duplicate accepted records or effects, preserving activity association and deterministic server acceptance ordering; recorded in docs/evidence | — |
+| · | The approved forecast moves only on planner approval, with reported progress passing supervisor then planner review | — |
+| · | Communication and media leave execution state, schedule state and schedule hashes unchanged; a separate authorised execution command against the same activity is independently audited and causes the corresponding live recalculation and subscribed update without bypassing approved-forecast review | — |
 
 <!-- roadmap:end now -->
 
@@ -319,10 +315,12 @@ trial file needs it (ADR-011).
 
 The future live execution loop includes field communication, sharing delivery
 and offline foundations while keeping messages outside execution authority.
-This is a roadmap correction, not P2 entry. P1-G2 and P1-G3 remain open;
-`docs/evidence/p1-gate-entry-decision-2026-09-20.md` still records the limited
-S7/PL4 exception as proposed, not enacted. ADR-016 records the new boundaries
-and `docs/history/2026-09-20-field-communication-roadmap.md` the review decision.
+The field-communication change was a roadmap correction, not P2 entry. The
+later clean controlled repeat closes P1-G2 and P1-G3, so P1 is passed; P2 is
+still not started and the limited S7/PL4 exception recorded in
+`docs/evidence/p1-gate-entry-decision-2026-09-20.md` was never enacted. ADR-016
+records the communication boundaries and
+`docs/history/2026-09-20-field-communication-roadmap.md` the review decision.
 
 P2 order and ownership, maintained from `docs/goals/roadmap.json`:
 
@@ -526,22 +524,26 @@ until the parity checklist passes.
   file that one day carries a usable status date fails and asks for the claim to
   be widened.
 - **Late dates for one in-progress shape are measured; broader shapes are not.**
-  The controlled UID 15 run in Microsoft Project build `16.0.20228.20186`
-  establishes that public `LateStart` stays on Actual Start, while a separate
+  The controlled UID 15 run and clean UID 227 repeat in Microsoft Project build
+  `16.0.20228.20186` establish that public `LateStart` stays on Actual Start,
+  while a separate
   latest feasible remaining-work span determines duration and float. It also
   anchors already-satisfied incoming logic on Actual Start. The bounded rule is
   recorded in `docs/evidence/p1-final-native-progress-2026-09-20.md`. Started
-  work with nonzero actual duration, Stop/Resume, finish-side constraints, or
-  other relationship shapes is still unmeasured.
+  work with nonzero actual duration, a non-zero Stop/Resume split, finish-side
+  constraints, or other relationship shapes is still unmeasured and is
+  labelled `ACTIVITY_IN_PROGRESS_LATE_DATES_ASSUMED` in a projected result.
 - **Remaining work is floored at the actual start, not at the end of the work
-  already done.** The one in-progress row in the estate settles that started
-  work is placed from its actual start rather than the project start — its
-  forecast finish now reproduces Project's exactly — but it reports no actual
-  duration and no resume date, so the two floors coincide on it. A row that has
-  consumed part of its duration, or carries a Project `Stop`/`Resume` pair,
+  already done.** The two controlled rows settle that started work is placed
+  from its actual start rather than the project start — their forecast finishes
+  reproduce Project's exactly. Both carry zero actual duration; Project's Stop
+  and Resume markers equal Actual Start, so the two possible floors coincide.
+  A row that has consumed part of its duration, or carries a non-zero Project
+  `Stop`/`Resume` split,
   would need the remaining span to begin after the completed portion, and that
-  is unmeasured. `tests/test_progress_boiler.py` pins the row's zero actual
-  duration so the first file that differs asks the question.
+  is unmeasured. The controlled tests pin zero actual duration and preserve the
+  zero-span Stop/Resume normalization so the first file that differs asks the
+  question.
 - **A constraint on an activity that has started is reported, not applied.**
   What a finish-side constraint should do to the remaining span of work already
   under way has no corpus case and no real file to measure on, so the forward
@@ -654,8 +656,11 @@ The file-oracle cases skip unless the real schedules are present; point
 set `STO_REQUIRE_BOILER=1` so its absence fails instead of skipping quietly.
 The exact day-5 pair remains a separate `STO_REQUIRE_DAY5=1` historical gate,
 and the two completion files Project recalculated use `STO_REQUIRE_NATIVE=1`.
-The controlled in-progress pair used by `P1-G2` and `P1-G3` is required with
-`STO_REQUIRE_CONTROLLED_NATIVE=1`; the roadmap names that conditional evidence.
+The first controlled in-progress pair is required with
+`STO_REQUIRE_CONTROLLED_NATIVE=1`; the clean baseline/repeat pair that closes
+`P1-G2` and `P1-G3` is required with
+`STO_REQUIRE_CONTROLLED_NATIVE_REPEAT=1`. The roadmap names the latter
+conditional evidence.
 The float and criticality rules are evidence from KILN and CALCINER as much as
 from BOILER, which is why those two now have variables of their own.
 `fixtures/README.md` records every file's hash, what it proves and how to

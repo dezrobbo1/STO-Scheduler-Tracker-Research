@@ -1,7 +1,7 @@
 {
   "schema_version": "sto-roadmap-1",
   "note": "Time-varying truth: phases, slices, gate criteria and the rule registry. AGENTS.md holds the durable rules; docs/roadmap/CONSOLIDATION-PLAN.md is the frozen design record and does not describe current status. The generated regions of docs/goals/ACTIVE.md come from here - run `sto roadmap render` after editing. Slice days are a positive planning estimate, or null with an effort_note explaining why and when to estimate; null never means zero effort.",
-  "current_phase": "P1",
+  "current_phase": "P2",
   "foreign_prefixes": [
     "dezrobbo1/",
     "~/"
@@ -80,7 +80,7 @@
         "P0-G1",
         "P0-G3"
       ],
-      "note": "Present on the original development machine on 2026-09-08 (two read-only copies, one filesystem, no upstream), but NOT AVAILABLE to the authorized 2026-09-10 or 2026-09-20 closure sources; the source-consolidation archive and frozen fixture repository do not contain its recorded hash. The off-machine copy is an ask of the user, not a task. S5 measured what it is and is not evidence for: its early dates are its actuals, so it is an oracle for reported work, but its late dates were never recalculated by Project and its slack describes a plan that no longer exists. The controlled 2026-09-20 Project output now supplies a separate in-progress native artifact and a clean repeat is the route to P1-G2/P1-G3; the missing day-5 file remains the estate's unique eight-row progressed cohort and is still needed to reproduce the earlier P0/S5 evidence.",
+      "note": "Present on the original development machine on 2026-09-08 (two read-only copies, one filesystem, no upstream), but NOT AVAILABLE to the authorized 2026-09-10 or 2026-09-20 closure sources; the source-consolidation archive and frozen fixture repository do not contain its recorded hash. The off-machine copy is an ask of the user, not a task. S5 measured what it is and is not evidence for: its early dates are its actuals, so it is an oracle for reported work, but its late dates were never recalculated by Project and its slack describes a plan that no longer exists. The two controlled 2026-09-20 Project outputs supply separate single-row in-progress native artifacts, and the clean repeat closed P1-G2/P1-G3; the missing day-5 file remains the estate's unique eight-row progressed cohort and is still needed to reproduce the earlier P0/S5 evidence.",
       "asked_on": null
     }
   ],
@@ -147,7 +147,7 @@
     {
       "id": "P1",
       "title": "Engine and local planner trial",
-      "status": "in_progress",
+      "status": "passed",
       "slices": [
         "S2",
         "S3",
@@ -171,21 +171,21 @@
         {
           "id": "P1-G2",
           "text": "The controlled BOILER baseline and Project output: every leaf activity gets a disposition, and no difference is UNEXPLAINED across start, finish, early and late dates, float and criticality",
-          "met": false,
+          "met": true,
           "evidence": "docs/evidence/p1-final-native-progress-2026-09-20.md",
           "evidence_conditional": {
-            "env": "STO_REQUIRE_CONTROLLED_NATIVE",
-            "why": "the controlled files live outside the repository; the fixed comparison contract leaves three upstream late/float fields UNEXPLAINED, so this criterion remains open"
+            "env": "STO_REQUIRE_CONTROLLED_NATIVE_REPEAT",
+            "why": "the clean controlled baseline/repeat pair lives outside the repository; its fixed-contract comparison has zero unexplained fields"
           }
         },
         {
           "id": "P1-G3",
           "text": "The controlled Microsoft Project recalculation reports zero unexpected differences under the predeclared field contract",
-          "met": false,
-          "evidence": "tests/test_controlled_native_progress_boiler.py",
+          "met": true,
+          "evidence": "tests/test_controlled_native_progress_repeat_boiler.py",
           "evidence_conditional": {
-            "env": "STO_REQUIRE_CONTROLLED_NATIVE",
-            "why": "the controlled files live outside the repository; 3 of 4,140 field slots remain UNEXPLAINED, so this criterion remains open"
+            "env": "STO_REQUIRE_CONTROLLED_NATIVE_REPEAT",
+            "why": "the clean controlled baseline/repeat pair lives outside the repository; all 4,140 field slots reconcile with zero unexpected differences"
           }
         },
         {

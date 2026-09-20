@@ -162,6 +162,23 @@ The complete fixed-contract comparison classifies 3,928 of 4,140 field slots
 as unchanged, 128 as engine/native agreement, 81 as explicit exclusions and 3
 as unexplained. Those three fields occur on one upstream identity whose
 baseline late fields were already inexact, so they cannot be promoted after
-seeing the native result. P1 therefore remains 3/5. Full identities,
+seeing the native result. At that interim point P1 therefore remained 3/5.
+Full identities,
 classification rules, the correction boundary and the smallest repeat are in
 `docs/evidence/p1-final-native-progress-2026-09-20.md` and its JSON companion.
+
+## Clean controlled repeat amendment — 2026-09-20
+
+The predeclared UID 227 repeat was subsequently returned from Microsoft Project
+build `16.0.20228.20186`. Its 3,362,778-byte output has SHA-256
+`6e0e5321ecadf4b8d9e96685968112803975737a61444104b45ae8cfa522df66`.
+Across the same 460 leaf identities and 4,140 contract field slots, 4,016 are
+unchanged, 43 are exact engine/native agreement, 81 belong to explicit coded
+exclusions and zero are unexplained. The 43 changed fields occur on exactly the
+12 rows selected before the native run, including six downstream movements.
+
+The clean repeat closes P1-G2 and P1-G3 without reclassifying the first run's
+three unexplained fields. P1 is therefore 5/5 and passed. P2 remains not
+started. The full fixed-contract result, provenance limitation and executable
+external-fixture test are in
+`docs/evidence/p1-final-native-progress-2026-09-20.md`.

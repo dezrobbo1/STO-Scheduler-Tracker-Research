@@ -525,6 +525,16 @@ class TheChecksTheFourthPassFoundTests(unittest.TestCase):
         self.assertIn("COMPLETED_LATE_START_NOT_ITS_ACTUAL", codes)
         self.assertIn("COMPLETED_LATE_FINISH_NOT_ITS_ACTUAL", codes)
 
+    def test_a_completed_row_cannot_report_a_late_remaining_start(self):
+        net = network(activity("A", 10, actual_start=0, actual_finish=10), status_time=20)
+        forward = forward_pass(net)
+        backward = backward_pass(net, forward)
+        floats = float_analysis(net, forward, backward)
+        late = list(backward.times)
+        late[0] = replace(late[0], remaining_start=0)
+        codes = self._codes(net, forward, replace(backward, times=tuple(late)), floats)
+        self.assertIn("LATE_REMAINING_START_UNEXPECTED", codes)
+
     def test_work_under_way_has_to_say_where_its_remaining_work_begins(self):
         """The coordinate exists for this state, and its absence was invisible."""
 

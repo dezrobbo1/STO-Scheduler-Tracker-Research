@@ -26,7 +26,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
-from calculation_fixture import _activity, _calendar, _document, _relationship
+from calculation_fixture import _activity, _calendar, _document, _duration, _relationship
 
 from sto.core.engine import PlanError, build_plan, forward_pass
 from sto.core.model.enums import ScheduleDirection
@@ -110,6 +110,63 @@ def _assignment_row(number, task, resource):
 def _plan(document):
     schedule, _, report = migrate(document)
     return schedule, build_plan(schedule, HORIZON), report
+
+
+class InProgressLateDateClaimBoundaryTests(unittest.TestCase):
+    CODE = "ACTIVITY_IN_PROGRESS_LATE_DATES_ASSUMED"
+
+    @staticmethod
+    def _document_for(*, actual_duration=0, stop=None, resume=None, relationship_type="FS"):
+        rows = [_task(1), _task(2), _task(3)]
+        progressed = rows[1][0]
+        progressed.update(
+            actual_start_source="2026-01-05T10:00:00",
+            actual_duration_source=_duration(actual_duration),
+            remaining_duration_source=_duration(1800),
+            stop_source=stop,
+            resume_source=resume,
+        )
+        incoming = _relationship(1, 1, 2)
+        if relationship_type != "FS":
+            incoming.update(type=relationship_type, source_type_code=3)
+        return _document(
+            rows,
+            relationships=[incoming, _relationship(2, 2, 3)],
+        )
+
+    def _codes_for_middle(self, document):
+        schedule, plan, _ = _plan(document)
+        middle = schedule.activities[1].uid
+        return {row.code for row in plan.assumed if row.uid == middle}
+
+    def test_the_two_trial_shape_is_not_labelled_as_an_assumption(self):
+        self.assertNotIn(self.CODE, self._codes_for_middle(self._document_for()))
+
+    def test_broader_started_work_shapes_are_labelled(self):
+        variants = (
+            self._document_for(actual_duration=600),
+            self._document_for(
+                stop="2026-01-05T10:15:00",
+                resume="2026-01-05T10:30:00",
+            ),
+            self._document_for(relationship_type="SS"),
+        )
+        for document in variants:
+            with self.subTest(document=document):
+                self.assertIn(self.CODE, self._codes_for_middle(document))
+
+    def test_stop_and_resume_survive_the_xml_to_canonical_path(self):
+        extra = (
+            "<ActualStart>2026-01-05T08:00:00</ActualStart>"
+            "<ActualDuration>PT0H0M0S</ActualDuration>"
+            "<Stop>2026-01-05T08:00:00</Stop>"
+            "<Resume>2026-01-05T08:00:00</Resume>"
+        )
+        with _imported(extra) as document:
+            schedule, _, _ = migrate(document)
+        row = schedule.activities[0]
+        self.assertEqual(row.suspend, row.actual_start)
+        self.assertEqual(row.resume, row.actual_start)
 
 
 class AnUnresolvedCalendarIsNotInheritanceTests(unittest.TestCase):

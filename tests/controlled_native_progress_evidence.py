@@ -82,6 +82,7 @@ def classify_controlled_transition(
     before_engine: Mapping[str, Sequence[object]],
     controlled_engine: Mapping[str, Sequence[object]],
     native_engine: Mapping[str, Sequence[object]],
+    explicit_exclusions: Mapping[str, str],
 ) -> ControlledNativeSummary:
     """Classify the complete result-field cohort without causal inference."""
 
@@ -102,6 +103,13 @@ def classify_controlled_transition(
         raise ValueError("controlled-native engine disposition changed between inputs")
     if not engine_ids <= common:
         raise ValueError("controlled-native engine result lacks a common source identity")
+    excluded_ids = set(explicit_exclusions)
+    if any(not code for code in explicit_exclusions.values()):
+        raise ValueError("controlled-native explicit exclusion has no code")
+    if engine_ids & excluded_ids or engine_ids | excluded_ids != common:
+        raise ValueError(
+            "controlled-native rows do not form an exact scheduled/excluded partition"
+        )
     counts: Counter[str] = Counter()
     unexplained: list[tuple[str, str]] = []
 
@@ -159,6 +167,7 @@ def classify_selected_progress(
     expected_remaining: int,
     before_planned: int,
     after_planned: int,
+    before_actual: int,
     after_actual: int,
     after_percent_permille: int,
     after_actual_finish: object,
@@ -167,6 +176,7 @@ def classify_selected_progress(
     after_task_work: int,
     before_assignment_work: int,
     after_assignment_work: int,
+    before_assignment_actual_work: int,
     after_assignment_actual_work: int,
     after_assignment_remaining_work: int,
 ) -> tuple[tuple[str, int], ...]:
@@ -184,7 +194,9 @@ def classify_selected_progress(
 
     expected_percent = 0 if after_planned == 0 else round(after_actual * 1000 / after_planned)
     if (
-        before_planned != after_planned
+        before_actual == 0
+        and after_actual == before_actual
+        and before_planned != after_planned
         and after_planned == after_actual + after_remaining
         and after_percent_permille == expected_percent
         and after_actual_finish is None
@@ -203,6 +215,8 @@ def classify_selected_progress(
     if (
         before_assignment_work != after_assignment_work
         and after_assignment_work == expected_work
+        and before_assignment_actual_work == 0
+        and after_assignment_actual_work == before_assignment_actual_work
         and after_assignment_work
         == after_assignment_actual_work + after_assignment_remaining_work
     ):
