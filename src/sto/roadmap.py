@@ -11,8 +11,9 @@ A test evaluates those predicates, so a rule marked pending whose machinery has
 appeared fails the suite and asks to be promoted. Nobody has to remember.
 
 Two things beside the registry live here for the same reason. Effort is
-recorded per slice in days, so a total is derived rather than written down and
-cannot go stale in prose. External dependencies -- a Primavera file, a CMMS
+recorded per slice in days, or explicitly unestimated with a reason and a point
+to revisit it; unknown effort must not disappear into a numeric total.
+External dependencies -- a Primavera file, a CMMS
 extract -- are rows with the slices and criteria they gate, so a gate that
 cannot be crossed says so now rather than in the week it is reached.
 
@@ -181,6 +182,19 @@ def load(path: Path | None = None) -> Roadmap:
             raise RoadmapError(
                 f"slice {entry['id']} says phase {entry['phase']!r} but "
                 f"{'no phase' if listed is None else listed} lists it"
+            )
+        if "days" not in entry:
+            raise RoadmapError(f"slice {entry['id']} has no effort declaration")
+        days = entry["days"]
+        if days is None:
+            note = entry.get("effort_note")
+            if not isinstance(note, str) or not note.strip():
+                raise RoadmapError(
+                    f"slice {entry['id']}: unestimated effort needs an effort_note"
+                )
+        elif type(days) is not int or days <= 0:
+            raise RoadmapError(
+                f"slice {entry['id']}: days must be a positive integer or null"
             )
 
     for rule in rules:
@@ -385,6 +399,26 @@ def gate_checklist(roadmap: Roadmap, phase_id: str | None = None) -> str:
 
     criteria = tuple(i["id"] for i in phase["gate"])
     slices = tuple(phase.get("slices", ()))
+    by_id = {entry["id"]: entry for entry in roadmap.slices}
+    lines += ["", "Slice completion and mandatory acceptance"]
+    unfinished = []
+    for key in slices:
+        entry = by_id[key]
+        done = entry["status"] == "done"
+        if not done:
+            unfinished.append(key)
+        lines.append(
+            f"  [{'x' if done else ' '}] {key} — {entry['title']} "
+            f"({entry['status'].replace('_', ' ')})"
+        )
+        for requirement in entry.get("acceptance", ()):
+            lines.append(f"          required: {requirement}")
+        if entry.get("product_contract"):
+            lines.append(f"          contract: {entry['product_contract']}")
+    if unfinished:
+        lines.append("  Cannot close: unfinished slices: " + ", ".join(unfinished))
+    lines.append("  Status alone is not acceptance evidence; verify the requirements and contracts.")
+
     gating = roadmap.blockers_for(*criteria)
     if gating:
         lines += ["", "External dependencies this gate waits on"]
@@ -418,13 +452,16 @@ def gate_checklist(roadmap: Roadmap, phase_id: str | None = None) -> str:
         "Before declaring this phase passed",
         "  1. Every criterion above is [x] and names what shows it, and every",
         "     criterion marked NOT ALWAYS RUN was crossed with its input present.",
-        "  2. Re-read AGENTS.md end to end. Anything it asserts that is no longer",
+        "  2. Every slice above is done, with its declared acceptance and product",
+        "     contract demonstrated by recorded evidence. Do not close this phase",
+        "     while any slice or mandatory acceptance remains unfinished.",
+        "  3. Re-read AGENTS.md end to end. Anything it asserts that is no longer",
         "     true is a defect: fix it now, not in the next phase.",
-        "  3. For each rule that went live: write the enforcing test, set",
+        "  4. For each rule that went live: write the enforcing test, set",
         "     enforced_by, set status to \"live\", delete its marker from AGENTS.md.",
-        "  4. Write the session record in docs/history/ — what was decided, the",
+        "  5. Write the session record in docs/history/ — what was decided, the",
         "     numbers that moved it, and what was rejected.",
-        "  5. Set this phase's status to \"passed\" and advance current_phase.",
-        "  6. sto roadmap render; run the suite; commit.",
+        "  6. Set this phase's status to \"passed\" and advance current_phase.",
+        "  7. sto roadmap render; run the suite; commit.",
     ]
     return "\n".join(lines)

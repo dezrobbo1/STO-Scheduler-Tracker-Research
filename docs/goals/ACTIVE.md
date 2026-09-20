@@ -316,11 +316,69 @@ trial file needs it (ADR-011).
 
 ## Next: the rest of the roadmap
 
-Live execution loop (progress reaches the live schedule in under a second, the
-approved forecast only through review); export with the proven Microsoft Project
-transaction and a bound evidence register; CMMS work orders through a mapped-file
-adapter and then named SAP PM, Maximo and Oracle EAM adapters; then **cut-over**,
-then resource levelling and operational constraints.
+The future live execution loop includes field communication, sharing delivery
+and offline foundations while keeping messages outside execution authority.
+This is a roadmap correction, not P2 entry. P1-G2 and P1-G3 remain open;
+`docs/evidence/p1-gate-entry-decision-2026-09-20.md` still records the limited
+S7/PL4 exception as proposed, not enacted. ADR-016 records the new boundaries
+and `docs/history/2026-09-20-field-communication-roadmap.md` the review decision.
+
+P2 order and ownership, maintained from `docs/goals/roadmap.json`:
+
+| Order | Slice | Ownership |
+|---|---|---|
+| 1 | S7 — Execution semantics and deterministic recalculation | Actuals, remaining duration, supported progress validation and deterministic recalculation, including incremental/full equivalence. |
+| 2 | PL4 — Live event API, sync, idempotency and audit | Authenticated submission, immutable operation identity, append-only acceptance, idempotent effects, canonical server order, realtime subscription and explicit catch-up. Shared delivery does not merge communication and execution domains. |
+| 3 | PL5 — Offline field app, durable outbox and device recovery | Durable local/cached state, immediate interaction, queued commands/communication/media, reconnect, account lifecycle and process-restart recovery; early real-device trial. |
+| 4 | PL6 — Supervisor/planner review and approved forecast | Explicit review of execution and governed approval; messages and reactions cannot approve progress. |
+| 5 | PL7 — Planner editing, leases and scenarios | Planner edits, version conflicts, lease contention and scenario promotion; communication grants no planner authority. |
+| 6 | PL15 — Field communication, activity context, photos, markup and notifications | Fast text, replies, mentions, simple reactions, activity links, photos/markup, recoverable transfer, notifications and labelled system events. |
+
+**Bounded communication.** Execution, Critical and Housekeeping are the initial
+UX configuration, not fixed domain categories. Ordinary communication needs
+no mandatory classification form. The field contract is
+`docs/product/field-communication.md`: immediate local send, understandable
+offline state, automatic recovery, inherited activity context, touch-friendly
+use and original photos preserved independently of markup. Communication and
+media never enter deterministic schedule state or hashes. An execution action
+from a message submits a separate authorised command; no natural-language
+message can silently report completion or change remaining duration.
+
+**Proof before mobile commitment.** After legitimate P2 entry and S7/PL4
+foundations, PL5 runs a thin two-device communication/photo/annotation and
+execution experiment before the full PL15 experience. It must test real iOS and
+Android lifecycle, durable queued state, authentication, reconnect, push deep
+links and media recovery. React plus Capacitor is a candidate, not committed
+architecture. Authenticated HTTP POST plus SSE and explicit catch-up is the
+preferred provisional transport; the roadmap requires working realtime
+subscription and recovery, not a specific transport or provider.
+
+**P2 acceptance.** Retain incremental/full equivalence, update-log replay and
+approved-forecast governance. Live execution propagation keeps the existing
+percentile target on a recorded, real-sized connected workload, not offline
+media or an unbounded global guarantee. P2-G4 retains the original three-task
+offline reports and adds both-device offline communication, process
+termination/reopening, automatic reconnect, preserved activity association and
+no loss or duplicate accepted effects. Server acceptance order is canonical;
+independent offline clocks do not establish global creation chronology.
+P2-G6 proves communication/hash isolation and the separate authorised-command
+path. Detailed photo/annotation/transfer recovery remains mandatory PL15 slice
+acceptance; P2 cannot close with that acceptance unfinished.
+
+**Later owners.** PL9 in P5 structures existing PL15 messages and evidence into
+problems, actions, ownership and handover, reusing the same media identities.
+PL10 in P5 adds critical watch, near-critical monitoring, escalation and
+reporting periods. Human Critical placement and engine-calculated criticality
+remain separate, with historical calculated context tied to its version.
+Communication links STO activities before CMMS; work-order/equipment context
+can enrich those links when P4 arrives. Voice, video, team/channel hierarchies,
+rich incident rooms, automated handover and AI operational summaries stay
+outside initial PL15.
+
+After the live loop: export with the proven Microsoft Project transaction and
+a bound evidence register; CMMS work orders through a mapped-file adapter and
+then named SAP PM, Maximo and Oracle EAM adapters; then **cut-over**, then
+resource levelling and operational constraints.
 
 Cut-over comes before the levelling work, not after it. What the parity
 checklist asks for is problems, evidence and critical updates, not levelling, so putting
@@ -329,10 +387,13 @@ for the length of a slice it does not need (ADR-004). The differentiators are
 then built against a stack in use.
 
 Effort is recorded per slice in `docs/goals/roadmap.json` and totalled by
-`sto roadmap status`, so no document has to carry a number that goes stale. Read
-those totals as slice work only: review, rework and the manual native sessions
-are on top, and the phases at the front of the list are the ones whose estimates
-have never been tested.
+`sto roadmap status` only when all remaining slices in the current phase are
+estimated. A null estimate carries a reason and a point to revisit it; it never
+counts as zero. P2 grows materially: PL4/PL5's old allowances are superseded and
+PL15 is new unestimated scope. Re-estimate the phase after PL5's early device
+trial; no complete P2 effort total is currently supported. Other recorded
+estimates remain planning guidance, with review, rework and manual native
+sessions on top.
 
 ## Rules stated but not yet enforceable
 
@@ -351,6 +412,7 @@ asks for the rule to be promoted, so none of this depends on anyone remembering.
 | `PR-evidence-register` | I13 | pending | docs/evidence/register.json exists |
 | `PR-approved-forecast` | PL6 | pending | sto.execution.review imports |
 | `PR-migrations` | PL1 | live | `tests/test_migrations_are_immutable.py` |
+| `PR-communication-not-authority` | PL15 | pending | src/sto/communication exists |
 | `PR-legacy-retirement` | I4 | pending | src/sto/interchange exists |
 
 <!-- roadmap:end rules -->

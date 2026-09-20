@@ -9,14 +9,14 @@ restarts at `ADR-001` here; the entries below map what came before.
 |---|---|---|
 | STC-ADR-001 | Microsoft Project integration | Carried forward in substance; the schedule-authority clause is **withdrawn** by ADR-001. |
 | STC-ADR-002 | Application architecture | Superseded by ADR-003. |
-| STC-ADR-003 | Frontend and mobile | Carried forward; the offline field queue is ported. |
+| STC-ADR-003 | Frontend and mobile | Offline field intent carried forward; ADR-016 replaces an assumed verbatim port with device validation before choosing the mobile implementation. |
 | STC-ADR-004 | Backend stack | Superseded by ADR-003. |
-| STC-ADR-005 | Offline sync | Carried forward. |
+| STC-ADR-005 | Offline sync | Offline intent carried forward; ADR-016 extends the delivery contract to communication/media and preserves current ADR-014/ADR-015 authentication. |
 | STC-ADR-006 | Audit and approval | Carried forward: append-only, correct-and-supersede. |
 | STC-ADR-007 | Data ownership and schedule authority | **Withdrawn** by ADR-001. STO calculates the schedule. |
 | STC-ADR-008 | MVP scope boundary | Withdrawn; superseded by `docs/goals/ACTIVE.md`. |
 | STC-ADR-009 | UX/UI architecture | Carried forward. |
-| STC-ADR-010 | Critical work package reporting | Carried forward. |
+| STC-ADR-010 | Critical work package reporting | Carried forward in PL10; ADR-016 keeps human Critical communication separate from calculated criticality. |
 | STC-ADR-011 | Project operational mapping | Carried forward. |
 
 ## `dezrobbo1/Shutdown-Tracker` (`ST-ADR-*`)

@@ -66,6 +66,13 @@ interface, not in a footnote. **(pending — PR-evidence-register)**
 
 **Audit is append-only.** Correct and supersede, never rewrite.
 
+**Communication is descriptive context, not execution authority.** Messages,
+replies, reactions, photos and annotations cannot mutate execution or schedule
+state, and communication/media/delivery/notification state stays outside
+schedule hashes. An execution action offered from a message is a separate,
+explicit, authorised and audited command, validated by the execution domain.
+ADR-016 records the boundary. **(pending — PR-communication-not-authority)**
+
 **The live schedule may change automatically; the exported forecast may not.**
 Reported progress reaches the live schedule at once, marked unreviewed; it
 reaches the approved forecast — what exports read — only through supervisor then
