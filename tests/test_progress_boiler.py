@@ -52,12 +52,15 @@ those specific oracles into a failure instead of suppressing unrelated tests.
 
 from __future__ import annotations
 
+from collections import Counter
+import json
 import os
 import unittest
 from datetime import datetime, timedelta
 from pathlib import Path
 
 from tests.real_fixture_guard import verify_available
+from tests.native_transition_evidence import classify_native_transition
 
 from sto.core.engine import (
     ProgressState,
@@ -124,6 +127,10 @@ _NATIVE_TRANSITION_PRESENT = all(
     ALL_FIXTURES[name].is_file() for name in NATIVE_TRANSITION
 )
 _LOADED: dict[str, tuple] = {}
+GATE_DECISION = (
+    Path(__file__).resolve().parents[1]
+    / "docs/evidence/p1-gate-entry-decision-2026-09-20.json"
+)
 
 
 def _load(name: str):
@@ -348,7 +355,7 @@ class NativeRecalculationTests(unittest.TestCase):
     "the BOILER before/after-native pair is not present; set STO_REQUIRE_NATIVE=1",
 )
 class NativeTransitionInventoryTests(unittest.TestCase):
-    """The raw transition exists; its broad changes are not yet classified."""
+    """Classify only what the pinned native transition can actually support."""
 
     @staticmethod
     def _source_uid(activity):
@@ -374,22 +381,138 @@ class NativeTransitionInventoryTests(unittest.TestCase):
         )
 
     def test_the_before_after_native_transition_is_measured_but_not_overclaimed(self):
+        before_schedule = _load("boiler_before")[0]
+        after_schedule = _load("after_native")[0]
         before = {
-            self._source_uid(row): row
-            for row in _load("boiler_before")[0].activities
+            self._source_uid(row): self._observed(row)
+            for row in before_schedule.activities
         }
         after = {
-            self._source_uid(row): row for row in _load("after_native")[0].activities
+            self._source_uid(row): self._observed(row)
+            for row in after_schedule.activities
         }
-        common = before.keys() & after.keys()
-        changed = {
-            uid for uid in common
-            if self._observed(before[uid]) != self._observed(after[uid])
+        summary = classify_native_transition(
+            before,
+            after,
+            documented_completion_uids=frozenset({"43", "318", "319"}),
+        )
+        self.assertEqual(summary.common_rows, 447)
+        self.assertEqual(summary.after_only_rows, 19)
+        self.assertEqual(summary.before_only_rows, 13)
+        self.assertEqual(summary.changed_common_rows, 420)
+        self.assertEqual(summary.unchanged_common_rows, 27)
+        self.assertEqual(summary.documented_completion_rows, 3)
+        self.assertEqual(summary.unexplained_changed_common_rows, 417)
+        self.assertEqual(summary.unresolved_identity_rows, 32)
+        self.assertEqual(summary.unresolved_rows, 449)
+        self.assertEqual(
+            dict(summary.field_change_counts),
+            {
+                "start": 273,
+                "finish": 277,
+                "early_start": 251,
+                "early_finish": 277,
+                "late_start": 403,
+                "late_finish": 402,
+                "total_float": 395,
+                "free_float": 105,
+                "critical": 54,
+                "actual_start": 3,
+                "actual_finish": 3,
+                "remaining_duration": 17,
+                "percent_complete": 3,
+            },
+        )
+
+        source_fields = (
+            "active",
+            "planned_duration",
+            "remaining_duration",
+            "planned_work",
+            "calendar_uid",
+            "actual_duration",
+            "percent_complete",
+            "actual_start",
+            "actual_finish",
+        )
+        before_activities = {
+            self._source_uid(row): row for row in before_schedule.activities
         }
-        self.assertEqual(len(common), 447)
-        self.assertEqual(len(after.keys() - before.keys()), 19)
-        self.assertEqual(len(before.keys() - after.keys()), 13)
-        self.assertEqual(len(changed), 420)
+        after_activities = {
+            self._source_uid(row): row for row in after_schedule.activities
+        }
+        for uid in ("43", "318", "319"):
+            old = before_activities[uid]
+            new = after_activities[uid]
+            observations = new.source_observations
+            self.assertIsNone(old.actual_start)
+            self.assertIsNone(old.actual_finish)
+            self.assertIsNotNone(new.actual_start)
+            self.assertIsNotNone(new.actual_finish)
+            self.assertEqual(new.remaining_duration.seconds, 0)
+            self.assertEqual(new.percent_complete.duration_permille, 1000)
+            self.assertEqual(observations.late_start, new.actual_start)
+            self.assertEqual(observations.late_finish, new.actual_finish)
+            self.assertEqual(observations.total_float_seconds, 0)
+
+        source_change_counts = Counter()
+        rows_with_source_changes = set()
+        for uid in before_activities.keys() & after_activities.keys():
+            for field in source_fields:
+                if getattr(before_activities[uid], field) != getattr(
+                    after_activities[uid], field
+                ):
+                    source_change_counts[field] += 1
+                    rows_with_source_changes.add(uid)
+
+        def relationship_signatures(schedule):
+            source_uids = {
+                row.uid: self._source_uid(row) for row in schedule.activities
+            }
+            return Counter(
+                (
+                    source_uids[row.predecessor_uid],
+                    source_uids[row.successor_uid],
+                    row.type.value,
+                    row.lag.seconds,
+                    row.lag.elapsed,
+                    row.lag_calendar.value,
+                )
+                for row in schedule.relationships
+            )
+
+        before_relationships = relationship_signatures(before_schedule)
+        after_relationships = relationship_signatures(after_schedule)
+        recorded = json.loads(GATE_DECISION.read_text(encoding="utf-8"))[
+            "native_transition"
+        ]
+        self.assertEqual(
+            recorded["confounding_input_observations"],
+            {
+                "common_rows_with_any_listed_input_or_progress_change": len(
+                    rows_with_source_changes
+                ),
+                "common_rows_other_than_documented_completions": len(
+                    rows_with_source_changes - {"43", "318", "319"}
+                ),
+                "activity_field_change_counts": {
+                    ("calendar_reference" if key == "calendar_uid" else key): value
+                    for key, value in source_change_counts.items()
+                },
+                "relationship_signatures_before": sum(before_relationships.values()),
+                "relationship_signatures_after": sum(after_relationships.values()),
+                "relationship_signatures_common": sum(
+                    (before_relationships & after_relationships).values()
+                ),
+                "relationship_signatures_before_only": sum(
+                    (before_relationships - after_relationships).values()
+                ),
+                "relationship_signatures_after_only": sum(
+                    (after_relationships - before_relationships).values()
+                ),
+            },
+        )
+        self.assertEqual(recorded["field_change_counts"], dict(summary.field_change_counts))
 
 
 @unittest.skipUnless(

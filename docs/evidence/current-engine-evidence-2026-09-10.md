@@ -127,3 +127,23 @@ test and skip accounting. The focused real-file cohorts were green; within
 those cohorts, only assertions requiring the unavailable day-5 file were
 skipped. Whole-suite skip totals additionally include the separately
 conditional PostgreSQL/API and external PM conformance repository cohorts.
+
+## P1 gate assessment amendment — 2026-09-20
+
+The native before/after inventory was rerun on hash-verified files recovered
+from frozen `dezrobbo1/Shutdown-Tracker-Claude` revision `135218f6`. It again
+measured 447 common activity source UIDs, 19 after-only, 13 before-only and 420
+changed common rows. The bounded classifier in `tests/test_progress_boiler.py`
+now separates 27 unchanged rows, the three exact documented completion
+transitions, and 417 changed common rows that remain `UNEXPLAINED`; the 32
+one-sided identities are unresolved too. Aggregate field and confounding-input
+counts are recorded in
+`docs/evidence/p1-gate-entry-decision-2026-09-20.json`.
+
+This classification does not say the unexplained rows are incorrect. It says
+the available pair also changes source/progress fields and identity membership,
+so the evidence cannot establish that progress caused every other difference.
+P1-G3 therefore remains open. The hash-identical consolidation archive and the
+documented frozen recovery route still do not contain the exact day-five
+candidate, so P1-G2 remains open as well. No fresh native Project session was
+executed and no historical measurement is relabelled as one.

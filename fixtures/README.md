@@ -121,3 +121,13 @@ their recorded hashes. The exact day-5 hash `a8d44aa23e20c510…` is **NOT
 AVAILABLE** in either authorized source; it was not reconstructed from task
 data. The current measurements and complete hashes are in
 `docs/evidence/current-engine-evidence-2026-09-10.md`.
+
+## Gate recovery checked 2026-09-20
+
+The same archive was supplied again and matched the recorded full SHA-256, so
+its unchanged contents were not treated as a new source. The frozen fixture
+repository was read at revision `135218f6f3a6f6fe91ce193d0ee3776ebf0eedbe`;
+the four committed BOILER files again matched the sizes and full hashes above.
+The exact day-five candidate remains **NOT AVAILABLE** through either recovery
+route. See `docs/evidence/p1-gate-entry-decision-2026-09-20.md` for the bounded
+native-transition classification and development-entry decision.
