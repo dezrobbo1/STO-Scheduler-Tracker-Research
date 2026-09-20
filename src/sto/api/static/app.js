@@ -39,8 +39,13 @@ const summaryBody = document.querySelector("#summaries tbody");
 
 let currentState = null;
 let refreshGeneration = 0;
+// Authentication ownership is independent of task/project render ordering.
+let authEpoch = 0;
 let csrfToken = null;
 let currentActor = null;
+// Only a logout/recovery outcome may release this barrier; an unrelated 401
+// can clear the screen but cannot confirm revocation or authorize a new login.
+let logoutState = "idle"; // idle | pending | unconfirmed
 
 function say(message, kind) {
   status.textContent = message;
@@ -62,11 +67,20 @@ function hours(seconds) {
 
 function setLoginEnabled(enabled) {
   for (const control of [loginUsername, loginPassword, loginTotp, loginButton]) {
-    control.disabled = !enabled;
+    control.disabled = !enabled || logoutState !== "idle";
   }
 }
 
+function clearLoginSecrets() {
+  loginPassword.value = "";
+  loginTotp.value = "";
+}
+
 function clearPlanner(message) {
+  // An anonymous startup refusal is not a completed login or a logout: keep
+  // credentials the user has begun entering in the already-visible form.
+  if (currentActor || logoutState !== "idle") clearLoginSecrets();
+  authEpoch += 1;
   currentActor = null;
   csrfToken = null;
   currentState = null;
@@ -75,16 +89,31 @@ function clearPlanner(message) {
   account.hidden = true;
   loginSection.hidden = false;
   actorName.textContent = "";
-  retryLogoutButton.hidden = true;
-  retryLogoutButton.disabled = false;
+  retryLogoutButton.hidden = logoutState !== "unconfirmed";
+  retryLogoutButton.disabled = logoutState === "pending";
   setLoginEnabled(true);
   projects.replaceChildren(new Option("sign in to load projects", ""));
   for (const section of [scenarioSection, provenanceSection, chartSection, rowsSection, summariesSection]) section.hidden = true;
-  body.replaceChildren(); chart.replaceChildren(); summaryBody.replaceChildren();
-  if (message) { authStatus.textContent = message; authStatus.dataset.kind = "error"; }
+  // Hiding a section is not clearing its retained text, inputs or attributes.
+  for (const element of [body, chart, summaryBody, activitySelect, provenance]) element.replaceChildren();
+  durationInput.value = "";
+  for (const element of [mode, versionState, changeSummary, status]) element.textContent = "";
+  delete mode.dataset.kind;
+  delete status.dataset.kind;
+  exportScenario.removeAttribute("href");
+  exportScenario.removeAttribute("download");
+  activitySelect.disabled = true;
+  applyScenario.disabled = true;
+  resetScenario.disabled = true;
+  applyScenario.textContent = "Create scenario";
+  document.querySelector("#project-name").value = "";
+  document.querySelector("#project-timezone").value = "UTC";
+  fileInput.value = "";
+  if (message && logoutState === "idle") { authStatus.textContent = message; authStatus.dataset.kind = "error"; }
 }
 
 function showAuthenticated(session) {
+  clearLoginSecrets();
   currentActor = session.actor;
   csrfToken = session.csrf_token;
   actorName.textContent = session.actor.display_name || session.actor.username;
@@ -96,13 +125,20 @@ function showAuthenticated(session) {
 }
 
 async function request(url, options) {
+  const epoch = authEpoch;
+  const actor = currentActor;
   const settings = {...(options ?? {}), credentials: "same-origin"};
   const method = (settings.method ?? "GET").toUpperCase();
   const headers = new Headers(settings.headers ?? {});
   if (["POST", "PUT", "PATCH", "DELETE"].includes(method) && csrfToken) headers.set("X-CSRF-Token", csrfToken);
   settings.headers = headers;
   const response = await fetch(url, settings);
-  if (response.status === 401 && url !== "/api/auth/login") clearPlanner("Your session is unavailable or has expired. Sign in again.");
+  // A late refusal belongs to the actor/epoch that sent it, not a subsequent
+  // login. Anonymous bootstrap/recovery outcomes are handled by their owners.
+  if (response.status === 401 && url !== "/api/auth/login" &&
+      epoch === authEpoch && actor && actor === currentActor) {
+    clearPlanner("Your session is unavailable or has expired. Sign in again.");
+  }
   return response;
 }
 
@@ -146,7 +182,16 @@ async function recoverLogout(load = json, perform = json) {
   }
 }
 
+function beginLogout(message) {
+  logoutState = "pending";
+  clearPlanner();
+  setLoginEnabled(false);
+  authStatus.textContent = message;
+  delete authStatus.dataset.kind;
+}
+
 function showLogoutOutcome(outcome) {
+  logoutState = ["revoked", "already-invalid"].includes(outcome.kind) ? "idle" : "unconfirmed";
   clearPlanner();
   if (outcome.kind === "revoked") {
     authStatus.textContent = "Signed out. The server session was revoked.";
@@ -485,7 +530,9 @@ async function show(projectId) {
 }
 
 async function refreshProjects(selected) {
+  const generation = refreshGeneration;
   const rows = await json("/api/projects");
+  if (generation !== refreshGeneration || !currentActor) return;
   projects.replaceChildren();
   if (!rows.length) projects.append(new Option("no projects yet", ""));
   for (const project of rows) projects.append(new Option(project.name, project.id));
@@ -512,16 +559,24 @@ calculateButton.addEventListener("click", async () => {
 });
 
 createProjectForm.addEventListener("submit", async (event) => {
-  event.preventDefault(); say("Creating project…");
+  event.preventDefault();
+  if (!currentActor) return;
+  const epoch = authEpoch;
+  say("Creating project…");
   try {
     const created = await json("/api/projects", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({name: document.querySelector("#project-name").value, timezone: document.querySelector("#project-timezone").value})});
-    await refreshProjects(created.id); say("Project created. Import an MSPDI/XML schedule.");
+    if (epoch !== authEpoch) return;
+    await refreshProjects(created.id);
+    if (epoch !== authEpoch) return;
+    say("Project created. Import an MSPDI/XML schedule.");
     createProjectForm.reset(); document.querySelector("#project-timezone").value = "UTC";
-  } catch (error) { say(error.message, "error"); }
+  } catch (error) { if (epoch === authEpoch) say(error.message, "error"); }
 });
 
 importForm.addEventListener("submit", async (event) => {
   event.preventDefault();
+  if (!currentActor) return;
+  const epoch = authEpoch;
   const projectId = projects.value; const file = fileInput.files[0];
   if (!projectId) { say("Create or select a project first.", "error"); return; }
   if (!file) return;
@@ -530,10 +585,12 @@ importForm.addEventListener("submit", async (event) => {
   say("Importing and preserving the source baseline…");
   try {
     const imported = await json("/api/projects/" + projectId + "/imports", {method: "POST", body: data});
+    if (epoch !== authEpoch) return;
     if (!(await reconcileMutationResponse(generation, projectId))) return;
     const state = await show(projectId);
+    if (epoch !== authEpoch) return;
     if (renderedImport(state, imported)) say("Schedule imported. Calculate the baseline next.");
-  } catch (error) { say(error.message, "error"); }
+  } catch (error) { if (epoch === authEpoch) say(error.message, "error"); }
 });
 
 scenarioForm.addEventListener("submit", async (event) => {
@@ -597,7 +654,9 @@ projects.addEventListener("change", () => show(projects.value));
 
 loginForm.addEventListener("submit", async (event) => {
   event.preventDefault();
+  if (logoutState !== "idle") return;
   if (loginButton.disabled) return;
+  const epoch = ++authEpoch;
   loginButton.disabled = true;
   authStatus.textContent = "Signing in…"; delete authStatus.dataset.kind;
   try {
@@ -610,55 +669,76 @@ loginForm.addEventListener("submit", async (event) => {
         totp: loginTotp.value,
       }),
     });
+    if (epoch !== authEpoch) return;
     showAuthenticated(session);
     await refreshProjects();
   } catch (error) {
+    if (epoch !== authEpoch) return;
+    clearLoginSecrets();
     clearPlanner("Authentication failed. Check your credentials and current authenticator code.");
   } finally {
-    loginPassword.value = "";
-    loginTotp.value = "";
-    loginButton.disabled = false;
+    if (epoch === authEpoch && logoutState === "idle") {
+      clearLoginSecrets();
+      loginButton.disabled = false;
+    }
   }
 });
 
 logoutButton.addEventListener("click", async () => {
+  if (logoutState !== "idle" || !currentActor) return;
   const csrf = csrfToken;
   logoutButton.disabled = true;
+  // Clear the planner and invalidate pending renders before waiting on I/O.
+  // The captured CSRF value still authorizes this request after local clearing.
+  beginLogout("Signing out… Sensitive planner data was cleared.");
   showLogoutOutcome(await requestLogout(csrf));
   logoutButton.disabled = false;
 });
 
 retryLogoutButton.addEventListener("click", async () => {
-  retryLogoutButton.disabled = true;
-  authStatus.textContent = "Checking the server session and retrying sign-out…";
-  delete authStatus.dataset.kind;
+  if (logoutState !== "unconfirmed") return;
+  beginLogout("Checking the server session and retrying sign-out…");
   showLogoutOutcome(await recoverLogout());
 });
 
 exportScenario.addEventListener("click", async (event) => {
   event.preventDefault();
-  if (!currentState) return;
+  if (!currentState || !currentActor || logoutState !== "idle") return;
+  const epoch = authEpoch;
+  const actor = currentActor;
+  const url = exportScenario.href;
+  const filename = exportScenario.getAttribute("download");
+  const ownsExport = () => epoch === authEpoch && actor === currentActor && logoutState === "idle";
   try {
-    const response = await request(exportScenario.href);
+    const response = await request(url);
+    if (!ownsExport()) return;
     if (!response.ok) throw new Error("Export could not be downloaded.");
     const blob = await response.blob();
+    // Logout can occur while either the response or its body is pending.
+    if (!ownsExport()) return;
     const objectUrl = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = objectUrl;
-    anchor.download = exportScenario.getAttribute("download");
-    anchor.click();
-    URL.revokeObjectURL(objectUrl);
+    try {
+      const anchor = document.createElement("a");
+      anchor.href = objectUrl;
+      anchor.download = filename;
+      anchor.click();
+    } finally {
+      URL.revokeObjectURL(objectUrl);
+    }
   } catch (error) {
-    if (currentActor) say(error.message, "error");
+    if (ownsExport()) say(error.message, "error");
   }
 });
 
 (async function start() {
+  const epoch = authEpoch;
   try {
     const session = await json("/api/auth/session");
+    if (epoch !== authEpoch) return;
     showAuthenticated(session);
     await refreshProjects();
   } catch (error) {
-    if (error.status !== 401) clearPlanner("The authentication service is unavailable.");
+    if (epoch !== authEpoch) return;
+    clearPlanner(error.status === 401 ? undefined : "The authentication service is unavailable.");
   }
 })();
