@@ -88,3 +88,24 @@ The suite passed with conditional external-fixture, database/API and external
 PM-clone coverage skipped; no fresh native or device evidence ran. Comparison
 with the starting commit confirmed unchanged P1 data, existing met flags, phase
 statuses, entry-decision records, frozen design and application runtime files.
+
+## PR #53 review correction
+
+The review of published head `f4c9d5df6f6ae5fae2f656339c0333003e01d733`
+identified incomplete gate guidance and a stale effort disclaimer. Both were
+reproduced against its byte-identical local tree: the gate checklist did not
+change when PL15 switched between unfinished and done, and fully estimated
+P2 test data printed a numeric total followed by the no-total phase note.
+
+The gate ritual now lists the phase's slices in roadmap order, their recorded
+status, declared acceptance and product-contract references. It names unfinished
+slices and requires recorded acceptance evidence before phase closure, including
+when a slice is marked done. This remains a checklist, not an automatic phase
+transition or a claim that the referenced evidence has executed. Detailed media
+acceptance stays at PL15 rather than becoming another P2 performance criterion.
+
+The status command now prints the unestimated-phase note only while remaining
+unestimated slices exist. Regression tests cover unfinished PL15 despite met
+phase criteria, the done-slice acceptance obligation, and both unknown and fully
+estimated effort. No roadmap data, phase status, gate flag, evidence record or
+application behaviour is changed by this correction.

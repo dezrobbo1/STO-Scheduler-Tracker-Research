@@ -399,6 +399,26 @@ def gate_checklist(roadmap: Roadmap, phase_id: str | None = None) -> str:
 
     criteria = tuple(i["id"] for i in phase["gate"])
     slices = tuple(phase.get("slices", ()))
+    by_id = {entry["id"]: entry for entry in roadmap.slices}
+    lines += ["", "Slice completion and mandatory acceptance"]
+    unfinished = []
+    for key in slices:
+        entry = by_id[key]
+        done = entry["status"] == "done"
+        if not done:
+            unfinished.append(key)
+        lines.append(
+            f"  [{'x' if done else ' '}] {key} — {entry['title']} "
+            f"({entry['status'].replace('_', ' ')})"
+        )
+        for requirement in entry.get("acceptance", ()):
+            lines.append(f"          required: {requirement}")
+        if entry.get("product_contract"):
+            lines.append(f"          contract: {entry['product_contract']}")
+    if unfinished:
+        lines.append("  Cannot close: unfinished slices: " + ", ".join(unfinished))
+    lines.append("  Status alone is not acceptance evidence; verify the requirements and contracts.")
+
     gating = roadmap.blockers_for(*criteria)
     if gating:
         lines += ["", "External dependencies this gate waits on"]
@@ -432,13 +452,16 @@ def gate_checklist(roadmap: Roadmap, phase_id: str | None = None) -> str:
         "Before declaring this phase passed",
         "  1. Every criterion above is [x] and names what shows it, and every",
         "     criterion marked NOT ALWAYS RUN was crossed with its input present.",
-        "  2. Re-read AGENTS.md end to end. Anything it asserts that is no longer",
+        "  2. Every slice above is done, with its declared acceptance and product",
+        "     contract demonstrated by recorded evidence. Do not close this phase",
+        "     while any slice or mandatory acceptance remains unfinished.",
+        "  3. Re-read AGENTS.md end to end. Anything it asserts that is no longer",
         "     true is a defect: fix it now, not in the next phase.",
-        "  3. For each rule that went live: write the enforcing test, set",
+        "  4. For each rule that went live: write the enforcing test, set",
         "     enforced_by, set status to \"live\", delete its marker from AGENTS.md.",
-        "  4. Write the session record in docs/history/ — what was decided, the",
+        "  5. Write the session record in docs/history/ — what was decided, the",
         "     numbers that moved it, and what was rejected.",
-        "  5. Set this phase's status to \"passed\" and advance current_phase.",
-        "  6. sto roadmap render; run the suite; commit.",
+        "  6. Set this phase's status to \"passed\" and advance current_phase.",
+        "  7. sto roadmap render; run the suite; commit.",
     ]
     return "\n".join(lines)

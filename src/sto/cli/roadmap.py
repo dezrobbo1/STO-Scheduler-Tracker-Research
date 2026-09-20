@@ -50,7 +50,7 @@ def _status(args: argparse.Namespace) -> int:
     else:
         remaining = sum(entry["days"] for entry in unfinished)
         print(f"effort   {remaining} slice-days left in this phase, before contingency")
-    if phase.get("effort_note"):
+    if unestimated and phase.get("effort_note"):
         print(f"         {phase['effort_note']}")
 
     blocked = roadmap.blockers_for(*phase.get("slices", ()))

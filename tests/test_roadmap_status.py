@@ -20,6 +20,7 @@ from sto.roadmap import (
     RoadmapError,
     describe,
     evaluate,
+    gate_checklist,
     load,
     render_regions,
 )
@@ -304,6 +305,49 @@ class MembershipTests(unittest.TestCase):
             load(Path(handle.name))
 
 
+class GateChecklistTests(unittest.TestCase):
+    def setUp(self):
+        import copy
+
+        self.roadmap = copy.deepcopy(load())
+        self.phase = self.roadmap.phase("P2")
+        self.phase["status"] = "in_progress"
+        # Hypothetical completed phase criteria do not prove slice acceptance.
+        for item in self.phase["gate"]:
+            item.update(met=True, evidence="tests/test_roadmap_status.py")
+        for entry in self.roadmap.slices:
+            if entry["id"] in self.phase["slices"]:
+                entry["status"] = "done"
+        self.communication = next(
+            entry for entry in self.roadmap.slices if entry["id"] == "PL15"
+        )
+
+    def test_met_phase_criteria_do_not_hide_unfinished_communication(self):
+        self.communication["status"] = "not_started"
+        output = gate_checklist(self.roadmap, "P2")
+        self.assertIn("[ ] PL15", output)
+        self.assertIn("Cannot close: unfinished slices: PL15", output)
+        self.assertIn("Every slice above is done", output)
+        self.assertIn("recorded evidence", output)
+        for requirement in self.communication["acceptance"]:
+            self.assertIn(requirement, output)
+        self.assertIn(self.communication["product_contract"], output)
+
+    def test_done_slices_still_require_their_declared_acceptance_evidence(self):
+        output = gate_checklist(self.roadmap, "P2")
+        self.assertIn("[x] PL15", output)
+        self.assertNotIn("Cannot close: unfinished slices", output)
+        self.assertIn("Status alone is not acceptance evidence", output)
+        positions = [output.index(f"[x] {key} —") for key in self.phase["slices"]]
+        self.assertEqual(positions, sorted(positions))
+        for entry in self.roadmap.slices:
+            if entry["id"] in self.phase["slices"]:
+                for requirement in entry.get("acceptance", ()):
+                    self.assertIn(requirement, output)
+        self.assertIn(self.communication["product_contract"], output)
+        self.assertEqual(self.phase["status"], "in_progress")
+
+
 class EffortTests(unittest.TestCase):
     def test_every_slice_records_its_effort(self):
         for entry in load().slices:
@@ -351,6 +395,7 @@ class EffortTests(unittest.TestCase):
                 self.assertEqual(_status(argparse.Namespace()), 0)
         self.assertIn("effort   unestimated for PL4", output.getvalue())
         self.assertIn("Await device trial.", output.getvalue())
+        self.assertIn(roadmap.phase("P2")["effort_note"], output.getvalue())
         self.assertNotIn("slice-days left in this phase", output.getvalue())
 
     def test_status_still_totals_a_fully_estimated_phase(self):
@@ -374,6 +419,8 @@ class EffortTests(unittest.TestCase):
                 self.assertEqual(_status(argparse.Namespace()), 0)
         self.assertIn(f"effort   {2 * len(members)} slice-days left", output.getvalue())
         self.assertNotIn("effort   unestimated", output.getvalue())
+        self.assertNotIn(roadmap.phase("P2")["effort_note"], output.getvalue())
+        self.assertNotIn("no complete phase effort total", output.getvalue())
 
 
 class ConformanceCorpusTests(unittest.TestCase):
