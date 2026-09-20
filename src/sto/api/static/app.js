@@ -41,6 +41,9 @@ let currentState = null;
 let refreshGeneration = 0;
 let csrfToken = null;
 let currentActor = null;
+// Only a logout/recovery outcome may release this barrier; an unrelated 401
+// can clear the screen but cannot confirm revocation or authorize a new login.
+let logoutState = "idle"; // idle | pending | unconfirmed
 
 function say(message, kind) {
   status.textContent = message;
@@ -62,7 +65,7 @@ function hours(seconds) {
 
 function setLoginEnabled(enabled) {
   for (const control of [loginUsername, loginPassword, loginTotp, loginButton]) {
-    control.disabled = !enabled;
+    control.disabled = !enabled || logoutState !== "idle";
   }
 }
 
@@ -73,15 +76,17 @@ function clearPlanner(message) {
   refreshGeneration += 1;
   planner.hidden = true;
   account.hidden = true;
+  loginPassword.value = "";
+  loginTotp.value = "";
   loginSection.hidden = false;
   actorName.textContent = "";
-  retryLogoutButton.hidden = true;
-  retryLogoutButton.disabled = false;
+  retryLogoutButton.hidden = logoutState !== "unconfirmed";
+  retryLogoutButton.disabled = logoutState === "pending";
   setLoginEnabled(true);
   projects.replaceChildren(new Option("sign in to load projects", ""));
   for (const section of [scenarioSection, provenanceSection, chartSection, rowsSection, summariesSection]) section.hidden = true;
   body.replaceChildren(); chart.replaceChildren(); summaryBody.replaceChildren();
-  if (message) { authStatus.textContent = message; authStatus.dataset.kind = "error"; }
+  if (message && logoutState === "idle") { authStatus.textContent = message; authStatus.dataset.kind = "error"; }
 }
 
 function showAuthenticated(session) {
@@ -146,7 +151,16 @@ async function recoverLogout(load = json, perform = json) {
   }
 }
 
+function beginLogout(message) {
+  logoutState = "pending";
+  clearPlanner();
+  setLoginEnabled(false);
+  authStatus.textContent = message;
+  delete authStatus.dataset.kind;
+}
+
 function showLogoutOutcome(outcome) {
+  logoutState = ["revoked", "already-invalid"].includes(outcome.kind) ? "idle" : "unconfirmed";
   clearPlanner();
   if (outcome.kind === "revoked") {
     authStatus.textContent = "Signed out. The server session was revoked.";
@@ -599,6 +613,7 @@ projects.addEventListener("change", () => show(projects.value));
 
 loginForm.addEventListener("submit", async (event) => {
   event.preventDefault();
+  if (logoutState !== "idle") return;
   if (loginButton.disabled) return;
   const generation = refreshGeneration;
   loginButton.disabled = true;
@@ -622,27 +637,24 @@ loginForm.addEventListener("submit", async (event) => {
   } finally {
     loginPassword.value = "";
     loginTotp.value = "";
-    if (generation === refreshGeneration) loginButton.disabled = false;
+    if (generation === refreshGeneration && logoutState === "idle") loginButton.disabled = false;
   }
 });
 
 logoutButton.addEventListener("click", async () => {
+  if (logoutState !== "idle" || !currentActor) return;
   const csrf = csrfToken;
   logoutButton.disabled = true;
   // Clear the planner and invalidate pending renders before waiting on I/O.
   // The captured CSRF value still authorizes this request after local clearing.
-  clearPlanner();
-  setLoginEnabled(false);
-  authStatus.textContent = "Signing out… Sensitive planner data was cleared.";
-  delete authStatus.dataset.kind;
+  beginLogout("Signing out… Sensitive planner data was cleared.");
   showLogoutOutcome(await requestLogout(csrf));
   logoutButton.disabled = false;
 });
 
 retryLogoutButton.addEventListener("click", async () => {
-  retryLogoutButton.disabled = true;
-  authStatus.textContent = "Checking the server session and retrying sign-out…";
-  delete authStatus.dataset.kind;
+  if (logoutState !== "unconfirmed") return;
+  beginLogout("Checking the server session and retrying sign-out…");
   showLogoutOutcome(await recoverLogout());
 });
 
