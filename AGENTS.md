@@ -117,32 +117,69 @@ experimental code solely because it might be reused.
   `tests/test_migrations_are_immutable.py` holds it to that;
   `scripts/db/apply-migrations.sh` refuses a changed file at the database.
 - No history rewriting, force-pushes, or merging without explicit instruction.
-- Automated review is advisory and bounded by the declared PR outcome and the
-  current milestone. One review pass per capability change; classify each
-  finding fix-now / defer / reject and verify it against the code first, because
-  grade has not tracked severity. A finding blocks merge only when it exposes a
-  regression caused by the PR, violates an invariant or acceptance criterion the
-  PR claims to establish, can corrupt source or user data, lose state, create a
-  false success or security risk, or materially block the current milestone.
-  Later-roadmap ownership does not override those blocker categories; if one is
-  present it is fix-now even when the complete feature belongs to a later slice.
-  Other findings owned by later roadmap slices are deferred, not blockers;
-  record a material deferred item once and do not repeatedly reopen it in the
-  same PR. Review is complete only when every fix-now finding is resolved, every
-  remaining finding is legitimately deferred or rejected, acceptance criteria
-  pass and CI is green. No clean-review loops, and never buy an unobserved edge
-  case at the cost of a new way for a real schedule to stop importing.
-  The reviewer re-runs on every push, so "one pass" is a rule about us, not
-  about it: the first pass is answered in full; a later pass is read for the
-  blocker categories above and for a guard the repository could carry but does
-  not — those are fixed — and everything else it raises is recorded once in a
-  single deferral comment and left. A finding the repository's own guards
-  could have caught is a finding about the guards: extend the guard, which
-  ends that class, rather than fixing the instance.
+- Reviewers and implementers follow **Code Review Rules** below. A severity
+  badge or unresolved thread is not, by itself, a merge decision.
 - **A diagnosis is a claim.** Before writing down why a number is what it is,
   measure the explanation against the data — including by checking that the
   proposed fix would actually change it. Twice now a confident cause has been
   recorded that the evidence did not support.
+
+## Code Review Rules
+
+These rules apply to automated and human PR review. Read the declared outcome,
+supported inputs, acceptance criteria and exclusions alongside
+`docs/goals/ACTIVE.md`. Scope limits do not waive existing safety invariants or
+permit silently dropping previously supported behaviour.
+
+### Material risks first
+
+Raise fix-now findings for concrete security risks, credential or project-data
+exposure, source/data corruption, lost state, incorrect scheduling results,
+false success, broken immutable lineage or append-only audit, and material
+regressions in the supported workflow. Also flag failures of acceptance criteria
+or required evidence the PR claims to establish. Inspect affected callers and
+boundaries, not just changed lines. Later-roadmap ownership does not excuse
+these defects; a rare but credible security or data-integrity failure still
+matters.
+
+Test and tooling defects qualify when they invalidate required evidence or
+break explicitly supported commands. Do not expand a bounded PR into support
+for hypothetical environments, every connection option, or future features.
+Style, optional refactoring and speculative hardening without a material
+consequence are not blockers. Leave mechanical formatting checks to CI.
+
+### Evidence and proportionate correction
+
+For each finding identify the triggering input or response ordering, the
+relevant code path, expected versus actual behaviour, and the material
+consequence or claimed contract it violates. Distinguish executed reproduction
+from source analysis; a clear code path can establish a risk without a live
+exploit or an unavailable private fixture. State uncertainty rather than
+inventing evidence. Judge severity from impact, not a badge or a count of tests.
+
+Classify findings **FIX NOW / DEFER / REJECT**. Group instances of the same root
+cause and prefer the smallest coherent correction. For a material fix, test the
+affected lifecycle or caller boundary, including the supported counter-case,
+rather than patching only the latest symptom. **A missing regression test
+identifies how to fix a material defect; it does not by itself make a finding a
+merge blocker.** Do not demand exhaustive coverage of an unclaimed input space.
+Record material deferrals once, with a reason and owning slice.
+
+### Bounded follow-up and closure
+
+Review the complete PR once. On corrective pushes, review the correction,
+affected callers and earlier material findings, not a fresh repository-wide
+hardening programme. Report a newly demonstrated blocker even on a later pass;
+do not repeatedly reopen fixed or legitimately deferred findings without new
+material evidence. Do not request repeated clean-review passes solely to obtain
+an empty automated report.
+
+The owner may close review when the actual published head meets acceptance,
+required CI/evidence checks pass, every fix-now finding is resolved and the rest
+are legitimately deferred or rejected. Do not weaken tests, required checks,
+security boundaries or phase gates to reach that state. Automated review is
+advisory, not proof of correctness; zero comments is not the acceptance criterion.
+Merge still requires explicit user instruction.
 
 ## Validation
 
