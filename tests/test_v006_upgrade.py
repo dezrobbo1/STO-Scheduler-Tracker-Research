@@ -11,7 +11,7 @@ import tempfile
 import unittest
 from datetime import UTC, datetime
 from pathlib import Path
-from urllib.parse import parse_qsl, unquote, urlparse, urlsplit
+from urllib.parse import unquote, urlparse, urlsplit
 
 REQUIRE_DB = os.environ.get("STO_REQUIRE_DB") == "1"
 ADMIN_URL = os.environ.get(
@@ -95,7 +95,12 @@ def _environment(dbname: str, *, host: str, port: int, user: str) -> dict[str, s
     )
     if parsed.password is not None:
         environment["PGPASSWORD"] = unquote(parsed.password)
-    for name, value in parse_qsl(parsed.query, keep_blank_values=True):
+    # libpq uses URI percent-encoding, not form encoding: '+' stays literal.
+    for parameter in parsed.query.split("&") if parsed.query else ():
+        name, separator, value = parameter.partition("=")
+        if not separator:
+            raise RuntimeError("the V006 upgrade test received a malformed libpq URL option")
+        name, value = unquote(name), unquote(value)
         variable = _LIBPQ_QUERY_ENV.get(name)
         if variable is None:
             raise RuntimeError(

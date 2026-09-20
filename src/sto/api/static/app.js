@@ -39,6 +39,8 @@ const summaryBody = document.querySelector("#summaries tbody");
 
 let currentState = null;
 let refreshGeneration = 0;
+// Authentication ownership is independent of task/project render ordering.
+let authEpoch = 0;
 let csrfToken = null;
 let currentActor = null;
 // Only a logout/recovery outcome may release this barrier; an unrelated 401
@@ -69,15 +71,22 @@ function setLoginEnabled(enabled) {
   }
 }
 
+function clearLoginSecrets() {
+  loginPassword.value = "";
+  loginTotp.value = "";
+}
+
 function clearPlanner(message) {
+  // An anonymous startup refusal is not a completed login or a logout: keep
+  // credentials the user has begun entering in the already-visible form.
+  if (currentActor || logoutState !== "idle") clearLoginSecrets();
+  authEpoch += 1;
   currentActor = null;
   csrfToken = null;
   currentState = null;
   refreshGeneration += 1;
   planner.hidden = true;
   account.hidden = true;
-  loginPassword.value = "";
-  loginTotp.value = "";
   loginSection.hidden = false;
   actorName.textContent = "";
   retryLogoutButton.hidden = logoutState !== "unconfirmed";
@@ -90,6 +99,7 @@ function clearPlanner(message) {
 }
 
 function showAuthenticated(session) {
+  clearLoginSecrets();
   currentActor = session.actor;
   csrfToken = session.csrf_token;
   actorName.textContent = session.actor.display_name || session.actor.username;
@@ -101,13 +111,20 @@ function showAuthenticated(session) {
 }
 
 async function request(url, options) {
+  const epoch = authEpoch;
+  const actor = currentActor;
   const settings = {...(options ?? {}), credentials: "same-origin"};
   const method = (settings.method ?? "GET").toUpperCase();
   const headers = new Headers(settings.headers ?? {});
   if (["POST", "PUT", "PATCH", "DELETE"].includes(method) && csrfToken) headers.set("X-CSRF-Token", csrfToken);
   settings.headers = headers;
   const response = await fetch(url, settings);
-  if (response.status === 401 && url !== "/api/auth/login") clearPlanner("Your session is unavailable or has expired. Sign in again.");
+  // A late refusal belongs to the actor/epoch that sent it, not a subsequent
+  // login. Anonymous bootstrap/recovery outcomes are handled by their owners.
+  if (response.status === 401 && url !== "/api/auth/login" &&
+      epoch === authEpoch && actor && actor === currentActor) {
+    clearPlanner("Your session is unavailable or has expired. Sign in again.");
+  }
   return response;
 }
 
@@ -615,7 +632,7 @@ loginForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (logoutState !== "idle") return;
   if (loginButton.disabled) return;
-  const generation = refreshGeneration;
+  const epoch = ++authEpoch;
   loginButton.disabled = true;
   authStatus.textContent = "Signing in…"; delete authStatus.dataset.kind;
   try {
@@ -628,16 +645,18 @@ loginForm.addEventListener("submit", async (event) => {
         totp: loginTotp.value,
       }),
     });
-    if (generation !== refreshGeneration) return;
+    if (epoch !== authEpoch) return;
     showAuthenticated(session);
     await refreshProjects();
   } catch (error) {
-    if (generation !== refreshGeneration) return;
+    if (epoch !== authEpoch) return;
+    clearLoginSecrets();
     clearPlanner("Authentication failed. Check your credentials and current authenticator code.");
   } finally {
-    loginPassword.value = "";
-    loginTotp.value = "";
-    if (generation === refreshGeneration && logoutState === "idle") loginButton.disabled = false;
+    if (epoch === authEpoch && logoutState === "idle") {
+      clearLoginSecrets();
+      loginButton.disabled = false;
+    }
   }
 });
 
@@ -677,14 +696,14 @@ exportScenario.addEventListener("click", async (event) => {
 });
 
 (async function start() {
-  const generation = refreshGeneration;
+  const epoch = authEpoch;
   try {
     const session = await json("/api/auth/session");
-    if (generation !== refreshGeneration) return;
+    if (epoch !== authEpoch) return;
     showAuthenticated(session);
     await refreshProjects();
   } catch (error) {
-    if (generation !== refreshGeneration) return;
-    if (error.status !== 401) clearPlanner("The authentication service is unavailable.");
+    if (epoch !== authEpoch) return;
+    clearPlanner(error.status === 401 ? undefined : "The authentication service is unavailable.");
   }
 })();

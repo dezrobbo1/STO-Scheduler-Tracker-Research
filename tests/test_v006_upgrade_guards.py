@@ -84,6 +84,55 @@ class V006UpgradeGuardTests(unittest.TestCase):
         ):
             upgrade._environment("sto_upgrade", host="/var/run/postgresql", port=5432, user="peer-user")
 
+    def test_uri_options_keep_literal_plus_and_percent_decoding_through_scripts(self):
+        shell = shutil.which("sh")
+        if shell is None:
+            self.skipTest("POSIX sh is required for the migration-script boundary")
+        source = (
+            "postgresql://operator:p+%2B%20%252B@db.example:6543/postgres"
+            "?sslcert=%2Ftmp%2Fclient+one%2Btwo%20three%252B%26%3D.pem"
+            "&application_name=upgrade+one%2Btwo%20three%252B"
+            "&options=-c%20application_name%3Dsession+one%2Btwo%20three%252B"
+        )
+        expected = [
+            "/tmp/client+one+two three%2B&=.pem",
+            "upgrade+one+two three%2B",
+            "-c application_name=session+one+two three%2B",
+            "p++ %2B",
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            temporary = Path(directory)
+            fake_psql = temporary / "psql"
+            fake_psql.write_text(
+                '#!/bin/sh\nprintf "%s\\n" "$PGSSLCERT" "$PGAPPNAME" '
+                '"$PGOPTIONS" "$PGPASSWORD" > "$STO_PSQL_CAPTURE"\nexit 73\n',
+                encoding="utf-8",
+            )
+            fake_psql.chmod(0o700)
+            with (
+                patch.object(upgrade, "ADMIN_URL", source),
+                patch.dict(os.environ, {"PATH": str(temporary) + os.pathsep + os.defpath}, clear=True),
+            ):
+                environment = upgrade._environment(
+                    "sto_upgrade", host="db.example", port=6543, user="operator"
+                )
+            self.assertEqual(
+                upgrade._database_url(source, "sto_upgrade"),
+                source.replace("/postgres?", "/sto_upgrade?"),
+            )
+            for name in ("apply-migrations.sh", "check-schema-drift.sh"):
+                with self.subTest(script=name):
+                    capture = temporary / "options.txt"
+                    capture.unlink(missing_ok=True)
+                    result = subprocess.run(
+                        [shell, str(upgrade.ROOT / "scripts" / "db" / name)],
+                        env=environment | {"STO_PSQL_CAPTURE": str(capture)},
+                        capture_output=True, text=True, timeout=10,
+                    )
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertTrue(capture.exists(), result.stdout + result.stderr)
+                    self.assertEqual(capture.read_text(encoding="utf-8").splitlines(), expected)
+
     def test_resolved_endpoint_survives_both_real_shell_entry_points(self):
         shell = shutil.which("sh")
         if shell is None:
