@@ -308,8 +308,72 @@ class EffortTests(unittest.TestCase):
     def test_every_slice_records_its_effort(self):
         for entry in load().slices:
             with self.subTest(entry["id"]):
-                self.assertIsInstance(entry["days"], int)
-                self.assertGreater(entry["days"], 0)
+                if entry["days"] is None:
+                    self.assertTrue(entry["effort_note"].strip())
+                else:
+                    self.assertIs(type(entry["days"]), int)
+                    self.assertGreater(entry["days"], 0)
+
+    def test_unknown_effort_requires_an_explanation_and_zero_is_not_unknown(self):
+        import json
+        import tempfile
+
+        payload = json.loads((REPO_ROOT / "docs/goals/roadmap.json").read_text())
+        entry = payload["slices"][0]
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "roadmap.json"
+            for days, note in ((None, None), (None, " "), (0, "Unestimated")):
+                with self.subTest(days=days, note=note):
+                    entry.update(days=days, effort_note=note)
+                    path.write_text(json.dumps(payload), encoding="utf-8")
+                    with self.assertRaises(RoadmapError):
+                        load(path)
+            entry.update(days=None, effort_note="Estimate after the device trial.")
+            path.write_text(json.dumps(payload), encoding="utf-8")
+            self.assertIsNone(load(path).slices[0]["days"])
+
+    def test_status_does_not_total_an_unestimated_phase(self):
+        import argparse
+        import contextlib
+        import io
+        from dataclasses import replace
+        from unittest.mock import patch
+        from sto.cli.roadmap import _status
+
+        roadmap = load()
+        slices = tuple(dict(entry) for entry in roadmap.slices)
+        target = next(entry for entry in slices if entry["id"] == "PL4")
+        target.update(days=None, status="not_started", effort_note="Await device trial.")
+        trial = replace(roadmap, current_phase="P2", slices=slices)
+        output = io.StringIO()
+        with patch("sto.cli.roadmap.load", return_value=trial):
+            with contextlib.redirect_stdout(output):
+                self.assertEqual(_status(argparse.Namespace()), 0)
+        self.assertIn("effort   unestimated for PL4", output.getvalue())
+        self.assertIn("Await device trial.", output.getvalue())
+        self.assertNotIn("slice-days left in this phase", output.getvalue())
+
+    def test_status_still_totals_a_fully_estimated_phase(self):
+        import argparse
+        import contextlib
+        import io
+        from dataclasses import replace
+        from unittest.mock import patch
+        from sto.cli.roadmap import _status
+
+        roadmap = load()
+        members = set(roadmap.phase("P2")["slices"])
+        slices = tuple(dict(entry) for entry in roadmap.slices)
+        for entry in slices:
+            if entry["id"] in members:
+                entry.update(days=2, status="not_started")
+        trial = replace(roadmap, current_phase="P2", slices=slices)
+        output = io.StringIO()
+        with patch("sto.cli.roadmap.load", return_value=trial):
+            with contextlib.redirect_stdout(output):
+                self.assertEqual(_status(argparse.Namespace()), 0)
+        self.assertIn(f"effort   {2 * len(members)} slice-days left", output.getvalue())
+        self.assertNotIn("effort   unestimated", output.getvalue())
 
 
 class ConformanceCorpusTests(unittest.TestCase):

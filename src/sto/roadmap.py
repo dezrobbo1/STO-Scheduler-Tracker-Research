@@ -11,8 +11,9 @@ A test evaluates those predicates, so a rule marked pending whose machinery has
 appeared fails the suite and asks to be promoted. Nobody has to remember.
 
 Two things beside the registry live here for the same reason. Effort is
-recorded per slice in days, so a total is derived rather than written down and
-cannot go stale in prose. External dependencies -- a Primavera file, a CMMS
+recorded per slice in days, or explicitly unestimated with a reason and a point
+to revisit it; unknown effort must not disappear into a numeric total.
+External dependencies -- a Primavera file, a CMMS
 extract -- are rows with the slices and criteria they gate, so a gate that
 cannot be crossed says so now rather than in the week it is reached.
 
@@ -181,6 +182,19 @@ def load(path: Path | None = None) -> Roadmap:
             raise RoadmapError(
                 f"slice {entry['id']} says phase {entry['phase']!r} but "
                 f"{'no phase' if listed is None else listed} lists it"
+            )
+        if "days" not in entry:
+            raise RoadmapError(f"slice {entry['id']} has no effort declaration")
+        days = entry["days"]
+        if days is None:
+            note = entry.get("effort_note")
+            if not isinstance(note, str) or not note.strip():
+                raise RoadmapError(
+                    f"slice {entry['id']}: unestimated effort needs an effort_note"
+                )
+        elif type(days) is not int or days <= 0:
+            raise RoadmapError(
+                f"slice {entry['id']}: days must be a positive integer or null"
             )
 
     for rule in rules:

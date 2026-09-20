@@ -1,6 +1,6 @@
 {
   "schema_version": "sto-roadmap-1",
-  "note": "Time-varying truth: phases, slices, gate criteria and the rule registry. AGENTS.md holds the durable rules; docs/roadmap/CONSOLIDATION-PLAN.md is the frozen design record and does not describe current status. The generated regions of docs/goals/ACTIVE.md come from here - run `sto roadmap render` after editing.",
+  "note": "Time-varying truth: phases, slices, gate criteria and the rule registry. AGENTS.md holds the durable rules; docs/roadmap/CONSOLIDATION-PLAN.md is the frozen design record and does not describe current status. The generated regions of docs/goals/ACTIVE.md come from here - run `sto roadmap render` after editing. Slice days are a positive planning estimate, or null with an effort_note explaining why and when to estimate; null never means zero effort.",
   "current_phase": "P1",
   "foreign_prefixes": [
     "dezrobbo1/",
@@ -213,12 +213,14 @@
       "id": "P2",
       "title": "Live execution loop",
       "status": "not_started",
+      "effort_note": "Scope has grown materially. PL4 and PL5's original allowances no longer describe the shared delivery and mobile recovery work, and PL15 was not budgeted. Re-estimate P2 after PL5's early real-device trial establishes the mobile, authentication and media recovery boundary; no complete phase effort total is currently supported.",
       "slices": [
         "S7",
         "PL4",
         "PL5",
         "PL6",
-        "PL7"
+        "PL7",
+        "PL15"
       ],
       "gate": [
         {
@@ -229,7 +231,7 @@
         },
         {
           "id": "P2-G2",
-          "text": "Progress reaches a subscribed client in under a second at the 95th percentile on a real-sized schedule",
+          "text": "An accepted live execution update reaches a subscribed client in under a second at the 95th percentile on a real-sized schedule, with the workload and connected trial conditions recorded",
           "met": false,
           "evidence": null
         },
@@ -241,13 +243,19 @@
         },
         {
           "id": "P2-G4",
-          "text": "Three tasks reported in airplane mode arrive when connectivity returns, recorded in docs/evidence",
+          "text": "A two-device field trial queues supported execution reports for three tasks and communication operations while both devices are offline, survives application process termination and reopening, reconnects and synchronises without loss or duplicate accepted records or effects, preserving activity association and deterministic server acceptance ordering; recorded in docs/evidence",
           "met": false,
           "evidence": null
         },
         {
           "id": "P2-G5",
-          "text": "The approved forecast moves only on planner approval",
+          "text": "The approved forecast moves only on planner approval, with reported progress passing supervisor then planner review",
+          "met": false,
+          "evidence": null
+        },
+        {
+          "id": "P2-G6",
+          "text": "Communication and media leave execution state, schedule state and schedule hashes unchanged; a separate authorised execution command against the same activity is independently audited and causes the corresponding live recalculation and subscribed update without bypassing approved-forecast review",
           "met": false,
           "evidence": null
         }
@@ -523,38 +531,102 @@
     },
     {
       "id": "S7",
-      "title": "Execution layer and incremental rescheduling",
+      "title": "Execution semantics and deterministic recalculation",
       "phase": "P2",
       "status": "not_started",
-      "days": 5
+      "days": 5,
+      "scope": [
+        "Authoritative actual start, actual finish, remaining duration and supported progress semantics; execution-domain validation and deterministic recalculation, including incremental/full equivalence.",
+        "Human communication is descriptive context outside the scheduling engine. Only explicit authorised execution commands can supply execution changes; percentage conversion remains an evidenced API-edge obligation under ADR-009."
+      ]
     },
     {
       "id": "PL4",
-      "title": "Live loop API, events and audit",
+      "title": "Live event API, sync, idempotency and audit",
       "phase": "P2",
       "status": "not_started",
-      "days": 5
+      "days": null,
+      "effort_note": "The former live-loop allowance is superseded by shared event acceptance, authorisation, catch-up and recovery scope. Re-estimate with PL5's early real-device trial.",
+      "scope": [
+        "Authenticated, project-scoped submission with immutable client operation identity, semantic payload fingerprint, idempotent acceptance and effects; conflicting reuse of an identity is refused.",
+        "Append-only accepted history, audit and provenance; authoritative acceptance time and committed server order distinct from client time and local order.",
+        "Realtime subscription, reconnect and explicit missed-event catch-up/sync shared by execution and communication without merging their domain objects or putting communication/media into schedule hashes.",
+        "Define operation-specific permission, conflict, receipt and replay rules with S7/PL5. Functional delivery requirements are transport-neutral; authenticated HTTP POST plus SSE is provisional in ADR-016."
+      ],
+      "acceptance": [
+        "A retry after acceptance but lost acknowledgement returns the existing authorised receipt and repeats no effect; the same identity with different operation semantics is refused, including concurrent retries.",
+        "An authenticated subscriber recovers missed committed events through catch-up after reconnect without gaps or duplicate effects; sync and attachments respect current project access.",
+        "The execution update log reproduces authoritative state and the head hash independently of communication/media traffic; P2-G2 bounds only the recorded connected execution workload."
+      ]
     },
     {
       "id": "PL5",
-      "title": "Field app, offline",
+      "title": "Offline field app, durable outbox and device recovery",
       "phase": "P2",
       "status": "not_started",
-      "days": 5
+      "days": null,
+      "effort_note": "Durable state, mixed queued work, account lifecycle and real-device recovery exceed a simple field-app port. Re-estimate after the early device trial, before committing the mobile architecture or a complete P2 total.",
+      "scope": [
+        "Durable local and cached field state, immediate optimistic interaction and an outbox for execution commands, communication operations and media references/transfers.",
+        "Automatic retry/backoff, connectivity transitions, process termination/reopening and reconciliation; media dependencies must not block unrelated text or execution work.",
+        "Account/session expiry, logout, disabled accounts, revoked membership, changed permissions and long-offline queues; queued work retains its actor/project identity and acquires no authority from former permission.",
+        "Early bounded real-device trial of the PL15 text/photo/annotation path against PL4/S7 foundations, before full PL15. Validate iOS and Android durable storage, suspension, process termination, reconnect, push deep links, media recovery and authentication lifecycle; framework and local database remain undecided."
+      ],
+      "acceptance": [
+        "The two-device offline execution/communication trial in P2-G4 survives process termination and reopening, preserves activity identity and visibly distinguishes queued, accepted, rejected and applied work.",
+        "Exercise an expired session and a membership revoked while offline: reconnect enforces current access before submission or refresh, reauthentication resumes only permitted work, and logout/account switching cannot expose or reattribute another actor's queue. Record the bounded local-access policy while revocation is unknowable offline.",
+        "Record the device/build and lifecycle matrix, including device restart where supported, app-upgrade outbox handling and transfer recovery. Use the thin PL15 trial to decide whether React plus Capacitor is sufficient and which native capabilities are needed; do not claim full PL15 acceptance."
+      ]
     },
     {
       "id": "PL6",
-      "title": "Review chain as export governance",
+      "title": "Supervisor/planner review and approved forecast",
       "phase": "P2",
       "status": "not_started",
-      "days": 4
+      "days": 4,
+      "scope": [
+        "Supervisor then planner review of execution reports and governed movement of the approved forecast; corrections supersede history.",
+        "A message, reaction, Critical placement or notification acknowledgement cannot approve progress. Review actions remain distinct authorised operations even when linked from a communication timeline."
+      ]
     },
     {
       "id": "PL7",
-      "title": "Planner editing, lease and scenarios",
+      "title": "Planner editing, leases and scenarios",
       "phase": "P2",
       "status": "not_started",
-      "days": 5
+      "days": 5,
+      "scope": [
+        "Planner edits, lease contention and immutable scenarios with governed promotion; distinguish planner authority from permission to communicate.",
+        "Resolve execution conflicts under explicit version/authority rules with S7/PL4; a communication send needs no planner edit lease and cannot publish a scenario."
+      ]
+    },
+    {
+      "id": "PL15",
+      "title": "Field communication, activity context, photos, markup and notifications",
+      "phase": "P2",
+      "status": "not_started",
+      "days": null,
+      "effort_note": "New product scope absent from the original P2 budget. Estimate after PL5's early real-device trial; full delivery follows PL6/PL7 and includes the mandatory media and authority acceptance below.",
+      "product_contract": "docs/product/field-communication.md",
+      "architecture": "docs/adr/ADR-016-field-communication-offline-delivery-and-execution-authority.md",
+      "scope": [
+        "Build on PL4 delivery and PL5 offline state/outbox. Ordinary messages require no mandatory classification form; Execution, Critical and Housekeeping are the initial UX configuration, not immutable domain categories.",
+        "Fast text, replies, mentions, simple reactions, timestamps, inherited activity context, activity links/deep links and useful labelled system/execution events in timelines.",
+        "Photo capture/selection, annotation, visible upload/sync state and recoverable nonblocking transfer; immutable original with derivatives, annotation representation and rendered annotation as required by the product contract, outside schedule-authoritative state.",
+        "Notifications for messages, mentions, replies, critical communication and relevant activity updates, subject to membership and preferences; push is a hint to authenticated sync, not delivery or review authority.",
+        "Link STO activity identity now, retaining historical context on re-import. Work-order/equipment enrichment follows CMMS availability without making P4 a prerequisite. Manual Critical placement remains distinct from calculated criticality."
+      ],
+      "acceptance": [
+        "On two real devices, open Execution, send normal text and associate it with an activity; capture/select a photo, annotate with arrow/circle/text, and send or queue it without blocking continued use.",
+        "Lose connectivity, create further communication, terminate and reopen the app, then reconnect automatically; the other device receives accepted content without duplicate accepted message or attachment records, with deterministic server acceptance order and preserved activity association.",
+        "Interrupt media transfer and recover it; preserve the immutable original, annotation representation and useful rendered annotation. Distinguish an accepted message with pending media from a completed transfer; reconcile lost acknowledgements and orphaned upload metadata under a recorded cleanup policy.",
+        "Messages, replies, reactions, media, annotations and delivery/notification changes cause no execution or schedule mutation and no schedule-hash change. Submit a separate authorised execution command for the same activity: independently audit it, recalculate live via S7 and show the subscribed result while approval remains separate.",
+        "Exercise replies, mentions, simple reactions, activity deep links and permission-checked notification/deep-link behaviour. Record iOS/Android builds, lifecycle limits and field usability against the product contract; no arbitrary media latency target is claimed."
+      ],
+      "excludes": [
+        "Voice and video; Teams-style collaboration or arbitrary nested team/channel structures; rich incident rooms.",
+        "PL9 problems/actions and handover workflow, automated handover generation, PL10 advanced critical-watch analytics, and AI-generated operational summaries."
+      ]
     },
     {
       "id": "I5",
@@ -645,14 +717,22 @@
       "title": "Problems, actions, evidence and handover",
       "phase": "P5",
       "status": "not_started",
-      "days": 5
+      "days": 5,
+      "scope": [
+        "Structured problems, actions, owners, due dates, status and handover visibility reuse PL15 communication/evidence identities and PL4/PL5 delivery/offline primitives; do not build another messaging or media subsystem.",
+        "Creating a problem from a message or annotated photo preserves its provenance. Any supported execution consequence requires a distinct authorised execution operation, not inference from problem text."
+      ]
     },
     {
       "id": "PL10",
       "title": "Critical watch and reporting periods",
       "phase": "P5",
       "status": "not_started",
-      "days": 4
+      "days": 4,
+      "scope": [
+        "Critical watch, near-critical monitoring, escalation, reporting periods and richer schedule-derived views build on PL15 activity context and communication.",
+        "Preserve human Critical placement separately from deterministic calculated critical-path state; historical calculated context identifies its schedule version and does not masquerade as current criticality."
+      ]
     },
     {
       "id": "S9",
@@ -742,6 +822,17 @@
         "path": "infra/migrations"
       },
       "enforced_by": "tests/test_migrations_are_immutable.py"
+    },
+    {
+      "id": "PR-communication-not-authority",
+      "summary": "Communication and media cannot mutate execution or schedule state or enter schedule hashes; an explicit authorised execution command is validated and audited separately",
+      "owed_to": "PL15",
+      "status": "pending",
+      "live_when": {
+        "kind": "path_exists",
+        "path": "src/sto/communication"
+      },
+      "enforced_by": null
     },
     {
       "id": "PR-legacy-retirement",

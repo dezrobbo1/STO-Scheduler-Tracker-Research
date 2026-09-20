@@ -36,12 +36,22 @@ def _status(args: argparse.Namespace) -> int:
             )
 
     members = set(phase.get("slices", ()))
-    remaining = sum(
-        entry["days"]
+    unfinished = [
+        entry
         for entry in roadmap.slices
         if entry["id"] in members and entry["status"] != "done"
-    )
-    print(f"effort   {remaining} slice-days left in this phase, before contingency")
+    ]
+    unestimated = [entry["id"] for entry in unfinished if entry["days"] is None]
+    if unestimated:
+        print(f"effort   unestimated for {', '.join(unestimated)}; no complete phase total")
+        for entry in unfinished:
+            if entry["days"] is None:
+                print(f"         {entry['id']}: {entry['effort_note']}")
+    else:
+        remaining = sum(entry["days"] for entry in unfinished)
+        print(f"effort   {remaining} slice-days left in this phase, before contingency")
+    if phase.get("effort_note"):
+        print(f"         {phase['effort_note']}")
 
     blocked = roadmap.blockers_for(*phase.get("slices", ()))
     if blocked:

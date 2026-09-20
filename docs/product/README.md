@@ -1,14 +1,15 @@
 # Product contracts
 
-Stack-independent contracts that outlived the repositories they were written in.
-They describe behaviour the product owes, not how any one implementation
-provides it, and they are copied here rather than rewritten — verbatim except
-for an editor's note at the top and the removal of customer task names, which
-this repository does not carry.
+Stack-independent contracts describe behaviour the product owes, not how any
+one implementation provides it. STO-authored contracts identify their roadmap
+owner and implementation status. Inherited contracts are copied rather than
+rewritten — verbatim except for a provenance note and the removal of customer
+task names, which this repository does not carry.
 
 | Document | Origin |
 |---|---|
 | `docs/product/project-progress-field-contract.md` | `dezrobbo1/Shutdown-Tracker-Claude`, `origin/main` at `135218f`, blob `a5432ce096a7c5c720168dab304632f7273de438` |
+| `docs/product/field-communication.md` | STO-authored, future PL15 behaviour and device acceptance under ADR-016; implementation pending. |
 
 `project-progress-field-contract.md` is the specification for the proven
 Microsoft Project completion transaction — the full field set Project itself

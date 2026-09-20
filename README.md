@@ -34,7 +34,7 @@ their identity forward, which are new, and which the later file no longer has.
 | Working mode and boundaries | `AGENTS.md` |
 | Decisions | `docs/adr/`, with `docs/adr/LEGACY-INDEX.md` mapping the frozen repositories' ADRs |
 | The design, frozen 2026-09-02 and not maintained | `docs/roadmap/CONSOLIDATION-PLAN.md` |
-| Product contracts carried from the frozen repositories | `docs/product/` |
+| Current and inherited product contracts | `docs/product/` |
 | Native round-trip evidence | `docs/evidence/` |
 | How decisions were reached | `docs/history/` |
 | Real schedules: hashes, provenance, recovery | `fixtures/README.md` |
