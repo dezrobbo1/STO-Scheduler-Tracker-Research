@@ -1509,6 +1509,21 @@ def _rebuild_result(
     """
 
     profiles = header["profiles"]
+    if profiles["result"] == "sto-result-v1":
+        unauthenticated = next(
+            (
+                row
+                for row in rows
+                if row.get("late_remaining_start") is not None
+            ),
+            None,
+        )
+        if unauthenticated is not None:
+            raise IntegrityError(
+                "legacy sto-result-v1 calculation "
+                f"{header['id']} contains late_remaining_start for activity "
+                f"{unauthenticated['activity_uid']}"
+            )
     provenance = Provenance(
         canonical_hash=header["canonical_hash"],
         epoch=header["epoch"],

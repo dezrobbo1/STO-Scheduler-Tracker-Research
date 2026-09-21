@@ -331,6 +331,13 @@ def build_plan(
         actual = activity.actual_duration
         if actual is None or actual.seconds != 0 or actual.elapsed:
             reasons.append("actual duration is not measured zero")
+        task_actual_work = activity.actual_work
+        if "actual_work_unsupported_source" in activity.source_fields:
+            reasons.append("task actual work is unreadable")
+        elif task_actual_work is None:
+            reasons.append("task actual work is absent")
+        elif task_actual_work.seconds != 0:
+            reasons.append("task actual work is not measured zero")
         split_markers = (activity.suspend, activity.resume)
         if split_markers not in (
             (None, None),
@@ -347,12 +354,22 @@ def build_plan(
             )
         ):
             reasons.append("reported percentage progress is outside the measured shape")
+        activity_assignments = assignment_rows_by_activity.get(activity.uid, ())
         if any(
-            row.work.actual_seconds != 0
-            or row.percent_work_complete_permille != 0
-            for row in assignment_rows_by_activity.get(activity.uid, ())
+            "actual_work_unsupported_source" in row.source_fields
+            for row in activity_assignments
         ):
-            reasons.append("assignment actual work is outside the measured shape")
+            reasons.append("assignment actual work is unreadable")
+        if any(
+            "actual_work_unsupported_source" not in row.source_fields
+            and row.source_fields.get("actual_work_source_present") != "1"
+            for row in activity_assignments
+        ):
+            reasons.append("assignment actual work is absent")
+        if any(row.work.actual_seconds != 0 for row in activity_assignments):
+            reasons.append("assignment actual work is not measured zero")
+        if any(row.percent_work_complete_permille != 0 for row in activity_assignments):
+            reasons.append("assignment percentage progress is outside the measured shape")
         primary = activity.primary_constraint
         if (
             primary is not None

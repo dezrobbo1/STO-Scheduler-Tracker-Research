@@ -77,6 +77,54 @@ def _imported(extra_on_first=""):
         path.write_text(_PROJECT.format(tasks=tasks), encoding="utf-8")
         yield import_mspdi(str(path))
 
+
+@contextmanager
+def _imported_progress_chain(
+    *,
+    task_actual_work: str | None = "PT0S",
+    assignment_actual_work: str | None = "PT0S",
+):
+    """A started middle task with the exact relationship shape under review."""
+
+    def element(name: str, value: str | None) -> str:
+        return "" if value is None else f"<{name}>{value}</{name}>"
+
+    predecessor = (
+        "<PredecessorLink><PredecessorUID>{uid}</PredecessorUID>"
+        "<Type>1</Type><LinkLag>0</LinkLag><LagFormat>7</LagFormat>"
+        "</PredecessorLink>"
+    )
+    middle_extra = (
+        "<ActualStart>2026-01-05T08:00:00</ActualStart>"
+        "<ActualDuration>PT0S</ActualDuration>"
+        f"{element('ActualWork', task_actual_work)}"
+        f"{predecessor.format(uid=1)}"
+    )
+    tasks = (
+        _TASK.format(uid=1, extra="")
+        + _TASK.format(uid=2, extra=middle_extra)
+        + _TASK.format(uid=3, extra=predecessor.format(uid=2))
+    )
+    resource = (
+        "<Resource><UID>1</UID><Name>R1</Name><Type>1</Type>"
+        "<CalendarUID>1</CalendarUID></Resource>"
+    )
+    assignment = (
+        "<Assignment><UID>1</UID><TaskUID>2</TaskUID><ResourceUID>1</ResourceUID>"
+        "<Units>1</Units><Work>PT1H</Work>"
+        f"{element('ActualWork', assignment_actual_work)}"
+        "<RemainingWork>PT1H</RemainingWork><PercentWorkComplete>0</PercentWorkComplete>"
+        "</Assignment>"
+    )
+    xml = _PROJECT.format(tasks=tasks).replace(
+        "<Resources/><Assignments/>",
+        f"<Resources>{resource}</Resources><Assignments>{assignment}</Assignments>",
+    )
+    with tempfile.TemporaryDirectory() as directory:
+        path = Path(directory) / "actual-work-boundary.mspdi.xml"
+        path.write_text(xml, encoding="utf-8")
+        yield import_mspdi(str(path))
+
 HORIZON = (datetime(2026, 1, 5) - timedelta(days=7), datetime(2026, 1, 5) + timedelta(days=60))
 
 
@@ -141,6 +189,71 @@ class InProgressLateDateClaimBoundaryTests(unittest.TestCase):
 
     def test_the_two_trial_shape_is_not_labelled_as_an_assumption(self):
         self.assertNotIn(self.CODE, self._codes_for_middle(self._document_for()))
+
+    def _imported_actual_work_boundary(
+        self,
+        *,
+        task_actual_work: str | None = "PT0S",
+        assignment_actual_work: str | None = "PT0S",
+    ):
+        with _imported_progress_chain(
+            task_actual_work=task_actual_work,
+            assignment_actual_work=assignment_actual_work,
+        ) as document:
+            schedule, _, _ = migrate(document)
+        plan = build_plan(schedule, HORIZON)
+        middle = next(row for row in schedule.activities if row.code == "2")
+        assumptions = [
+            row for row in plan.assumed if row.uid == middle.uid and row.code == self.CODE
+        ]
+        return schedule, middle, assumptions
+
+    def test_explicit_zero_task_and_assignment_actual_work_is_measured(self):
+        _, _, assumptions = self._imported_actual_work_boundary()
+        self.assertEqual(assumptions, [])
+
+    def test_nonzero_task_actual_work_is_outside_the_measured_shape(self):
+        _, _, assumptions = self._imported_actual_work_boundary(task_actual_work="PT15M")
+        self.assertEqual(len(assumptions), 1)
+        self.assertIn("task actual work is not measured zero", assumptions[0].detail)
+
+    def test_nonzero_assignment_actual_work_is_outside_the_measured_shape(self):
+        _, _, assumptions = self._imported_actual_work_boundary(
+            assignment_actual_work="PT15M"
+        )
+        self.assertEqual(len(assumptions), 1)
+        self.assertIn("assignment actual work is not measured zero", assumptions[0].detail)
+
+    def test_unreadable_task_actual_work_is_outside_the_measured_shape(self):
+        schedule, middle, assumptions = self._imported_actual_work_boundary(
+            task_actual_work="P1M"
+        )
+        self.assertEqual(middle.source_fields["actual_work_unsupported_source"], "P1M")
+        self.assertEqual(len(assumptions), 1)
+        self.assertIn("task actual work is unreadable", assumptions[0].detail)
+
+    def test_unreadable_assignment_actual_work_is_outside_the_measured_shape(self):
+        schedule, middle, assumptions = self._imported_actual_work_boundary(
+            assignment_actual_work="P1M"
+        )
+        assignment = next(
+            row for row in schedule.assignments if row.activity_uid == middle.uid
+        )
+        self.assertEqual(assignment.source_fields["actual_work_unsupported_source"], "P1M")
+        self.assertEqual(len(assumptions), 1)
+        self.assertIn("assignment actual work is unreadable", assumptions[0].detail)
+
+    def test_absent_task_actual_work_is_not_inferred_to_be_zero(self):
+        _, _, assumptions = self._imported_actual_work_boundary(task_actual_work=None)
+        self.assertEqual(len(assumptions), 1)
+        self.assertIn("task actual work is absent", assumptions[0].detail)
+
+    def test_absent_assignment_actual_work_is_not_inferred_to_be_zero(self):
+        _, _, assumptions = self._imported_actual_work_boundary(
+            assignment_actual_work=None
+        )
+        self.assertEqual(len(assumptions), 1)
+        self.assertIn("assignment actual work is absent", assumptions[0].detail)
 
     def test_broader_started_work_shapes_are_labelled(self):
         variants = (

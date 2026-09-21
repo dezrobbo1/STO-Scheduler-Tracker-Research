@@ -842,6 +842,109 @@ class AStoredCalculationComesBackTests(unittest.TestCase):
         self.assertLess(persisted.late_finish, persisted.late_start)
         self.assertEqual(reread.result.fingerprint, candidate.fingerprint)
 
+    def test_legacy_v1_rejects_an_added_late_remaining_start(self):
+        """A v1 fingerprint cannot authenticate the coordinate V007 added."""
+
+        from sto.persistence import repositories as repo
+        from sto.scheduling.working_schedule import IntegrityError
+
+        workspace, project_id = self._imported()
+        stored = workspace.calculate(project_id)
+        _, current = _projected(FIXTURE)
+        target = next(row for row in current.activities if row.disposition == SCHEDULED)
+        legacy_target = replace(
+            target,
+            state="in_progress",
+            remaining_start=target.early_start,
+            late_remaining_start=None,
+        )
+        legacy_rows = tuple(
+            legacy_target if row.uid == target.uid else row for row in current.activities
+        )
+        legacy = replace(
+            current,
+            provenance=replace(current.provenance, result_profile="sto-result-v1"),
+            activities=legacy_rows,
+            fingerprint="",
+        )
+        legacy = replace(legacy, fingerprint=fingerprint_result(legacy))
+
+        with self.connect() as conn:
+            calculation_id = repo.insert_calculation(
+                conn,
+                project_id=project_id,
+                version_id=stored.version_id,
+                result=legacy,
+            )
+            conn.commit()
+        self.assertIsNotNone(calculation_id)
+        genuine = workspace.read_calculation(project_id, calculation_id=calculation_id)
+        self.assertEqual(genuine.result.fingerprint, legacy.fingerprint)
+        self.assertIsNone(genuine.result.by_uid()[target.uid].late_remaining_start)
+
+        with self.connect() as conn:
+            conn.execute(
+                """
+                UPDATE activity_results SET late_remaining_start = late_start
+                WHERE calculation_id = %s AND activity_uid = %s
+                """,
+                (calculation_id, target.uid),
+            )
+            conn.commit()
+        with self.assertRaises(IntegrityError):
+            workspace.read_calculation(project_id, calculation_id=calculation_id)
+
+    def test_v2_late_remaining_start_tampering_is_fingerprint_detected(self):
+        from sto.persistence import repositories as repo
+        from sto.scheduling.working_schedule import IntegrityError
+
+        workspace, project_id = self._imported()
+        stored = workspace.calculate(project_id)
+        _, expected = _projected(FIXTURE)
+        target = next(row for row in expected.activities if row.disposition == SCHEDULED)
+        changed = replace(
+            target,
+            state="in_progress",
+            remaining_start=target.early_start,
+            late_remaining_start=target.late_start,
+        )
+        candidate = replace(
+            expected,
+            activities=tuple(
+                changed if row.uid == target.uid else row for row in expected.activities
+            ),
+            fingerprint="",
+        )
+        candidate = replace(candidate, fingerprint=fingerprint_result(candidate))
+        with self.connect() as conn:
+            calculation_id = repo.insert_calculation(
+                conn,
+                project_id=project_id,
+                version_id=stored.version_id,
+                result=candidate,
+            )
+            conn.commit()
+        self.assertIsNotNone(calculation_id)
+        self.assertEqual(
+            workspace.read_calculation(
+                project_id, calculation_id=calculation_id
+            ).result.fingerprint,
+            candidate.fingerprint,
+        )
+
+        with self.connect() as conn:
+            conn.execute(
+                """
+                UPDATE activity_results
+                SET late_remaining_start = late_remaining_start - interval '1 minute'
+                WHERE calculation_id = %s AND activity_uid = %s
+                """,
+                (calculation_id, target.uid),
+            )
+            conn.commit()
+        with self.assertRaises(IntegrityError):
+            workspace.read_calculation(project_id, calculation_id=calculation_id)
+
     def test_recalculating_the_same_head_stores_a_second_run_not_an_edit(self):
         """A calculation is immutable, like the version it was computed from."""
 
