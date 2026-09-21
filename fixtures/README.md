@@ -36,7 +36,8 @@ matrix (BOILER baseline, KILN and CALCINER). `STO_REQUIRE_NATIVE=1` separately
 requires the two Project-recalculated completion files, and
 `STO_REQUIRE_CONTROLLED_NATIVE=1` requires the controlled in-progress pair.
 `STO_REQUIRE_CONTROLLED_NATIVE_REPEAT=1` requires the baseline and clean UID
-227 repeat that close P1-G2/P1-G3.
+227 repeat that closes P1-G3; it does not close the separate P1-G2 static
+baseline-reconciliation gate.
 `STO_REQUIRE_DAY5=1` requires the exact day-5 candidate. Use only the switch for
 the evidence claim being gated.
 
@@ -158,8 +159,11 @@ this exact pair missing or wrong-identity a hard failure.
 The separately predeclared UID 227 repeat is also evaluated in
 `docs/evidence/p1-final-native-progress-2026-09-20.md`. All 43 result fields
 changed by Project across the predicted 12-row cohort agree exactly with the
-independent engine, and no field is unexplained. That result closes P1-G2 and
-P1-G3, so P1 is 5/5 and passed. The first run's three unexplained fields remain
-recorded; they were not retrospectively reclassified.
+independent engine, with zero unexpected transition differences. That result
+closes P1-G3 only. P1-G2 remains open because the full-leaf static comparison
+contains 422 `BASELINE_MISMATCH` field instances across 105 leaf identities.
+P1 is therefore 4/5 and in progress, and P2 is not started. The first run's
+three unexplained fields remain recorded; they were not retrospectively
+reclassified.
 `STO_REQUIRE_CONTROLLED_NATIVE_REPEAT=1` makes the verified baseline/repeat pair
 missing or wrong-identity a hard failure.

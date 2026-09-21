@@ -61,6 +61,11 @@ EXCLUDED = "excluded"
 #: scheduled edge either, since it took no part in the late dates or the float.
 RELEASED = "released"
 
+#: The activity itself uses the broader, labelled in-progress late-date rule.
+DIRECT_PROGRESS_ASSUMPTION = "ACTIVITY_IN_PROGRESS_LATE_DATES_ASSUMED"
+#: This otherwise supported row consumed a late boundary carrying that rule.
+DERIVED_PROGRESS_ASSUMPTION = "ACTIVITY_LATE_DATES_DEPEND_ON_ASSUMED_PROGRESS"
+
 
 @dataclass(frozen=True, slots=True)
 class Provenance:
@@ -280,6 +285,31 @@ def project_result(
                 plan.progress_policy.value,
             )
         )
+
+    # A late driver is the relationship whose successor boundary actually won
+    # the backward calculation for this row. Follow that recorded result in
+    # reverse topological order: direct unsupported progress seeds the set, and
+    # only a row whose chosen driver consumes a seeded or derived successor is
+    # labelled in turn. This excludes connected but non-driving alternatives,
+    # while released and endpoint-dropped edges cannot appear as late drivers.
+    late_by_uid = backward.by_uid()
+    relationship_by_uid = {row.uid: row for row in plan.network.relationships}
+    progress_dependent = {
+        uid
+        for uid, codes in assumptions.items()
+        if DIRECT_PROGRESS_ASSUMPTION in codes
+    }
+    for uid in backward.order:
+        if uid in progress_dependent:
+            continue
+        driver_uid = late_by_uid[uid].driving_relationship_uid
+        if driver_uid is None:
+            continue
+        relationship = relationship_by_uid[driver_uid]
+        if relationship.successor_uid not in progress_dependent:
+            continue
+        assumptions.setdefault(uid, []).append(DERIVED_PROGRESS_ASSUMPTION)
+        progress_dependent.add(uid)
 
     # Two things the passes report and the plan does not know about. Both
     # describe a placement that rests on something other than measured file

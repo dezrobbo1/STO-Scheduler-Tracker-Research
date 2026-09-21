@@ -43,7 +43,7 @@ from sto.core.engine.result import (
 from sto.core.hashing import canonical_sha256
 from sto.core.model.codec import encode_schedule
 from sto.core.model.entities import Constraint
-from sto.core.model.enums import ConstraintType
+from sto.core.model.enums import ConstraintType, ProgressPolicy
 from sto.core.model.migrate.sto_v011 import migrate
 from sto.legacy import import_mspdi
 
@@ -149,6 +149,169 @@ def _task(uid, hour=9):
         finish=f"2026-01-05T{hour + 1:02d}:00:00",
         duration_seconds=3600,
     )
+
+
+DIRECT_PROGRESS_ASSUMPTION = "ACTIVITY_IN_PROGRESS_LATE_DATES_ASSUMED"
+DERIVED_PROGRESS_ASSUMPTION = "ACTIVITY_LATE_DATES_DEPEND_ON_ASSUMED_PROGRESS"
+
+
+def _progress_task(uid, hour):
+    row, extensions = _task(uid, hour)
+    row.update(
+        actual_start_source=f"2026-01-05T{hour:02d}:00:00",
+        actual_duration_source=_duration(600),
+        remaining_duration_source=_duration(1800),
+    )
+    return row, extensions
+
+
+def _projected_progress_document(document, *, progress_policy=None):
+    schedule, _, _ = migrate(document)
+    if progress_policy is not None:
+        schedule = replace(
+            schedule,
+            project=replace(schedule.project, progress_policy=progress_policy),
+        )
+    plan, result = _projected_schedule(schedule)
+    return schedule, plan, result
+
+
+class ProgressAssumptionDependencyTests(unittest.TestCase):
+    """Published late dates name unsupported progress they actually consume."""
+
+    def _chain(self, length=3, *, measured=False, progress_policy=None):
+        progress = length - 1
+        rows = [_task(number, 8 + number) for number in range(1, length + 1)]
+        rows[progress - 1] = _progress_task(progress, 8 + progress)
+        if measured:
+            rows[progress - 1][0]["actual_duration_source"] = _duration(0)
+        relationships = [
+            _relationship(number, number, number + 1)
+            for number in range(1, length)
+        ]
+        document = _document(rows, relationships=relationships)
+        if progress_policy is ProgressPolicy.PROGRESS_OVERRIDE:
+            document["project"]["status_date"] = "2026-01-05T10:00:00"
+        return _projected_progress_document(
+            document,
+            progress_policy=progress_policy,
+        )
+
+    def test_the_unsupported_progress_activity_keeps_the_direct_assumption(self):
+        schedule, _, result = self._chain()
+        middle = result.by_uid()[schedule.activities[1].uid]
+        self.assertIn(DIRECT_PROGRESS_ASSUMPTION, middle.assumptions)
+        self.assertNotIn(DERIVED_PROGRESS_ASSUMPTION, middle.assumptions)
+
+    def test_the_driving_predecessor_exposes_the_derived_assumption(self):
+        schedule, plan, result = self._chain()
+        predecessor = result.by_uid()[schedule.activities[0].uid]
+        relationship = plan.network.relationships[0]
+        self.assertEqual(
+            predecessor.late_driving_relationship_uid,
+            relationship.uid,
+            "the fixture must consume the unsupported successor's late boundary",
+        )
+        self.assertIn(DERIVED_PROGRESS_ASSUMPTION, predecessor.assumptions)
+        self.assertNotIn(DIRECT_PROGRESS_ASSUMPTION, predecessor.assumptions)
+
+    def test_the_dependency_propagates_transitively_through_actual_late_drivers(self):
+        schedule, plan, result = self._chain(length=4)
+        by_uid = result.by_uid()
+        first = by_uid[schedule.activities[0].uid]
+        second = by_uid[schedule.activities[1].uid]
+        assumed = by_uid[schedule.activities[2].uid]
+        relationships = {row.uid: row for row in plan.network.relationships}
+
+        self.assertEqual(
+            relationships[first.late_driving_relationship_uid].successor_uid,
+            second.uid,
+        )
+        self.assertEqual(
+            relationships[second.late_driving_relationship_uid].successor_uid,
+            assumed.uid,
+        )
+        self.assertIn(DERIVED_PROGRESS_ASSUMPTION, first.assumptions)
+        self.assertIn(DERIVED_PROGRESS_ASSUMPTION, second.assumptions)
+        self.assertIn(DIRECT_PROGRESS_ASSUMPTION, assumed.assumptions)
+
+    def test_a_connected_but_non_driving_assumed_branch_does_not_contaminate_the_row(self):
+        rows = [
+            _task(1, 8),
+            _progress_task(2, 12),
+            _task(3, 13),
+            _activity(
+                4,
+                start="2026-01-05T09:00:00",
+                finish="2026-01-06T09:00:00",
+                duration_seconds=8 * 3600,
+            ),
+        ]
+        schedule, plan, result = _projected_progress_document(
+            _document(
+                rows,
+                relationships=[
+                    _relationship(1, 1, 2),
+                    _relationship(2, 2, 3),
+                    _relationship(3, 1, 4),
+                ],
+            )
+        )
+        predecessor = result.by_uid()[schedule.activities[0].uid]
+        relationships = {row.uid: row for row in plan.network.relationships}
+        driver = relationships[predecessor.late_driving_relationship_uid]
+
+        self.assertEqual(driver.successor_uid, schedule.activities[3].uid)
+        self.assertNotIn(DERIVED_PROGRESS_ASSUMPTION, predecessor.assumptions)
+        self.assertIn(
+            DIRECT_PROGRESS_ASSUMPTION,
+            result.by_uid()[schedule.activities[1].uid].assumptions,
+        )
+
+    def test_a_released_edge_does_not_propagate_the_assumption(self):
+        schedule, _, result = self._chain(
+            progress_policy=ProgressPolicy.PROGRESS_OVERRIDE
+        )
+        predecessor = result.by_uid()[schedule.activities[0].uid]
+        self.assertIsNone(predecessor.late_driving_relationship_uid)
+        self.assertNotIn(DERIVED_PROGRESS_ASSUMPTION, predecessor.assumptions)
+        self.assertTrue(
+            [row for row in result.relationships if row.disposition == RELEASED]
+        )
+
+    def test_an_excluded_endpoint_cannot_propagate_through_its_dropped_edge(self):
+        excluded, extensions = _task(1, 9)
+        excluded["manual"] = True
+        schedule, _, result = _projected_progress_document(
+            _document(
+                [(excluded, extensions), _progress_task(2, 10), _task(3, 11)],
+                relationships=[_relationship(1, 1, 2), _relationship(2, 2, 3)],
+            )
+        )
+        excluded_result = result.by_uid()[schedule.activities[0].uid]
+        self.assertEqual(excluded_result.disposition, EXCLUDED)
+        self.assertNotIn(DERIVED_PROGRESS_ASSUMPTION, excluded_result.assumptions)
+        self.assertIn(
+            (EXCLUDED, "RELATIONSHIP_ENDPOINT_NOT_SCHEDULED"),
+            [(row.disposition, row.code) for row in result.relationships],
+        )
+
+    def test_the_measured_controlled_shape_does_not_contaminate_predecessors(self):
+        _, _, result = self._chain(measured=True)
+        for row in result.activities:
+            self.assertNotIn(DIRECT_PROGRESS_ASSUMPTION, row.assumptions)
+            self.assertNotIn(DERIVED_PROGRESS_ASSUMPTION, row.assumptions)
+
+    def test_direct_and_derived_codes_are_in_the_final_fingerprinted_rows(self):
+        _, _, result = self._chain()
+        assumptions = [row.assumptions for row in result.activities]
+        self.assertTrue(any(DIRECT_PROGRESS_ASSUMPTION in row for row in assumptions))
+        self.assertTrue(any(DERIVED_PROGRESS_ASSUMPTION in row for row in assumptions))
+        stripped = replace(
+            result,
+            activities=tuple(replace(row, assumptions=()) for row in result.activities),
+        )
+        self.assertNotEqual(result.fingerprint, fingerprint_result(stripped))
 
 
 class WhatElseDecidedTheseDatesTests(unittest.TestCase):
