@@ -269,7 +269,7 @@ class V005UpgradeTests(unittest.TestCase):
                 }
                 <= tables
             )
-            self.assertEqual(migration_count, 6)
+            self.assertEqual(migration_count, 7)
             self.assertGreaterEqual(historic_actors, 4)
         finally:
             source_dir.cleanup()
