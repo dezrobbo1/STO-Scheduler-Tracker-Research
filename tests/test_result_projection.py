@@ -24,7 +24,7 @@ from unittest.mock import patch
 from uuid import uuid4
 from threading import Event, Thread
 
-from calculation_fixture import _activity, _document, _relationship
+from calculation_fixture import _activity, _document, _duration, _relationship
 
 from sto.core.engine import (
     backward_pass,
@@ -519,11 +519,30 @@ class TheProjectionAnswersForEveryRowTests(unittest.TestCase):
                     self.assertIsNone(row.early_start)
                     self.assertIsNotNone(row.exclusion_code)
 
+    def test_in_progress_projection_keeps_the_late_remaining_start(self):
+        rows = [_task(1), _task(2, hour=10), _task(3, hour=11)]
+        progressed = rows[1][0]
+        progressed.update(
+            actual_start_source="2026-01-05T10:00:00",
+            actual_duration_source=_duration(0),
+            remaining_duration_source=_duration(1800),
+        )
+        plan, result = _projected_document(
+            _document(
+                rows,
+                relationships=[_relationship(1, 1, 2), _relationship(2, 2, 3)],
+            )
+        )
+        middle = result.by_uid()[plan.network.activities[1].uid]
+        self.assertEqual(middle.late_start, datetime(2026, 1, 5, 10))
+        self.assertIsNotNone(middle.late_remaining_start)
+        self.assertEqual(middle.state, "in_progress")
+
     def test_the_result_names_what_produced_it(self):
         schedule, result = _projected(FIXTURE)
         provenance = result.provenance
         self.assertEqual(provenance.canonical_hash, canonical_sha256(encode_schedule(schedule)))
-        self.assertEqual(provenance.result_profile, "sto-result-v1")
+        self.assertEqual(provenance.result_profile, "sto-result-v2")
         self.assertTrue(provenance.forward_profile.startswith("sto-forward-pass-"))
         self.assertLess(provenance.horizon_start, provenance.horizon_finish)
 
@@ -531,6 +550,29 @@ class TheProjectionAnswersForEveryRowTests(unittest.TestCase):
         _, first = _projected(FIXTURE)
         _, second = _projected(FIXTURE)
         self.assertEqual(first.fingerprint, second.fingerprint)
+
+    def test_v1_fingerprints_remain_verifiable_after_the_additive_field(self):
+        _, current = _projected(FIXTURE)
+        legacy = replace(
+            current,
+            provenance=replace(current.provenance, result_profile="sto-result-v1"),
+        )
+        first = current.activities[0]
+        changed_rows = (
+            replace(first, late_remaining_start=first.late_start),
+            *current.activities[1:],
+        )
+        current_with_coordinate = replace(current, activities=changed_rows)
+        legacy_with_coordinate = replace(legacy, activities=changed_rows)
+
+        self.assertNotEqual(
+            fingerprint_result(current),
+            fingerprint_result(current_with_coordinate),
+        )
+        self.assertEqual(
+            fingerprint_result(legacy),
+            fingerprint_result(legacy_with_coordinate),
+        )
 
     def test_a_wider_window_is_a_different_calculation_and_says_so(self):
         """The horizon is the caller's choice, so it is part of the identity."""
@@ -738,7 +780,7 @@ class AStoredCalculationComesBackTests(unittest.TestCase):
 
         self.assertEqual(header["result_fingerprint"], expected.fingerprint)
         self.assertEqual(header["canonical_hash"], stored.canonical_hash)
-        self.assertEqual(header["profiles"]["result"], "sto-result-v1")
+        self.assertEqual(header["profiles"]["result"], "sto-result-v2")
         self.assertEqual(len(rows), len(expected.activities))
         self.assertEqual(
             len(summaries), len(expected.summaries) + len(expected.empty_summaries)
@@ -751,9 +793,54 @@ class AStoredCalculationComesBackTests(unittest.TestCase):
                 self.assertEqual(row["disposition"], source.disposition)
                 self.assertEqual(row["early_start"], source.early_start)
                 self.assertEqual(row["late_finish"], source.late_finish)
+                self.assertEqual(
+                    row["late_remaining_start"], source.late_remaining_start
+                )
                 self.assertEqual(row["total_float_seconds"], source.total_float)
                 self.assertEqual(row["critical"], source.critical)
                 self.assertEqual(row["exclusion_code"], source.exclusion_code)
+
+    def test_negative_float_progress_keeps_both_late_start_coordinates(self):
+        """The public actual start may follow the late remaining finish."""
+
+        from sto.persistence import repositories as repo
+
+        workspace, project_id = self._imported()
+        stored = workspace.calculate(project_id)
+        _, expected = _projected(FIXTURE)
+        target = next(row for row in expected.activities if row.disposition == SCHEDULED)
+        public_actual_start = target.late_finish + timedelta(hours=1)
+        changed = replace(
+            target,
+            state="in_progress",
+            remaining_start=target.early_start,
+            late_start=public_actual_start,
+            late_remaining_start=target.late_start,
+        )
+        rows = tuple(
+            changed if row.uid == target.uid else row for row in expected.activities
+        )
+        candidate = replace(expected, activities=rows, fingerprint="")
+        candidate = replace(candidate, fingerprint=fingerprint_result(candidate))
+
+        with self.connect() as conn:
+            calculation_id = repo.insert_calculation(
+                conn,
+                project_id=project_id,
+                version_id=stored.version_id,
+                result=candidate,
+            )
+            conn.commit()
+        self.assertIsNotNone(calculation_id)
+        reread = workspace.read_calculation(
+            project_id,
+            calculation_id=calculation_id,
+        )
+        persisted = reread.result.by_uid()[target.uid]
+        self.assertEqual(persisted.late_start, public_actual_start)
+        self.assertEqual(persisted.late_remaining_start, target.late_start)
+        self.assertLess(persisted.late_finish, persisted.late_start)
+        self.assertEqual(reread.result.fingerprint, candidate.fingerprint)
 
     def test_recalculating_the_same_head_stores_a_second_run_not_an_edit(self):
         """A calculation is immutable, like the version it was computed from."""

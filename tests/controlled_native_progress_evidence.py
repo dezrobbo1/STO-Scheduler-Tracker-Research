@@ -26,6 +26,7 @@ RESULT_FIELDS = (
 )
 
 UNCHANGED = "UNCHANGED"
+BASELINE_MISMATCH = "BASELINE_MISMATCH"
 DIRECT_CONTROLLED_EDIT = "DIRECT_CONTROLLED_EDIT"
 PROJECT_DERIVED_PROGRESS_INPUT = "PROJECT_DERIVED_PROGRESS_INPUT"
 ENGINE_NATIVE_AGREEMENT = "ENGINE_NATIVE_AGREEMENT"
@@ -44,9 +45,21 @@ class ControlledNativeSummary:
     field_slots: int
     classifications: tuple[tuple[str, int], ...]
     unexplained: tuple[tuple[str, str], ...]
+    baseline_mismatches: tuple[tuple[str, str], ...]
 
     @property
     def unexplained_count(self) -> int:
+        return (
+            len(self.unexplained)
+            + len(self.baseline_mismatches)
+            + self.added_rows
+            + self.removed_rows
+        )
+
+    @property
+    def unexpected_transition_count(self) -> int:
+        """Changed or missing native rows outside the transition contract."""
+
         return len(self.unexplained) + self.added_rows + self.removed_rows
 
     def assert_reconciled(self) -> None:
@@ -112,6 +125,7 @@ def classify_controlled_transition(
         )
     counts: Counter[str] = Counter()
     unexplained: list[tuple[str, str]] = []
+    baseline_mismatches: list[tuple[str, str]] = []
 
     for identity in sorted(common, key=lambda item: (not item.isdigit(), item)):
         old_observed = before_observed[identity]
@@ -129,7 +143,14 @@ def classify_controlled_transition(
                 engine_changed = old_engine[index] != expected_engine[index]
                 native_changed = old_value != new_value
                 if not engine_changed and not native_changed:
-                    reason = UNCHANGED
+                    if (
+                        old_engine[index] == old_value
+                        and recalculated_engine is not None
+                        and recalculated_engine[index] == new_value
+                    ):
+                        reason = UNCHANGED
+                    else:
+                        reason = BASELINE_MISMATCH
                 elif (
                     old_engine[index] == old_value
                     and new_value == expected_engine[index]
@@ -142,6 +163,8 @@ def classify_controlled_transition(
             counts[reason] += 1
             if reason == UNEXPLAINED:
                 unexplained.append((identity, field))
+            elif reason == BASELINE_MISMATCH:
+                baseline_mismatches.append((identity, field))
 
     summary = ControlledNativeSummary(
         before_rows=len(before_ids),
@@ -152,6 +175,7 @@ def classify_controlled_transition(
         field_slots=len(common) * len(RESULT_FIELDS),
         classifications=tuple(sorted(counts.items())),
         unexplained=tuple(unexplained),
+        baseline_mismatches=tuple(baseline_mismatches),
     )
     summary.assert_reconciled()
     return summary

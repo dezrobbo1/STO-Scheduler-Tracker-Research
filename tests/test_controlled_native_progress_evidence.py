@@ -5,6 +5,7 @@ from pathlib import Path
 import unittest
 
 from tests.controlled_native_progress_evidence import (
+    BASELINE_MISMATCH,
     DIRECT_CONTROLLED_EDIT,
     ENGINE_NATIVE_AGREEMENT,
     EXPLICIT_EXCLUSION,
@@ -59,6 +60,17 @@ class ControlledNativeProgressEvidenceTests(unittest.TestCase):
         summary = self.classify()
         self.assertEqual(dict(summary.classifications), {UNCHANGED: len(RESULT_FIELDS)})
         self.assertEqual(summary.unexplained_count, 0)
+
+    def test_unchanged_native_value_does_not_hide_a_static_engine_mismatch(self):
+        summary = self.classify(
+            base={"1": row(late_finish="wrong")},
+            control={"1": row(late_finish="wrong")},
+            recalculated={"1": row(late_finish="wrong")},
+        )
+        self.assertEqual(dict(summary.classifications)[BASELINE_MISMATCH], 1)
+        self.assertEqual(summary.baseline_mismatches, (("1", "late_finish"),))
+        self.assertEqual(summary.unexpected_transition_count, 0)
+        self.assertEqual(summary.unexplained_count, 1)
 
     def test_downstream_engine_native_agreement_is_recognized(self):
         summary = self.classify(
@@ -274,7 +286,7 @@ class ControlledNativeProgressEvidenceRecordTests(unittest.TestCase):
         self.assertEqual(repeat["sha256"], digest)
         self.assertEqual(repeat["byte_size"], size)
 
-    def test_record_preserves_the_first_result_and_closes_on_the_clean_repeat(self):
+    def test_record_preserves_the_first_result_and_keeps_static_mismatches_open(self):
         cohort = self.record["cohort"]
         self.assertEqual(
             sum(cohort["classifications"].values()), cohort["field_slots"]
@@ -287,8 +299,13 @@ class ControlledNativeProgressEvidenceRecordTests(unittest.TestCase):
         )
         self.assertEqual(repeat["classifications"][UNEXPLAINED], 0)
         self.assertEqual(repeat["unexplained"], [])
-        self.assertEqual(self.record["gate"]["met"], 5)
-        self.assertTrue(self.record["gate"]["P1-G2"])
+        self.assertGreater(repeat["classifications"][BASELINE_MISMATCH], 0)
+        self.assertEqual(
+            repeat["baseline_mismatches"]["count"],
+            repeat["classifications"][BASELINE_MISMATCH],
+        )
+        self.assertEqual(self.record["gate"]["met"], 4)
+        self.assertFalse(self.record["gate"]["P1-G2"])
         self.assertTrue(self.record["gate"]["P1-G3"])
 
     def test_record_pins_the_clean_repeat_without_customer_names(self):

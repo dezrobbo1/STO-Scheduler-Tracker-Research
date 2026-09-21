@@ -22,16 +22,20 @@ not start until the previous gate passes.
 <!-- roadmap:begin now -->
 <!-- generated from docs/goals/roadmap.json by `sto roadmap render`; edit the JSON, not this -->
 
-**P2 — Live execution loop** (not started; 0 of 6 gate criteria met)
+**P1 — Engine and local planner trial** (in progress; 4 of 5 gate criteria met)
 
 | | Gate criterion | Shown by |
 |---|---|---|
-| · | Incremental rescheduling equals a full recompute on a thousand random networks | — |
-| · | An accepted live execution update reaches a subscribed client in under a second at the 95th percentile on a real-sized schedule, with the workload and connected trial conditions recorded | — |
-| · | Replaying the update log from the baseline reproduces the head hash | — |
-| · | A two-device field trial queues supported execution reports for three tasks and communication operations while both devices are offline, survives application process termination and reopening, reconnects and synchronises without loss or duplicate accepted records or effects, preserving activity association and deterministic server acceptance ordering; recorded in docs/evidence | — |
-| · | The approved forecast moves only on planner approval, with reported progress passing supervisor then planner review | — |
-| · | Communication and media leave execution state, schedule state and schedule hashes unchanged; a separate authorised execution command against the same activity is independently audited and causes the corresponding live recalculation and subscribed update without bypassing approved-forecast review | — |
+| ✓ | The 47 executable conformance cases pass, byte-identically across three processes | `tests/test_conformance_determinism.py` |
+| · | The controlled BOILER baseline and Project output: every leaf activity gets a disposition, and no unresolved engine/source difference remains across start, finish, early and late dates, float and criticality | `docs/evidence/p1-final-native-progress-2026-09-20.md` ‡ |
+| ✓ | The controlled Microsoft Project recalculation reports zero unexpected differences under the predeclared field contract | `tests/test_controlled_native_progress_repeat_boiler.py` ‡ |
+| ✓ | A persisted import shows calculated dates beside the ones it imported; one duration edit moves its successors; reset restores the baseline; the scenario exports; and a restart reproduces the same result from the same input hash | `scripts/browser-acceptance-pl14.py` ‡ |
+| ✓ | Every API route rejects an unauthenticated request, and a project is readable only by an actor authorised on it | `tests/test_authentication.py` ‡ |
+
+‡ the clean controlled baseline/repeat pair lives outside the repository; its transition has zero unexpected changes, but 422 unchanged engine/source field mismatches remain across 105 leaves; set `STO_REQUIRE_CONTROLLED_NATIVE_REPEAT=1` to make their absence a failure rather than a skip.
+‡ the clean controlled baseline/repeat pair lives outside the repository; all 43 native-changed fields reconcile and the transition has zero unexpected differences; set `STO_REQUIRE_CONTROLLED_NATIVE_REPEAT=1` to make their absence a failure rather than a skip.
+‡ the API CI job supplies PostgreSQL and Chromium, drives the rendered workflow, restarts the application, and uploads its screenshots and export; set `STO_REQUIRE_DB=1` to make their absence a failure rather than a skip.
+‡ the API CI job supplies PostgreSQL and runs the route inventory, two-user project matrix, session, CSRF and device-token acceptance with database absence treated as a failure; set `STO_REQUIRE_DB=1` to make their absence a failure rather than a skip.
 
 <!-- roadmap:end now -->
 
@@ -316,7 +320,8 @@ trial file needs it (ADR-011).
 The future live execution loop includes field communication, sharing delivery
 and offline foundations while keeping messages outside execution authority.
 The field-communication change was a roadmap correction, not P2 entry. The
-later clean controlled repeat closes P1-G2 and P1-G3, so P1 is passed; P2 is
+later clean controlled repeat closes the bounded-transition criterion P1-G3,
+but its 422 static baseline mismatches keep P1-G2 open and P1 at 4/5. P2 is
 still not started and the limited S7/PL4 exception recorded in
 `docs/evidence/p1-gate-entry-decision-2026-09-20.md` was never enacted. ADR-016
 records the communication boundaries and
@@ -658,7 +663,7 @@ The exact day-5 pair remains a separate `STO_REQUIRE_DAY5=1` historical gate,
 and the two completion files Project recalculated use `STO_REQUIRE_NATIVE=1`.
 The first controlled in-progress pair is required with
 `STO_REQUIRE_CONTROLLED_NATIVE=1`; the clean baseline/repeat pair that closes
-`P1-G2` and `P1-G3` is required with
+P1-G3 while keeping P1-G2's static parity gap explicit is required with
 `STO_REQUIRE_CONTROLLED_NATIVE_REPEAT=1`. The roadmap names the latter
 conditional evidence.
 The float and criticality rules are evidence from KILN and CALCINER as much as

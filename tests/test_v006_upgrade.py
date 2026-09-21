@@ -202,6 +202,10 @@ class V006UpgradeTests(unittest.TestCase):
                 check=True,
             )
             self.assertIn("apply   V006__scenario_reset_events.sql", applied.stdout)
+            self.assertIn(
+                "apply   V007__persist_late_remaining_start.sql",
+                applied.stdout,
+            )
             drift = subprocess.run(
                 [str(ROOT / "scripts" / "db" / "check-schema-drift.sh")],
                 cwd=ROOT,

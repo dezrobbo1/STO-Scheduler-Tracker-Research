@@ -161,6 +161,10 @@ class V005UpgradeTests(unittest.TestCase):
                 applied.stdout,
             )
             self.assertIn("apply   V006__scenario_reset_events.sql", applied.stdout)
+            self.assertIn(
+                "apply   V007__persist_late_remaining_start.sql",
+                applied.stdout,
+            )
             drift = subprocess.run(
                 [str(ROOT / "scripts" / "db" / "check-schema-drift.sh")],
                 cwd=ROOT,
@@ -169,7 +173,7 @@ class V005UpgradeTests(unittest.TestCase):
                 capture_output=True,
                 check=True,
             )
-            self.assertIn("Schema matches infra/migrations (6 migrations, 15 tables)", drift.stdout)
+            self.assertIn("Schema matches infra/migrations (7 migrations, 15 tables)", drift.stdout)
 
             after = Workspace(connect=connect_v004, source_dir=Path(source_dir.name))
             self.assertEqual(after.rebuild(), 1)

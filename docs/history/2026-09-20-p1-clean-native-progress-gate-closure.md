@@ -1,5 +1,11 @@
 # P1 clean native-progress gate closure — 2026-09-20
 
+> **Superseded on 2026-09-21.** Review found that `UNCHANGED` did not require
+> engine/source baseline equality. The corrected comparison exposes 422 static
+> baseline field mismatches across 105 leaves. P1-G3 remains passed for the
+> bounded native transition; P1-G2 and P1 are reopened. See
+> `docs/history/2026-09-21-p1-gate-review-correction.md`.
+
 ## Decision
 
 P1 is passed. The clean controlled Microsoft Project repeat satisfies P1-G2

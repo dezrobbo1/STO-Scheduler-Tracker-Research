@@ -34,7 +34,8 @@
     "downstream_moved_rows": 6,
     "field_slots": 4140,
     "classifications": {
-      "UNCHANGED": 3928,
+      "UNCHANGED": 3509,
+      "BASELINE_MISMATCH": 419,
       "ENGINE_NATIVE_AGREEMENT": 128,
       "EXPLICIT_EXCLUSION": 81,
       "UNEXPLAINED": 3
@@ -43,7 +44,22 @@
       {"source_uid": "5", "field": "late_start"},
       {"source_uid": "5", "field": "late_finish"},
       {"source_uid": "5", "field": "total_float"}
-    ]
+    ],
+    "baseline_mismatches": {
+      "count": 419,
+      "leaf_identities": 104,
+      "by_field": {
+        "start": 62,
+        "finish": 67,
+        "early_start": 62,
+        "early_finish": 67,
+        "late_start": 41,
+        "late_finish": 32,
+        "total_float": 70,
+        "free_float": 16,
+        "critical": 2
+      }
+    }
   },
   "defects": {
     "engine": "in-progress LateStart was the late remaining-span start instead of Actual Start",
@@ -52,14 +68,14 @@
   },
   "gate": {
     "P1-G1": true,
-    "P1-G2": true,
+    "P1-G2": false,
     "P1-G3": true,
     "P1-G4": true,
     "P1-G5": true,
-    "met": 5,
+    "met": 4,
     "total": 5,
     "phase": "P1",
-    "phase_status": "passed"
+    "phase_status": "in_progress"
   },
   "next_experiment": {
     "source_uid": "227",
@@ -107,18 +123,34 @@
       "field_slots": 4140,
       "native_changed_field_slots": 43,
       "classifications": {
-        "UNCHANGED": 4016,
+        "UNCHANGED": 3594,
+        "BASELINE_MISMATCH": 422,
         "ENGINE_NATIVE_AGREEMENT": 43,
         "EXPLICIT_EXCLUSION": 81,
         "UNEXPLAINED": 0
       },
-      "unexplained": []
+      "unexplained": [],
+      "baseline_mismatches": {
+        "count": 422,
+        "leaf_identities": 105,
+        "by_field": {
+          "start": 62,
+          "finish": 67,
+          "early_start": 62,
+          "early_finish": 67,
+          "late_start": 42,
+          "late_finish": 33,
+          "total_float": 71,
+          "free_float": 16,
+          "critical": 2
+        }
+      }
     },
-    "contract_result": "PASS",
+    "contract_result": "TRANSITION_PASS_BASELINE_PARITY_OPEN",
     "gate_effect": {
-      "P1-G2": true,
+      "P1-G2": false,
       "P1-G3": true,
-      "P1": "passed",
+      "P1": "in_progress",
       "P2": "not_started"
     }
   }

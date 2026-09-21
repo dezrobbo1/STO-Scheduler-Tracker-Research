@@ -1,5 +1,11 @@
 # P1 controlled native progress evidence — 2026-09-20
 
+> **Review correction (2026-09-21):** the original classifier called a field
+> `UNCHANGED` whenever neither the native file nor the engine transition moved
+> it, without first requiring the engine to agree with the observed baseline.
+> The corrected classification below exposes those static mismatches. The
+> controlled transition still satisfies P1-G3, but P1-G2 and P1 are open.
+
 This record evaluates `P1-NATIVE-PROGRESS-BOILER-UID15-V1`. It contains no
 customer task names or schedule content. The source and returned schedules
 remain outside git.
@@ -59,10 +65,17 @@ The predeclared nine-field contract covers all 460 common leaf identities and
 
 | Classification | Field slots |
 |---|---:|
-| `UNCHANGED` | 3,928 |
+| `UNCHANGED` | 3,509 |
+| `BASELINE_MISMATCH` | 419 |
 | `ENGINE_NATIVE_AGREEMENT` | 128 |
 | `EXPLICIT_EXCLUSION` | 81 |
 | `UNEXPLAINED` | 3 |
+
+The 419 static baseline mismatches span 104 leaf identities: 62 Start, 67
+Finish, 62 Early Start, 67 Early Finish, 41 Late Start, 32 Late Finish, 70
+Total Float, 16 Free Float and 2 Critical fields. They were present both before
+and after the controlled change, so they do not invalidate the measured
+transition, but they do prevent the full-leaf parity claim in P1-G2.
 
 The 131 native-changed field instances occur across 31 rows. The expected input
 classification is two `DIRECT_CONTROLLED_EDIT` fields and three
@@ -88,7 +101,7 @@ continues to fail on changes to those inputs.
 | Criterion | Status |
 |---|---|
 | P1-G1 | PASS |
-| P1-G2 | OPEN — three controlled native fields remain unexplained |
+| P1-G2 | OPEN — static engine/source baseline mismatches remain, as do three changed unexplained fields |
 | P1-G3 | OPEN — unexpected differences are not zero |
 | P1-G4 | PASS |
 | P1-G5 | PASS |
@@ -145,13 +158,14 @@ expected.
 ## Repeat comparison
 
 The same nine-field contract covers the same 460 common leaf identities and
-4,140 field slots. The classifier now also requires the engine result and the
-explicit coded exclusions to form an exact partition; a missing calculated row
-cannot be inferred to be an exclusion.
+4,140 field slots. The classifier requires the engine result and the explicit
+coded exclusions to form an exact partition, and requires observed/engine
+baseline equality before a field can be called `UNCHANGED`.
 
 | Classification | Field slots |
 |---|---:|
-| `UNCHANGED` | 4,016 |
+| `UNCHANGED` | 3,594 |
+| `BASELINE_MISMATCH` | 422 |
 | `ENGINE_NATIVE_AGREEMENT` | 43 |
 | `EXPLICIT_EXCLUSION` | 81 |
 | `UNEXPLAINED` | 0 |
@@ -163,6 +177,12 @@ already exact. Activity and relationship identity are unchanged, and the leaf
 partition remains 433 supported/calculated, 18 assumed/labelled and 9
 excluded/coded.
 
+The corrected full-leaf check also finds 422 static mismatches across 105 leaf
+identities: 62 Start, 67 Finish, 62 Early Start, 67 Early Finish, 42 Late Start,
+33 Late Finish, 71 Total Float, 16 Free Float and 2 Critical fields. These
+unchanged discrepancies were previously hidden inside `UNCHANGED`. They keep
+P1-G2 open even though the clean transition itself has no unexpected change.
+
 The measured public-`LateStart` rule remains bounded. Canonical started-work
 rows with non-zero actual duration, a real Stop/Resume split, constraints,
 non-zero-lag or non-FS incident logic, a different progress policy, or without
@@ -170,17 +190,17 @@ the measured predecessor-and-successor shape are emitted with
 `ACTIVITY_IN_PROGRESS_LATE_DATES_ASSUMED`; they are not published as ordinary
 native-evidenced results.
 
-## Final P1 gate decision
+## Corrected P1 gate decision
 
 | Criterion | Status |
 |---|---|
 | P1-G1 | PASS |
-| P1-G2 | PASS — every leaf is explicitly dispositioned and no result field is unexplained |
+| P1-G2 | OPEN — every leaf is dispositioned, but 422 static baseline field mismatches remain |
 | P1-G3 | PASS — the predeclared clean repeat has zero unexpected differences |
 | P1-G4 | PASS |
 | P1-G5 | PASS |
 
-P1 is **5/5 and passed**. P2 remains not started; this evidence change does not
+P1 is **4/5 and in progress**. P2 remains not started; this correction does not
 begin a P2 slice or enact the earlier limited-development exception.
 
 The repeat is executable in

@@ -155,6 +155,28 @@ class InProgressLateDateClaimBoundaryTests(unittest.TestCase):
             with self.subTest(document=document):
                 self.assertIn(self.CODE, self._codes_for_middle(document))
 
+    def test_an_excluded_endpoint_does_not_supply_the_measured_shape(self):
+        document = self._document_for()
+        outgoing_target = document["activities"][2]
+        outgoing_target["manual"] = True
+
+        schedule, plan, _ = _plan(document)
+        middle = schedule.activities[1]
+        outgoing = schedule.relationships[1]
+        self.assertIn(
+            self.CODE,
+            {row.code for row in plan.assumed if row.uid == middle.uid},
+        )
+        self.assertNotIn(outgoing.uid, {row.uid for row in plan.network.relationships})
+        self.assertIn(
+            outgoing.uid,
+            {
+                row.uid
+                for row in plan.excluded
+                if row.code == "RELATIONSHIP_ENDPOINT_NOT_SCHEDULED"
+            },
+        )
+
     def test_stop_and_resume_survive_the_xml_to_canonical_path(self):
         extra = (
             "<ActualStart>2026-01-05T08:00:00</ActualStart>"

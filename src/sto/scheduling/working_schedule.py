@@ -1088,6 +1088,7 @@ class Workspace:
                     "late_start": row.late_start,
                     "late_finish": row.late_finish,
                     "remaining_start": row.remaining_start,
+                    "late_remaining_start": row.late_remaining_start,
                     "total_float_seconds": row.total_float,
                     "free_float_seconds": row.free_float,
                     "critical": row.critical,
@@ -1534,6 +1535,7 @@ def _rebuild_result(
             late_start=row["late_start"],
             late_finish=row["late_finish"],
             remaining_start=row["remaining_start"],
+            late_remaining_start=row.get("late_remaining_start"),
             total_float=(
                 None if row["total_float_seconds"] is None else int(row["total_float_seconds"])
             ),

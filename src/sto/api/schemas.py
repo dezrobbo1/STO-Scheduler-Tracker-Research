@@ -186,6 +186,7 @@ class ActivityRow(BaseModel):
     late_start: datetime | None = None
     late_finish: datetime | None = None
     remaining_start: datetime | None = None
+    late_remaining_start: datetime | None = None
     total_float_seconds: int | None = None
     free_float_seconds: int | None = None
     critical: bool | None = None

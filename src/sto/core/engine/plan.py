@@ -313,14 +313,10 @@ def build_plan(
 
     assumed: list[Assumed] = []
 
-    incident_by_activity = {activity.uid: [] for activity in schedule.activities}
-    for relationship in schedule.relationships:
-        if relationship.predecessor_uid in incident_by_activity:
-            incident_by_activity[relationship.predecessor_uid].append(relationship)
-        if relationship.successor_uid in incident_by_activity:
-            incident_by_activity[relationship.successor_uid].append(relationship)
-
-    def in_progress_late_rule_assumption(activity: Activity) -> Assumed | None:
+    def in_progress_late_rule_assumption(
+        activity: Activity,
+        incident: list[PlannedRelationship],
+    ) -> Assumed | None:
         """Label started-work shapes outside the two native Project trials.
 
         The public-LateStart rule is measured on zero-actual-duration work with
@@ -368,14 +364,13 @@ def build_plan(
             for duration in (activity.planned_duration, activity.remaining_duration)
         ):
             reasons.append("remaining work is elapsed duration")
-        incident = incident_by_activity[activity.uid]
         incoming = any(row.successor_uid == activity.uid for row in incident)
         outgoing = any(row.predecessor_uid == activity.uid for row in incident)
         if not incoming or not outgoing:
             reasons.append("the measured predecessor/successor shape is absent")
         if any(
             row.type is not RelationshipType.FS
-            or (row.lag is not None and row.lag.seconds != 0)
+            or row.lag != 0
             for row in incident
         ):
             reasons.append("incident logic is not ordinary zero-lag FS")
@@ -668,9 +663,6 @@ def build_plan(
         scheduled.add(activity.uid)
         if pending_assumption is not None:
             assumed.append(pending_assumption)
-        progress_assumption = in_progress_late_rule_assumption(activity)
-        if progress_assumption is not None:
-            assumed.append(progress_assumption)
 
     # A row whose dates are unknown takes its successors with it. Walked to a
     # fixed point, so a chain behind one unreadable duration is reported rather
@@ -860,6 +852,26 @@ def build_plan(
                 lag_calendar=lag_calendar,
             )
         )
+
+    # Evidence labels describe the network the passes actually evaluate, not
+    # the raw source graph. An edge whose other endpoint was excluded above is
+    # absent from that network and therefore cannot make a started activity
+    # look like the measured predecessor/successor trial shape.
+    incident_by_activity: dict[UUID, list[PlannedRelationship]] = {
+        uid: [] for uid in scheduled
+    }
+    for relationship in relationships:
+        incident_by_activity[relationship.predecessor_uid].append(relationship)
+        incident_by_activity[relationship.successor_uid].append(relationship)
+    for activity in schedule.activities:
+        if activity.uid not in scheduled:
+            continue
+        progress_assumption = in_progress_late_rule_assumption(
+            activity,
+            incident_by_activity[activity.uid],
+        )
+        if progress_assumption is not None:
+            assumed.append(progress_assumption)
 
     # An assumption is a statement about a row the plan scheduled. One about
     # an excluded row would count in ``assumed_by_code`` against a calculation

@@ -18,6 +18,7 @@ from pathlib import Path
 import unittest
 
 from tests.controlled_native_progress_evidence import (
+    BASELINE_MISMATCH,
     DIRECT_CONTROLLED_EDIT,
     ENGINE_NATIVE_AGREEMENT,
     EXPLICIT_EXCLUSION,
@@ -462,9 +463,10 @@ class ControlledNativeProgressBoilerTests(unittest.TestCase):
         self.assertEqual(
             dict(summary.classifications),
             {
+                BASELINE_MISMATCH: 419,
                 ENGINE_NATIVE_AGREEMENT: 128,
                 EXPLICIT_EXCLUSION: 81,
-                UNCHANGED: 3_928,
+                UNCHANGED: 3_509,
                 UNEXPLAINED: 3,
             },
         )
@@ -475,6 +477,21 @@ class ControlledNativeProgressBoilerTests(unittest.TestCase):
                 ("5", "late_finish"),
                 ("5", "total_float"),
             ),
+        )
+        self.assertEqual(len(summary.baseline_mismatches), 419)
+        self.assertEqual(
+            Counter(field for _, field in summary.baseline_mismatches),
+            {
+                "start": 62,
+                "finish": 67,
+                "early_start": 62,
+                "early_finish": 67,
+                "late_start": 41,
+                "late_finish": 32,
+                "total_float": 70,
+                "free_float": 16,
+                "critical": 2,
+            },
         )
 
     def test_assignment_schedule_outputs_move_without_input_corruption(self):
