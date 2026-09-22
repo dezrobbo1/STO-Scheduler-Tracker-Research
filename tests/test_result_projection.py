@@ -189,7 +189,32 @@ class ProgressAssumptionDependencyTests(unittest.TestCase):
             _relationship(number, number, number + 1)
             for number in range(1, length)
         ]
-        document = _document(rows, relationships=relationships)
+        resource = {
+            "id": "resource:1",
+            "source_order": 1,
+            "external_references": [],
+            "name": "Resource 1",
+            "calendar_ref": "calendar:1",
+        }
+        assignment = {
+            "id": "assignment:1",
+            "source_order": 1,
+            "task_ref": f"task:{progress}",
+            "resource_ref": "resource:1",
+            "units_source": 1,
+            "work_source": _duration(1800),
+            "actual_work_source": _duration(0),
+            "remaining_work_source": _duration(1800),
+            "percent_work_complete_source": 0,
+            "work_contour_source": 0,
+            "extension_refs": [],
+        }
+        document = _document(
+            rows,
+            relationships=relationships,
+            resources=[resource],
+            assignments=[assignment],
+        )
         if progress_policy is ProgressPolicy.PROGRESS_OVERRIDE:
             document["project"]["status_date"] = "2026-01-05T10:00:00"
         return _projected_progress_document(

@@ -188,7 +188,17 @@ class InProgressLateDateClaimBoundaryTests(unittest.TestCase):
         return {row.code for row in plan.assumed if row.uid == middle}
 
     def test_the_two_trial_shape_is_not_labelled_as_an_assumption(self):
-        self.assertNotIn(self.CODE, self._codes_for_middle(self._document_for()))
+        _, _, assumptions = self._imported_actual_work_boundary()
+        self.assertEqual(assumptions, [])
+
+    def test_an_unassigned_started_task_is_outside_the_measured_shape(self):
+        schedule, plan, _ = _plan(self._document_for())
+        middle = schedule.activities[1]
+        assumptions = [
+            row for row in plan.assumed if row.uid == middle.uid and row.code == self.CODE
+        ]
+        self.assertEqual(len(assumptions), 1)
+        self.assertIn("assignment cardinality", assumptions[0].detail)
 
     def _imported_actual_work_boundary(
         self,

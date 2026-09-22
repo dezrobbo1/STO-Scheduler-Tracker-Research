@@ -355,6 +355,10 @@ def build_plan(
         ):
             reasons.append("reported percentage progress is outside the measured shape")
         activity_assignments = assignment_rows_by_activity.get(activity.uid, ())
+        if len(activity_assignments) != 1:
+            reasons.append(
+                "assignment cardinality is outside the measured one-assignment shape"
+            )
         if any(
             "actual_work_unsupported_source" in row.source_fields
             for row in activity_assignments
