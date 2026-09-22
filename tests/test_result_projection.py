@@ -24,7 +24,7 @@ from unittest.mock import patch
 from uuid import uuid4
 from threading import Event, Thread
 
-from calculation_fixture import _activity, _document, _relationship
+from calculation_fixture import _activity, _document, _duration, _relationship
 
 from sto.core.engine import (
     backward_pass,
@@ -43,7 +43,7 @@ from sto.core.engine.result import (
 from sto.core.hashing import canonical_sha256
 from sto.core.model.codec import encode_schedule
 from sto.core.model.entities import Constraint
-from sto.core.model.enums import ConstraintType
+from sto.core.model.enums import ConstraintType, ProgressPolicy
 from sto.core.model.migrate.sto_v011 import migrate
 from sto.legacy import import_mspdi
 
@@ -149,6 +149,297 @@ def _task(uid, hour=9):
         finish=f"2026-01-05T{hour + 1:02d}:00:00",
         duration_seconds=3600,
     )
+
+
+DIRECT_PROGRESS_ASSUMPTION = "ACTIVITY_IN_PROGRESS_LATE_DATES_ASSUMED"
+DERIVED_PROGRESS_ASSUMPTION = "ACTIVITY_LATE_DATES_DEPEND_ON_ASSUMED_PROGRESS"
+
+
+def _progress_task(uid, hour):
+    row, extensions = _task(uid, hour)
+    row.update(
+        actual_start_source=f"2026-01-05T{hour:02d}:00:00",
+        actual_duration_source=_duration(600),
+        remaining_duration_source=_duration(1800),
+    )
+    return row, extensions
+
+
+def _projected_progress_document(document, *, progress_policy=None):
+    schedule, _, _ = migrate(document)
+    if progress_policy is not None:
+        schedule = replace(
+            schedule,
+            project=replace(schedule.project, progress_policy=progress_policy),
+        )
+    plan, result = _projected_schedule(schedule)
+    return schedule, plan, result
+
+
+class ProgressAssumptionDependencyTests(unittest.TestCase):
+    """Published late dates name unsupported progress they actually consume."""
+
+    def _chain(
+        self,
+        length=3,
+        *,
+        measured=False,
+        out_of_sequence=False,
+        active_status_floor=False,
+        progress_policy=None,
+    ):
+        progress = length - 1
+        rows = [_task(number, 8 + number) for number in range(1, length + 1)]
+        rows[progress - 1] = _progress_task(progress, 8 + progress)
+        if measured:
+            rows[progress - 1][0]["actual_duration_source"] = _duration(0)
+        if out_of_sequence:
+            rows[progress - 1][0]["actual_start_source"] = (
+                f"2026-01-05T{6 + progress:02d}:00:00"
+            )
+        relationships = [
+            _relationship(number, number, number + 1)
+            for number in range(1, length)
+        ]
+        resource = {
+            "id": "resource:1",
+            "source_order": 1,
+            "external_references": [],
+            "name": "Resource 1",
+            "calendar_ref": "calendar:1",
+        }
+        assignment = {
+            "id": "assignment:1",
+            "source_order": 1,
+            "task_ref": f"task:{progress}",
+            "resource_ref": "resource:1",
+            "units_source": 1,
+            "work_source": _duration(1800),
+            "actual_work_source": _duration(0),
+            "remaining_work_source": _duration(1800),
+            "percent_work_complete_source": 0,
+            "work_contour_source": 0,
+            "extension_refs": [],
+        }
+        document = _document(
+            rows,
+            relationships=relationships,
+            resources=[resource],
+            assignments=[assignment],
+        )
+        if active_status_floor:
+            document["project"]["status_date"] = "2026-01-05T11:00:00"
+        elif progress_policy is ProgressPolicy.PROGRESS_OVERRIDE:
+            document["project"]["status_date"] = "2026-01-05T10:00:00"
+        return _projected_progress_document(
+            document,
+            progress_policy=progress_policy,
+        )
+
+    def test_the_unsupported_progress_activity_keeps_the_direct_assumption(self):
+        schedule, _, result = self._chain()
+        middle = result.by_uid()[schedule.activities[1].uid]
+        self.assertIn(DIRECT_PROGRESS_ASSUMPTION, middle.assumptions)
+        self.assertNotIn(DERIVED_PROGRESS_ASSUMPTION, middle.assumptions)
+
+    def test_the_driving_predecessor_exposes_the_derived_assumption(self):
+        schedule, plan, result = self._chain()
+        predecessor = result.by_uid()[schedule.activities[0].uid]
+        relationship = plan.network.relationships[0]
+        self.assertEqual(
+            predecessor.late_driving_relationship_uid,
+            relationship.uid,
+            "the fixture must consume the unsupported successor's late boundary",
+        )
+        self.assertIn(DERIVED_PROGRESS_ASSUMPTION, predecessor.assumptions)
+        self.assertNotIn(DIRECT_PROGRESS_ASSUMPTION, predecessor.assumptions)
+
+    def test_out_of_sequence_work_gets_the_direct_assumption(self):
+        schedule, _, result = self._chain(measured=True, out_of_sequence=True)
+        progressed = result.by_uid()[schedule.activities[1].uid]
+
+        self.assertIn(DIRECT_PROGRESS_ASSUMPTION, progressed.assumptions)
+
+    def test_a_predecessor_driven_by_out_of_sequence_work_gets_the_derived_code(self):
+        schedule, plan, result = self._chain(measured=True, out_of_sequence=True)
+        predecessor = result.by_uid()[schedule.activities[0].uid]
+        relationship = plan.network.relationships[0]
+
+        self.assertEqual(predecessor.late_driving_relationship_uid, relationship.uid)
+        self.assertIn(DERIVED_PROGRESS_ASSUMPTION, predecessor.assumptions)
+
+    def test_active_status_floor_projects_direct_and_late_driver_assumptions(self):
+        schedule, plan, result = self._chain(
+            measured=True,
+            active_status_floor=True,
+        )
+        predecessor = result.by_uid()[schedule.activities[0].uid]
+        progressed = result.by_uid()[schedule.activities[1].uid]
+        relationship = plan.network.relationships[0]
+        direct = next(
+            row
+            for row in plan.assumed
+            if row.uid == progressed.uid and row.code == DIRECT_PROGRESS_ASSUMPTION
+        )
+
+        self.assertIn("status date", direct.detail)
+        self.assertIn(DIRECT_PROGRESS_ASSUMPTION, progressed.assumptions)
+        self.assertEqual(predecessor.late_driving_relationship_uid, relationship.uid)
+        self.assertIn(DERIVED_PROGRESS_ASSUMPTION, predecessor.assumptions)
+
+    def test_the_dependency_propagates_transitively_through_actual_late_drivers(self):
+        schedule, plan, result = self._chain(length=4)
+        by_uid = result.by_uid()
+        first = by_uid[schedule.activities[0].uid]
+        second = by_uid[schedule.activities[1].uid]
+        assumed = by_uid[schedule.activities[2].uid]
+        relationships = {row.uid: row for row in plan.network.relationships}
+
+        self.assertEqual(
+            relationships[first.late_driving_relationship_uid].successor_uid,
+            second.uid,
+        )
+        self.assertEqual(
+            relationships[second.late_driving_relationship_uid].successor_uid,
+            assumed.uid,
+        )
+        self.assertIn(DERIVED_PROGRESS_ASSUMPTION, first.assumptions)
+        self.assertIn(DERIVED_PROGRESS_ASSUMPTION, second.assumptions)
+        self.assertIn(DIRECT_PROGRESS_ASSUMPTION, assumed.assumptions)
+
+    def test_a_connected_but_non_driving_assumed_branch_does_not_contaminate_the_row(self):
+        rows = [
+            _task(1, 8),
+            _progress_task(2, 12),
+            _task(3, 13),
+            _activity(
+                4,
+                start="2026-01-05T09:00:00",
+                finish="2026-01-06T09:00:00",
+                duration_seconds=8 * 3600,
+            ),
+        ]
+        schedule, plan, result = _projected_progress_document(
+            _document(
+                rows,
+                relationships=[
+                    _relationship(1, 1, 2),
+                    _relationship(2, 2, 3),
+                    _relationship(3, 1, 4),
+                ],
+            )
+        )
+        predecessor = result.by_uid()[schedule.activities[0].uid]
+        relationships = {row.uid: row for row in plan.network.relationships}
+        driver = relationships[predecessor.late_driving_relationship_uid]
+
+        self.assertEqual(driver.successor_uid, schedule.activities[3].uid)
+        self.assertNotIn(DERIVED_PROGRESS_ASSUMPTION, predecessor.assumptions)
+        self.assertIn(
+            DIRECT_PROGRESS_ASSUMPTION,
+            result.by_uid()[schedule.activities[1].uid].assumptions,
+        )
+
+    def test_a_non_driving_out_of_sequence_branch_does_not_contaminate_the_row(self):
+        progressed = _progress_task(2, 8)
+        progressed[0]["actual_duration_source"] = _duration(0)
+        resource = {
+            "id": "resource:1",
+            "source_order": 1,
+            "external_references": [],
+            "name": "Resource 1",
+            "calendar_ref": "calendar:1",
+        }
+        assignment = {
+            "id": "assignment:1",
+            "source_order": 1,
+            "task_ref": "task:2",
+            "resource_ref": "resource:1",
+            "units_source": 1,
+            "work_source": _duration(1800),
+            "actual_work_source": _duration(0),
+            "remaining_work_source": _duration(1800),
+            "percent_work_complete_source": 0,
+            "work_contour_source": 0,
+            "extension_refs": [],
+        }
+        schedule, plan, result = _projected_progress_document(
+            _document(
+                [
+                    _task(1, 8),
+                    progressed,
+                    _task(3, 13),
+                    _activity(
+                        4,
+                        start="2026-01-05T09:00:00",
+                        finish="2026-01-06T09:00:00",
+                        duration_seconds=8 * 3600,
+                    ),
+                ],
+                relationships=[
+                    _relationship(1, 1, 2),
+                    _relationship(2, 2, 3),
+                    _relationship(3, 1, 4),
+                ],
+                resources=[resource],
+                assignments=[assignment],
+            )
+        )
+        predecessor = result.by_uid()[schedule.activities[0].uid]
+        relationships = {row.uid: row for row in plan.network.relationships}
+        driver = relationships[predecessor.late_driving_relationship_uid]
+
+        self.assertEqual(driver.successor_uid, schedule.activities[3].uid)
+        self.assertNotIn(DERIVED_PROGRESS_ASSUMPTION, predecessor.assumptions)
+        self.assertIn(
+            DIRECT_PROGRESS_ASSUMPTION,
+            result.by_uid()[schedule.activities[1].uid].assumptions,
+        )
+
+    def test_a_released_edge_does_not_propagate_the_assumption(self):
+        schedule, _, result = self._chain(
+            progress_policy=ProgressPolicy.PROGRESS_OVERRIDE
+        )
+        predecessor = result.by_uid()[schedule.activities[0].uid]
+        self.assertIsNone(predecessor.late_driving_relationship_uid)
+        self.assertNotIn(DERIVED_PROGRESS_ASSUMPTION, predecessor.assumptions)
+        self.assertTrue(
+            [row for row in result.relationships if row.disposition == RELEASED]
+        )
+
+    def test_an_excluded_endpoint_cannot_propagate_through_its_dropped_edge(self):
+        excluded, extensions = _task(1, 9)
+        excluded["manual"] = True
+        schedule, _, result = _projected_progress_document(
+            _document(
+                [(excluded, extensions), _progress_task(2, 10), _task(3, 11)],
+                relationships=[_relationship(1, 1, 2), _relationship(2, 2, 3)],
+            )
+        )
+        excluded_result = result.by_uid()[schedule.activities[0].uid]
+        self.assertEqual(excluded_result.disposition, EXCLUDED)
+        self.assertNotIn(DERIVED_PROGRESS_ASSUMPTION, excluded_result.assumptions)
+        self.assertIn(
+            (EXCLUDED, "RELATIONSHIP_ENDPOINT_NOT_SCHEDULED"),
+            [(row.disposition, row.code) for row in result.relationships],
+        )
+
+    def test_the_measured_controlled_shape_does_not_contaminate_predecessors(self):
+        _, _, result = self._chain(measured=True)
+        for row in result.activities:
+            self.assertNotIn(DIRECT_PROGRESS_ASSUMPTION, row.assumptions)
+            self.assertNotIn(DERIVED_PROGRESS_ASSUMPTION, row.assumptions)
+
+    def test_direct_and_derived_codes_are_in_the_final_fingerprinted_rows(self):
+        _, _, result = self._chain()
+        assumptions = [row.assumptions for row in result.activities]
+        self.assertTrue(any(DIRECT_PROGRESS_ASSUMPTION in row for row in assumptions))
+        self.assertTrue(any(DERIVED_PROGRESS_ASSUMPTION in row for row in assumptions))
+        stripped = replace(
+            result,
+            activities=tuple(replace(row, assumptions=()) for row in result.activities),
+        )
+        self.assertNotEqual(result.fingerprint, fingerprint_result(stripped))
 
 
 class WhatElseDecidedTheseDatesTests(unittest.TestCase):
@@ -519,11 +810,30 @@ class TheProjectionAnswersForEveryRowTests(unittest.TestCase):
                     self.assertIsNone(row.early_start)
                     self.assertIsNotNone(row.exclusion_code)
 
+    def test_in_progress_projection_keeps_the_late_remaining_start(self):
+        rows = [_task(1), _task(2, hour=10), _task(3, hour=11)]
+        progressed = rows[1][0]
+        progressed.update(
+            actual_start_source="2026-01-05T10:00:00",
+            actual_duration_source=_duration(0),
+            remaining_duration_source=_duration(1800),
+        )
+        plan, result = _projected_document(
+            _document(
+                rows,
+                relationships=[_relationship(1, 1, 2), _relationship(2, 2, 3)],
+            )
+        )
+        middle = result.by_uid()[plan.network.activities[1].uid]
+        self.assertEqual(middle.late_start, datetime(2026, 1, 5, 10))
+        self.assertIsNotNone(middle.late_remaining_start)
+        self.assertEqual(middle.state, "in_progress")
+
     def test_the_result_names_what_produced_it(self):
         schedule, result = _projected(FIXTURE)
         provenance = result.provenance
         self.assertEqual(provenance.canonical_hash, canonical_sha256(encode_schedule(schedule)))
-        self.assertEqual(provenance.result_profile, "sto-result-v1")
+        self.assertEqual(provenance.result_profile, "sto-result-v2")
         self.assertTrue(provenance.forward_profile.startswith("sto-forward-pass-"))
         self.assertLess(provenance.horizon_start, provenance.horizon_finish)
 
@@ -531,6 +841,29 @@ class TheProjectionAnswersForEveryRowTests(unittest.TestCase):
         _, first = _projected(FIXTURE)
         _, second = _projected(FIXTURE)
         self.assertEqual(first.fingerprint, second.fingerprint)
+
+    def test_v1_fingerprints_remain_verifiable_after_the_additive_field(self):
+        _, current = _projected(FIXTURE)
+        legacy = replace(
+            current,
+            provenance=replace(current.provenance, result_profile="sto-result-v1"),
+        )
+        first = current.activities[0]
+        changed_rows = (
+            replace(first, late_remaining_start=first.late_start),
+            *current.activities[1:],
+        )
+        current_with_coordinate = replace(current, activities=changed_rows)
+        legacy_with_coordinate = replace(legacy, activities=changed_rows)
+
+        self.assertNotEqual(
+            fingerprint_result(current),
+            fingerprint_result(current_with_coordinate),
+        )
+        self.assertEqual(
+            fingerprint_result(legacy),
+            fingerprint_result(legacy_with_coordinate),
+        )
 
     def test_a_wider_window_is_a_different_calculation_and_says_so(self):
         """The horizon is the caller's choice, so it is part of the identity."""
@@ -738,7 +1071,7 @@ class AStoredCalculationComesBackTests(unittest.TestCase):
 
         self.assertEqual(header["result_fingerprint"], expected.fingerprint)
         self.assertEqual(header["canonical_hash"], stored.canonical_hash)
-        self.assertEqual(header["profiles"]["result"], "sto-result-v1")
+        self.assertEqual(header["profiles"]["result"], "sto-result-v2")
         self.assertEqual(len(rows), len(expected.activities))
         self.assertEqual(
             len(summaries), len(expected.summaries) + len(expected.empty_summaries)
@@ -751,9 +1084,157 @@ class AStoredCalculationComesBackTests(unittest.TestCase):
                 self.assertEqual(row["disposition"], source.disposition)
                 self.assertEqual(row["early_start"], source.early_start)
                 self.assertEqual(row["late_finish"], source.late_finish)
+                self.assertEqual(
+                    row["late_remaining_start"], source.late_remaining_start
+                )
                 self.assertEqual(row["total_float_seconds"], source.total_float)
                 self.assertEqual(row["critical"], source.critical)
                 self.assertEqual(row["exclusion_code"], source.exclusion_code)
+
+    def test_negative_float_progress_keeps_both_late_start_coordinates(self):
+        """The public actual start may follow the late remaining finish."""
+
+        from sto.persistence import repositories as repo
+
+        workspace, project_id = self._imported()
+        stored = workspace.calculate(project_id)
+        _, expected = _projected(FIXTURE)
+        target = next(row for row in expected.activities if row.disposition == SCHEDULED)
+        public_actual_start = target.late_finish + timedelta(hours=1)
+        changed = replace(
+            target,
+            state="in_progress",
+            remaining_start=target.early_start,
+            late_start=public_actual_start,
+            late_remaining_start=target.late_start,
+        )
+        rows = tuple(
+            changed if row.uid == target.uid else row for row in expected.activities
+        )
+        candidate = replace(expected, activities=rows, fingerprint="")
+        candidate = replace(candidate, fingerprint=fingerprint_result(candidate))
+
+        with self.connect() as conn:
+            calculation_id = repo.insert_calculation(
+                conn,
+                project_id=project_id,
+                version_id=stored.version_id,
+                result=candidate,
+            )
+            conn.commit()
+        self.assertIsNotNone(calculation_id)
+        reread = workspace.read_calculation(
+            project_id,
+            calculation_id=calculation_id,
+        )
+        persisted = reread.result.by_uid()[target.uid]
+        self.assertEqual(persisted.late_start, public_actual_start)
+        self.assertEqual(persisted.late_remaining_start, target.late_start)
+        self.assertLess(persisted.late_finish, persisted.late_start)
+        self.assertEqual(reread.result.fingerprint, candidate.fingerprint)
+
+    def test_legacy_v1_rejects_an_added_late_remaining_start(self):
+        """A v1 fingerprint cannot authenticate the coordinate V007 added."""
+
+        from sto.persistence import repositories as repo
+        from sto.scheduling.working_schedule import IntegrityError
+
+        workspace, project_id = self._imported()
+        stored = workspace.calculate(project_id)
+        _, current = _projected(FIXTURE)
+        target = next(row for row in current.activities if row.disposition == SCHEDULED)
+        legacy_target = replace(
+            target,
+            state="in_progress",
+            remaining_start=target.early_start,
+            late_remaining_start=None,
+        )
+        legacy_rows = tuple(
+            legacy_target if row.uid == target.uid else row for row in current.activities
+        )
+        legacy = replace(
+            current,
+            provenance=replace(current.provenance, result_profile="sto-result-v1"),
+            activities=legacy_rows,
+            fingerprint="",
+        )
+        legacy = replace(legacy, fingerprint=fingerprint_result(legacy))
+
+        with self.connect() as conn:
+            calculation_id = repo.insert_calculation(
+                conn,
+                project_id=project_id,
+                version_id=stored.version_id,
+                result=legacy,
+            )
+            conn.commit()
+        self.assertIsNotNone(calculation_id)
+        genuine = workspace.read_calculation(project_id, calculation_id=calculation_id)
+        self.assertEqual(genuine.result.fingerprint, legacy.fingerprint)
+        self.assertIsNone(genuine.result.by_uid()[target.uid].late_remaining_start)
+
+        with self.connect() as conn:
+            conn.execute(
+                """
+                UPDATE activity_results SET late_remaining_start = late_start
+                WHERE calculation_id = %s AND activity_uid = %s
+                """,
+                (calculation_id, target.uid),
+            )
+            conn.commit()
+        with self.assertRaises(IntegrityError):
+            workspace.read_calculation(project_id, calculation_id=calculation_id)
+
+    def test_v2_late_remaining_start_tampering_is_fingerprint_detected(self):
+        from sto.persistence import repositories as repo
+        from sto.scheduling.working_schedule import IntegrityError
+
+        workspace, project_id = self._imported()
+        stored = workspace.calculate(project_id)
+        _, expected = _projected(FIXTURE)
+        target = next(row for row in expected.activities if row.disposition == SCHEDULED)
+        changed = replace(
+            target,
+            state="in_progress",
+            remaining_start=target.early_start,
+            late_remaining_start=target.late_start,
+        )
+        candidate = replace(
+            expected,
+            activities=tuple(
+                changed if row.uid == target.uid else row for row in expected.activities
+            ),
+            fingerprint="",
+        )
+        candidate = replace(candidate, fingerprint=fingerprint_result(candidate))
+        with self.connect() as conn:
+            calculation_id = repo.insert_calculation(
+                conn,
+                project_id=project_id,
+                version_id=stored.version_id,
+                result=candidate,
+            )
+            conn.commit()
+        self.assertIsNotNone(calculation_id)
+        self.assertEqual(
+            workspace.read_calculation(
+                project_id, calculation_id=calculation_id
+            ).result.fingerprint,
+            candidate.fingerprint,
+        )
+
+        with self.connect() as conn:
+            conn.execute(
+                """
+                UPDATE activity_results
+                SET late_remaining_start = late_remaining_start - interval '1 minute'
+                WHERE calculation_id = %s AND activity_uid = %s
+                """,
+                (calculation_id, target.uid),
+            )
+            conn.commit()
+        with self.assertRaises(IntegrityError):
+            workspace.read_calculation(project_id, calculation_id=calculation_id)
 
     def test_recalculating_the_same_head_stores_a_second_run_not_an_edit(self):
         """A calculation is immutable, like the version it was computed from."""

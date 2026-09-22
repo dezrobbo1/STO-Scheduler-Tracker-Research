@@ -529,6 +529,31 @@ class CalendarTailSchedulingConsequencesTests(unittest.TestCase):
                             self.assertEqual(floats.by_uid()[uid("P")].free_float, 0)
                             self.assertEqual(validate_result(net, forward, backward, floats), ())
 
+    def test_native_in_progress_late_start_anchors_predecessors_not_remaining_float(self):
+        net = network(
+            activity("P", 10),
+            activity("S", 20, actual_start=10, remaining_duration=2),
+            relationships=(link("R1", "P", "S"),),
+            status_time=10,
+            horizon=40,
+        )
+        forward = forward_pass(net)
+        backward = backward_pass(net, forward, project_late_finish=30)
+        floats = float_analysis(net, forward, backward)
+
+        predecessor = backward.by_uid()[uid("P")]
+        started = backward.by_uid()[uid("S")]
+        started_float = floats.by_uid()[uid("S")]
+
+        self.assertEqual((predecessor.late_start, predecessor.late_finish), (0, 10))
+        self.assertEqual((started.late_start, started.late_finish), (10, 30))
+        self.assertEqual(started.remaining_start, 28)
+        self.assertEqual(
+            (started_float.start_float, started_float.finish_float, started_float.total_float),
+            (18, 18, 18),
+        )
+        self.assertEqual(validate_result(net, forward, backward, floats), ())
+
     def test_a_completed_terminal_activity_has_no_movable_free_float(self):
         net = network(
             activity("P", 2, CONTINUOUS, actual_start=5, actual_finish=7),
@@ -835,7 +860,8 @@ class OneApplicabilityDecisionForBothPassesTests(unittest.TestCase):
         row = forward.by_uid()[uid("A")]
         late = backward.by_uid()[uid("A")]
         self.assertEqual((row.remaining_start, row.early_finish), (50, 55))
-        self.assertEqual((late.late_start, late.late_finish), (50, 55))
+        self.assertEqual((late.late_start, late.late_finish), (1, 55))
+        self.assertEqual(late.remaining_start, 50)
         # Minus thirty before C2, invented by the two passes disagreeing.
         self.assertEqual(floats.by_uid()[uid("A")].total_float, 0)
 

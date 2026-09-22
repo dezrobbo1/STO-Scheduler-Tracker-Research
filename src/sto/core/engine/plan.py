@@ -66,17 +66,27 @@ from uuid import UUID
 
 from sto.core.calendar.arithmetic import CompiledIntervals, intersect_intervals, normalise
 from sto.core.calendar.compile import CompiledCalendar, Horizon, compile_calendars
-from sto.core.model.entities import Activity, Schedule
+from sto.core.model.entities import Activity, Assignment, Schedule
 from sto.core.model.enums import (
     ActivityKind,
     ConstraintType,
     LagCalendar,
     MilestoneSnapPolicy,
     ProgressPolicy,
+    RelationshipType,
     ScheduleDirection,
 )
 
-from .network import Network, NetworkError, PlannedActivity, PlannedRelationship
+from .forward import ActivityTimes, forward_pass
+from .network import (
+    Network,
+    NetworkError,
+    PlannedActivity,
+    PlannedRelationship,
+    lag_calendar_for,
+    shift_lag,
+)
+from .progress import ProgressState, remaining_bound
 
 
 class PlanError(NetworkError):
@@ -244,6 +254,177 @@ def _remaining_seconds(activity: Activity) -> int | None:
     return activity.remaining_duration.seconds
 
 
+def _measured_in_progress_native_shape_static_failures(
+    activity: Activity,
+    activity_assignments: list[Assignment],
+    resource_uids: set[UUID],
+    incident: list[PlannedRelationship],
+    progress_policy: ProgressPolicy,
+) -> tuple[str, ...] | None:
+    """Evaluate the static half of the positive native-evidence contract.
+
+    ``None`` means this is not the in-progress state to which the contract
+    applies. An empty tuple means every static characteristic of the two
+    controlled Microsoft Project trials is affirmatively present; it does not
+    mean final eligibility until the forward-network checks below also pass.
+
+    This predicate describes evidence eligibility, not the scheduler's general
+    supported-input boundary. The engine may calculate broader shapes, but
+    their late dates are labelled as assumed.
+    """
+
+    if activity.actual_start is None or activity.actual_finish is not None:
+        return None
+
+    failures: list[str] = []
+    actual_duration = activity.actual_duration
+    if "actual_duration_unsupported_source" in activity.source_fields:
+        failures.append("actual duration is unreadable")
+    elif actual_duration is None:
+        failures.append("actual duration is absent")
+    elif actual_duration.seconds != 0:
+        failures.append("actual duration is not measured zero")
+    elif actual_duration.elapsed:
+        failures.append("actual duration is elapsed")
+
+    remaining_duration = activity.remaining_duration
+    if remaining_duration is None:
+        failures.append("remaining duration is absent")
+    elif remaining_duration.seconds <= 0:
+        failures.append("remaining duration is not strictly positive")
+    elif remaining_duration.elapsed:
+        failures.append("remaining duration is elapsed")
+    if activity.planned_duration is not None and activity.planned_duration.elapsed:
+        failures.append("planned duration is elapsed")
+
+    task_actual_work = activity.actual_work
+    if "actual_work_unsupported_source" in activity.source_fields:
+        failures.append("task actual work is unreadable")
+    elif task_actual_work is None:
+        failures.append("task actual work is absent")
+    elif task_actual_work.seconds != 0:
+        failures.append("task actual work is not measured zero")
+
+    if any(
+        value != 0
+        for value in (
+            activity.percent_complete.duration_permille,
+            activity.percent_complete.work_permille,
+            activity.percent_complete.physical_permille,
+            activity.percent_complete.units_permille,
+        )
+    ):
+        failures.append("reported percentage progress is outside the measured shape")
+
+    split_markers = (activity.suspend, activity.resume)
+    if split_markers not in (
+        (None, None),
+        (activity.actual_start, activity.actual_start),
+    ):
+        failures.append("Stop/Resume describes a split span")
+
+    if len(activity_assignments) != 1:
+        failures.append(
+            "assignment cardinality is outside the measured one-assignment shape"
+        )
+    else:
+        assignment = activity_assignments[0]
+        resolved_resource_assignment = (
+            assignment.activity_uid == activity.uid
+            and assignment.resource_uid is not None
+            and assignment.resource_uid in resource_uids
+            and not assignment.unassigned_placeholder
+        )
+        if not resolved_resource_assignment:
+            failures.append(
+                "the measured assignment is not a resolved resource-backed assignment"
+            )
+        if "actual_work_unsupported_source" in assignment.source_fields:
+            failures.append("assignment actual work is unreadable")
+        elif assignment.source_fields.get("actual_work_source_present") != "1":
+            failures.append("assignment actual work is absent")
+        elif assignment.work.actual_seconds != 0:
+            failures.append("assignment actual work is not measured zero")
+        if assignment.percent_work_complete_permille != 0:
+            failures.append(
+                "assignment percentage progress is outside the measured shape"
+            )
+
+    primary = activity.primary_constraint
+    if (
+        primary is not None and primary.type is not ConstraintType.ASAP
+    ) or activity.secondary_constraint is not None:
+        failures.append("started work carries an unmeasured constraint")
+
+    incoming = [row for row in incident if row.successor_uid == activity.uid]
+    outgoing = [row for row in incident if row.predecessor_uid == activity.uid]
+    if not incoming or not outgoing:
+        failures.append("the measured predecessor/successor shape is absent")
+    if any(
+        row.type is not RelationshipType.FS or row.lag != 0
+        for row in incident
+    ):
+        failures.append("incident logic is not ordinary zero-lag FS")
+    if progress_policy is not ProgressPolicy.RETAINED_LOGIC:
+        failures.append("the progress policy is not the measured retained logic")
+
+    return tuple(failures)
+
+
+def _measured_in_progress_native_shape_dynamic_failures(
+    activity: Activity,
+    incident: list[PlannedRelationship],
+    early: dict[UUID, ActivityTimes],
+    planned: PlannedActivity,
+    progress_policy: ProgressPolicy,
+    status_time: int | None,
+) -> tuple[str, ...]:
+    """Evaluate the forward-network half of the same positive contract."""
+
+    failures: list[str] = []
+    if planned.actual_start is None:
+        # Static eligibility requires Actual Start. Keep this fail-closed if a
+        # future planner mapping ever loses it between the canonical row and
+        # the network consumed by the passes.
+        failures.append("Actual Start is absent from the planned activity")
+        return tuple(failures)
+
+    for relationship in incident:
+        if relationship.successor_uid != activity.uid:
+            continue
+        predecessor = early[relationship.predecessor_uid]
+        anchor = (
+            predecessor.early_finish
+            if relationship.anchors_predecessor_finish
+            else predecessor.early_start
+        )
+        landing = shift_lag(
+            lag_calendar_for(relationship, planned.calendar),
+            anchor,
+            relationship.lag,
+        )
+        if landing is None or landing > planned.actual_start:
+            failures.append(
+                "incoming retained logic is out of sequence at Actual Start"
+            )
+            break
+
+    # Ask the same policy primitive as the forward pass, isolating the status
+    # floor from predecessor logic. The measured trials did not exercise a
+    # usable status time that raises unfinished work beyond Actual Start.
+    status_bound = remaining_bound(
+        ProgressState.IN_PROGRESS,
+        progress_policy,
+        planned.actual_start,
+        status_time,
+        planned.actual_start,
+    )
+    if status_bound > planned.actual_start:
+        failures.append("usable status date moves remaining work beyond Actual Start")
+
+    return tuple(failures)
+
+
 def build_plan(
     schedule: Schedule,
     horizon: Horizon,
@@ -294,8 +475,14 @@ def build_plan(
 
     resources = {resource.uid: resource for resource in schedule.resources}
     assignments_by_activity: dict[UUID, list[UUID]] = {}
+    assignment_rows_by_activity: dict[UUID, list[Assignment]] = {}
     for assignment in schedule.assignments:
-        if assignment.activity_uid is None or assignment.resource_uid is None:
+        if assignment.activity_uid is None:
+            continue
+        assignment_rows_by_activity.setdefault(assignment.activity_uid, []).append(
+            assignment
+        )
+        if assignment.resource_uid is None:
             continue
         assignments_by_activity.setdefault(assignment.activity_uid, []).append(
             assignment.resource_uid
@@ -305,6 +492,7 @@ def build_plan(
         return int((moment - shared_epoch).total_seconds())
 
     assumed: list[Assumed] = []
+    resource_uids = set(resources)
 
     def effective_calendar(
         activity: Activity,
@@ -774,15 +962,16 @@ def build_plan(
             )
         )
 
-    # An assumption is a statement about a row the plan scheduled. One about
-    # an excluded row would count in ``assumed_by_code`` against a calculation
-    # it took no part in, so the plan refuses to carry it rather than report it.
-    for row in assumed:
-        if row.kind == "activity" and row.uid not in scheduled:
-            raise ValueError(
-                f"assumption {row.code} names activity {row.uid}, which the plan did not schedule"
-            )
-
+    # Evidence labels describe the network the passes actually evaluate, not
+    # the raw source graph. An edge whose other endpoint was excluded above is
+    # absent from that network and therefore cannot make a started activity
+    # look like the measured predecessor/successor trial shape.
+    incident_by_activity: dict[UUID, list[PlannedRelationship]] = {
+        uid: [] for uid in scheduled
+    }
+    for relationship in relationships:
+        incident_by_activity[relationship.predecessor_uid].append(relationship)
+        incident_by_activity[relationship.successor_uid].append(relationship)
     # The hierarchy, in source order, so the rollup answers a summary the same
     # way twice. Every node appears, including one with nothing beneath it:
     # the rollup reports those rather than leaving them out.
@@ -832,6 +1021,68 @@ def build_plan(
         horizon=window[1],
         status_time=status_time,
     )
+    dynamic_evidence_candidates: list[Activity] = []
+    for activity in schedule.activities:
+        if activity.uid not in scheduled:
+            continue
+        static_failures = _measured_in_progress_native_shape_static_failures(
+            activity,
+            assignment_rows_by_activity.get(activity.uid, []),
+            resource_uids,
+            incident_by_activity[activity.uid],
+            project.progress_policy,
+        )
+        if static_failures is None:
+            continue
+        if static_failures:
+            assumed.append(
+                Assumed(
+                    activity.uid,
+                    "activity",
+                    "ACTIVITY_IN_PROGRESS_LATE_DATES_ASSUMED",
+                    "; ".join(static_failures),
+                )
+            )
+        else:
+            dynamic_evidence_candidates.append(activity)
+
+    if dynamic_evidence_candidates:
+        early = forward_pass(
+            network,
+            snap_milestones=(
+                project.milestone_snap_policy is MilestoneSnapPolicy.NEXT_WORKING
+            ),
+            progress_policy=project.progress_policy,
+        ).by_uid()
+        planned_by_uid = network.activity_by_uid()
+        for activity in dynamic_evidence_candidates:
+            dynamic_failures = _measured_in_progress_native_shape_dynamic_failures(
+                activity,
+                incident_by_activity[activity.uid],
+                early,
+                planned_by_uid[activity.uid],
+                project.progress_policy,
+                status_time,
+            )
+            if dynamic_failures:
+                assumed.append(
+                    Assumed(
+                        activity.uid,
+                        "activity",
+                        "ACTIVITY_IN_PROGRESS_LATE_DATES_ASSUMED",
+                        "; ".join(dynamic_failures),
+                    )
+                )
+
+    # An assumption is a statement about a row the plan scheduled. One about
+    # an excluded row would count in ``assumed_by_code`` against a calculation
+    # it took no part in, so the plan refuses to carry it rather than report it.
+    for row in assumed:
+        if row.kind == "activity" and row.uid not in scheduled:
+            raise ValueError(
+                f"assumption {row.code} names activity {row.uid}, which the plan did not schedule"
+            )
+
     return Plan(
         network=network,
         epoch=shared_epoch,

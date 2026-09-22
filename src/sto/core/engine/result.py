@@ -50,7 +50,7 @@ __all__ = [
 ]
 
 #: Named on the hash, so a stored result says which assembly produced it.
-RESULT_PROFILE = "sto-result-v1"
+RESULT_PROFILE = "sto-result-v2"
 
 #: A row the plan scheduled and the passes placed.
 SCHEDULED = "scheduled"
@@ -60,6 +60,11 @@ EXCLUDED = "excluded"
 #: it. Not an exclusion -- the plan scheduled it -- and not an ordinary
 #: scheduled edge either, since it took no part in the late dates or the float.
 RELEASED = "released"
+
+#: The activity itself uses the broader, labelled in-progress late-date rule.
+DIRECT_PROGRESS_ASSUMPTION = "ACTIVITY_IN_PROGRESS_LATE_DATES_ASSUMED"
+#: This otherwise supported row consumed a late boundary carrying that rule.
+DERIVED_PROGRESS_ASSUMPTION = "ACTIVITY_LATE_DATES_DEPEND_ON_ASSUMED_PROGRESS"
 
 
 @dataclass(frozen=True, slots=True)
@@ -133,6 +138,12 @@ class ActivityResult:
     #: Where the unfinished part of work under way begins. Set for exactly the
     #: in-progress rows, which is the corpus's own convention.
     remaining_start: datetime | None = None
+    #: The movable start of the late unfinished span. This is distinct from
+    #: ``late_start`` for work already under way: Project reports the immutable
+    #: actual start publicly while the backward pass places only the remaining
+    #: duration. Keeping both coordinates makes a negative-float row
+    #: persistable without rewriting the public LateStart.
+    late_remaining_start: datetime | None = None
     total_float: int | None = None
     free_float: int | None = None
     #: The two readings total float is the smaller of. They differ when the
@@ -275,6 +286,31 @@ def project_result(
             )
         )
 
+    # A late driver is the relationship whose successor boundary actually won
+    # the backward calculation for this row. Follow that recorded result in
+    # reverse topological order: direct unsupported progress seeds the set, and
+    # only a row whose chosen driver consumes a seeded or derived successor is
+    # labelled in turn. This excludes connected but non-driving alternatives,
+    # while released and endpoint-dropped edges cannot appear as late drivers.
+    late_by_uid = backward.by_uid()
+    relationship_by_uid = {row.uid: row for row in plan.network.relationships}
+    progress_dependent = {
+        uid
+        for uid, codes in assumptions.items()
+        if DIRECT_PROGRESS_ASSUMPTION in codes
+    }
+    for uid in backward.order:
+        if uid in progress_dependent:
+            continue
+        driver_uid = late_by_uid[uid].driving_relationship_uid
+        if driver_uid is None:
+            continue
+        relationship = relationship_by_uid[driver_uid]
+        if relationship.successor_uid not in progress_dependent:
+            continue
+        assumptions.setdefault(uid, []).append(DERIVED_PROGRESS_ASSUMPTION)
+        progress_dependent.add(uid)
+
     # Two things the passes report and the plan does not know about. Both
     # describe a placement that rests on something other than measured file
     # evidence, so a stored row that dropped them would look ordinary.
@@ -314,6 +350,11 @@ def project_result(
                     None
                     if placed.remaining_start is None
                     else plan.to_datetime(placed.remaining_start)
+                ),
+                late_remaining_start=(
+                    None
+                    if late_row.remaining_start is None
+                    else plan.to_datetime(late_row.remaining_start)
                 ),
                 total_float=float_row.total_float,
                 free_float=float_row.free_float,
@@ -373,35 +414,51 @@ def fingerprint_result(result: ScheduleResult) -> str:
     def moment(value: datetime | None) -> str | None:
         return None if value is None else value.isoformat()
 
+    def activity_values(row: ActivityResult) -> list[object]:
+        values: list[object] = [
+            str(row.uid),
+            row.disposition,
+            moment(row.early_start),
+            moment(row.early_finish),
+            moment(row.late_start),
+            moment(row.late_finish),
+            moment(row.remaining_start),
+        ]
+        # V1 calculations predate the persisted late-remaining coordinate.
+        # Omitting it for their recorded profile lets immutable historical
+        # rows continue to verify after the additive V007 migration. V2 binds
+        # the new field, including an explicit null, into every new result.
+        if result.provenance.result_profile != "sto-result-v1":
+            values.append(moment(row.late_remaining_start))
+        values.extend(
+            [
+                row.total_float,
+                row.free_float,
+                row.start_float,
+                row.finish_float,
+                row.critical,
+                row.state,
+                row.placed_by,
+                None
+                if row.driving_relationship_uid is None
+                else str(row.driving_relationship_uid),
+                row.late_placed_by,
+                None
+                if row.late_driving_relationship_uid is None
+                else str(row.late_driving_relationship_uid),
+                row.constraint_override,
+                row.exclusion_code,
+                row.exclusion_detail,
+                list(row.assumptions),
+            ]
+        )
+        return values
+
     return canonical_sha256(
         {
             "provenance": result.provenance.to_dict(),
             "activities": sorted(
-                [
-                    str(row.uid),
-                    row.disposition,
-                    moment(row.early_start),
-                    moment(row.early_finish),
-                    moment(row.late_start),
-                    moment(row.late_finish),
-                    moment(row.remaining_start),
-                    row.total_float,
-                    row.free_float,
-                    row.start_float,
-                    row.finish_float,
-                    row.critical,
-                    row.state,
-                    row.placed_by,
-                    None if row.driving_relationship_uid is None else str(row.driving_relationship_uid),
-                    row.late_placed_by,
-                    None
-                    if row.late_driving_relationship_uid is None
-                    else str(row.late_driving_relationship_uid),
-                    row.constraint_override,
-                    row.exclusion_code,
-                    row.exclusion_detail,
-                    list(row.assumptions),
-                ]
+                activity_values(row)
                 for row in result.activities
             ),
             "relationships": sorted(

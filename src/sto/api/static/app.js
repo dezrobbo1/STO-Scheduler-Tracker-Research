@@ -281,7 +281,14 @@ function detail(row) {
 
 function calculationDetail(row) {
   const values = [];
-  if (row.late_start) values.push("late " + span(row.late_start, row.late_finish));
+  const lateSpanStart = row.late_remaining_start ?? row.late_start;
+  if (lateSpanStart) {
+    const label = row.late_remaining_start ? "late remaining " : "late ";
+    values.push(label + span(lateSpanStart, row.late_finish));
+  }
+  if (row.late_remaining_start && row.late_start) {
+    values.push("public LateStart " + moment(row.late_start));
+  }
   if (row.total_float_seconds !== null) values.push("TF " + hours(row.total_float_seconds));
   if (row.free_float_seconds !== null) values.push("FF " + hours(row.free_float_seconds));
   if (row.critical !== null) values.push(row.critical ? "critical" : "not critical");

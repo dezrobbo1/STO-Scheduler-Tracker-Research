@@ -287,10 +287,10 @@ def _bounds(
     fifty-six such rows, the earliest four weeks early on a twenty-eight-day
     lead. Flooring them at the project start moved every one of them and the
     chains behind them by exactly that lead. Work that has begun is past the
-    project start in the same way: the one in-progress row in the estate
-    started five weeks before it, and Project placed its remaining work from
-    the actual start. A predecessor that reaches back before the base did not
-    hold this activity and is not reported as its driver.
+    project start in the same way: the measured BOILER progress rows began
+    before it, and Project placed their remaining work from the actual start.
+    A predecessor that reaches back before the base did not hold this activity
+    and is not reported as its driver.
 
     A relationship becomes the driver when it raises its bound, or when it is
     the first to reach a bound nothing else has claimed. A later tie does not

@@ -40,16 +40,16 @@ dates alone rather than from a percentage:
     schedule with no usable status date, or one whose status date is older
     than its actuals, has a logic bound that may sit weeks before the actual
     start, and placing the remaining span there forecasts a finish before the
-    work began. The one in-progress row in the estate is exactly that shape --
-    a status date sixteen months stale, an actual start five weeks before the
-    project start -- and Microsoft Project placed its remaining eight hours
-    from the actual start on the task's calendar. So the actual start is a
+    work began. The measured BOILER progress rows have that shape -- a stale
+    status date and an actual start before the project start -- and Microsoft
+    Project placed their remaining work from the actual start on the task's
+    calendar. So the actual start is a
     floor under the remaining span as well as a fact about the past. What the
     floor is *not* is the end of the work already done: Project carries a
-    resume date and an actual duration for that, and the one row here has
-    neither, so a remaining span that should begin after a completed portion
-    is not measured and is recorded in ``docs/goals/ACTIVE.md`` rather than
-    guessed.
+    resume date and an actual duration for that. The controlled rows have zero
+    actual duration and only zero-span Stop/Resume markers, so a remaining span
+    that should begin after a completed portion is not measured and is recorded
+    in ``docs/goals/ACTIVE.md`` rather than guessed.
 
 ``NOT_STARTED``
     Neither date. Scheduled exactly as it was before this slice, on its

@@ -47,7 +47,7 @@ from .progress import ProgressState, relationship_binds, state_of
 __all__ = ["VALIDATOR_PROFILE", "Violation", "validate_result"]
 
 #: Named on a report so a stored one says which rules were applied.
-VALIDATOR_PROFILE = "sto-validator-v2"
+VALIDATOR_PROFILE = "sto-validator-v3"
 
 
 @dataclass(frozen=True, slots=True)
@@ -210,10 +210,17 @@ def validate_result(
             violations.append(
                 Violation("EARLY_SPAN_INVERTED", uid, f"{row.early_start} > {row.early_finish}")
             )
-        if late_row.late_finish < late_row.late_start:
+        late_span_start = (
+            late_row.remaining_start
+            if late_row.remaining_start is not None
+            else late_row.late_start
+        )
+        if late_row.late_finish < late_span_start:
             violations.append(
                 Violation(
-                    "LATE_SPAN_INVERTED", uid, f"{late_row.late_start} > {late_row.late_finish}"
+                    "LATE_SPAN_INVERTED",
+                    uid,
+                    f"{late_span_start} > {late_row.late_finish}",
                 )
             )
 
@@ -234,8 +241,13 @@ def validate_result(
                         f"consumes {consumed}, duration {expected}",
                     )
                 )
+            late_begins = (
+                late_row.remaining_start
+                if late_row.remaining_start is not None
+                else late_row.late_start
+            )
             late_consumed = working_between(
-                activity.calendar, late_row.late_start, late_row.late_finish
+                activity.calendar, late_begins, late_row.late_finish
             )
             if late_consumed != expected:
                 violations.append(
@@ -342,6 +354,34 @@ def validate_result(
                         f"early start {row.early_start}, actual start {activity.actual_start}",
                     )
                 )
+            if late_row.remaining_start is None:
+                violations.append(
+                    Violation(
+                        "LATE_REMAINING_START_MISSING",
+                        uid,
+                        "work under way reports no late remaining start",
+                    )
+                )
+            if (
+                activity.actual_start is not None
+                and late_row.late_start != activity.actual_start
+            ):
+                violations.append(
+                    Violation(
+                        "STARTED_LATE_START_NOT_ITS_ACTUAL",
+                        uid,
+                        f"late start {late_row.late_start}, "
+                        f"actual start {activity.actual_start}",
+                    )
+                )
+        if state is not ProgressState.IN_PROGRESS and late_row.remaining_start is not None:
+            violations.append(
+                Violation(
+                    "LATE_REMAINING_START_UNEXPECTED",
+                    uid,
+                    f"{state.value} activity reports a late remaining start",
+                )
+            )
         # --- and a root begins no earlier than the project does ----------
         # Only of a root: an activity with nothing bounding it and no dated
         # constraint has the project start as its floor, and nothing else can
@@ -351,8 +391,9 @@ def validate_result(
         # activity bounded on its finish reaches back before the project start
         # on every real file here -- 56 rows on the un-progressed BOILER
         # snapshot alone. Asking it of them would reject sound results.
-        elif (
-            not incident[uid]
+        if (
+            state is ProgressState.NOT_STARTED
+            and not incident[uid]
             and activity.constraint_coordinate is None
             and row.early_start < network.project_start
         ):
@@ -382,7 +423,12 @@ def validate_result(
             # Already reported as missing above; indexing it here turned that
             # report into a KeyError before it could be returned.
             continue
-        start_gap = _signed(activity.float_calendar, early_side, late_row.late_start)
+        late_side = (
+            late_row.remaining_start
+            if late_row.remaining_start is not None
+            else late_row.late_start
+        )
+        start_gap = _signed(activity.float_calendar, early_side, late_side)
         finish_gap = _signed(activity.float_calendar, row.early_finish, late_row.late_finish)
         measured = min(start_gap, finish_gap)
         reported = float_row.total_float

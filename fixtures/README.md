@@ -23,6 +23,8 @@ export STO_CALCINER=/path/to/calciner-wg050-source.xml             # the float r
                                                                    # only declared slack limit
 export STO_BOILER_AFTER_NATIVE=/path/to/boiler-after-native-progress.xml
 export STO_BOILER_ROUNDTRIP_SAVED=/path/to/boiler-roundtrip-project-saved-task43.xml
+export STO_BOILER_CONTROLLED_NATIVE=/path/to/P1-CONTROLLED-NATIVE-PROGRESS-RETURNED.xml
+export STO_BOILER_CONTROLLED_NATIVE_REPEAT=/path/to/P1-CONTROLLED-NATIVE-PROGRESS-UID227-RETURNED.xml
 PYTHONPATH=src python3 -m unittest discover -s tests
 ```
 
@@ -32,8 +34,12 @@ does not wait for day-5, and KILN, CALCINER and native-completion evidence do
 not wait for one another. `STO_REQUIRE_BOILER=1` requires the current stored-XML
 matrix (BOILER baseline, KILN and CALCINER). `STO_REQUIRE_NATIVE=1` separately
 requires the two Project-recalculated completion files, and
-`STO_REQUIRE_DAY5=1` requires the exact day-5 candidate. Use only the switch
-for the evidence claim being gated.
+`STO_REQUIRE_CONTROLLED_NATIVE=1` requires the controlled in-progress pair.
+`STO_REQUIRE_CONTROLLED_NATIVE_REPEAT=1` requires the baseline and clean UID
+227 repeat that closes P1-G3; it does not close the separate P1-G2 static
+baseline-reconciliation gate.
+`STO_REQUIRE_DAY5=1` requires the exact day-5 candidate. Use only the switch for
+the evidence claim being gated.
 
 ## The BOILER family: at least four distinct files
 
@@ -47,7 +53,9 @@ file**. Any evidence claim must name which one it used.
 | `9fabe70debd004ac` | `boiler-after-native-progress.xml` | 3,871,501 | The same schedule after Microsoft Project natively completed task UIDs 43, 318, 319. The genuine Project-recalculation oracle for engine slice S5. |
 | `7dcd4d828944db9b` | `boiler-roundtrip-candidate-task43.xml` | 3,264,344 | The generated candidate. Hash matches ST-Claude's evidence record `RT-2026-08-28-BOILER-43` exactly. |
 | `aff57ce8466d6194` | `boiler-roundtrip-project-saved-task43.xml` | 3,362,829 | Project's saved result for that candidate. Hash matches the same evidence record exactly. |
-| `a8d44aa23e20c510` | `BOILER-WG110-day5-candidate.mspdi.xml` | 3,747,935 | 562 tasks, `StatusDate 2025-05-09T17:00:00`, 8 tasks with actuals, 40 calendar exceptions, 635 links, carrying the build label `16.0.20131.20152`. Written by tooling and never recalculated by Project (ADR-009): an oracle for *reported work* — the actual dates and the one in-progress forecast finish, which the pass reproduces exactly — and **not** for late dates, slack, criticality or the status date, which falls sixteen months before its own project start. The two Project-recalculated files above are the completion oracle. |
+| `31443027dedaf411c` | `P1-CONTROLLED-NATIVE-PROGRESS-RETURNED.xml` | 3,362,251 | The resaved baseline after the controlled UID 15 in-progress edit in Microsoft Project build `16.0.20228.20186`. External-only evidence for `P1-NATIVE-PROGRESS-BOILER-UID15-V1`; the supplied filename differed, so identity is by this hash. |
+| `6e0e5321ecadf4b8` | `P1-CONTROLLED-NATIVE-PROGRESS-UID227-RETURNED.xml` | 3,362,778 | The clean repeat selected before execution because all nine baseline result fields were exact. Microsoft Project build `16.0.20228.20186` changed the predicted 43 result fields across 12 rows with zero unexplained differences. External-only evidence for `P1-NATIVE-PROGRESS-BOILER-UID227-V1`. |
+| `a8d44aa23e20c510` | `BOILER-WG110-day5-candidate.mspdi.xml` | 3,747,935 | 562 tasks, `StatusDate 2025-05-09T17:00:00`, 8 tasks with actuals, 40 calendar exceptions, 635 links, carrying the build label `16.0.20131.20152`. Written by tooling and never recalculated by Project (ADR-009): an oracle for *reported work* — the actual dates and the one in-progress forecast finish, which the pass reproduces exactly — and **not** for late dates, slack, criticality or the status date, which falls sixteen months before its own project start. The separately listed after-native and roundtrip Project-saved files are the completion oracle. |
 
 ### The untouched source, recovered
 
@@ -77,11 +85,12 @@ of them. Same policy: outside git, recorded by hash.
 
 **`BOILER-WG110-day5-candidate.mspdi.xml` has no upstream.** It exists in no
 repository, on no branch, in no other copy found on this machine. It is the only
-file carrying an activity that has started but not finished. Its actual dates
-and stored forecast finish are a reported-work oracle. Its status date precedes
-its project start and its late dates were not recalculated by Project, so it is
-not evidence for status-date scheduling, retained logic, late dates, float or
-criticality. If it is lost, the only real in-progress cohort cannot be rerun.
+eight-row field-progress cohort; the two controlled Project outputs each carry
+one selected in-progress row. Its actual dates and stored forecast finish are a
+reported-work oracle. Its status date precedes its project start and its late
+dates were not recalculated by Project, so it is not evidence for status-date
+scheduling, retained logic, late dates, float or criticality. If it is lost,
+that broader field-progress cohort cannot be rerun.
 
 As of 2026-09-03 a second copy sits beside the other four, and every file in
 that directory is read-only. Both copies are on one filesystem on one machine,
@@ -119,7 +128,9 @@ It contains the untouched BOILER, KILN and CALCINER files above. The four
 committed BOILER fixtures were recovered from the frozen repository and match
 their recorded hashes. The exact day-5 hash `a8d44aa23e20c510…` is **NOT
 AVAILABLE** in either authorized source; it was not reconstructed from task
-data. The current measurements and complete hashes are in
+data. It remains the unique eight-row reported-work cohort, but the controlled
+2026-09-20 output now supplies a separate Project-recalculated in-progress row.
+The current measurements and complete hashes are in
 `docs/evidence/current-engine-evidence-2026-09-10.md`.
 
 ## Gate recovery checked 2026-09-20
@@ -131,3 +142,28 @@ the four committed BOILER files again matched the sizes and full hashes above.
 The exact day-five candidate remains **NOT AVAILABLE** through either recovery
 route. See `docs/evidence/p1-gate-entry-decision-2026-09-20.md` for the bounded
 native-transition classification and development-entry decision.
+
+## Controlled in-progress run received 2026-09-20
+
+The controlled Project run is evaluated in
+`docs/evidence/p1-final-native-progress-2026-09-20.md`. It produced the first
+native measurement of late dates for started, unfinished work and led to a
+bounded engine correction. Under the predeclared comparison contract, 3 of
+4,140 field slots remain unexplained, so at that interim point P1 stayed 3/5
+and the file did not
+close P1-G2 or P1-G3. `STO_REQUIRE_CONTROLLED_NATIVE=1` makes either member of
+this exact pair missing or wrong-identity a hard failure.
+
+## Clean controlled repeat received 2026-09-20
+
+The separately predeclared UID 227 repeat is also evaluated in
+`docs/evidence/p1-final-native-progress-2026-09-20.md`. All 43 result fields
+changed by Project across the predicted 12-row cohort agree exactly with the
+independent engine, with zero unexpected transition differences. That result
+closes P1-G3 only. P1-G2 remains open because the full-leaf static comparison
+contains 422 `BASELINE_MISMATCH` field instances across 105 leaf identities.
+P1 is therefore 4/5 and in progress, and P2 is not started. The first run's
+three unexplained fields remain recorded; they were not retrospectively
+reclassified.
+`STO_REQUIRE_CONTROLLED_NATIVE_REPEAT=1` makes the verified baseline/repeat pair
+missing or wrong-identity a hard failure.

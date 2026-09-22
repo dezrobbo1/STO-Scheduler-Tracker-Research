@@ -147,3 +147,41 @@ P1-G3 therefore remains open. The hash-identical consolidation archive and the
 documented frozen recovery route still do not contain the exact day-five
 candidate, so P1-G2 remains open as well. No fresh native Project session was
 executed and no historical measurement is relabelled as one.
+
+## Controlled native progress amendment — 2026-09-20
+
+A later, independently evidenced Microsoft Project session applied one
+predeclared in-progress edit to the verified BOILER baseline. The returned file
+has SHA-256 `31443027dedaf411c5c33b03806881c370f7f039ca520569a1fa0fa59f0b5278`
+and identifies Project build `16.0.20228.20186`. It exposed a bounded engine
+defect: Project reports `LateStart` for started, unfinished work at Actual Start
+while separately placing the movable late remaining-work span. The corrected
+engine keeps both coordinates and preserves the existing retained-logic rule.
+
+The corrected complete comparison classifies 3,509 of 4,140 field slots as
+unchanged, 419 as static baseline mismatches, 128 as engine/native agreement,
+81 as explicit exclusions and 3 as unexplained. Those three changed fields
+occur on one upstream identity whose
+baseline late fields were already inexact, so they cannot be promoted after
+seeing the native result. At that interim point P1 therefore remained 3/5.
+Full identities,
+classification rules, the correction boundary and the smallest repeat are in
+`docs/evidence/p1-final-native-progress-2026-09-20.md` and its JSON companion.
+
+## Clean controlled repeat amendment — 2026-09-20
+
+The predeclared UID 227 repeat was subsequently returned from Microsoft Project
+build `16.0.20228.20186`. Its 3,362,778-byte output has SHA-256
+`6e0e5321ecadf4b8d9e96685968112803975737a61444104b45ae8cfa522df66`.
+The corrected review classifier finds 3,594 exact unchanged fields, 422 static
+engine/source baseline mismatches, 43 exact engine/native agreement fields and
+81 fields belonging to explicit coded exclusions. The 43 changed fields occur
+on exactly the 12 rows selected before the native run, including six downstream
+movements, and there are zero unexpected transition differences.
+
+The clean repeat therefore closes the bounded-transition criterion P1-G3, but
+the 422 static mismatches across 105 leaves keep the full-leaf parity criterion
+P1-G2 open. P1 is 4/5 and in progress; P2 remains not started. The full
+fixed-contract result, provenance limitation and executable external-fixture
+test are in
+`docs/evidence/p1-final-native-progress-2026-09-20.md`.

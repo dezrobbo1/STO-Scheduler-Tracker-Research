@@ -851,9 +851,12 @@ def migrate(
                     _duration(row.get("actual_duration_source"), format_code=format_code)
                 ),
                 planned_work=_as_duration(_duration(row.get("work"))),
+                actual_work=_as_duration(_duration(row.get("actual_work_source"))),
                 percent_complete=_percent(row),
                 actual_start=_dt(row.get("actual_start_source")),
                 actual_finish=_dt(row.get("actual_finish_source")),
+                suspend=_dt(row.get("stop_source")),
+                resume=_dt(row.get("resume_source")),
                 calendar_uid=_calendar_uid(calendar_ref),
                 primary_constraint=_constraint(row),
                 deadline=_dt(row.get("deadline_source")),
@@ -955,6 +958,11 @@ def migrate(
             **_unsupported_fields("actual_work", raw_actual_work),
             **_unsupported_fields("remaining_work", raw_remaining_work),
         }
+        if actual_work is not None:
+            # ``WorkTriple.actual_seconds`` defaults to zero, so it cannot by
+            # itself distinguish an explicit source zero from an absent value.
+            # The native late-date evidence boundary needs that distinction.
+            assignment_fields["actual_work_source_present"] = "1"
         assignments.append(
             Assignment(
                 uid=uid,

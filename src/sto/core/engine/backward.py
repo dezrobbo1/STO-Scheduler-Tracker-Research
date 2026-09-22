@@ -48,19 +48,18 @@ activity's late dates are its actual dates and no successor pulls them anywhere.
 That is measured rather than assumed: in the two files Microsoft Project itself
 recalculated after progress was entered, every completed activity's stored late
 start and late finish equal its actual ones, with a stored total slack of zero.
-An **in-progress** activity is not pinned. What this pass places for it is its
-*remaining* duration, exactly as the forward pass does, so ``late_start`` is the
-latest its unfinished work could begin rather than the latest it could have
-started -- which is a question about the past and has no answer. Placing the
-whole duration instead is not merely wrong but unschedulable: a corpus case with
-eight units of duration and three remaining has no room to fit eight units
-before its own late finish, and the pass would refuse a schedule it had just
-computed a forward answer for.
-
-Whether Microsoft Project agrees is **not settled here**: no file in this estate
-carries a Project-recalculated late date for an activity that had started and
-not finished, so there is nothing to measure the rule against, and
-``docs/goals/ACTIVE.md`` records it as owed to the first file that does.
+The two controlled native in-progress experiments recorded in
+``docs/evidence/p1-final-native-progress-2026-09-20.md`` settle the corresponding
+started-work rule for their shared zero-actual-duration, zero-lag FS shape.
+Project keeps ``LateStart`` on the immutable actual start,
+places the *remaining* duration at its latest feasible span, and uses that actual
+start as the backward FS/SS anchor. The two start coordinates therefore stay
+distinct: ``late_start`` is the reported Project field and ``remaining_start``
+is the internal start of the movable late remaining span. Collapsing them left
+the predecessor chain with float that Project removed; placing the full original
+duration would instead refuse valid remaining work.
+``build_plan`` labels broader started-work shapes as assumptions, so this pass's
+general conformance behavior is not published as broader native evidence.
 
 The progress policy reaches this pass too. Under ``progress_override`` with a
 status time the forward pass releases every predecessor's hold over an
@@ -104,13 +103,14 @@ from sto.core.calendar.arithmetic import (
 from sto.core.hashing import canonical_sha256
 from sto.core.model.enums import ConstraintType, ProgressPolicy
 
-from .forward import ForwardPass
+from .forward import ActivityTimes, ForwardPass
 from .network import (
     lag_calendar_for,
     BackwardPassError,
     Network,
     PlannedActivity,
     PlannedRelationship,
+    shift_lag,
     unshift_lag,
 )
 from .progress import ProgressState, relationship_binds, state_of
@@ -129,8 +129,10 @@ FROM_ACTUALS = "actuals"
 #: already redundant -- still changes the answer's digest. Version four binds
 #: the progress policy itself; version five closes a feasible plateau after a
 #: finite lag calendar against the network horizon. Version six binds the
-#: milestone-snap policy inherited from the forward pass.
-BACKWARD_PASS_PROFILE = "sto-backward-pass-v6"
+#: milestone-snap policy inherited from the forward pass; version seven keeps
+#: an in-progress activity's actual LateStart separate from its movable late
+#: remaining span.
+BACKWARD_PASS_PROFILE = "sto-backward-pass-v7"
 
 
 @dataclass(frozen=True, slots=True)
@@ -142,6 +144,9 @@ class ActivityLateTimes:
     late_finish: int
     driving_relationship_uid: UUID | None = None
     source: str = FROM_PROJECT_FINISH
+    #: The latest start of unfinished work. Present only in progress, where
+    #: ``late_start`` is the immutable actual start reported by Project.
+    remaining_start: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -198,6 +203,7 @@ def _bounds(
     activity: PlannedActivity,
     outgoing: tuple[PlannedRelationship, ...],
     placed: dict[UUID, ActivityLateTimes],
+    early: dict[UUID, ActivityTimes],
     project_late_finish: int,
     calendars: dict[UUID, CompiledIntervals],
     released: frozenset[UUID],
@@ -229,12 +235,28 @@ def _bounds(
         if relationship.uid in released:
             continue
         successor = placed[relationship.successor_uid]
+        calendar = lag_calendar_for(relationship, calendars[relationship.successor_uid])
         anchor = (
             successor.late_start
             if relationship.bounds_successor_start
             else successor.late_finish
         )
-        calendar = lag_calendar_for(relationship, calendars[relationship.successor_uid])
+        if relationship.bounds_successor_start and successor.remaining_start is not None:
+            # A started successor's actual LateStart is a backward boundary
+            # only for logic already satisfied when it started. Retained-logic
+            # out-of-sequence work still binds the remaining span; using the
+            # actual unconditionally can make a predecessor that Project keeps
+            # outstanding impossible to place. Compare the exact relationship
+            # landing, including its lag, with the immutable actual boundary.
+            predecessor = early[relationship.predecessor_uid]
+            predecessor_anchor = (
+                predecessor.early_finish
+                if relationship.anchors_predecessor_finish
+                else predecessor.early_start
+            )
+            landed = shift_lag(calendar, predecessor_anchor, relationship.lag)
+            if landed is None or landed > successor.late_start:
+                anchor = successor.remaining_start
         shifted = unshift_lag(calendar, anchor, relationship.lag, ceiling=horizon)
         if shifted is None:
             raise BackwardPassError(
@@ -314,6 +336,7 @@ def backward_pass(
             f"horizon {network.horizon}",
         )
     calendars = {activity.uid: activity.calendar for activity in network.activities}
+    early = forward.by_uid()
     states = {activity.uid: state_of(activity) for activity in network.activities}
     overridden = tuple(
         relationship.uid
@@ -367,7 +390,14 @@ def backward_pass(
             continue
 
         start_bound, finish_bound, start_driver, finish_driver = _bounds(
-            activity, outgoing[uid], placed, late_finish, calendars, released, network.horizon
+            activity,
+            outgoing[uid],
+            placed,
+            early,
+            late_finish,
+            calendars,
+            released,
+            network.horizon,
         )
 
         constraint = activity.constraint_type
@@ -416,7 +446,21 @@ def backward_pass(
             )
             source = FROM_RELATIONSHIP if driver is not None else FROM_PROJECT_FINISH
 
-        placed[uid] = ActivityLateTimes(uid, start, finish, driver, source)
+        if state is ProgressState.IN_PROGRESS:
+            if activity.actual_start is None:
+                raise BackwardPassError(
+                    "SCHEDULE_PROGRESS_STATE_INCOMPLETE", activity.uid
+                )
+            placed[uid] = ActivityLateTimes(
+                uid,
+                activity.actual_start,
+                finish,
+                driver,
+                source,
+                remaining_start=start,
+            )
+        else:
+            placed[uid] = ActivityLateTimes(uid, start, finish, driver, source)
 
     times = tuple(placed[uid] for uid in forward.order)
     return BackwardPass(
@@ -571,7 +615,13 @@ def _fingerprint(
             "project_late_finish": project_late_finish,
             "overridden_relationships": sorted(str(uid) for uid in overridden),
             "times": sorted(
-                [str(row.uid), row.late_start, row.late_finish] for row in times
+                [
+                    str(row.uid),
+                    row.late_start,
+                    row.late_finish,
+                    row.remaining_start,
+                ]
+                for row in times
             ),
         }
     )

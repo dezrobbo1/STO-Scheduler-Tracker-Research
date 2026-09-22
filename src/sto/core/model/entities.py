@@ -199,6 +199,9 @@ class Activity:
     remaining_duration: Duration | None = None
     actual_duration: Duration | None = None
     planned_work: Duration | None = None
+    #: Task-level work already performed. ``None`` means the source did not
+    #: report it; unreadable source text is retained in ``source_fields``.
+    actual_work: Duration | None = None
     percent_complete: PercentComplete = field(default_factory=PercentComplete)
     actual_start: datetime | None = None
     actual_finish: datetime | None = None

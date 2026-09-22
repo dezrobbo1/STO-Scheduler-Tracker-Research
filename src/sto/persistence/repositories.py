@@ -481,19 +481,62 @@ def insert_calculation(
         return None
     calculation_id = row["id"]
 
-    with conn.cursor() as cursor:
-        cursor.executemany(
+    late_remaining_supported = bool(
+        conn.execute(
             """
+            SELECT EXISTS (
+              SELECT 1 FROM information_schema.columns
+              WHERE table_schema = current_schema()
+                AND table_name = 'activity_results'
+                AND column_name = 'late_remaining_start'
+            ) AS present
+            """
+        ).fetchone()["present"]
+    )
+    if not late_remaining_supported and any(
+        activity.late_remaining_start is not None for activity in result.activities
+    ):
+        raise RuntimeError(
+            "V007 is required to store an in-progress late remaining span"
+        )
+
+    with conn.cursor() as cursor:
+        activity_columns = [
+            "calculation_id",
+            "activity_uid",
+            "disposition",
+            "early_start",
+            "early_finish",
+            "late_start",
+            "late_finish",
+            "remaining_start",
+        ]
+        if late_remaining_supported:
+            activity_columns.append("late_remaining_start")
+        activity_columns.extend(
+            [
+                "total_float_seconds",
+                "free_float_seconds",
+                "start_float_seconds",
+                "finish_float_seconds",
+                "critical",
+                "progress_state",
+                "placed_by",
+                "driving_relationship_uid",
+                "late_placed_by",
+                "late_driving_relationship_uid",
+                "constraint_override",
+                "exclusion_code",
+                "exclusion_detail",
+                "assumptions",
+            ]
+        )
+        activity_placeholders = ", ".join(["%s"] * len(activity_columns))
+        cursor.executemany(
+            f"""
             INSERT INTO activity_results
-              (calculation_id, activity_uid, disposition, early_start, early_finish,
-               late_start, late_finish, remaining_start, total_float_seconds,
-               free_float_seconds, start_float_seconds, finish_float_seconds,
-               critical, progress_state, placed_by,
-               driving_relationship_uid, late_placed_by,
-               late_driving_relationship_uid, constraint_override,
-               exclusion_code, exclusion_detail, assumptions)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                    %s, %s, %s, %s, %s, %s, %s)
+              ({", ".join(activity_columns)})
+            VALUES ({activity_placeholders})
             """,
             [
                 (
@@ -505,6 +548,7 @@ def insert_calculation(
                     activity.late_start,
                     activity.late_finish,
                     activity.remaining_start,
+                    *((activity.late_remaining_start,) if late_remaining_supported else ()),
                     activity.total_float,
                     activity.free_float,
                     activity.start_float,

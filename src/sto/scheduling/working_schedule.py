@@ -1088,6 +1088,7 @@ class Workspace:
                     "late_start": row.late_start,
                     "late_finish": row.late_finish,
                     "remaining_start": row.remaining_start,
+                    "late_remaining_start": row.late_remaining_start,
                     "total_float_seconds": row.total_float,
                     "free_float_seconds": row.free_float,
                     "critical": row.critical,
@@ -1508,6 +1509,21 @@ def _rebuild_result(
     """
 
     profiles = header["profiles"]
+    if profiles["result"] == "sto-result-v1":
+        unauthenticated = next(
+            (
+                row
+                for row in rows
+                if row.get("late_remaining_start") is not None
+            ),
+            None,
+        )
+        if unauthenticated is not None:
+            raise IntegrityError(
+                "legacy sto-result-v1 calculation "
+                f"{header['id']} contains late_remaining_start for activity "
+                f"{unauthenticated['activity_uid']}"
+            )
     provenance = Provenance(
         canonical_hash=header["canonical_hash"],
         epoch=header["epoch"],
@@ -1534,6 +1550,7 @@ def _rebuild_result(
             late_start=row["late_start"],
             late_finish=row["late_finish"],
             remaining_start=row["remaining_start"],
+            late_remaining_start=row.get("late_remaining_start"),
             total_float=(
                 None if row["total_float_seconds"] is None else int(row["total_float_seconds"])
             ),
