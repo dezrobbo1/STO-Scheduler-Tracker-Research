@@ -494,13 +494,13 @@ class P1G2DiagnosticToolTests(unittest.TestCase):
     def _assert_poisoned_bytecode_is_ignored(self, *, external_prefix: bool) -> None:
         source = ROOT / "tests/controlled_native_progress_evidence.py"
         source_text = source.read_text(encoding="utf-8")
-        future = "from __future__ import annotations\\n"
+        future = "from __future__ import annotations\n"
         self.assertIn(future, source_text)
         poisoned_source = source_text.replace(
             future,
             future
-            + "import os\\n"
-            + "os.environ['STO_P1_G2_PYCACHE_POISON'] = 'executed'\\n",
+            + "import os\n"
+            + "os.environ['STO_P1_G2_PYCACHE_POISON'] = 'executed'\n",
             1,
         )
 
