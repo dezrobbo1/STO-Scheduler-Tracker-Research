@@ -11,8 +11,12 @@ Repository basis: `0805bcb44f5122e9499e1dc2449dc25ee6b01abd`.
 That commit is a declared **production-code basis**, not an unchecked label.
 The diagnostic refuses to run when `src/sto/core`, `src/sto/legacy` or the
 controlled-transition classifier differs from that commit, including relevant
-uncommitted or untracked files. Evidence-tool and documentation changes remain
-independent of that production boundary. The JSON records the verified path-tree
+uncommitted or untracked files. Before importing repository calculation code it
+also redirects Python bytecode lookup to a fresh private cache domain and disables
+cache writes, so ignored `__pycache__` entries and caller-supplied
+`PYTHONPYCACHEPREFIX` contents cannot replace the verified checkout source.
+Evidence-tool and documentation changes remain independent of that production
+boundary. The JSON records the verified path-tree
 digest and the evidence tool's own schema, path, byte size and SHA-256. The
 pinned path-tree digest is the verification authority when a shallow CI checkout
 does not contain the declared commit object.

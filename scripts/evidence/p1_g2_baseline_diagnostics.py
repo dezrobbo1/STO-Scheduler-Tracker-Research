@@ -34,6 +34,17 @@ ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "src"
 _EVIDENCE_TOOL_BYTES_AT_STARTUP = Path(__file__).resolve().read_bytes()
 
+# Evidence generation must execute checkout source, never pre-existing bytecode.
+# Redirect importlib's cache lookup to a fresh private directory before any
+# repository module is imported, then disable cache writes. This makes both
+# ordinary __pycache__ entries and caller-supplied PYTHONPYCACHEPREFIX caches
+# irrelevant to the production code that generates the record.
+_EVIDENCE_PYCACHE_DIRECTORY = tempfile.TemporaryDirectory(
+    prefix="sto-p1-g2-pycache-"
+)
+sys.pycache_prefix = _EVIDENCE_PYCACHE_DIRECTORY.name
+sys.dont_write_bytecode = True
+
 # Use this checkout's classifier and production implementation even when a
 # caller supplied the same paths later in PYTHONPATH.  Merely checking for
 # membership would leave an earlier shadow package able to perform a

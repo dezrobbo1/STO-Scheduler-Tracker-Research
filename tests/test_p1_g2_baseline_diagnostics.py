@@ -2,9 +2,12 @@ from __future__ import annotations
 
 from collections import Counter
 import hashlib
+import importlib.util
 import json
+import marshal
 import os
 from pathlib import Path
+import struct
 import subprocess
 import sys
 import tempfile
@@ -487,6 +490,87 @@ class P1G2DiagnosticToolTests(unittest.TestCase):
             Path(completed.stdout.strip()).resolve(),
             (ROOT / "src/sto/__init__.py").resolve(),
         )
+
+    def _assert_poisoned_bytecode_is_ignored(self, *, external_prefix: bool) -> None:
+        source = ROOT / "tests/controlled_native_progress_evidence.py"
+        source_text = source.read_text(encoding="utf-8")
+        future = "from __future__ import annotations\\n"
+        self.assertIn(future, source_text)
+        poisoned_source = source_text.replace(
+            future,
+            future
+            + "import os\\n"
+            + "os.environ['STO_P1_G2_PYCACHE_POISON'] = 'executed'\\n",
+            1,
+        )
+
+        with tempfile.TemporaryDirectory() as directory:
+            environment = os.environ.copy()
+            if external_prefix:
+                environment["PYTHONPYCACHEPREFIX"] = str(Path(directory) / "external-cache")
+            else:
+                environment.pop("PYTHONPYCACHEPREFIX", None)
+            cache_probe = subprocess.run(
+                (
+                    sys.executable,
+                    "-c",
+                    "import importlib.util, sys; "
+                    "print(importlib.util.cache_from_source(sys.argv[1]))",
+                    str(source),
+                ),
+                cwd=ROOT,
+                env=environment,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            cache_path = Path(cache_probe.stdout.strip())
+            previous = cache_path.read_bytes() if cache_path.exists() else None
+            cache_path.parent.mkdir(parents=True, exist_ok=True)
+            metadata = source.stat()
+            header = (
+                importlib.util.MAGIC_NUMBER
+                + struct.pack(
+                    "<III",
+                    0,
+                    int(metadata.st_mtime) & 0xFFFFFFFF,
+                    metadata.st_size & 0xFFFFFFFF,
+                )
+            )
+            code = compile(poisoned_source, str(source), "exec")
+            cache_path.write_bytes(header + marshal.dumps(code))
+
+            child_environment = environment.copy()
+            child_environment.pop("STO_P1_G2_PYCACHE_POISON", None)
+            try:
+                completed = subprocess.run(
+                    (
+                        sys.executable,
+                        "-c",
+                        "import os; "
+                        "import scripts.evidence.p1_g2_baseline_diagnostics; "
+                        "print(os.environ.get('STO_P1_G2_PYCACHE_POISON', 'clean'))",
+                    ),
+                    cwd=ROOT,
+                    env=child_environment,
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                )
+            finally:
+                if previous is None:
+                    cache_path.unlink(missing_ok=True)
+                else:
+                    cache_path.write_bytes(previous)
+
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(completed.stdout.strip(), "clean")
+
+    def test_ignored_checkout_pycache_cannot_supply_evidence_code(self) -> None:
+        self._assert_poisoned_bytecode_is_ignored(external_prefix=False)
+
+    def test_external_pythonpycacheprefix_cannot_supply_evidence_code(self) -> None:
+        self._assert_poisoned_bytecode_is_ignored(external_prefix=True)
 
     def test_declared_production_basis_matches_this_worktree(self) -> None:
         lineage = verify_production_basis()

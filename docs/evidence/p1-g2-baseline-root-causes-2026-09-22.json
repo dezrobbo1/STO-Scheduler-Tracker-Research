@@ -17,8 +17,8 @@
     "evidence_tool": {
       "path": "scripts/evidence/p1_g2_baseline_diagnostics.py",
       "schema": "sto-p1-g2-baseline-root-causes-v3",
-      "bytes": 74222,
-      "sha256": "9701a86dcbfa17f665681db868558d2b92e074ddd8b85313dd56e7fcfe62a4f2"
+      "bytes": 74775,
+      "sha256": "bfdaf4e40dc5de7ee28ec8736b5dfb4f27715f2dd44dcba672237b444767c882"
     }
   },
   "classification_contract": {
