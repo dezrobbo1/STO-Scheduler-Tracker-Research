@@ -28,7 +28,8 @@ from xml.etree import ElementTree as ET
 
 from calculation_fixture import _activity, _calendar, _document, _duration, _relationship
 
-from sto.core.engine import PlanError, build_plan, forward_pass
+from sto.core.engine import PlanError, build_plan, forward_pass, shift_lag
+from sto.core.engine.network import lag_calendar_for
 from sto.core.model.enums import ScheduleDirection
 from sto.core.model.migrate.sto_v011 import migrate
 from sto.legacy import MSPDI_NAMESPACE, import_mspdi
@@ -83,6 +84,7 @@ def _imported_progress_chain(
     *,
     task_actual_work: str | None = "PT0S",
     assignment_actual_work: str | None = "PT0S",
+    actual_start: str = "2026-01-05T09:00:00",
 ):
     """A started middle task with the exact relationship shape under review."""
 
@@ -95,7 +97,7 @@ def _imported_progress_chain(
         "</PredecessorLink>"
     )
     middle_extra = (
-        "<ActualStart>2026-01-05T08:00:00</ActualStart>"
+        f"<ActualStart>{actual_start}</ActualStart>"
         "<ActualDuration>PT0S</ActualDuration>"
         f"{element('ActualWork', task_actual_work)}"
         f"{predecessor.format(uid=1)}"
@@ -205,10 +207,12 @@ class InProgressLateDateClaimBoundaryTests(unittest.TestCase):
         *,
         task_actual_work: str | None = "PT0S",
         assignment_actual_work: str | None = "PT0S",
+        actual_start: str = "2026-01-05T09:00:00",
     ):
         with _imported_progress_chain(
             task_actual_work=task_actual_work,
             assignment_actual_work=assignment_actual_work,
+            actual_start=actual_start,
         ) as document:
             schedule, _, _ = migrate(document)
         plan = build_plan(schedule, HORIZON)
@@ -221,6 +225,67 @@ class InProgressLateDateClaimBoundaryTests(unittest.TestCase):
     def test_explicit_zero_task_and_assignment_actual_work_is_measured(self):
         _, _, assumptions = self._imported_actual_work_boundary()
         self.assertEqual(assumptions, [])
+
+    def test_in_sequence_retained_logic_stays_inside_the_measured_shape(self):
+        with _imported_progress_chain(actual_start="2026-01-05T09:00:00") as document:
+            schedule, _, _ = migrate(document)
+        plan = build_plan(schedule, HORIZON)
+        forward = forward_pass(
+            plan.network,
+            snap_milestones=plan.snap_milestones,
+            progress_policy=plan.progress_policy,
+        )
+        middle = next(row for row in schedule.activities if row.code == "2")
+        planned = plan.network.activity_by_uid()[middle.uid]
+        incoming = next(
+            row for row in plan.network.relationships if row.successor_uid == middle.uid
+        )
+        predecessor = forward.by_uid()[incoming.predecessor_uid]
+        landing = shift_lag(
+            lag_calendar_for(incoming, planned.calendar),
+            predecessor.early_finish,
+            incoming.lag,
+        )
+
+        self.assertEqual(landing, planned.actual_start)
+        self.assertFalse(
+            [row for row in plan.assumed if row.uid == middle.uid and row.code == self.CODE]
+        )
+
+    def test_out_of_sequence_retained_logic_is_outside_the_measured_shape(self):
+        with _imported_progress_chain(actual_start="2026-01-05T08:00:00") as document:
+            schedule, _, _ = migrate(document)
+        plan = build_plan(schedule, HORIZON)
+        forward = forward_pass(
+            plan.network,
+            snap_milestones=plan.snap_milestones,
+            progress_policy=plan.progress_policy,
+        )
+        middle = next(row for row in schedule.activities if row.code == "2")
+        planned = plan.network.activity_by_uid()[middle.uid]
+        incoming = next(
+            row for row in plan.network.relationships if row.successor_uid == middle.uid
+        )
+        predecessor = forward.by_uid()[incoming.predecessor_uid]
+        anchor = (
+            predecessor.early_finish
+            if incoming.anchors_predecessor_finish
+            else predecessor.early_start
+        )
+        landing = shift_lag(
+            lag_calendar_for(incoming, planned.calendar),
+            anchor,
+            incoming.lag,
+        )
+        assumptions = [
+            row for row in plan.assumed if row.uid == middle.uid and row.code == self.CODE
+        ]
+
+        self.assertEqual(landing, 637200)
+        self.assertEqual(planned.actual_start, 633600)
+        self.assertGreater(landing, planned.actual_start)
+        self.assertEqual(len(assumptions), 1)
+        self.assertIn("out of sequence at Actual Start", assumptions[0].detail)
 
     def test_nonzero_task_actual_work_is_outside_the_measured_shape(self):
         _, _, assumptions = self._imported_actual_work_boundary(task_actual_work="PT15M")

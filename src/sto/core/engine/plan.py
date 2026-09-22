@@ -77,7 +77,15 @@ from sto.core.model.enums import (
     ScheduleDirection,
 )
 
-from .network import Network, NetworkError, PlannedActivity, PlannedRelationship
+from .forward import ActivityTimes, forward_pass
+from .network import (
+    Network,
+    NetworkError,
+    PlannedActivity,
+    PlannedRelationship,
+    lag_calendar_for,
+    shift_lag,
+)
 
 
 class PlanError(NetworkError):
@@ -316,13 +324,17 @@ def build_plan(
     def in_progress_late_rule_assumption(
         activity: Activity,
         incident: list[PlannedRelationship],
+        *,
+        early: dict[UUID, ActivityTimes] | None = None,
+        planned: PlannedActivity | None = None,
     ) -> Assumed | None:
         """Label started-work shapes outside the two native Project trials.
 
         The public-LateStart rule is measured on zero-actual-duration work with
         no split, no applied constraint, and ordinary zero-lag FS logic on both
-        sides. The engine can still place the broader conformance shapes, but a
-        projected result must not present their late dates as native evidence.
+        sides whose incoming logic landed no later than Actual Start. The engine
+        can still place the broader conformance shapes, but a projected result
+        must not present their late dates as native evidence.
         """
 
         if activity.actual_start is None or activity.actual_finish is not None:
@@ -397,6 +409,31 @@ def build_plan(
             reasons.append("incident logic is not ordinary zero-lag FS")
         if project.progress_policy is not ProgressPolicy.RETAINED_LOGIC:
             reasons.append("the progress policy is not the measured retained logic")
+        if (
+            not reasons
+            and early is not None
+            and planned is not None
+            and planned.actual_start is not None
+        ):
+            for relationship in incident:
+                if relationship.successor_uid != activity.uid:
+                    continue
+                predecessor = early[relationship.predecessor_uid]
+                anchor = (
+                    predecessor.early_finish
+                    if relationship.anchors_predecessor_finish
+                    else predecessor.early_start
+                )
+                landing = shift_lag(
+                    lag_calendar_for(relationship, planned.calendar),
+                    anchor,
+                    relationship.lag,
+                )
+                if landing is None or landing > planned.actual_start:
+                    reasons.append(
+                        "incoming retained logic is out of sequence at Actual Start"
+                    )
+                    break
         if not reasons:
             return None
         return Assumed(
@@ -884,25 +921,6 @@ def build_plan(
     for relationship in relationships:
         incident_by_activity[relationship.predecessor_uid].append(relationship)
         incident_by_activity[relationship.successor_uid].append(relationship)
-    for activity in schedule.activities:
-        if activity.uid not in scheduled:
-            continue
-        progress_assumption = in_progress_late_rule_assumption(
-            activity,
-            incident_by_activity[activity.uid],
-        )
-        if progress_assumption is not None:
-            assumed.append(progress_assumption)
-
-    # An assumption is a statement about a row the plan scheduled. One about
-    # an excluded row would count in ``assumed_by_code`` against a calculation
-    # it took no part in, so the plan refuses to carry it rather than report it.
-    for row in assumed:
-        if row.kind == "activity" and row.uid not in scheduled:
-            raise ValueError(
-                f"assumption {row.code} names activity {row.uid}, which the plan did not schedule"
-            )
-
     # The hierarchy, in source order, so the rollup answers a summary the same
     # way twice. Every node appears, including one with nothing beneath it:
     # the rollup reports those rather than leaving them out.
@@ -952,6 +970,47 @@ def build_plan(
         horizon=window[1],
         status_time=status_time,
     )
+    sequence_candidates: list[Activity] = []
+    for activity in schedule.activities:
+        if activity.uid not in scheduled:
+            continue
+        progress_assumption = in_progress_late_rule_assumption(
+            activity,
+            incident_by_activity[activity.uid],
+        )
+        if progress_assumption is not None:
+            assumed.append(progress_assumption)
+        elif activity.actual_start is not None and activity.actual_finish is None:
+            sequence_candidates.append(activity)
+
+    if sequence_candidates:
+        early = forward_pass(
+            network,
+            snap_milestones=(
+                project.milestone_snap_policy is MilestoneSnapPolicy.NEXT_WORKING
+            ),
+            progress_policy=project.progress_policy,
+        ).by_uid()
+        planned_by_uid = network.activity_by_uid()
+        for activity in sequence_candidates:
+            progress_assumption = in_progress_late_rule_assumption(
+                activity,
+                incident_by_activity[activity.uid],
+                early=early,
+                planned=planned_by_uid[activity.uid],
+            )
+            if progress_assumption is not None:
+                assumed.append(progress_assumption)
+
+    # An assumption is a statement about a row the plan scheduled. One about
+    # an excluded row would count in ``assumed_by_code`` against a calculation
+    # it took no part in, so the plan refuses to carry it rather than report it.
+    for row in assumed:
+        if row.kind == "activity" and row.uid not in scheduled:
+            raise ValueError(
+                f"assumption {row.code} names activity {row.uid}, which the plan did not schedule"
+            )
+
     return Plan(
         network=network,
         epoch=shared_epoch,

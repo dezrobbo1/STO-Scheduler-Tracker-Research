@@ -179,12 +179,23 @@ def _projected_progress_document(document, *, progress_policy=None):
 class ProgressAssumptionDependencyTests(unittest.TestCase):
     """Published late dates name unsupported progress they actually consume."""
 
-    def _chain(self, length=3, *, measured=False, progress_policy=None):
+    def _chain(
+        self,
+        length=3,
+        *,
+        measured=False,
+        out_of_sequence=False,
+        progress_policy=None,
+    ):
         progress = length - 1
         rows = [_task(number, 8 + number) for number in range(1, length + 1)]
         rows[progress - 1] = _progress_task(progress, 8 + progress)
         if measured:
             rows[progress - 1][0]["actual_duration_source"] = _duration(0)
+        if out_of_sequence:
+            rows[progress - 1][0]["actual_start_source"] = (
+                f"2026-01-05T{6 + progress:02d}:00:00"
+            )
         relationships = [
             _relationship(number, number, number + 1)
             for number in range(1, length)
@@ -240,6 +251,20 @@ class ProgressAssumptionDependencyTests(unittest.TestCase):
         self.assertIn(DERIVED_PROGRESS_ASSUMPTION, predecessor.assumptions)
         self.assertNotIn(DIRECT_PROGRESS_ASSUMPTION, predecessor.assumptions)
 
+    def test_out_of_sequence_work_gets_the_direct_assumption(self):
+        schedule, _, result = self._chain(measured=True, out_of_sequence=True)
+        progressed = result.by_uid()[schedule.activities[1].uid]
+
+        self.assertIn(DIRECT_PROGRESS_ASSUMPTION, progressed.assumptions)
+
+    def test_a_predecessor_driven_by_out_of_sequence_work_gets_the_derived_code(self):
+        schedule, plan, result = self._chain(measured=True, out_of_sequence=True)
+        predecessor = result.by_uid()[schedule.activities[0].uid]
+        relationship = plan.network.relationships[0]
+
+        self.assertEqual(predecessor.late_driving_relationship_uid, relationship.uid)
+        self.assertIn(DERIVED_PROGRESS_ASSUMPTION, predecessor.assumptions)
+
     def test_the_dependency_propagates_transitively_through_actual_late_drivers(self):
         schedule, plan, result = self._chain(length=4)
         by_uid = result.by_uid()
@@ -280,6 +305,62 @@ class ProgressAssumptionDependencyTests(unittest.TestCase):
                     _relationship(2, 2, 3),
                     _relationship(3, 1, 4),
                 ],
+            )
+        )
+        predecessor = result.by_uid()[schedule.activities[0].uid]
+        relationships = {row.uid: row for row in plan.network.relationships}
+        driver = relationships[predecessor.late_driving_relationship_uid]
+
+        self.assertEqual(driver.successor_uid, schedule.activities[3].uid)
+        self.assertNotIn(DERIVED_PROGRESS_ASSUMPTION, predecessor.assumptions)
+        self.assertIn(
+            DIRECT_PROGRESS_ASSUMPTION,
+            result.by_uid()[schedule.activities[1].uid].assumptions,
+        )
+
+    def test_a_non_driving_out_of_sequence_branch_does_not_contaminate_the_row(self):
+        progressed = _progress_task(2, 8)
+        progressed[0]["actual_duration_source"] = _duration(0)
+        resource = {
+            "id": "resource:1",
+            "source_order": 1,
+            "external_references": [],
+            "name": "Resource 1",
+            "calendar_ref": "calendar:1",
+        }
+        assignment = {
+            "id": "assignment:1",
+            "source_order": 1,
+            "task_ref": "task:2",
+            "resource_ref": "resource:1",
+            "units_source": 1,
+            "work_source": _duration(1800),
+            "actual_work_source": _duration(0),
+            "remaining_work_source": _duration(1800),
+            "percent_work_complete_source": 0,
+            "work_contour_source": 0,
+            "extension_refs": [],
+        }
+        schedule, plan, result = _projected_progress_document(
+            _document(
+                [
+                    _task(1, 8),
+                    progressed,
+                    _task(3, 13),
+                    _activity(
+                        4,
+                        start="2026-01-05T09:00:00",
+                        finish="2026-01-06T09:00:00",
+                        duration_seconds=8 * 3600,
+                    ),
+                ],
+                relationships=[
+                    _relationship(1, 1, 2),
+                    _relationship(2, 2, 3),
+                    _relationship(3, 1, 4),
+                ],
+                resources=[resource],
+                assignments=[assignment],
             )
         )
         predecessor = result.by_uid()[schedule.activities[0].uid]

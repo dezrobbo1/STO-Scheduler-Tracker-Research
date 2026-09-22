@@ -49,10 +49,10 @@ occurred.
 ## Verification
 
 Both controlled native tests passed with the hash-guarded external baseline and
-Project outputs present. The complete suite passed 859 tests with the verified
-BOILER, KILN, CALCINER, untouched-source and both controlled native files
-present; 103 database, unavailable day-five/native-completion and environment
-dependent cases skipped under their declared gates. Compileall, JSON parsing,
-migration checksums, roadmap rendering/status and whitespace checks also
-passed. The PostgreSQL persistence and upgrade cases remain mandatory in the
-PR's database CI job because this local environment has no PostgreSQL server.
+Project outputs present. The complete suite passed with the verified BOILER,
+KILN, CALCINER, untouched-source and both controlled native files present;
+database, unavailable day-five/native-completion and environment-dependent
+cases skipped only under their declared gates. Compileall, JSON parsing,
+migration checksums, roadmap rendering/status and whitespace checks also passed.
+The PostgreSQL persistence and upgrade cases remain mandatory in the PR's
+database CI job because this local environment has no PostgreSQL server.

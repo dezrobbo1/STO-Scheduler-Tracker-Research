@@ -166,6 +166,65 @@ console.log(JSON.stringify({
         self.assertAlmostEqual(float(measured["left"].removesuffix("%")), 99.6)
         self.assertAlmostEqual(float(measured["width"].removesuffix("%")), 0.4)
 
+    def test_late_remaining_work_span_keeps_public_late_start_distinct(self):
+        node = shutil.which("node") or os.environ.get("CODEX_PRIMARY_RUNTIME_NODE")
+        if not node:
+            self.skipTest("Node is required to execute the page's JavaScript")
+        functions = "\n".join(
+            re.search(r"function " + name + r"\([\s\S]*?\n}", self.script).group(0)
+            for name in ("moment", "span", "hours", "calculationDetail")
+        )
+        probe = r"""
+const row = {
+  total_float_seconds: null, free_float_seconds: null, critical: null,
+  progress_state: null, placed_by: null, late_placed_by: null,
+  constraint_override: null, agrees_with_source: null
+};
+console.log(JSON.stringify({
+  notStarted: calculationDetail({...row,
+    late_start: '2026-01-05T10:00:00', late_remaining_start: null,
+    late_finish: '2026-01-05T12:00:00'}),
+  inProgress: calculationDetail({...row, progress_state: 'in_progress',
+    late_start: '2026-01-05T10:00:00',
+    late_remaining_start: '2026-01-05T11:00:00',
+    late_finish: '2026-01-05T12:00:00'}),
+  negativeFloat: calculationDetail({...row, progress_state: 'in_progress',
+    late_start: '2026-01-05T12:00:00',
+    late_remaining_start: '2026-01-05T10:00:00',
+    late_finish: '2026-01-05T11:00:00'})
+}));
+"""
+        measured = json.loads(
+            subprocess.run(
+                [node, "-e", functions + probe],
+                check=True,
+                text=True,
+                capture_output=True,
+            ).stdout
+        )
+
+        self.assertIn(
+            "late 2026-01-05 10:00:00 → 2026-01-05 12:00:00",
+            measured["notStarted"],
+        )
+        self.assertNotIn("public LateStart", measured["notStarted"])
+        self.assertIn(
+            "late remaining 2026-01-05 11:00:00 → 2026-01-05 12:00:00",
+            measured["inProgress"],
+        )
+        self.assertIn("public LateStart 2026-01-05 10:00:00", measured["inProgress"])
+        self.assertIn(
+            "late remaining 2026-01-05 10:00:00 → 2026-01-05 11:00:00",
+            measured["negativeFloat"],
+        )
+        self.assertIn(
+            "public LateStart 2026-01-05 12:00:00", measured["negativeFloat"]
+        )
+        self.assertNotIn(
+            "late 2026-01-05 12:00:00 → 2026-01-05 11:00:00",
+            measured["negativeFloat"],
+        )
+
     def test_rendered_movement_and_disposition_contract(self):
         """Execute the logic that marks the edited and downstream rows."""
 
@@ -461,7 +520,8 @@ console.log(JSON.stringify(measured));
         self.assertIn('id="duration-hours" type="number" min="0.0003" step="any"', self.html)
         self.assertIn("Calculation details", self.html)
         for field in (
-            "late_start", "late_finish", "total_float_seconds", "free_float_seconds",
+            "late_start", "late_remaining_start", "late_finish",
+            "total_float_seconds", "free_float_seconds",
             "critical", "progress_state", "placed_by", "late_placed_by",
             "constraint_override", "agrees_with_source",
         ):
