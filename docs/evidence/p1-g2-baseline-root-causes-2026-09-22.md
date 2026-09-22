@@ -15,6 +15,9 @@ uncommitted or untracked files. Before importing repository calculation code it
 also redirects Python bytecode lookup to a fresh private cache domain and disables
 cache writes, so ignored `__pycache__` entries and caller-supplied
 `PYTHONPYCACHEPREFIX` contents cannot replace the verified checkout source.
+The cache isolation is exercised by poisoned timestamp/size-valid bytecode
+regressions for both the checkout `__pycache__` location and an external
+`PYTHONPYCACHEPREFIX`.
 Evidence-tool and documentation changes remain independent of that production
 boundary. The JSON records the verified path-tree
 digest and the evidence tool's own schema, path, byte size and SHA-256. The
