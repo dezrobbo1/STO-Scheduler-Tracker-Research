@@ -22,15 +22,23 @@ from __future__ import annotations
 import tempfile
 import unittest
 from contextlib import contextmanager
+from dataclasses import replace
 from datetime import datetime, timedelta
 from pathlib import Path
+from uuid import UUID
 from xml.etree import ElementTree as ET
 
 from calculation_fixture import _activity, _calendar, _document, _duration, _relationship
 
 from sto.core.engine import PlanError, build_plan, forward_pass, shift_lag
 from sto.core.engine.network import lag_calendar_for
-from sto.core.model.enums import ScheduleDirection
+from sto.core.model.entities import Constraint, Duration
+from sto.core.model.enums import (
+    ConstraintType,
+    ProgressPolicy,
+    RelationshipType,
+    ScheduleDirection,
+)
 from sto.core.model.migrate.sto_v011 import migrate
 from sto.legacy import MSPDI_NAMESPACE, import_mspdi
 
@@ -221,6 +229,462 @@ class InProgressLateDateClaimBoundaryTests(unittest.TestCase):
             row for row in plan.assumed if row.uid == middle.uid and row.code == self.CODE
         ]
         return schedule, middle, assumptions
+
+    @staticmethod
+    def _replace_activity(schedule, replacement):
+        return replace(
+            schedule,
+            activities=tuple(
+                replacement if row.uid == replacement.uid else row
+                for row in schedule.activities
+            ),
+        )
+
+    @staticmethod
+    def _replace_assignment(schedule, replacement):
+        return replace(
+            schedule,
+            assignments=tuple(
+                replacement if row.uid == replacement.uid else row
+                for row in schedule.assignments
+            ),
+        )
+
+    @staticmethod
+    def _direct_progress_assumptions(schedule, activity_uid):
+        plan = build_plan(schedule, HORIZON)
+        return plan, [
+            row
+            for row in plan.assumed
+            if row.uid == activity_uid
+            and row.code == "ACTIVITY_IN_PROGRESS_LATE_DATES_ASSUMED"
+        ]
+
+    def test_positive_native_progress_contract_fails_closed_by_dimension(self):
+        """Every dimension outside the two measured trials is labelled."""
+
+        with _imported_progress_chain() as document:
+            schedule, _, _ = migrate(document)
+        middle = next(row for row in schedule.activities if row.code == "2")
+        assignment = next(
+            row for row in schedule.assignments if row.activity_uid == middle.uid
+        )
+        incoming = next(
+            row for row in schedule.relationships if row.successor_uid == middle.uid
+        )
+        outgoing = next(
+            row for row in schedule.relationships if row.predecessor_uid == middle.uid
+        )
+
+        def changed_activity(**changes):
+            return self._replace_activity(schedule, replace(middle, **changes))
+
+        def changed_assignment(**changes):
+            return self._replace_assignment(schedule, replace(assignment, **changes))
+
+        task_unreadable_fields = dict(middle.source_fields)
+        task_unreadable_fields["actual_work_unsupported_source"] = "P1M"
+        assignment_absent_fields = dict(assignment.source_fields)
+        assignment_absent_fields.pop("actual_work_source_present", None)
+        assignment_unreadable_fields = dict(assignment.source_fields)
+        assignment_unreadable_fields["actual_work_unsupported_source"] = "P1M"
+        unresolved_resource_uid = UUID("00000000-0000-0000-0000-000000000099")
+        duplicate_assignment_uid = UUID("00000000-0000-0000-0000-000000000100")
+
+        variants = (
+            (
+                "nonzero actual duration",
+                changed_activity(
+                    actual_duration=replace(middle.actual_duration, seconds=60)
+                ),
+                "actual duration",
+            ),
+            (
+                "absent actual duration",
+                changed_activity(actual_duration=None),
+                "actual duration",
+            ),
+            (
+                "unreadable actual duration",
+                changed_activity(
+                    actual_duration=None,
+                    source_fields={
+                        **middle.source_fields,
+                        "actual_duration_unsupported_source": "P1M",
+                    },
+                ),
+                "actual duration",
+            ),
+            (
+                "elapsed actual duration",
+                changed_activity(
+                    actual_duration=replace(middle.actual_duration, elapsed=True)
+                ),
+                "actual duration",
+            ),
+            (
+                "absent remaining duration",
+                changed_activity(remaining_duration=None),
+                "remaining duration",
+            ),
+            (
+                "zero remaining duration",
+                changed_activity(
+                    remaining_duration=replace(middle.remaining_duration, seconds=0)
+                ),
+                "remaining duration",
+            ),
+            (
+                "elapsed remaining duration",
+                changed_activity(
+                    remaining_duration=replace(middle.remaining_duration, elapsed=True)
+                ),
+                "remaining duration",
+            ),
+            (
+                "elapsed planned duration",
+                changed_activity(
+                    planned_duration=replace(middle.planned_duration, elapsed=True)
+                ),
+                "planned duration",
+            ),
+            (
+                "nonzero task actual work",
+                changed_activity(actual_work=replace(middle.actual_work, seconds=60)),
+                "task actual work",
+            ),
+            (
+                "absent task actual work",
+                changed_activity(actual_work=None),
+                "task actual work",
+            ),
+            (
+                "unreadable task actual work",
+                changed_activity(
+                    actual_work=None,
+                    source_fields=task_unreadable_fields,
+                ),
+                "task actual work",
+            ),
+            (
+                "zero assignments",
+                replace(
+                    schedule,
+                    assignments=tuple(
+                        row
+                        for row in schedule.assignments
+                        if row.activity_uid != middle.uid
+                    ),
+                ),
+                "assignment cardinality",
+            ),
+            (
+                "multiple assignments",
+                replace(
+                    schedule,
+                    assignments=schedule.assignments
+                    + (replace(assignment, uid=duplicate_assignment_uid),),
+                ),
+                "assignment cardinality",
+            ),
+            (
+                "placeholder assignment",
+                changed_assignment(unassigned_placeholder=True),
+                "resolved resource-backed assignment",
+            ),
+            (
+                "assignment without a resolved resource",
+                changed_assignment(resource_uid=None, unassigned_placeholder=False),
+                "resolved resource-backed assignment",
+            ),
+            (
+                "assignment naming a missing resource",
+                changed_assignment(
+                    resource_uid=unresolved_resource_uid,
+                    unassigned_placeholder=False,
+                ),
+                "resolved resource-backed assignment",
+            ),
+            (
+                "nonzero assignment actual work",
+                changed_assignment(
+                    work=replace(assignment.work, actual_seconds=60)
+                ),
+                "assignment actual work",
+            ),
+            (
+                "absent assignment actual work",
+                changed_assignment(source_fields=assignment_absent_fields),
+                "assignment actual work",
+            ),
+            (
+                "unreadable assignment actual work",
+                changed_assignment(source_fields=assignment_unreadable_fields),
+                "assignment actual work",
+            ),
+            (
+                "nonzero task percentage",
+                changed_activity(
+                    percent_complete=replace(
+                        middle.percent_complete,
+                        duration_permille=100,
+                    )
+                ),
+                "reported percentage progress",
+            ),
+            (
+                "nonzero task work percentage",
+                changed_activity(
+                    percent_complete=replace(
+                        middle.percent_complete,
+                        work_permille=100,
+                    )
+                ),
+                "reported percentage progress",
+            ),
+            (
+                "nonzero physical percentage",
+                changed_activity(
+                    percent_complete=replace(
+                        middle.percent_complete,
+                        physical_permille=100,
+                    )
+                ),
+                "reported percentage progress",
+            ),
+            (
+                "nonzero units percentage",
+                changed_activity(
+                    percent_complete=replace(
+                        middle.percent_complete,
+                        units_permille=100,
+                    )
+                ),
+                "reported percentage progress",
+            ),
+            (
+                "nonzero assignment percentage",
+                changed_assignment(percent_work_complete_permille=100),
+                "assignment percentage progress",
+            ),
+            (
+                "real Stop/Resume split",
+                changed_activity(
+                    suspend=middle.actual_start + timedelta(minutes=15),
+                    resume=middle.actual_start + timedelta(minutes=30),
+                ),
+                "Stop/Resume",
+            ),
+            (
+                "unsupported started-work constraint",
+                changed_activity(
+                    primary_constraint=Constraint(
+                        ConstraintType.SNET,
+                        middle.actual_start + timedelta(hours=1),
+                    )
+                ),
+                "unmeasured constraint",
+            ),
+            (
+                "secondary started-work constraint",
+                changed_activity(
+                    secondary_constraint=Constraint(
+                        ConstraintType.FNLT,
+                        middle.actual_start + timedelta(hours=1),
+                    )
+                ),
+                "unmeasured constraint",
+            ),
+            (
+                "missing incoming relationship",
+                replace(
+                    schedule,
+                    relationships=tuple(
+                        row for row in schedule.relationships if row.uid != incoming.uid
+                    ),
+                ),
+                "predecessor/successor shape",
+            ),
+            (
+                "missing outgoing relationship",
+                replace(
+                    schedule,
+                    relationships=tuple(
+                        row for row in schedule.relationships if row.uid != outgoing.uid
+                    ),
+                ),
+                "predecessor/successor shape",
+            ),
+            (
+                "non-FS incident relationship",
+                replace(
+                    schedule,
+                    relationships=tuple(
+                        replace(row, type=RelationshipType.SS)
+                        if row.uid == incoming.uid
+                        else row
+                        for row in schedule.relationships
+                    ),
+                ),
+                "ordinary zero-lag FS",
+            ),
+            (
+                "nonzero-lag incident relationship",
+                replace(
+                    schedule,
+                    relationships=tuple(
+                        replace(row, lag=Duration(seconds=60))
+                        if row.uid == incoming.uid
+                        else row
+                        for row in schedule.relationships
+                    ),
+                ),
+                "ordinary zero-lag FS",
+            ),
+            (
+                "non-retained progress policy",
+                replace(
+                    schedule,
+                    project=replace(
+                        schedule.project,
+                        progress_policy=ProgressPolicy.PROGRESS_OVERRIDE,
+                    ),
+                ),
+                "measured retained logic",
+            ),
+            (
+                "out-of-sequence incoming logic",
+                changed_activity(actual_start=datetime(2026, 1, 5, 8, 0)),
+                "out of sequence at Actual Start",
+            ),
+            (
+                "active status-date floor",
+                replace(
+                    schedule,
+                    project=replace(
+                        schedule.project,
+                        status_date=datetime(2026, 1, 5, 10, 0),
+                    ),
+                ),
+                "status date",
+            ),
+        )
+
+        for name, variant, expected_detail in variants:
+            with self.subTest(dimension=name):
+                _, assumptions = self._direct_progress_assumptions(
+                    variant,
+                    middle.uid,
+                )
+                self.assertEqual(len(assumptions), 1)
+                self.assertIn(expected_detail, assumptions[0].detail)
+
+    def test_positive_native_progress_contract_measured_counter_cases(self):
+        with _imported_progress_chain() as document:
+            schedule, _, _ = migrate(document)
+        middle = next(row for row in schedule.activities if row.code == "2")
+        assignment = next(
+            row for row in schedule.assignments if row.activity_uid == middle.uid
+        )
+
+        zero_span = self._replace_activity(
+            schedule,
+            replace(
+                middle,
+                suspend=middle.actual_start,
+                resume=middle.actual_start,
+            ),
+        )
+        predecessor_landed_earlier = self._replace_activity(
+            schedule,
+            replace(middle, actual_start=datetime(2026, 1, 5, 10, 0)),
+        )
+        status_not_moving_remaining = replace(
+            schedule,
+            project=replace(
+                schedule.project,
+                status_date=datetime(2026, 1, 5, 8, 0),
+            ),
+        )
+        explicit_asap = self._replace_activity(
+            schedule,
+            replace(middle, primary_constraint=Constraint(ConstraintType.ASAP)),
+        )
+        uid15_activity = replace(
+            middle,
+            planned_work=replace(middle.planned_work, seconds=2 * 60 * 60),
+        )
+        uid15_equivalent = self._replace_assignment(
+            self._replace_activity(schedule, uid15_activity),
+            replace(
+                assignment,
+                units=replace(assignment.units, budgeted_permille=2000),
+                work=replace(
+                    assignment.work,
+                    budgeted_seconds=2 * 60 * 60,
+                    remaining_seconds=2 * 60 * 60,
+                ),
+            ),
+        )
+        four_hours = replace(middle.remaining_duration, seconds=4 * 60 * 60)
+        uid227_activity = replace(
+            middle,
+            planned_duration=replace(middle.planned_duration, seconds=4 * 60 * 60),
+            remaining_duration=four_hours,
+            suspend=middle.actual_start,
+            resume=middle.actual_start,
+        )
+        uid227_equivalent = self._replace_assignment(
+            self._replace_activity(schedule, uid227_activity),
+            replace(
+                assignment,
+                work=replace(
+                    assignment.work,
+                    budgeted_seconds=4 * 60 * 60,
+                    remaining_seconds=4 * 60 * 60,
+                ),
+            ),
+        )
+
+        counter_cases = (
+            ("measured base", schedule),
+            ("zero-span Stop/Resume", zero_span),
+            ("incoming landing before Actual Start", predecessor_landed_earlier),
+            ("status date at or before Actual Start", status_not_moving_remaining),
+            ("explicit ASAP constraint", explicit_asap),
+            ("UID15 one-hour 200-percent-assignment equivalent", uid15_equivalent),
+            ("UID227 four-hour zero-span equivalent", uid227_equivalent),
+        )
+        for name, counter_case in counter_cases:
+            with self.subTest(counter_case=name):
+                _, assumptions = self._direct_progress_assumptions(
+                    counter_case,
+                    middle.uid,
+                )
+                self.assertEqual(assumptions, [])
+
+    def test_active_status_date_moves_remaining_work_and_fails_closed(self):
+        with _imported_progress_chain() as document:
+            schedule, _, _ = migrate(document)
+        middle = next(row for row in schedule.activities if row.code == "2")
+        schedule = replace(
+            schedule,
+            project=replace(
+                schedule.project,
+                status_date=datetime(2026, 1, 5, 10, 0),
+            ),
+        )
+        plan, assumptions = self._direct_progress_assumptions(schedule, middle.uid)
+        early = forward_pass(
+            plan.network,
+            snap_milestones=plan.snap_milestones,
+            progress_policy=plan.progress_policy,
+        ).by_uid()[middle.uid]
+        planned = plan.network.activity_by_uid()[middle.uid]
+
+        self.assertGreater(early.remaining_start, planned.actual_start)
+        self.assertEqual(len(assumptions), 1)
+        self.assertIn("status date", assumptions[0].detail)
 
     def test_explicit_zero_task_and_assignment_actual_work_is_measured(self):
         _, _, assumptions = self._imported_actual_work_boundary()

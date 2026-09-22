@@ -185,6 +185,7 @@ class ProgressAssumptionDependencyTests(unittest.TestCase):
         *,
         measured=False,
         out_of_sequence=False,
+        active_status_floor=False,
         progress_policy=None,
     ):
         progress = length - 1
@@ -226,7 +227,9 @@ class ProgressAssumptionDependencyTests(unittest.TestCase):
             resources=[resource],
             assignments=[assignment],
         )
-        if progress_policy is ProgressPolicy.PROGRESS_OVERRIDE:
+        if active_status_floor:
+            document["project"]["status_date"] = "2026-01-05T11:00:00"
+        elif progress_policy is ProgressPolicy.PROGRESS_OVERRIDE:
             document["project"]["status_date"] = "2026-01-05T10:00:00"
         return _projected_progress_document(
             document,
@@ -262,6 +265,25 @@ class ProgressAssumptionDependencyTests(unittest.TestCase):
         predecessor = result.by_uid()[schedule.activities[0].uid]
         relationship = plan.network.relationships[0]
 
+        self.assertEqual(predecessor.late_driving_relationship_uid, relationship.uid)
+        self.assertIn(DERIVED_PROGRESS_ASSUMPTION, predecessor.assumptions)
+
+    def test_active_status_floor_projects_direct_and_late_driver_assumptions(self):
+        schedule, plan, result = self._chain(
+            measured=True,
+            active_status_floor=True,
+        )
+        predecessor = result.by_uid()[schedule.activities[0].uid]
+        progressed = result.by_uid()[schedule.activities[1].uid]
+        relationship = plan.network.relationships[0]
+        direct = next(
+            row
+            for row in plan.assumed
+            if row.uid == progressed.uid and row.code == DIRECT_PROGRESS_ASSUMPTION
+        )
+
+        self.assertIn("status date", direct.detail)
+        self.assertIn(DIRECT_PROGRESS_ASSUMPTION, progressed.assumptions)
         self.assertEqual(predecessor.late_driving_relationship_uid, relationship.uid)
         self.assertIn(DERIVED_PROGRESS_ASSUMPTION, predecessor.assumptions)
 
