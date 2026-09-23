@@ -242,7 +242,7 @@ class RecordedP1G2BaselineDiagnosticsTests(unittest.TestCase):
             },
         )
 
-    def test_record_identifies_verified_production_and_tool_lineage(self) -> None:
+    def test_historical_record_and_its_original_lineage_remain_immutable(self) -> None:
         self.assertEqual(self.record["schema"], "sto-p1-g2-baseline-root-causes-v3")
         lineage = self.record["lineage"]
         production = lineage["production_basis"]
@@ -254,9 +254,12 @@ class RecordedP1G2BaselineDiagnosticsTests(unittest.TestCase):
         tool = lineage["evidence_tool"]
         self.assertRegex(tool["sha256"], r"^[0-9a-f]{64}$")
         self.assertEqual(tool["path"], "scripts/evidence/p1_g2_baseline_diagnostics.py")
-        tool_payload = (ROOT / tool["path"]).read_bytes()
-        self.assertEqual(tool["bytes"], len(tool_payload))
-        self.assertEqual(tool["sha256"], hashlib.sha256(tool_payload).hexdigest())
+        # This is the immutable pre-correction record, not a claim that the
+        # current producer has already rerun the unavailable native pair.
+        self.assertEqual(
+            hashlib.sha256(EVIDENCE.read_bytes()).hexdigest(),
+            "2408fc99f282e9c600d3821b3c926f7deafa8c05044c7fec9a5f08b2b656bf63",
+        )
         contract = self.record["classification_contract"]
         self.assertIn("mechanical", contract["diagnostic_group"])
         self.assertIn("STRONG_CANDIDATE", contract["causal_confidence"])
@@ -769,9 +772,23 @@ class P1G2DiagnosticToolTests(unittest.TestCase):
         )
 
     @unittest.skipUnless(PRESENT, "exact BOILER baseline/UID 227 pair unavailable")
-    def test_exact_pair_regenerates_the_committed_record(self) -> None:
-        regenerated = canonical_json(build_record(BASELINE, REPEAT))
-        self.assertEqual(regenerated, EVIDENCE.read_text(encoding="utf-8"))
+    def test_exact_pair_reproduces_diagnosis_with_current_execution_lineage(self) -> None:
+        regenerated = build_record(BASELINE, REPEAT)
+        recorded = json.loads(EVIDENCE.read_text(encoding="utf-8"))
+        current_lineage = regenerated.pop("lineage")
+        recorded_lineage = recorded.pop("lineage")
+        # Only producer identity changes. Every field slot, causal confidence,
+        # dependency path, input identity and gate remains an exact comparison.
+        self.assertEqual(regenerated, recorded)
+        self.assertEqual(current_lineage["production_basis"],
+                         recorded_lineage["production_basis"])
+        for key in ("evidence_tool", "execution"):
+            identity = current_lineage[key]
+            payload = (ROOT / identity["path"]).read_bytes()
+            self.assertEqual(identity["bytes"], len(payload))
+            self.assertEqual(identity["sha256"], hashlib.sha256(payload).hexdigest())
+        self.assertEqual(current_lineage["execution"]["profile"],
+                         "sto-p1-g2-verified-source-v1")
 
 
 if __name__ == "__main__":

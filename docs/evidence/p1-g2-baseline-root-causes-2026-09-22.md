@@ -4,11 +4,47 @@ This is a diagnosis record, not a scheduler correction. It studies the fixed
 P1-G2 matrix produced by the clean UID 227 controlled repeat and leaves every
 production formula, importer rule, model, API, UI and gate unchanged.
 
+## Controlled execution amendment — 2026-09-23
+
+Record generation now runs through an isolated source-file worker in
+`scripts/evidence/p1_g2_execution.py`. The original command delegates to that
+worker; importing calculation helpers is not an authoritative generation route.
+The worker verifies and retains the pinned production bytes before any
+calculation import, then compiles those same retained bytes. It does not use the
+caller's loaded modules, shadow packages or cached diagnostic bytecode. The
+source payload of each evidence module is checked against its executing module
+code, and publication refuses a mid-run change to either evidence source.
+
+Generate a separate candidate with an explicit protected output path:
+
+```bash
+python3 scripts/evidence/p1_g2_baseline_diagnostics.py \
+  "$STO_BOILER_BEFORE" "$STO_BOILER_CONTROLLED_NATIVE_REPEAT" \
+  --output /outside-the-repository/p1-g2-current-execution.json
+```
+
+JSON is no longer emitted to stdout. Both CLI and Python record generation use
+the controlled worker; output publication retains the existing atomic alias
+protection. This does not protect against a shell truncating an input with `>`
+before Python starts, an untrusted interpreter, or arbitrary hostile code run
+by the same OS user. Keep immutable originals outside output directories.
+
+The committed JSON remains the historical diagnosis produced by the tool at
+`6cc38863b68723746e2afc82ca8681f2d57e616a`; its bytes are pinned rather than
+rewriting its producer hashes without a fresh run. Corrected candidates carry
+the current diagnostic identity and a separate `lineage.execution` source
+identity. Required exact-pair replay compares all diagnosis content unchanged,
+the same pinned production basis, and the actual current producer identities.
+The always-on execution regressions use synthetic record stubs to exercise the
+real source-loading and publication boundaries; they do not claim a fresh
+BOILER comparison. A fresh native-pair replay is still required before treating
+the corrected producer as regenerated real-schedule evidence.
+
 ## Evidence identity and reproduction
 
 Repository basis: `0805bcb44f5122e9499e1dc2449dc25ee6b01abd`.
 
-That commit is a declared **production-code basis**, not an unchecked label.
+That commit remains the declared **production-code basis**, not an unchecked label.
 The diagnostic refuses to run when `src/sto/core`, `src/sto/legacy` or the
 controlled-transition classifier differs from that commit, including relevant
 uncommitted or untracked files. Before importing repository calculation code it
