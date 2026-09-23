@@ -12,7 +12,17 @@ the existing placement primitives whether the current row then agrees.  A
 match is propagation evidence; a remaining difference is a first divergence.
 """
 
-from __future__ import annotations
+# Only the built-in sys module may load before the command's isolation guard.
+import sys
+
+if __name__ == "__main__" and not (
+    sys.flags.isolated and sys.flags.no_site and sys.flags.dont_write_bytecode
+):
+    raise SystemExit(
+        "Evidence generation requires isolated source execution:\n"
+        "python3 -I -S -B scripts/evidence/p1_g2_execution.py "
+        "BASELINE REPEAT --output OUTPUT"
+    )
 
 import argparse
 from collections import Counter, defaultdict
@@ -24,7 +34,6 @@ import os
 from pathlib import Path
 import stat
 import subprocess
-import sys
 import tempfile
 from typing import Iterable, Mapping, Sequence
 from uuid import UUID

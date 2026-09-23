@@ -1,11 +1,21 @@
 """Source-only execution boundary for the fixed P1-G2 diagnostic.
 
-This module uses only the standard library. The public diagnostic starts it in
-an isolated child using direct source-file execution (not a module cache).
-It verifies and retains calculation sources before importing any of them.
+Run this source file with python3 -I -S -B so isolation precedes all imports.
+The public diagnostic also delegates here from an isolated child interpreter.
+This worker retains verified calculation sources before importing any of them.
 It is not a sandbox for an untrusted interpreter or arbitrary hostile code.
 """
-from __future__ import annotations
+# Only the built-in sys module may load before the command's isolation guard.
+import sys
+
+if __name__ == "__main__" and not (
+    sys.flags.isolated and sys.flags.no_site and sys.flags.dont_write_bytecode
+):
+    raise SystemExit(
+        "Evidence generation requires isolated source execution:\n"
+        "python3 -I -S -B scripts/evidence/p1_g2_execution.py "
+        "BASELINE REPEAT --output OUTPUT"
+    )
 
 import argparse
 import hashlib
@@ -15,7 +25,6 @@ import os
 from pathlib import Path
 import stat
 import subprocess
-import sys
 from types import ModuleType
 from typing import Sequence
 
