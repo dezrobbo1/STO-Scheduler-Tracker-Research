@@ -37,8 +37,31 @@ identity. Required exact-pair replay compares all diagnosis content unchanged,
 the same pinned production basis, and the actual current producer identities.
 The always-on execution regressions use synthetic record stubs to exercise the
 real source-loading and publication boundaries; they do not claim a fresh
-BOILER comparison. A fresh native-pair replay is still required before treating
-the corrected producer as regenerated real-schedule evidence.
+BOILER comparison. The previously outstanding real-schedule replay is recorded
+separately below.
+
+### Completed exact-pair replay — 2026-09-23
+
+The corrected producer at `116a55392b4848fcd05e8cf8de9a6b198ebd6c01`
+completed the required replay using the exact external pair identified below.
+The [execution receipt](https://github.com/dezrobbo1/STO-Scheduler-Tracker-Research/pull/56#issuecomment-5795086384)
+records the executed source, commands, validation and before/after input hashes.
+No new Microsoft Project session was run.
+
+The protected-output CLI produced a separate 376,744-byte candidate with SHA-256
+`59d8789ee65c13e1c1ca721b9028f633f458b4d44ae7fe6a4f15aeab71a9a5e4`.
+Every field outside top-level `lineage` equals the historical JSON exactly;
+`lineage.production_basis` also equals it. The diagnostic and worker identities
+match their executed source bytes. Both XML inputs and the historical JSON
+remained byte-identical; the latter retains SHA-256
+`2408fc99f282e9c600d3821b3c926f7deafa8c05044c7fec9a5f08b2b656bf63`.
+
+`tests/test_p1_g2_baseline_diagnostics.py` executed the exact-pair regeneration,
+and `tests/test_controlled_native_progress_repeat_boiler.py` executed the native
+transition checks rather than skipping them. The result remains 422 baseline
+mismatches across 105 leaves, with 43 engine/native transition agreements and
+zero unexpected transition differences. This completes validation of the
+corrected producer, not P1-G2: P1 remains 4/5, G2 OPEN, and P2 NOT STARTED.
 
 ## Evidence identity and reproduction
 
