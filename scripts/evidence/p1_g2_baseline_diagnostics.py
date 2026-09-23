@@ -70,7 +70,7 @@ if __name__ == "__main__":
     ])
 
 from scripts.evidence.p1_g2_execution import (  # noqa: E402
-    DiagnosticError, EXECUTION_PATH, REPOSITORY_BASE, TOOL_PATH,
+    DiagnosticError, REPOSITORY_BASE, TOOL_PATH,
     PRODUCTION_BASIS_PATHS, PRODUCTION_BASIS_PATH_TREE_SHA256,
     verify_production_basis,
 )
@@ -1717,7 +1717,14 @@ def _build_record(baseline_path: Path, repeat_path: Path) -> dict[str, object]:
 def build_record(baseline_path: Path, repeat_path: Path) -> dict[str, object]:
     """Calculate in a fresh interpreter, never with this caller's loaded modules."""
 
-    helper_path = ROOT / EXECUTION_PATH
+    # Worker selection belongs to this source entrypoint, not a helper that
+    # may already be resident from an earlier, subsequently restored file.
+    helper_path = Path(__file__).resolve().with_name("p1_g2_execution.py")
+    try:
+        if not stat.S_ISREG(helper_path.lstat().st_mode):
+            raise DiagnosticError("verified source worker must be a regular sibling file")
+    except OSError as error:
+        raise DiagnosticError("verified source worker sibling is unavailable") from error
     with tempfile.TemporaryDirectory(prefix="sto-p1-g2-record-") as directory:
         output = Path(directory) / "record.json"
         completed = subprocess.run(

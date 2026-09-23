@@ -138,6 +138,95 @@ print(json.dumps(result))
             self.assertEqual(completed.returncode, 0, completed.stderr)
             self.assertFalse(json.loads(completed.stdout)["classifier_marker"])
 
+    def _public_builder_with_restored_helper(self, *, stub):
+        with checkout(stub=stub) as root:
+            if not stub:
+                (root / "baseline.xml").unlink()
+                (root / "repeat.xml").unlink()
+            probe = r'''
+from pathlib import Path
+import json, sys
+root = Path(sys.argv[1]); sys.path[:0] = [str(root), str(root / "src")]
+substitute = root / "substituted_worker.py"
+marker = root / "substituted-worker-ran"
+substitute.write_text(
+    "from pathlib import Path\nimport json, sys\n"
+    + f"Path({str(marker)!r}).touch()\n"
+    + "Path(sys.argv[sys.argv.index('--output') + 1]).write_text("
+      "json.dumps({'counterfeit': True}))\n"
+)
+helper = root / "scripts/evidence/p1_g2_execution.py"
+source = helper.read_bytes()
+helper.write_bytes(source + f"\nEXECUTION_PATH = {str(substitute)!r}\n".encode())
+try:
+    import scripts.evidence.p1_g2_execution as resident
+finally:
+    helper.write_bytes(source)
+assert resident.EXECUTION_PATH == str(substitute)
+import scripts.evidence.p1_g2_baseline_diagnostics as d
+try:
+    result = d.build_record(root / "baseline.xml", root / "repeat.xml")
+except d.DiagnosticError as error:
+    outcome = {"accepted": False, "error": str(error)}
+else:
+    outcome = {"accepted": True, "record": result}
+assert helper.read_bytes() == source
+outcome["substituted_worker_ran"] = marker.exists()
+print(json.dumps(outcome))
+'''
+            completed = subprocess.run(
+                [sys.executable, "-I", "-S", "-B", "-c", probe, str(root)],
+                capture_output=True, text=True,
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            return json.loads(completed.stdout)
+
+    def test_restored_resident_helper_cannot_substitute_the_public_worker(self):
+        outcome = self._public_builder_with_restored_helper(stub=False)
+        self.assertFalse(outcome["accepted"], outcome)
+        self.assertFalse(outcome["substituted_worker_ran"])
+        self.assertIn("BOILER baseline", outcome["error"])
+
+    def test_restored_resident_helper_keeps_the_real_worker_counter_case(self):
+        outcome = self._public_builder_with_restored_helper(stub=True)
+        self.assertTrue(outcome["accepted"], outcome)
+        self.assertFalse(outcome["substituted_worker_ran"])
+        record = outcome["record"]
+        self.assertNotIn("counterfeit", record)
+        self.assertFalse(record["tool_marker"])
+        self.assertFalse(record["classifier_marker"])
+        self.assertEqual(record["lineage"]["execution"]["profile"],
+                         "sto-p1-g2-verified-source-v1")
+
+    def test_public_builder_refuses_missing_or_symlinked_worker(self):
+        for replacement in ("missing", "symlink"):
+            with self.subTest(replacement=replacement), checkout() as root:
+                probe = r'''
+from pathlib import Path
+import sys
+root = Path(sys.argv[1]); sys.path[:0] = [str(root), str(root / "src")]
+import scripts.evidence.p1_g2_baseline_diagnostics as d
+helper = root / "scripts/evidence/p1_g2_execution.py"
+helper.unlink()
+marker = root / "substituted-worker-ran"
+if sys.argv[2] == "symlink":
+    substitute = root / "substituted_worker.py"
+    substitute.write_text(f"from pathlib import Path\nPath({str(marker)!r}).touch()\n")
+    helper.symlink_to(substitute)
+try:
+    d.build_record(root / "baseline.xml", root / "repeat.xml")
+except d.DiagnosticError as error:
+    assert "sibling" in str(error), str(error)
+else:
+    raise AssertionError("missing/nonregular worker accepted")
+assert not marker.exists()
+'''
+                completed = subprocess.run(
+                    [sys.executable, "-I", "-S", "-B", "-c", probe,
+                     str(root), replacement], capture_output=True, text=True,
+                )
+                self.assertEqual(completed.returncode, 0, completed.stderr)
+
     def test_retained_verified_bytes_survive_a_change_between_check_and_import(self):
         with checkout() as root:
             probe = r'''
