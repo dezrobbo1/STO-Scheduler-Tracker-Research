@@ -1,0 +1,27 @@
+name: P1-G2 correction workspace
+
+on:
+  push:
+    branches: [fix/p1-g2-diagnostic-execution]
+    paths: [.github/workflows/p1-g2-workspace.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: adb27666424205e74e588f61b857b27d02a29c57
+          persist-credentials: false
+      - name: Archive tracked source only
+        run: |
+          git archive --format=zip --output=sto-source-adb2766.zip HEAD
+          sha256sum sto-source-adb2766.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sto-source-adb2766
+          path: sto-source-adb2766.zip
+          retention-days: 1
