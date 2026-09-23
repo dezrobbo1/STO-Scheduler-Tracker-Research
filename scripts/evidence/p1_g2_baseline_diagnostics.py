@@ -12,7 +12,17 @@ the existing placement primitives whether the current row then agrees.  A
 match is propagation evidence; a remaining difference is a first divergence.
 """
 
-from __future__ import annotations
+# Only the built-in sys module may load before the command's isolation guard.
+import sys
+
+if __name__ == "__main__" and not (
+    sys.flags.isolated and sys.flags.no_site and sys.flags.dont_write_bytecode
+):
+    raise SystemExit(
+        "Evidence generation requires isolated source execution:\n"
+        "python3 -I -S -B scripts/evidence/p1_g2_execution.py "
+        "BASELINE REPEAT --output OUTPUT"
+    )
 
 import argparse
 from collections import Counter, defaultdict
@@ -24,7 +34,6 @@ import os
 from pathlib import Path
 import stat
 import subprocess
-import sys
 import tempfile
 from typing import Iterable, Mapping, Sequence
 from uuid import UUID
@@ -32,7 +41,15 @@ from uuid import UUID
 
 ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "src"
-_EVIDENCE_TOOL_BYTES_AT_STARTUP = Path(__file__).resolve().read_bytes()
+_EVIDENCE_TOOL_BYTES_AT_STARTUP = globals().get("_VERIFIED_TOOL_BYTES")
+if _EVIDENCE_TOOL_BYTES_AT_STARTUP is None:
+    _EVIDENCE_TOOL_BYTES_AT_STARTUP = Path(__file__).resolve().read_bytes()
+# A timestamp/size-valid stale cache must not pass as the source we identify.
+if sys._getframe().f_code != compile(
+    _EVIDENCE_TOOL_BYTES_AT_STARTUP, __file__, "exec", dont_inherit=True,
+    optimize=sys.flags.optimize,
+):
+    raise RuntimeError("diagnostic bytecode differs from source; use source-file execution")
 
 # Evidence generation must execute checkout source, never pre-existing bytecode.
 # Redirect importlib's cache lookup to a fresh private directory before any
@@ -54,6 +71,18 @@ sys.path[:] = [
     entry for entry in sys.path if entry not in _CHECKOUT_IMPORT_ROOTS
 ]
 sys.path[:0] = _CHECKOUT_IMPORT_ROOTS
+
+if __name__ == "__main__":
+    os.execv(sys.executable, [
+        sys.executable, "-I", "-S", "-B",
+        str(ROOT / "scripts/evidence/p1_g2_execution.py"), *sys.argv[1:],
+    ])
+
+from scripts.evidence.p1_g2_execution import (  # noqa: E402
+    DiagnosticError, REPOSITORY_BASE, TOOL_PATH,
+    PRODUCTION_BASIS_PATHS, PRODUCTION_BASIS_PATH_TREE_SHA256,
+    verify_production_basis,
+)
 
 from tests.controlled_native_progress_evidence import (  # noqa: E402
     BASELINE_MISMATCH,
@@ -94,16 +123,6 @@ from sto.legacy import import_mspdi  # noqa: E402
 
 SCHEMA = "sto-p1-g2-baseline-root-causes-v3"
 EVIDENCE_DATE = "2026-09-22"
-REPOSITORY_BASE = "0805bcb44f5122e9499e1dc2449dc25ee6b01abd"
-PRODUCTION_BASIS_PATHS = (
-    "src/sto/core",
-    "src/sto/legacy",
-    "tests/controlled_native_progress_evidence.py",
-)
-PRODUCTION_BASIS_PATH_TREE_SHA256 = (
-    "483477d8e28d644327e98ad378bbdba00f572d2f941e1e36f075f02003fb81c2"
-)
-TOOL_PATH = "scripts/evidence/p1_g2_baseline_diagnostics.py"
 BASELINE_IDENTITY = (
     3_361_935,
     "e9b9b7994cc5cc50479807b82c452da742a91de9f7de52b172a6be6f4f399c70",
@@ -277,10 +296,6 @@ GROUP_DEFINITIONS = {
 }
 
 
-class DiagnosticError(RuntimeError):
-    """The fixed evidence contract could not be reproduced or reconciled."""
-
-
 def _read_evidence_tool_identity(
     path: Path,
     *,
@@ -310,187 +325,6 @@ _EVIDENCE_TOOL_IDENTITY_AT_STARTUP = {
     "bytes": len(_EVIDENCE_TOOL_BYTES_AT_STARTUP),
     "sha256": hashlib.sha256(_EVIDENCE_TOOL_BYTES_AT_STARTUP).hexdigest(),
 }
-
-
-def _git(
-    repository_root: Path,
-    *arguments: str,
-    check: bool = True,
-) -> subprocess.CompletedProcess[bytes]:
-    try:
-        completed = subprocess.run(
-            ("git", *arguments),
-            cwd=repository_root,
-            check=False,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-        )
-    except OSError as error:  # pragma: no cover - environment failure
-        raise DiagnosticError(f"cannot verify production basis: {error}") from error
-    if check and completed.returncode != 0:
-        detail = completed.stderr.decode("utf-8", errors="replace").strip()
-        raise DiagnosticError(
-            f"cannot verify production basis with git {' '.join(arguments)}: {detail}"
-        )
-    return completed
-
-
-def _worktree_blob_id(
-    repository_root: Path,
-    relative_path: bytes,
-    index_mode: bytes,
-    object_format: str,
-) -> bytes:
-    try:
-        path = repository_root / relative_path.decode("utf-8")
-        metadata = path.lstat()
-        if index_mode == b"120000":
-            if not stat.S_ISLNK(metadata.st_mode):
-                raise DiagnosticError("production basis file type differs from its index")
-            payload = os.fsencode(os.readlink(path))
-        elif index_mode in {b"100644", b"100755"}:
-            if not stat.S_ISREG(metadata.st_mode):
-                raise DiagnosticError("production basis file type differs from its index")
-            executable = bool(metadata.st_mode & stat.S_IXUSR)
-            if executable != (index_mode == b"100755"):
-                raise DiagnosticError("production basis file mode differs from its index")
-            payload = path.read_bytes()
-        else:
-            raise DiagnosticError(
-                f"unsupported production basis index mode {index_mode.decode('ascii')}"
-            )
-    except (OSError, UnicodeError) as error:
-        raise DiagnosticError("cannot read production basis worktree bytes") from error
-    if object_format == "sha1":
-        digest = hashlib.sha1()
-    elif object_format == "sha256":
-        digest = hashlib.sha256()
-    else:
-        raise DiagnosticError(f"unsupported git object format {object_format}")
-    digest.update(f"blob {len(payload)}\0".encode("ascii"))
-    digest.update(payload)
-    return digest.hexdigest().encode("ascii")
-
-
-def verify_production_basis(
-    *,
-    repository_root: Path = ROOT,
-    declared_commit: str = REPOSITORY_BASE,
-    production_paths: Sequence[str] = PRODUCTION_BASIS_PATHS,
-    expected_path_tree_sha256: str | None = PRODUCTION_BASIS_PATH_TREE_SHA256,
-) -> dict[str, object]:
-    """Verify that the calculation code matches its declared immutable basis."""
-
-    commit_probe = _git(
-        repository_root,
-        "cat-file",
-        "-e",
-        f"{declared_commit}^{{commit}}",
-        check=False,
-    )
-    if commit_probe.returncode == 0:
-        declared_tree_entries = _git(
-            repository_root,
-            "ls-tree",
-            "-r",
-            "-z",
-            declared_commit,
-            "--",
-            *production_paths,
-        ).stdout
-        if not declared_tree_entries:
-            raise DiagnosticError("declared production basis contains no tracked paths")
-        declared_tree_sha256 = hashlib.sha256(declared_tree_entries).hexdigest()
-        if expected_path_tree_sha256 is None:
-            expected_path_tree_sha256 = declared_tree_sha256
-        elif declared_tree_sha256 != expected_path_tree_sha256:
-            raise DiagnosticError(
-                "declared production basis does not match its pinned path-tree digest"
-            )
-    elif expected_path_tree_sha256 is None:
-        raise DiagnosticError(
-            "declared production basis is unavailable and has no pinned path-tree digest"
-        )
-
-    index_entries = _git(
-        repository_root,
-        "ls-files",
-        "--stage",
-        "-z",
-        "--",
-        *production_paths,
-    ).stdout
-    object_format = (
-        _git(repository_root, "rev-parse", "--show-object-format")
-        .stdout.decode("ascii")
-        .strip()
-    )
-    tree_entries = bytearray()
-    for entry in index_entries.split(b"\0"):
-        if not entry:
-            continue
-        try:
-            header, path = entry.split(b"\t", 1)
-            mode, object_id, stage = header.split(b" ", 2)
-        except ValueError as error:
-            raise DiagnosticError("cannot interpret the production basis index") from error
-        if stage != b"0":
-            raise DiagnosticError(
-                "production basis contains an unmerged index entry; refusing stale lineage"
-            )
-        if _worktree_blob_id(
-            repository_root, path, mode, object_format
-        ) != object_id:
-            raise DiagnosticError(
-                "production basis worktree bytes differ from the declared evidence "
-                "commit; refusing stale lineage"
-            )
-        tree_entries.extend(mode + b" blob " + object_id + b"\t" + path + b"\0")
-    if not tree_entries:
-        raise DiagnosticError("working production basis contains no tracked paths")
-    path_tree_sha256 = hashlib.sha256(tree_entries).hexdigest()
-    if path_tree_sha256 != expected_path_tree_sha256:
-        raise DiagnosticError(
-            "production basis differs from the declared evidence commit; "
-            "refusing stale lineage"
-        )
-
-    worktree_comparison = _git(
-        repository_root,
-        "diff",
-        "--no-ext-diff",
-        "--quiet",
-        "--",
-        *production_paths,
-        check=False,
-    )
-    if worktree_comparison.returncode == 1:
-        raise DiagnosticError(
-            "production basis differs from the declared evidence commit; "
-            "refusing stale lineage"
-        )
-    if worktree_comparison.returncode != 0:
-        detail = worktree_comparison.stderr.decode("utf-8", errors="replace").strip()
-        raise DiagnosticError(f"cannot compare production basis: {detail}")
-    untracked = _git(
-        repository_root,
-        "ls-files",
-        "--others",
-        "--exclude-standard",
-        "--",
-        *production_paths,
-    ).stdout
-    if untracked:
-        raise DiagnosticError(
-            "production basis contains untracked files; refusing stale lineage"
-        )
-    return {
-        "declared_commit": declared_commit,
-        "paths": list(production_paths),
-        "path_tree_sha256": path_tree_sha256,
-        "tracked_entry_count": tree_entries.count(b"\0"),
-        "verified_against_worktree": True,
-    }
 
 
 def _evidence_tool_identity(
@@ -1499,10 +1333,12 @@ def _inactive_boundary_evidence(schedule: object, root_uids: set[UUID]):
     }
 
 
-def build_record(baseline_path: Path, repeat_path: Path) -> dict[str, object]:
+def _build_record(baseline_path: Path, repeat_path: Path) -> dict[str, object]:
     """Build the deterministic, sanitized 422-slot diagnosis."""
 
-    production_basis = verify_production_basis()
+    production_basis = globals().get("_VERIFIED_PRODUCTION_BASIS")
+    if production_basis is None:
+        raise DiagnosticError("record generation requires the verified source worker")
     baseline_fixture = read_verified_fixture(
         baseline_path, BASELINE_IDENTITY, "BOILER baseline"
     )
@@ -1887,6 +1723,31 @@ def build_record(baseline_path: Path, repeat_path: Path) -> dict[str, object]:
     }
 
 
+def build_record(baseline_path: Path, repeat_path: Path) -> dict[str, object]:
+    """Calculate in a fresh interpreter, never with this caller's loaded modules."""
+
+    # Worker selection belongs to this source entrypoint, not a helper that
+    # may already be resident from an earlier, subsequently restored file.
+    helper_path = Path(__file__).resolve().with_name("p1_g2_execution.py")
+    try:
+        if not stat.S_ISREG(helper_path.lstat().st_mode):
+            raise DiagnosticError("verified source worker must be a regular sibling file")
+    except OSError as error:
+        raise DiagnosticError("verified source worker sibling is unavailable") from error
+    with tempfile.TemporaryDirectory(prefix="sto-p1-g2-record-") as directory:
+        output = Path(directory) / "record.json"
+        completed = subprocess.run(
+            [sys.executable, "-I", "-S", "-B", str(helper_path),
+             str(baseline_path.resolve()), str(repeat_path.resolve()),
+             "--output", str(output)],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False,
+        )
+        if completed.returncode != 0:
+            detail = completed.stderr.decode("utf-8", errors="replace").strip()
+            raise DiagnosticError(f"verified source worker failed: {detail}")
+        return json.loads(output.read_text(encoding="utf-8"))
+
+
 def canonical_json(record: Mapping[str, object]) -> str:
     return json.dumps(record, indent=2, sort_keys=False) + "\n"
 
@@ -1898,7 +1759,8 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--output",
         type=Path,
-        help="write the deterministic JSON record instead of stdout",
+        required=True,
+        help="write the deterministic JSON through the protected output route",
     )
     return parser
 
@@ -1906,13 +1768,9 @@ def _parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     fixtures = {"baseline": args.baseline, "repeat": args.repeat}
-    if args.output is not None:
-        refuse_output_alias(args.output, fixtures)
+    refuse_output_alias(args.output, fixtures)
     serialized = canonical_json(build_record(args.baseline, args.repeat))
-    if args.output is None:
-        sys.stdout.write(serialized)
-    else:
-        write_output_safely(args.output, serialized, fixtures)
+    write_output_safely(args.output, serialized, fixtures)
     return 0
 
 

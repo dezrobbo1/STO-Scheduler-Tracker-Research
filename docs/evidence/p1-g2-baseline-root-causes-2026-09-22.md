@@ -4,11 +4,100 @@ This is a diagnosis record, not a scheduler correction. It studies the fixed
 P1-G2 matrix produced by the clean UID 227 controlled repeat and leaves every
 production formula, importer rule, model, API, UI and gate unchanged.
 
+## Controlled execution amendment — 2026-09-23
+
+The supported evidence-generation command starts an isolated interpreter on
+`scripts/evidence/p1_g2_execution.py`, before any script imports. Do not start
+an ordinary Python process and rely on a later isolation handoff. The legacy
+diagnostic source-file command delegates only when started with the same
+`-I -S -B` flags; without them, both entrypoints refuse before script imports
+other than built-in `sys`. Importing calculation helpers is not an
+authoritative generation route.
+The worker verifies and retains the pinned production bytes before any
+calculation import, then compiles those same retained bytes. It does not use the
+caller's loaded modules, shadow packages or cached diagnostic bytecode. The
+source payload of each evidence module is checked against its executing module
+code, and publication refuses a mid-run change to either evidence source.
+
+Generate a separate candidate with an explicit protected output path:
+
+```bash
+python3 -I -S -B scripts/evidence/p1_g2_execution.py \
+  "$STO_BOILER_BEFORE" "$STO_BOILER_CONTROLLED_NATIVE_REPEAT" \
+  --output /outside-the-repository/p1-g2-current-execution.json
+```
+
+JSON is no longer emitted to stdout. Both CLI and Python record generation use
+the controlled worker; output publication retains the existing atomic alias
+protection. This does not protect against a shell truncating an input with `>`
+before Python starts, an untrusted interpreter, or arbitrary hostile code run
+by the same OS user. The early guard cannot undo interpreter startup hooks
+that ran before the script; the documented flags prevent loading those hooks.
+Keep immutable originals outside output directories.
+
+The committed JSON remains the historical diagnosis produced by the tool at
+`6cc38863b68723746e2afc82ca8681f2d57e616a`; its bytes are pinned rather than
+rewriting its producer hashes without a fresh run. Corrected candidates carry
+the current diagnostic identity and a separate `lineage.execution` source
+identity. Required exact-pair replay compares all diagnosis content unchanged,
+the same pinned production basis, and the actual current producer identities.
+The always-on execution regressions use synthetic record stubs to exercise the
+real source-loading and publication boundaries; they do not claim a fresh
+BOILER comparison. The previously outstanding real-schedule replay is recorded
+separately below.
+
+### Completed exact-pair replay — 2026-09-23
+
+The corrected producer at `116a55392b4848fcd05e8cf8de9a6b198ebd6c01`
+completed the required replay using the exact external pair identified below.
+The [execution receipt](https://github.com/dezrobbo1/STO-Scheduler-Tracker-Research/pull/56#issuecomment-5795086384)
+records the executed source, commands, validation and before/after input hashes.
+No new Microsoft Project session was run.
+
+The protected-output CLI produced a separate 376,744-byte candidate with SHA-256
+`59d8789ee65c13e1c1ca721b9028f633f458b4d44ae7fe6a4f15aeab71a9a5e4`.
+Every field outside top-level `lineage` equals the historical JSON exactly;
+`lineage.production_basis` also equals it. The diagnostic and worker identities
+match their executed source bytes. Both XML inputs and the historical JSON
+remained byte-identical; the latter retains SHA-256
+`2408fc99f282e9c600d3821b3c926f7deafa8c05044c7fec9a5f08b2b656bf63`.
+
+`tests/test_p1_g2_baseline_diagnostics.py` executed the exact-pair regeneration,
+and `tests/test_controlled_native_progress_repeat_boiler.py` executed the native
+transition checks rather than skipping them. The result remains 422 baseline
+mismatches across 105 leaves, with 43 engine/native transition agreements and
+zero unexpected transition differences. This completes validation of the
+corrected producer, not P1-G2: P1 remains 4/5, G2 OPEN, and P2 NOT STARTED.
+
+### Isolated-startup correction and replay — 2026-09-24
+
+The earlier replay above remains historical. The documented command now enters
+isolation at interpreter startup rather than after importing launcher modules.
+Both evidence entrypoints reject a missing startup flag before importing anything
+other than built-in `sys`; the isolated legacy entrypoint still delegates to the
+same worker. `tests/test_p1_g2_launch_contract.py` executes the command extracted
+from this guide with caller-shadowed modules, valid and missing inputs, and the
+existing required-output and source-alias guards.
+
+A fresh run of that documented command against the exact pair produced a separate
+376,744-byte candidate, SHA-256
+`17e9e56daa2fcb30cdd3a2c314087fcd0186b76fbe581e41c97bf277bffa67b2`.
+Every diagnostic field outside `lineage`, and `lineage.production_basis`, equals
+the historical JSON. The current diagnostic and worker identities match the
+executed bytes. Both XML input hashes and the historical JSON hash above were
+unchanged after validation. The execution receipt is recorded with
+[PR #56](https://github.com/dezrobbo1/STO-Scheduler-Tracker-Research/pull/56).
+
+The run retains 422 baseline mismatches across 105 leaves, 43 matching controlled
+transition fields and zero unexpected transition differences. It validates this
+launch correction, not a scheduling replacement: P1 remains 4/5, G2 OPEN, and
+P2 NOT STARTED. No new Microsoft Project session was run.
+
 ## Evidence identity and reproduction
 
 Repository basis: `0805bcb44f5122e9499e1dc2449dc25ee6b01abd`.
 
-That commit is a declared **production-code basis**, not an unchecked label.
+That commit remains the declared **production-code basis**, not an unchecked label.
 The diagnostic refuses to run when `src/sto/core`, `src/sto/legacy` or the
 controlled-transition classifier differs from that commit, including relevant
 uncommitted or untracked files. Before importing repository calculation code it
