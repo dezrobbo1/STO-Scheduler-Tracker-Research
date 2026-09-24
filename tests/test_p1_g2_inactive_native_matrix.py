@@ -195,6 +195,16 @@ class Rc02NativeMatrixTests(unittest.TestCase):
                 "original_inactive_edge_gap": 0,
             },
         )
+        self.assertEqual(
+            result["validated_topology"]["RC02-C-I-SUCC"],
+            {
+                "uid": "23",
+                "predecessor_links": [
+                    {"predecessor_uid": "21", "type": "1", "link_lag": "0"},
+                    {"predecessor_uid": "22", "type": "1", "link_lag": "0"},
+                ],
+            },
+        )
 
     def test_inconsistent_observations_do_not_establish_a_rule(self):
         with tempfile.TemporaryDirectory() as directory:
