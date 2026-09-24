@@ -1,0 +1,826 @@
+%PDF-1.4
+%STO
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Count 14 /Kids [6 0 R 8 0 R 10 0 R 12 0 R 14 0 R 16 0 R 18 0 R 20 0 R 22 0 R 24 0 R 26 0 R 28 0 R 30 0 R 32 0 R] >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>
+endobj
+6 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 7 0 R >>
+endobj
+7 0 obj
+<< /Length 5134 >>
+stream
+BT /F2 16 Tf 52 784 Td (STO Scheduler + Tracker) Tj ET
+BT /F2 12.5 Tf 52 756 Td (Professional Scheduling UX/UI and Live Shutdown Execution Research) Tj ET
+BT /F2 10.5 Tf 52 734 Td (Deep Research Pass 1 - Cleaned and Reviewed Edition) Tj ET
+BT /F1 9.4 Tf 52 716 Td (24 September 2026) Tj ET
+BT /F1 9.1 Tf 64 695 Td (Revision note. This edition cleans and corrects the original Pass 1 report after review. It does not add) Tj ET
+BT /F1 9.1 Tf 64 683 Td (a new broad research pass. It preserves the original evidence base while making current STO authority,) Tj ET
+BT /F1 9.1 Tf 64 671 Td (inherited Design C evidence, external documented patterns, recommendations and practitioner-test) Tj ET
+BT /F1 9.1 Tf 64 659 Td (hypotheses explicit.) Tj ET
+BT /F1 9.4 Tf 52 638 Td (Overall judgement: Pass 1 establishes a sufficiently supported direction to begin STO UX Architecture v1) Tj ET
+BT /F1 9.4 Tf 52 626 Td (and low-fidelity prototyping. It does not establish a finished scheduler UI.) Tj ET
+BT /F2 16 Tf 52 605 Td (1. Executive conclusion) Tj ET
+BT /F1 9.4 Tf 52 572 Td (CURRENT STO FACT. STO is now the product monorepo and describes itself as a shutdown, turnaround and) Tj ET
+BT /F1 9.4 Tf 52 560 Td (outage scheduler that will import from CMMS, Primavera P6 or Microsoft Project, track/manage/schedule) Tj ET
+BT /F1 9.4 Tf 52 548 Td (execution in real time, and export back. Today it imports Microsoft Project XML into a canonical model,) Tj ET
+BT /F1 9.4 Tf 52 536 Td (persists and calculates an immutable baseline, and supports one persisted duration scenario that) Tj ET
+BT /F1 9.4 Tf 52 524 Td (demonstrates downstream movement behind authenticated project access. [I1][I2]) Tj ET
+BT /F1 9.4 Tf 52 503 Td (INHERITED DESIGN EVIDENCE. The earlier Shutdown Tracker UX was designed for a different authority) Tj ET
+BT /F1 9.4 Tf 52 491 Td (boundary: Microsoft Project remained the scheduler while Shutdown Tracker concentrated on execution,) Tj ET
+BT /F1 9.4 Tf 52 479 Td (review, evidence and export. Its UX ADR therefore excluded schedule editing and dependency planning from) Tj ET
+BT /F1 9.4 Tf 52 467 Td (the baseline UX. [I4][I5]) Tj ET
+BT /F1 9.4 Tf 52 446 Td (RECOMMENDATION. STO should evolve that inherited work rather than replace it. The product should remain) Tj ET
+BT /F1 9.4 Tf 52 434 Td (one activity-centred operational system with two deliberately different surfaces: a professional desktop) Tj ET
+BT /F1 9.4 Tf 52 422 Td (scheduling/control-room application and a sparse offline-first field application. Planning and execution) Tj ET
+BT /F1 9.4 Tf 52 410 Td (should share STO activity identity, authoritative state and audit lineage, while presenting) Tj ET
+BT /F1 9.4 Tf 52 398 Td (role-appropriate workflows.) Tj ET
+BT /F1 9.4 Tf 52 377 Td (RECOMMENDATION TO PROTOTYPE. A synchronized WBS/activity table plus Gantt plus progressively disclosed) Tj ET
+BT /F1 9.4 Tf 52 365 Td (activity inspector is the leading desktop architecture to validate. Professional scheduling products) Tj ET
+BT /F1 9.4 Tf 52 353 Td (repeatedly document combinations of dense activity tables, temporal bars, relationship views, filters,) Tj ET
+BT /F1 9.4 Tf 52 341 Td (grouping and detail panes. That recurrence supports a prototype direction; vendor documentation does not) Tj ET
+BT /F1 9.4 Tf 52 329 Td (prove that the pattern is objectively the most usable design. [E1][E2][E5]) Tj ET
+BT /F1 9.4 Tf 52 308 Td (The strongest product opportunity is to connect schedule mechanics to live execution without hiding) Tj ET
+BT /F1 9.4 Tf 52 296 Td (authority. A field execution command may change the live forecast after server validation and) Tj ET
+BT /F1 9.4 Tf 52 284 Td (application; communication cannot. Supervisor and planner review govern movement of the approved) Tj ET
+BT /F1 9.4 Tf 52 272 Td (forecast. [I2][I3]) Tj ET
+BT /F1 9.4 Tf 52 251 Td (A second opportunity is explainability: the planner should be able to ask "Why did this move?" This must) Tj ET
+BT /F1 9.4 Tf 52 239 Td (be a provenance-backed scheduler explanation, not an inference from coincident date changes. Current STO) Tj ET
+BT /F1 9.4 Tf 52 227 Td (can identify changed activities and expose some calculation/placement metadata in its P1 planner, but a) Tj ET
+BT /F1 9.4 Tf 52 215 Td (production explanation requires sufficient causal provenance to identify authoritative changed inputs,) Tj ET
+BT /F1 9.4 Tf 52 203 Td (driving relationships, calendar/constraint decisions and downstream effects. [I8]) Tj ET
+BT /F1 9.4 Tf 52 182 Td (No further broad scheduling-UX research is required before architecture and prototyping. The next step) Tj ET
+BT /F1 9.4 Tf 52 170 Td (is:) Tj ET
+BT /F1 9.4 Tf 52 149 Td (STO UX Architecture v1 -> low-fidelity scheduler/execution prototypes -> practitioner validation ->) Tj ET
+BT /F1 9.4 Tf 52 137 Td (corrections -> P2 implementation.) Tj ET
+BT /F2 16 Tf 52 116 Td (2. Evidence model and source hierarchy) Tj ET
+BT /F1 9.4 Tf 52 83 Td (This cleaned report uses five evidence labels:) Tj ET
+BT /F1 8 Tf 52 28 Td (STO Scheduling UX - Cleaned Pass 1) Tj ET
+BT /F1 8 Tf 488 28 Td (Page 1 of 14) Tj ET
+0.75 w 52 40 m 543 40 l S
+endstream
+endobj
+8 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 9 0 R >>
+endobj
+9 0 obj
+<< /Length 4868 >>
+stream
+BT /F1 9.4 Tf 64 784 Td (- CURRENT STO FACT - current repository, roadmap, accepted ADRs, implemented P1 behaviour and gate) Tj ET
+BT /F1 9.4 Tf 64 772 Td (contracts. Highest authority for current product direction.) Tj ET
+BT /F1 9.4 Tf 64 758 Td (- INHERITED/FROZEN DESIGN EVIDENCE - Design C and frozen Shutdown Tracker material. Strong evidence) Tj ET
+BT /F1 9.4 Tf 64 746 Td (for operational UX principles, but not current authority where the product boundary changed.) Tj ET
+BT /F1 9.4 Tf 64 732 Td (- EXTERNAL DOCUMENTED PATTERN - current vendor documentation or authoritative platform/human-factors) Tj ET
+BT /F1 9.4 Tf 64 720 Td (guidance. Establishes documented capability or constraints, not user preference or usability success.) Tj ET
+BT /F1 9.4 Tf 64 706 Td (- RECOMMENDATION - synthesis for STO based on the evidence.) Tj ET
+BT /F1 9.4 Tf 64 692 Td (- TEST / UNVALIDATED HYPOTHESIS - a design choice that must be demonstrated with practitioners or) Tj ET
+BT /F1 9.4 Tf 64 680 Td (representative workloads before it is hardened.) Tj ET
+BT /F1 9.4 Tf 52 661 Td (Current STO authority outranks frozen documents where they conflict. The roadmap treats the) Tj ET
+BT /F1 9.4 Tf 52 649 Td (consolidation plan as a frozen design record and keeps P2 as the live execution loop, P3 as) Tj ET
+BT /F1 9.4 Tf 52 637 Td (export/interchange evidence, P4 as CMMS integration and P6 as later scheduler depth. [I2]) Tj ET
+BT /F2 16 Tf 52 616 Td (3. Design C inheritance: Keep / Adapt / Retire / Test) Tj ET
+BT /F2 12.5 Tf 52 583 Td (KEEP) Tj ET
+BT /F1 9.4 Tf 64 556 Td (- Separate Master Console and Field App.) Tj ET
+BT /F1 9.4 Tf 64 542 Td (- Mobile is not a responsive collapse of the professional desktop scheduler.) Tj ET
+BT /F1 9.4 Tf 64 528 Td (- Attention-first Today surface: what changed, what is blocked, what is late, what needs review, who) Tj ET
+BT /F1 9.4 Tf 64 516 Td (owns it, and what is not synchronized.) Tj ET
+BT /F1 9.4 Tf 64 502 Td (- Flat, restrained industrial visual language; limited decorative cards, shadows, radii and) Tj ET
+BT /F1 9.4 Tf 64 490 Td (marketing-style presentation.) Tj ET
+BT /F1 9.4 Tf 64 476 Td (- Semantic state rather than colour names; text/icon/shape plus colour rather than colour-only) Tj ET
+BT /F1 9.4 Tf 64 464 Td (meaning.) Tj ET
+BT /F1 9.4 Tf 64 450 Td (- Structured Problems, Actions and Evidence rather than burying operational facts in comments.) Tj ET
+BT /F1 9.4 Tf 64 436 Td (- Explicit offline/queued/server states and preservation of failed local work.) Tj ET
+BT /F1 9.4 Tf 64 422 Td (- Dense tables/lists where comparison matters; sparse field cards where rapid action matters.) Tj ET
+BT /F1 9.4 Tf 64 408 Td (- Communication remains contextual rather than becoming a generic top-level chat product.) Tj ET
+BT /F2 12.5 Tf 52 389 Td (ADAPT) Tj ET
+BT /F1 9.4 Tf 64 362 Td (- The old Tasks zone should no longer be expected to carry professional scheduling. A distinct) Tj ET
+BT /F1 9.4 Tf 64 350 Td (scheduling capability is required. The exact replacement label for operational work is TEST;) Tj ET
+BT /F1 9.4 Tf 64 338 Td ("Execution" is the current leading candidate.) Tj ET
+BT /F1 9.4 Tf 64 324 Td (- The old Exports concept must eventually broaden to Project/P6/CMMS import, reconciliation, mapping) Tj ET
+BT /F1 9.4 Tf 64 312 Td (and export evidence. The exact label "Interchange" is TEST and need not appear as an empty P2) Tj ET
+BT /F1 9.4 Tf 64 300 Td (top-level zone.) Tj ET
+BT /F1 9.4 Tf 64 286 Td (- Planner review moves from an export-centric model toward governed live-versus-approved forecast) Tj ET
+BT /F1 9.4 Tf 64 274 Td (review, while P3 artifact review remains an integration concern.) Tj ET
+BT /F1 9.4 Tf 64 260 Td (- Project-boundary warnings become source/provenance/authority warnings. Project is no longer STO's) Tj ET
+BT /F1 9.4 Tf 64 248 Td (scheduling authority.) Tj ET
+BT /F2 12.5 Tf 52 229 Td (RETIRE) Tj ET
+BT /F1 9.4 Tf 64 202 Td (- The frozen five-zone desktop navigation freeze where it prevents first-class scheduling.) Tj ET
+BT /F1 9.4 Tf 64 188 Td (- The blanket prohibition on Gantt/scheduler views.) Tj ET
+BT /F1 9.4 Tf 64 174 Td (- The blanket prohibition on CPM/float/critical-path visualization. These are now scheduler concepts,) Tj ET
+BT /F1 9.4 Tf 64 162 Td (although they still require restrained presentation.) Tj ET
+BT /F1 9.4 Tf 64 148 Td (- Microsoft Project as the scheduling authority.) Tj ET
+BT /F2 12.5 Tf 52 129 Td (TEST) Tj ET
+BT /F1 9.4 Tf 64 102 Td (- Exact desktop label "Execution" versus alternatives such as Work or Live Execution.) Tj ET
+BT /F1 9.4 Tf 64 88 Td (- Exact future label "Interchange" and when it becomes visible.) Tj ET
+BT /F1 9.4 Tf 64 74 Td (- Exact Live/Approved/Scenario visual treatment.) Tj ET
+BT /F1 8 Tf 52 28 Td (STO Scheduling UX - Cleaned Pass 1) Tj ET
+BT /F1 8 Tf 488 28 Td (Page 2 of 14) Tj ET
+0.75 w 52 40 m 543 40 l S
+endstream
+endobj
+10 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 11 0 R >>
+endobj
+11 0 obj
+<< /Length 4661 >>
+stream
+BT /F1 9.4 Tf 64 784 Td (- Materiality thresholds for schedule-derived attention.) Tj ET
+BT /F1 9.4 Tf 64 770 Td (- Exact inspector tab labels/order and default pane sizes.) Tj ET
+BT /F1 9.4 Tf 52 751 Td (The conclusion is not that Design C is obsolete. Its operational discipline remains the foundation. Only) Tj ET
+BT /F1 9.4 Tf 52 739 Td (the assumptions that flowed from the old Project-owned scheduling boundary are retired. [I4][I5]) Tj ET
+BT /F2 16 Tf 52 718 Td (4. Professional scheduler interaction patterns) Tj ET
+BT /F1 9.4 Tf 52 685 Td (EXTERNAL DOCUMENTED PATTERN. Oracle P6 documents an Activities workspace in which an activity table can) Tj ET
+BT /F1 9.4 Tf 52 673 Td (be supplemented by a Gantt and detailed information for the selected activity. Relationship lines,) Tj ET
+BT /F1 9.4 Tf 52 661 Td (data-date display and configurable views are documented. [E1][E2]) Tj ET
+BT /F1 9.4 Tf 52 640 Td (EXTERNAL DOCUMENTED PATTERN. Microsoft Project documents Gantt-based task editing, relationship) Tj ET
+BT /F1 9.4 Tf 52 628 Td (creation, Task Path highlighting for predecessors/driving predecessors/successors, critical-path and) Tj ET
+BT /F1 9.4 Tf 52 616 Td (slack views. These patterns demonstrate useful local logic inspection without requiring every) Tj ET
+BT /F1 9.4 Tf 52 604 Td (relationship to remain visible. [E3][E4]) Tj ET
+BT /F1 9.4 Tf 52 583 Td (EXTERNAL DOCUMENTED PATTERN. Safran Project's Barchart Editor combines activity columns with a Gantt/bar) Tj ET
+BT /F1 9.4 Tf 52 571 Td (area, synchronized information panes, logic/resource views, saved layouts and immediate schedule) Tj ET
+BT /F1 9.4 Tf 52 559 Td (feedback from timing/logic edits. [E5]) Tj ET
+BT /F1 9.4 Tf 52 538 Td (EXTERNAL DOCUMENTED PATTERN. InEight Progress documents mobile planning/execution workflows and explicit) Tj ET
+BT /F1 9.4 Tf 52 526 Td (offline/sync state. This supports role/state clarity but does not define STO's CPM scheduler model. [E6]) Tj ET
+BT /F1 9.4 Tf 52 505 Td (RECOMMENDATION. STO should borrow interaction primitives, not copy an application's chrome or) Tj ET
+BT /F1 9.4 Tf 52 493 Td (complexity. The candidate pattern is synchronized activity grid + Gantt + selected-activity detail,) Tj ET
+BT /F1 9.4 Tf 52 481 Td (supported by search, grouping, filters, saved views, keyboard operation and explicit schedule-state) Tj ET
+BT /F1 9.4 Tf 52 469 Td (context.) Tj ET
+BT /F1 9.4 Tf 52 448 Td (Dependency lines should be selection-local or driving-path oriented by default. Always-on network) Tj ET
+BT /F1 9.4 Tf 52 436 Td ("spaghetti" should not be the primary analysis mode. Microsoft Project Task Path and P6 relationship) Tj ET
+BT /F1 9.4 Tf 52 424 Td (views provide documented examples of localizing logic inspection. [E2][E3]) Tj ET
+BT /F1 9.4 Tf 52 403 Td (Direct manipulation may be offered as convenience, but semantic schedule actions must remain explicit) Tj ET
+BT /F1 9.4 Tf 52 391 Td (and have keyboard/form alternatives. WCAG 2.2 requires a simple pointer alternative for functionality) Tj ET
+BT /F1 9.4 Tf 52 379 Td (that uses dragging unless dragging is essential. [E10]) Tj ET
+BT /F2 16 Tf 52 358 Td (5. Planner jobs-to-be-done) Tj ET
+BT /F1 9.4 Tf 52 325 Td (The following priorities are recommendations inferred from the STO roadmap, PM-Software trial material) Tj ET
+BT /F1 9.4 Tf 52 313 Td (and documented scheduler patterns. They are not measured industry frequency and must be validated with) Tj ET
+BT /F1 9.4 Tf 52 301 Td (shutdown planners.) Tj ET
+BT /F2 12.5 Tf 52 280 Td (Continuous during execution) Tj ET
+BT /F1 9.4 Tf 64 253 Td (- Locate an activity, WBS or workfront quickly.) Tj ET
+BT /F1 9.4 Tf 64 239 Td (- See actual history, remaining work, live forecast and approved position without confusing them.) Tj ET
+BT /F1 9.4 Tf 64 225 Td (- Find blocked, late, newly critical, materially moved, stale or review-required work.) Tj ET
+BT /F1 9.4 Tf 64 211 Td (- Determine why an activity or milestone moved.) Tj ET
+BT /F1 9.4 Tf 64 197 Td (- Inspect predecessor/successor logic, driving logic and float.) Tj ET
+BT /F2 12.5 Tf 52 178 Td (Frequent) Tj ET
+BT /F1 9.4 Tf 64 151 Td (- Review execution reports and understand their live forecast effect.) Tj ET
+BT /F1 9.4 Tf 64 137 Td (- Evaluate recovery alternatives in isolated scenarios.) Tj ET
+BT /F1 9.4 Tf 64 123 Td (- Compare a scenario with an explicit reference version.) Tj ET
+BT /F1 9.4 Tf 64 109 Td (- Review forecast changes under the governed P2 process.) Tj ET
+BT /F2 12.5 Tf 52 90 Td (Planning and maintenance) Tj ET
+BT /F1 8 Tf 52 28 Td (STO Scheduling UX - Cleaned Pass 1) Tj ET
+BT /F1 8 Tf 488 28 Td (Page 3 of 14) Tj ET
+0.75 w 52 40 m 543 40 l S
+endstream
+endobj
+12 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 13 0 R >>
+endobj
+13 0 obj
+<< /Length 4244 >>
+stream
+BT /F1 9.4 Tf 64 784 Td (- Edit supported durations, relationships, calendars and constraints.) Tj ET
+BT /F1 9.4 Tf 64 770 Td (- Perform multi-select and bulk operations with preview/validation.) Tj ET
+BT /F1 9.4 Tf 64 756 Td (- Import/build WBS and logic through professional table workflows.) Tj ET
+BT /F2 12.5 Tf 52 737 Td (Guarded / high consequence) Tj ET
+BT /F1 9.4 Tf 64 710 Td (- Correct accepted history.) Tj ET
+BT /F1 9.4 Tf 64 696 Td (- Change a calendar or constraint with broad schedule impact.) Tj ET
+BT /F1 9.4 Tf 64 682 Td (- Submit/promote a scenario outcome.) Tj ET
+BT /F1 9.4 Tf 64 668 Td (- Advance approved forecast or approve an external interchange artifact.) Tj ET
+BT /F1 9.4 Tf 52 649 Td (High-frequency editing and high-consequence editing should not have identical friction.) Tj ET
+BT /F2 16 Tf 52 628 Td (6. Proposed STO information architecture) Tj ET
+BT /F1 9.4 Tf 52 595 Td (RECOMMENDATION. Preserve Design C's operational zones while introducing first-class scheduling. Labels) Tj ET
+BT /F1 9.4 Tf 52 583 Td (marked TEST remain provisional.) Tj ET
+BT /F3 8 Tf 62 559 Td (STO MASTER CONSOLE) Tj ET
+BT /F3 8 Tf 62 549 Td () Tj ET
+BT /F3 8 Tf 62 539 Td (Today) Tj ET
+BT /F3 8 Tf 62 529 Td (Schedule) Tj ET
+BT /F3 8 Tf 62 519 Td (Operational work [TEST label: Execution]) Tj ET
+BT /F3 8 Tf 62 509 Td (Problems) Tj ET
+BT /F3 8 Tf 62 499 Td (Evidence) Tj ET
+BT /F3 8 Tf 62 489 Td (External systems [future concept; TEST label: Interchange]) Tj ET
+BT /F3 8 Tf 62 479 Td () Tj ET
+BT /F3 8 Tf 62 469 Td (STO FIELD APP) Tj ET
+BT /F3 8 Tf 62 459 Td () Tj ET
+BT /F3 8 Tf 62 449 Td (My Work) Tj ET
+BT /F3 8 Tf 62 439 Td (Today) Tj ET
+BT /F3 8 Tf 62 429 Td (Problems) Tj ET
+BT /F3 8 Tf 62 419 Td (Evidence) Tj ET
+BT /F3 8 Tf 62 409 Td (Sync) Tj ET
+BT /F1 9.4 Tf 52 391 Td (Schedule should be treated as a first-class desktop capability before P2 frontend structure hardens.) Tj ET
+BT /F1 9.4 Tf 52 379 Td (This does not require every scheduling feature to be built in P2.) Tj ET
+BT /F1 9.4 Tf 52 358 Td (Today remains an attention surface, not a management dashboard. It should prioritize decisions and) Tj ET
+BT /F1 9.4 Tf 52 346 Td (exceptions: material forecast movement, blocked controlling work, newly critical work, stale execution) Tj ET
+BT /F1 9.4 Tf 52 334 Td (information, review queues, rejected field updates and sync/data-quality failures. Exact thresholds are) Tj ET
+BT /F1 9.4 Tf 52 322 Td (TEST.) Tj ET
+BT /F1 9.4 Tf 52 301 Td (The future external-systems concept should reserve a coherent home for Project/P6/CMMS import,) Tj ET
+BT /F1 9.4 Tf 52 289 Td (reconciliation and export evidence, but P2 should not expose an empty Interchange zone merely to reserve) Tj ET
+BT /F1 9.4 Tf 52 277 Td (navigation.) Tj ET
+BT /F1 9.4 Tf 52 256 Td (Communication remains contextual to activities/workfronts/entities and may appear in a timeline. It) Tj ET
+BT /F1 9.4 Tf 52 244 Td (should not become a generic top-level Chat area.) Tj ET
+BT /F2 16 Tf 52 223 Td (7. Candidate scheduler workspace) Tj ET
+BT /F1 9.4 Tf 52 190 Td (RECOMMENDATION TO PROTOTYPE. The main professional scheduling surface should be a synchronized) Tj ET
+BT /F1 9.4 Tf 52 178 Td (table/Gantt workspace with persistent schedule-state context and progressive detail.) Tj ET
+BT /F3 8 Tf 62 154 Td (Project / status point / viewed state / scenario / freshness) Tj ET
+BT /F3 8 Tf 62 144 Td (------------------------------------------------------------) Tj ET
+BT /F3 8 Tf 62 134 Td (Today | Schedule | Operational work | Problems | Evidence) Tj ET
+BT /F3 8 Tf 62 124 Td (------------------------------------------------------------) Tj ET
+BT /F3 8 Tf 62 114 Td (Search | View | Group | Filter | Compare | Scenario | Recalculate) Tj ET
+BT /F3 8 Tf 62 104 Td (------------------------------------------------------------) Tj ET
+BT /F3 8 Tf 62 94 Td (WBS / ACTIVITY TABLE        | GANTT) Tj ET
+BT /F3 8 Tf 62 84 Td (ID  Name  Dur  Start  Float | baseline / actual / live / scenario) Tj ET
+BT /F3 8 Tf 62 74 Td (                            |) Tj ET
+BT /F3 8 Tf 62 64 Td ([same row model and selection across both panes]) Tj ET
+BT /F1 8 Tf 52 28 Td (STO Scheduling UX - Cleaned Pass 1) Tj ET
+BT /F1 8 Tf 488 28 Td (Page 4 of 14) Tj ET
+0.75 w 52 40 m 543 40 l S
+endstream
+endobj
+14 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 15 0 R >>
+endobj
+15 0 obj
+<< /Length 4431 >>
+stream
+BT /F3 8 Tf 62 784 Td (------------------------------------------------------------) Tj ET
+BT /F3 8 Tf 62 774 Td (SELECTED ACTIVITY INSPECTOR) Tj ET
+BT /F3 8 Tf 62 764 Td (Summary | Plan | Logic | Execution | Context | History  [TEST labels]) Tj ET
+BT /F3 8 Tf 62 754 Td () Tj ET
+BT /F3 8 Tf 62 744 Td (Movement / impact explanation when provenance supports it) Tj ET
+BT /F1 9.4 Tf 52 726 Td (The table and Gantt should share one row identity and selection model. Recalculation should preserve) Tj ET
+BT /F1 9.4 Tf 52 714 Td (selected activity, filters, relevant scroll position and timescale wherever possible.) Tj ET
+BT /F1 9.4 Tf 52 693 Td (Default grid density should remain professional rather than card-based. Progressive disclosure prevents) Tj ET
+BT /F1 9.4 Tf 52 681 Td (the default grid from becoming a fifty-column dump.) Tj ET
+BT /F1 9.4 Tf 52 660 Td (Keyboard navigation, multi-selection and bulk operations are candidate architectural requirements, but) Tj ET
+BT /F1 9.4 Tf 52 648 Td (exact shortcuts and bulk-edit semantics require prototype testing.) Tj ET
+BT /F2 16 Tf 52 627 Td (8. Activity detail architecture) Tj ET
+BT /F1 9.4 Tf 52 594 Td (The central architectural decision is one STO activity identity viewed through planning and execution) Tj ET
+BT /F1 9.4 Tf 52 582 Td (lenses. Exact tab names and order are TEST.) Tj ET
+BT /F1 9.4 Tf 64 561 Td (- Summary - identity, WBS/workfront, live timing, approved timing, movement, current execution state) Tj ET
+BT /F1 9.4 Tf 64 549 Td (and immediate attention.) Tj ET
+BT /F1 9.4 Tf 64 535 Td (- Plan - duration, calendar, constraints, early/late dates, total/free float and supported planning) Tj ET
+BT /F1 9.4 Tf 64 523 Td (assumptions.) Tj ET
+BT /F1 9.4 Tf 64 509 Td (- Logic - predecessors, successors, relationship type/lag, driving relationship/path and) Tj ET
+BT /F1 9.4 Tf 64 497 Td (selected-path highlighting.) Tj ET
+BT /F1 9.4 Tf 64 483 Td (- Execution - actual start/finish, status point, remaining duration, submitted operations,) Tj ET
+BT /F1 9.4 Tf 64 471 Td (acceptance/application state, review state and live forecast effect.) Tj ET
+BT /F1 9.4 Tf 64 457 Td (- Context - Problems/Actions, Evidence/photos, communication and later work-order/equipment context.) Tj ET
+BT /F1 9.4 Tf 64 443 Td (- History - source/import provenance, baseline, accepted authoritative changes, corrections,) Tj ET
+BT /F1 9.4 Tf 64 431 Td (scenario/promotion history and audit.) Tj ET
+BT /F1 9.4 Tf 52 412 Td (Opening an activity from Schedule can emphasize Summary/Plan; opening the same activity from operational) Tj ET
+BT /F1 9.4 Tf 52 400 Td (work can emphasize Execution. These are lenses over one record, not separate task databases.) Tj ET
+BT /F2 16 Tf 52 379 Td (9. Schedule-state and execution-time model) Tj ET
+BT /F1 9.4 Tf 52 346 Td (CURRENT STO FACT. P1 already distinguishes imported/source observations, an immutable calculated) Tj ET
+BT /F1 9.4 Tf 52 334 Td (baseline and a persisted scenario. P2 adds live execution semantics and requires that approved forecast) Tj ET
+BT /F1 9.4 Tf 52 322 Td (move only on planner approval after supervisor then planner review. [I1][I2]) Tj ET
+BT /F1 9.4 Tf 52 301 Td (RECOMMENDATION. Do not present Source, Baseline, Live, Approved, Scenario and History as equal peer) Tj ET
+BT /F1 9.4 Tf 52 289 Td (tabs. They belong to different dimensions.) Tj ET
+BT /F3 8 Tf 62 265 Td (REFERENCE) Tj ET
+BT /F3 8 Tf 62 255 Td (  Source/imported observations) Tj ET
+BT /F3 8 Tf 62 245 Td (  Immutable STO baseline) Tj ET
+BT /F3 8 Tf 62 235 Td () Tj ET
+BT /F3 8 Tf 62 225 Td (OPERATIONAL) Tj ET
+BT /F3 8 Tf 62 215 Td (  Approved forecast) Tj ET
+BT /F3 8 Tf 62 205 Td (  Live forecast) Tj ET
+BT /F3 8 Tf 62 195 Td (    may include authoritative execution effects) Tj ET
+BT /F3 8 Tf 62 185 Td (    not yet incorporated into Approved) Tj ET
+BT /F3 8 Tf 62 175 Td () Tj ET
+BT /F3 8 Tf 62 165 Td (WORKING) Tj ET
+BT /F3 8 Tf 62 155 Td (  Scenario / planner draft) Tj ET
+BT /F3 8 Tf 62 145 Td (    explicitly based on a version) Tj ET
+BT /F3 8 Tf 62 135 Td (    isolated until governed promotion) Tj ET
+BT /F3 8 Tf 62 125 Td () Tj ET
+BT /F3 8 Tf 62 115 Td (HISTORY) Tj ET
+BT /F3 8 Tf 62 105 Td (  Immutable prior versions and audit) Tj ET
+BT /F1 9.4 Tf 52 87 Td (The execution-time model is separate:) Tj ET
+BT /F1 8 Tf 52 28 Td (STO Scheduling UX - Cleaned Pass 1) Tj ET
+BT /F1 8 Tf 488 28 Td (Page 5 of 14) Tj ET
+0.75 w 52 40 m 543 40 l S
+endstream
+endobj
+16 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 17 0 R >>
+endobj
+17 0 obj
+<< /Length 4128 >>
+stream
+BT /F3 8 Tf 62 784 Td (ACTUAL HISTORY | STATUS POINT | REMAINING FORECAST) Tj ET
+BT /F3 8 Tf 62 774 Td (===============|==============|====================) Tj ET
+BT /F1 9.4 Tf 52 756 Td (The global context should make the viewed state explicit: what is being viewed, what version it is based) Tj ET
+BT /F1 9.4 Tf 52 744 Td (on, the data/status point, current approved version, whether unreviewed effects exist, and whether edits) Tj ET
+BT /F1 9.4 Tf 52 732 Td (can affect live execution.) Tj ET
+BT /F1 9.4 Tf 52 711 Td (When viewing a scenario, the UI should explicitly state that it is not live and not approved, identify) Tj ET
+BT /F1 9.4 Tf 52 699 Td (its base version, last calculation and edited inputs. Exact visual treatment remains TEST.) Tj ET
+BT /F2 16 Tf 52 678 Td (10. Trustworthy movement and impact explanation) Tj ET
+BT /F1 9.4 Tf 52 645 Td (DESIGN OBJECTIVE. "Why did this move?" should be a first-class STO interaction because it connects) Tj ET
+BT /F1 9.4 Tf 52 633 Td (scheduler mechanics to operational decisions. PM-Software's practitioner trial explicitly asks whether) Tj ET
+BT /F1 9.4 Tf 52 621 Td (planners understand important reasons work moved. [I7]) Tj ET
+BT /F1 9.4 Tf 52 600 Td (CORRECTION. The UI must not infer a cause from coincident date changes. A trustworthy explanation) Tj ET
+BT /F1 9.4 Tf 52 588 Td (requires scheduler provenance/causal data. Current STO can identify changed activities and expose some) Tj ET
+BT /F1 9.4 Tf 52 576 Td (calculation/placement metadata, but that is not yet equivalent to a complete causal chain. [I8]) Tj ET
+BT /F1 9.4 Tf 52 555 Td (The scheduler should eventually make sufficient evidence available to express:) Tj ET
+BT /F3 8 Tf 62 531 Td (Version v31 -> v32) Tj ET
+BT /F3 8 Tf 62 521 Td () Tj ET
+BT /F3 8 Tf 62 511 Td (AUTHORITATIVE CHANGE) Tj ET
+BT /F3 8 Tf 62 501 Td (A-101 Remaining Duration: 2h -> 3h) Tj ET
+BT /F3 8 Tf 62 491 Td (Execution operation: E-4821) Tj ET
+BT /F3 8 Tf 62 481 Td () Tj ET
+BT /F3 8 Tf 62 471 Td (SCHEDULING CONSEQUENCE) Tj ET
+BT /F3 8 Tf 62 461 Td (A-101 Finish: +1h) Tj ET
+BT /F3 8 Tf 62 451 Td () Tj ET
+BT /F3 8 Tf 62 441 Td (PLACEMENT OF A-102) Tj ET
+BT /F3 8 Tf 62 431 Td (Driving edge: A-101 -> A-102) Tj ET
+BT /F3 8 Tf 62 421 Td (Relationship: FS + 0h) Tj ET
+BT /F3 8 Tf 62 411 Td (Calendar/constraint decision: DAY / none) Tj ET
+BT /F3 8 Tf 62 401 Td (Result: A-102 Start +1h) Tj ET
+BT /F3 8 Tf 62 391 Td () Tj ET
+BT /F3 8 Tf 62 381 Td (DOWNSTREAM IMPACT) Tj ET
+BT /F3 8 Tf 62 371 Td (A-117 Start +1h) Tj ET
+BT /F3 8 Tf 62 361 Td (Milestone M-12 Finish +1h) Tj ET
+BT /F3 8 Tf 62 351 Td (Total float: 1h -> 0h) Tj ET
+BT /F3 8 Tf 62 341 Td () Tj ET
+BT /F3 8 Tf 62 331 Td (OTHER SIMULTANEOUS DRIVERS) Tj ET
+BT /F3 8 Tf 62 321 Td (None / multiple / unresolved) Tj ET
+BT /F1 9.4 Tf 52 303 Td (The explanation hierarchy should be:) Tj ET
+BT /F1 9.4 Tf 52 282 Td (What moved -> direct driver\(s\) -> changed authoritative input/event -> scheduling rule/placement ->) Tj ET
+BT /F1 9.4 Tf 52 270 Td (downstream consequence.) Tj ET
+BT /F1 9.4 Tf 52 249 Td (Potential cause types include predecessor timing, relationship/lag, actual start/finish, remaining) Tj ET
+BT /F1 9.4 Tf 52 237 Td (duration, calendar, constraint, planner/scenario edit and, later, resource or operational constraints.) Tj ET
+BT /F1 9.4 Tf 52 216 Td (Where multiple causes are possible, the UI must show that ambiguity rather than invent a single cause. A) Tj ET
+BT /F1 9.4 Tf 52 204 Td (production explainability contract therefore depends on scheduler provenance becoming sufficiently) Tj ET
+BT /F1 9.4 Tf 52 192 Td (explicit.) Tj ET
+BT /F2 16 Tf 52 171 Td (11. Criticality, float and attention semantics) Tj ET
+BT /F1 9.4 Tf 52 138 Td (STO should keep the following facts visibly separate:) Tj ET
+BT /F1 9.4 Tf 64 117 Td (- Calculated CPM criticality.) Tj ET
+BT /F1 9.4 Tf 64 103 Td (- Total float.) Tj ET
+BT /F1 9.4 Tf 64 89 Td (- Free float.) Tj ET
+BT /F1 9.4 Tf 64 75 Td (- Near-critical threshold/view policy.) Tj ET
+BT /F1 8 Tf 52 28 Td (STO Scheduling UX - Cleaned Pass 1) Tj ET
+BT /F1 8 Tf 488 28 Td (Page 6 of 14) Tj ET
+0.75 w 52 40 m 543 40 l S
+endstream
+endobj
+18 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 19 0 R >>
+endobj
+19 0 obj
+<< /Length 3968 >>
+stream
+BT /F1 9.4 Tf 64 784 Td (- Driving logic / causal path.) Tj ET
+BT /F1 9.4 Tf 64 770 Td (- Human Critical/watch operational classification.) Tj ET
+BT /F1 9.4 Tf 64 756 Td (- Future resource-constrained executable risk.) Tj ET
+BT /F1 9.4 Tf 64 742 Td (- Future operational-constraint risk.) Tj ET
+BT /F1 9.4 Tf 52 723 Td (Near-critical is a configured view/filter policy, not a scheduler truth equivalent to total or free) Tj ET
+BT /F1 9.4 Tf 52 711 Td (float.) Tj ET
+BT /F1 9.4 Tf 52 690 Td (Microsoft Project itself documents configurable critical/slack concepts, which reinforces the need for) Tj ET
+BT /F1 9.4 Tf 52 678 Td (STO to state the basis rather than rely on a generic red bar. [E4]) Tj ET
+BT /F1 9.4 Tf 52 657 Td (Human Critical placement and calculated criticality must remain separate. A planner or control-room) Tj ET
+BT /F1 9.4 Tf 52 645 Td (operator may deliberately watch work that the current CPM calculation does not classify as critical.) Tj ET
+BT /F2 16 Tf 52 624 Td (12. Scenario and recovery UX) Tj ET
+BT /F1 9.4 Tf 52 591 Td (CURRENT STO FACT. P1 has one persisted duration scenario. P2 PL7 plans planner editing, leases and) Tj ET
+BT /F1 9.4 Tf 52 579 Td (immutable scenarios with governed promotion. [I1][I2]) Tj ET
+BT /F1 9.4 Tf 52 558 Td (RECOMMENDATION.) Tj ET
+BT /F3 8 Tf 62 534 Td (Explicit reference version) Tj ET
+BT /F3 8 Tf 62 524 Td (        |) Tj ET
+BT /F3 8 Tf 62 514 Td (Create scenario / planner draft) Tj ET
+BT /F3 8 Tf 62 504 Td (        |) Tj ET
+BT /F3 8 Tf 62 494 Td (Edit supported inputs) Tj ET
+BT /F3 8 Tf 62 484 Td (        |) Tj ET
+BT /F3 8 Tf 62 474 Td (Recalculate) Tj ET
+BT /F3 8 Tf 62 464 Td (        |) Tj ET
+BT /F3 8 Tf 62 454 Td (Impact summary + changed-only comparison) Tj ET
+BT /F3 8 Tf 62 444 Td (        |) Tj ET
+BT /F3 8 Tf 62 434 Td (Investigate movement and adverse effects) Tj ET
+BT /F3 8 Tf 62 424 Td (        |) Tj ET
+BT /F3 8 Tf 62 414 Td (   +----+------------------+) Tj ET
+BT /F3 8 Tf 62 404 Td (   |                       |) Tj ET
+BT /F3 8 Tf 62 394 Td (Discard              Submit proposed) Tj ET
+BT /F3 8 Tf 62 384 Td (                     scenario outcome) Tj ET
+BT /F3 8 Tf 62 374 Td (                           |) Tj ET
+BT /F3 8 Tf 62 364 Td (                 Governed promotion process) Tj ET
+BT /F3 8 Tf 62 354 Td (                           |) Tj ET
+BT /F3 8 Tf 62 344 Td (              Exact P2 semantics still to define) Tj ET
+BT /F1 9.4 Tf 52 326 Td (A scenario should always identify its base version and must never silently mutate live or approved) Tj ET
+BT /F1 9.4 Tf 52 314 Td (state.) Tj ET
+BT /F1 9.4 Tf 52 293 Td (Useful comparison patterns to prototype include overlay comparison, changed-only table, impact summary) Tj ET
+BT /F1 9.4 Tf 52 281 Td (and explicit provenance. Exact promotion/approval interaction remains TEST until PL7/PL6 semantics are) Tj ET
+BT /F1 9.4 Tf 52 269 Td (designed together.) Tj ET
+BT /F2 16 Tf 52 248 Td (13. Core workflows and authority) Tj ET
+BT /F2 12.5 Tf 52 215 Td (13.1 Planner edit and recalculation) Tj ET
+BT /F1 9.4 Tf 52 188 Td (Schedule -> find/select activity -> edit supported Plan/Logic input -> draft visibly dirty -> validate) Tj ET
+BT /F1 9.4 Tf 52 176 Td (-> recalculate -> changed-only impact -> inspect movement/provenance -> keep in scenario / undo /) Tj ET
+BT /F1 9.4 Tf 52 164 Td (discard / submit proposal.) Tj ET
+BT /F1 9.4 Tf 52 143 Td (Invalid edits should preserve user input and explain the correction required. Essential operations need) Tj ET
+BT /F1 9.4 Tf 52 131 Td (keyboard/form paths; drag may be an optional convenience.) Tj ET
+BT /F2 12.5 Tf 52 110 Td (13.2 Field execution command to live schedule) Tj ET
+BT /F1 9.4 Tf 52 83 Td (ADR-016 distinguishes queueing, server acceptance and application. The UI must preserve that) Tj ET
+BT /F1 9.4 Tf 52 71 Td (distinction. [I3]) Tj ET
+BT /F1 8 Tf 52 28 Td (STO Scheduling UX - Cleaned Pass 1) Tj ET
+BT /F1 8 Tf 488 28 Td (Page 7 of 14) Tj ET
+0.75 w 52 40 m 543 40 l S
+endstream
+endobj
+20 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 21 0 R >>
+endobj
+21 0 obj
+<< /Length 3964 >>
+stream
+BT /F3 8 Tf 62 781 Td (Field execution command) Tj ET
+BT /F3 8 Tf 62 771 Td (  -> queued locally) Tj ET
+BT /F3 8 Tf 62 761 Td (  -> server authenticates and validates) Tj ET
+BT /F3 8 Tf 62 751 Td (  -> ACCEPTED) Tj ET
+BT /F3 8 Tf 62 741 Td (  -> authoritative execution effect applied) Tj ET
+BT /F3 8 Tf 62 731 Td (  -> S7 deterministic recalculation) Tj ET
+BT /F3 8 Tf 62 721 Td (  -> APPLIED) Tj ET
+BT /F3 8 Tf 62 711 Td (  -> live schedule updated) Tj ET
+BT /F1 9.4 Tf 52 693 Td (An accepted receipt must not falsely imply that recalculation or downstream application has finished.) Tj ET
+BT /F2 12.5 Tf 52 672 Td (13.3 Live forecast to approved forecast) Tj ET
+BT /F3 8 Tf 62 642 Td (Authoritative execution effect) Tj ET
+BT /F3 8 Tf 62 632 Td (  -> live forecast changes) Tj ET
+BT /F3 8 Tf 62 622 Td (  -> supervisor review) Tj ET
+BT /F3 8 Tf 62 612 Td (  -> planner forecast review) Tj ET
+BT /F3 8 Tf 62 602 Td (  -> approved forecast advances) Tj ET
+BT /F1 9.4 Tf 52 584 Td (The exact review interaction is P2 design work, but the authority boundary is already explicit in the) Tj ET
+BT /F1 9.4 Tf 52 572 Td (roadmap. [I2]) Tj ET
+BT /F2 12.5 Tf 52 551 Td (13.4 Movement investigation) Tj ET
+BT /F1 9.4 Tf 52 524 Td (Today/Schedule attention -> open affected milestone/activity -> focus selected activity -> inspect) Tj ET
+BT /F1 9.4 Tf 52 512 Td (provenance-backed "Why did this move?" -> highlight supported driving chain -> open causal event ->) Tj ET
+BT /F1 9.4 Tf 52 500 Td (inspect actual/remaining/logic/calendar -> create recovery scenario if required.) Tj ET
+BT /F2 12.5 Tf 52 479 Td (13.5 Supervisor review) Tj ET
+BT /F1 9.4 Tf 52 452 Td (The supervisor should see the submitted execution operation, prior authoritative state, relevant) Tj ET
+BT /F1 9.4 Tf 52 440 Td (evidence/context and live schedule consequence. Communication acknowledgements or reactions must never) Tj ET
+BT /F1 9.4 Tf 52 428 Td (perform review implicitly. [I3]) Tj ET
+BT /F2 12.5 Tf 52 407 Td (13.6 Field communication and photos) Tj ET
+BT /F1 9.4 Tf 52 380 Td (My Work -> activity -> contextual timeline -> text or photo/markup -> local queued state if offline ->) Tj ET
+BT /F1 9.4 Tf 52 368 Td (server acceptance/delivery -> visible to permitted users. No schedule mutation.) Tj ET
+BT /F1 9.4 Tf 52 347 Td (A separate "Mark complete" or progress action opens an explicit ExecutionCommand path. Message text is) Tj ET
+BT /F1 9.4 Tf 52 335 Td (never interpreted as scheduling authority. [I3]) Tj ET
+BT /F2 12.5 Tf 52 314 Td (13.7 Offline reconnect and rejection) Tj ET
+BT /F1 9.4 Tf 52 287 Td (Offline capture -> durable local outbox -> process termination/reopen -> queued work remains visible ->) Tj ET
+BT /F1 9.4 Tf 52 275 Td (reconnect/current permission check -> idempotent submission -> accepted/applied OR rejected.) Tj ET
+BT /F1 9.4 Tf 52 254 Td (Rejected/stale/conflicting work becomes Needs attention and must show what the user entered, current) Tj ET
+BT /F1 9.4 Tf 52 242 Td (server state, why it cannot apply, and allowed resolution. Android offline-first guidance and InEight) Tj ET
+BT /F1 9.4 Tf 52 230 Td (mobile sync states provide external patterns, but STO's authority/idempotency contract comes from) Tj ET
+BT /F1 9.4 Tf 52 218 Td (ADR-016. [E6][E11][I3]) Tj ET
+BT /F2 16 Tf 52 197 Td (14. Desktop versus mobile responsibility) Tj ET
+BT /F2 12.5 Tf 52 164 Td (Desktop / Master Console) Tj ET
+BT /F1 9.4 Tf 64 137 Td (- Full WBS/activity table and professional Gantt.) Tj ET
+BT /F1 9.4 Tf 64 123 Td (- Logic and float investigation.) Tj ET
+BT /F1 9.4 Tf 64 109 Td (- Planner editing and scenarios.) Tj ET
+BT /F1 9.4 Tf 64 95 Td (- Changed-only and comparison views.) Tj ET
+BT /F1 9.4 Tf 64 81 Td (- Planner forecast review/approval.) Tj ET
+BT /F1 9.4 Tf 64 67 Td (- Supervisor/control-room review where authorised.) Tj ET
+BT /F1 8 Tf 52 28 Td (STO Scheduling UX - Cleaned Pass 1) Tj ET
+BT /F1 8 Tf 488 28 Td (Page 8 of 14) Tj ET
+0.75 w 52 40 m 543 40 l S
+endstream
+endobj
+22 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 23 0 R >>
+endobj
+23 0 obj
+<< /Length 4219 >>
+stream
+BT /F1 9.4 Tf 64 784 Td (- Import/reconciliation/export in later phases.) Tj ET
+BT /F1 9.4 Tf 64 770 Td (- Future CMMS/P6 mapping/configuration.) Tj ET
+BT /F2 12.5 Tf 52 751 Td (Field App) Tj ET
+BT /F1 9.4 Tf 64 724 Td (- Assigned work / My Work.) Tj ET
+BT /F1 9.4 Tf 64 710 Td (- Start, progress, remaining duration and finish through supported execution commands.) Tj ET
+BT /F1 9.4 Tf 64 696 Td (- Problems/actions where in scope.) Tj ET
+BT /F1 9.4 Tf 64 682 Td (- Evidence/photo capture.) Tj ET
+BT /F1 9.4 Tf 64 668 Td (- Contextual communication.) Tj ET
+BT /F1 9.4 Tf 64 654 Td (- Durable offline submission.) Tj ET
+BT /F1 9.4 Tf 64 640 Td (- Sync diagnostics/recovery understandable to field users.) Tj ET
+BT /F1 9.4 Tf 64 626 Td (- Summary schedule context only where useful; no professional scheduler.) Tj ET
+BT /F1 9.4 Tf 52 607 Td (This preserves Design C's strongest premise: the field app is a different application surface with) Tj ET
+BT /F1 9.4 Tf 52 595 Td (different jobs and density.) Tj ET
+BT /F2 16 Tf 52 574 Td (15. Design-system implications) Tj ET
+BT /F1 9.4 Tf 52 541 Td (Design C's restrained operational language should be retained. Scheduling adds semantic tokens named by) Tj ET
+BT /F1 9.4 Tf 52 529 Td (meaning rather than colour, for example:) Tj ET
+BT /F1 9.4 Tf 52 508 Td (schedule.reference.source, schedule.reference.baseline, schedule.history.actual, schedule.forecast.live,) Tj ET
+BT /F1 9.4 Tf 52 496 Td (schedule.forecast.approved, schedule.forecast.unreviewed, schedule.working.scenario,) Tj ET
+BT /F1 9.4 Tf 52 484 Td (schedule.working.edited, schedule.logic.driving, schedule.logic.related, schedule.risk.critical,) Tj ET
+BT /F1 9.4 Tf 52 472 Td (schedule.risk.nearCritical.) Tj ET
+BT /F1 9.4 Tf 52 451 Td (Exact colours, fills and patterns remain TEST.) Tj ET
+BT /F1 9.4 Tf 52 430 Td (Gantt semantics should use combinations of position, fill/outline/pattern, labels and persistent state) Tj ET
+BT /F1 9.4 Tf 52 418 Td (context rather than colour alone. Actual history and future forecast should be separated by an explicit) Tj ET
+BT /F1 9.4 Tf 52 406 Td (status point.) Tj ET
+BT /F1 9.4 Tf 52 385 Td (WCAG 2.2 requires alternatives to drag-only interaction and defines minimum target-size rules. STO's) Tj ET
+BT /F1 9.4 Tf 52 373 Td (field UX should go beyond minimum web compliance where real device/PPE/time-pressure conditions justify) Tj ET
+BT /F1 9.4 Tf 52 361 Td (it. [E10]) Tj ET
+BT /F1 9.4 Tf 52 340 Td (High-contrast/night use should be prototyped rather than assumed. HSE control-room guidance emphasizes) Tj ET
+BT /F1 9.4 Tf 52 328 Td (task analysis, readable displays, logical grouping and clear feedback. [E8]) Tj ET
+BT /F2 16 Tf 52 307 Td (16. Large-schedule UX) Tj ET
+BT /F1 9.4 Tf 52 274 Td (Candidate architectural requirements:) Tj ET
+BT /F1 9.4 Tf 64 253 Td (- Virtualized activity and Gantt rows.) Tj ET
+BT /F1 9.4 Tf 64 239 Td (- One shared vertical row/selection model.) Tj ET
+BT /F1 9.4 Tf 64 225 Td (- Pinned identity/name/state columns.) Tj ET
+BT /F1 9.4 Tf 64 211 Td (- Collapsible WBS.) Tj ET
+BT /F1 9.4 Tf 64 197 Td (- Search-to-activity rather than manual scrolling.) Tj ET
+BT /F1 9.4 Tf 64 183 Td (- Saved views and filters.) Tj ET
+BT /F1 9.4 Tf 64 169 Td (- Changed-only, critical/near-critical, needs-review, shift/lookahead and workfront views.) Tj ET
+BT /F1 9.4 Tf 64 155 Td (- Selection-local/driving-path dependency display rather than global lines by default.) Tj ET
+BT /F1 9.4 Tf 64 141 Td (- Preserve selection, filters, relevant scroll position and zoom after recalculation.) Tj ET
+BT /F1 9.4 Tf 64 127 Td (- Multi-select and keyboard operations.) Tj ET
+BT /F1 9.4 Tf 64 113 Td (- Asynchronous detail loading where appropriate.) Tj ET
+BT /F1 9.4 Tf 52 94 Td (TEST COHORTS, NOT PRODUCT LIMITS: 500, 2,000 and 5,000+ activity fixtures may be used as representative) Tj ET
+BT /F1 9.4 Tf 52 82 Td (performance/usability cohorts. They are not supported limits, SLAs or latency promises. Actual) Tj ET
+BT /F1 9.4 Tf 52 70 Td (interaction budgets should come from profiling representative real schedules.) Tj ET
+BT /F1 8 Tf 52 28 Td (STO Scheduling UX - Cleaned Pass 1) Tj ET
+BT /F1 8 Tf 488 28 Td (Page 9 of 14) Tj ET
+0.75 w 52 40 m 543 40 l S
+endstream
+endobj
+24 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 25 0 R >>
+endobj
+25 0 obj
+<< /Length 4289 >>
+stream
+BT /F2 16 Tf 52 784 Td (17. Human factors and attention design) Tj ET
+BT /F1 9.4 Tf 52 751 Td (HSE control-room guidance says HMI design should be based on task analysis, displays should be logically) Tj ET
+BT /F1 9.4 Tf 52 739 Td (grouped, and operators should receive clear feedback about actions and delays. HSE alarm guidance) Tj ET
+BT /F1 9.4 Tf 52 727 Td (emphasizes useful, relevant alarms tied to timely operator action rather than flooding. [E8][E9]) Tj ET
+BT /F1 9.4 Tf 52 706 Td (Applied to STO, this supports an attention-by-action model rather than treating every schedule movement) Tj ET
+BT /F1 9.4 Tf 52 694 Td (as an alert.) Tj ET
+BT /F1 9.4 Tf 52 673 Td (Candidate Today categories are Decision required, Schedule risk, Execution risk, Review queues and) Tj ET
+BT /F1 9.4 Tf 52 661 Td (Data/sync exceptions. Exact materiality thresholds are TEST.) Tj ET
+BT /F2 16 Tf 52 640 Td (18. Future readiness without premature design) Tj ET
+BT /F2 12.5 Tf 52 607 Td (P3 - Project/P6 interchange) Tj ET
+BT /F1 9.4 Tf 52 580 Td (Reserve a coherent external-systems area and activity provenance seam for import, identity) Tj ET
+BT /F1 9.4 Tf 52 568 Td (reconciliation, candidate export, difference review and returned-file evidence. Do not design the full) Tj ET
+BT /F1 9.4 Tf 52 556 Td (P3 writer/reconciliation UI before semantics and evidence profiles exist. [I2]) Tj ET
+BT /F2 12.5 Tf 52 535 Td (P4 - CMMS/EAM) Tj ET
+BT /F1 9.4 Tf 52 508 Td (Allow the activity Context area to later expose STO identity, source schedule identity, work order,) Tj ET
+BT /F1 9.4 Tf 52 496 Td (operation, equipment, CMMS provenance and mapping status. Do not design vendor adapter configuration in) Tj ET
+BT /F1 9.4 Tf 52 484 Td (P2. [I2]) Tj ET
+BT /F2 12.5 Tf 52 463 Td (P6 - scheduler depth) Tj ET
+BT /F1 9.4 Tf 52 436 Td (The Schedule workspace should be extensible to later Resources and operational Constraints without) Tj ET
+BT /F1 9.4 Tf 52 424 Td (introducing a second "advanced scheduler". Resource levelling, crew capacity, permits, isolations,) Tj ET
+BT /F1 9.4 Tf 52 412 Td (workface occupancy and optimisation explanation remain deferred until P6 semantics are real. [I2]) Tj ET
+BT /F2 16 Tf 52 391 Td (19. Proposed practitioner validation) Tj ET
+BT /F1 9.4 Tf 52 358 Td (This report recommends adapting PM-Software's practitioner method for STO. It is a PROPOSED STO) Tj ET
+BT /F1 9.4 Tf 52 346 Td (VALIDATION METHOD, not yet a formally adopted STO gate.) Tj ET
+BT /F1 9.4 Tf 52 325 Td (PM-Software currently requires at least three independent experienced planners, with five preferable,) Tj ET
+BT /F1 9.4 Tf 52 313 Td (and classifies findings A/B/C. Its exit gate requires practitioners to distinguish accepted actual) Tj ET
+BT /F1 9.4 Tf 52 301 Td (history, status point, remaining work, future recovery and approved plan, and to understand material) Tj ET
+BT /F1 9.4 Tf 52 289 Td (movement. [I6][I7]) Tj ET
+BT /F2 12.5 Tf 52 268 Td (Planner trial) Tj ET
+BT /F1 9.4 Tf 52 241 Td (Participants should complete outcomes rather than follow click-by-click instructions:) Tj ET
+BT /F1 9.4 Tf 52 220 Td (1. Identify whether they are viewing Baseline, Live, Approved or Scenario and explain what edits can) Tj ET
+BT /F1 9.4 Tf 52 208 Td (affect.) Tj ET
+BT /F1 9.4 Tf 52 192 Td (2. Distinguish accepted actual history, status point, remaining work and future forecast.) Tj ET
+BT /F1 9.4 Tf 52 176 Td (3. Investigate a moved milestone/activity and identify supported driving causes.) Tj ET
+BT /F1 9.4 Tf 52 160 Td (4. Inspect driving predecessor/relationship without displaying the entire network.) Tj ET
+BT /F1 9.4 Tf 52 144 Td (5. Create an isolated scenario, change a supported planning input and recalculate.) Tj ET
+BT /F1 9.4 Tf 52 128 Td (6. Compare scenario consequences against Approved.) Tj ET
+BT /F1 9.4 Tf 52 112 Td (7. Explain that scenario submission/promotion is not automatic forecast approval.) Tj ET
+BT /F1 9.4 Tf 52 96 Td (8. Resolve a stale edit or rejected update without losing intended information.) Tj ET
+BT /F1 9.4 Tf 52 80 Td (9. Distinguish calculated criticality, float, near-critical policy and human Critical/watch status.) Tj ET
+BT /F1 8 Tf 52 28 Td (STO Scheduling UX - Cleaned Pass 1) Tj ET
+BT /F1 8 Tf 488 28 Td (Page 10 of 14) Tj ET
+0.75 w 52 40 m 543 40 l S
+endstream
+endobj
+26 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 27 0 R >>
+endobj
+27 0 obj
+<< /Length 4460 >>
+stream
+BT /F1 9.4 Tf 52 784 Td (10. Complete a representative keyboard-heavy sequence without repeatedly leaving the main workspace.) Tj ET
+BT /F1 9.4 Tf 52 763 Td (Measure task completion, wrong-layer edits, state-identification errors, unsupported causal assumptions,) Tj ET
+BT /F1 9.4 Tf 52 751 Td (ability to explain movement, whether participants invent unavailable information, error recovery,) Tj ET
+BT /F1 9.4 Tf 52 739 Td (interaction effort, terminology confusion and trust sufficient to investigate/use results.) Tj ET
+BT /F2 12.5 Tf 52 718 Td (Supervisor, coordinator and field trials) Tj ET
+BT /F1 9.4 Tf 52 691 Td (Supervisor: distinguish submitted execution operations from communication, inspect evidence and live) Tj ET
+BT /F1 9.4 Tf 52 679 Td (consequence, request correction, and understand whether the action advances Approved.) Tj ET
+BT /F1 9.4 Tf 52 658 Td (Shutdown coordinator: work through a mixed Today queue containing a blocked controlling activity,) Tj ET
+BT /F1 9.4 Tf 52 646 Td (routine non-material delay, failed offline submission, newly critical path and planner decision. Observe) Tj ET
+BT /F1 9.4 Tf 52 634 Td (whether highest-consequence work is found first without notification flooding.) Tj ET
+BT /F1 9.4 Tf 52 613 Td (Field: use the P2 two-device offline trial and add UX observations for whether users understand Queued,) Tj ET
+BT /F1 9.4 Tf 52 601 Td (Accepted, Applied, Failed and Conflict.) Tj ET
+BT /F2 12.5 Tf 52 580 Td (Finding classes) Tj ET
+BT /F1 9.4 Tf 64 553 Td (- A - Fundamental/product blocker: authority/state is misunderstood, actual/future is confused,) Tj ET
+BT /F1 9.4 Tf 64 541 Td (causal explanation is untrustworthy, or the UI encourages dangerous wrong-layer edits.) Tj ET
+BT /F1 9.4 Tf 64 527 Td (- B - Important usability issue: semantics appear sound but normal practitioners materially struggle.) Tj ET
+BT /F1 9.4 Tf 64 513 Td (- C - Later improvement: convenience, terminology, presentation or polish issue that does not prevent) Tj ET
+BT /F1 9.4 Tf 64 501 Td (safe comprehension.) Tj ET
+BT /F2 16 Tf 52 482 Td (20. Pre-P2 decisions) Tj ET
+BT /F2 12.5 Tf 52 449 Td (MUST DECIDE BEFORE P2 FRONTEND HARDENS) Tj ET
+BT /F1 9.4 Tf 64 422 Td (- Preserve separate desktop Console and Field App.) Tj ET
+BT /F1 9.4 Tf 64 408 Td (- Introduce first-class professional scheduling capability.) Tj ET
+BT /F1 9.4 Tf 64 394 Td (- Schedule and operational work use the same STO activity identity.) Tj ET
+BT /F1 9.4 Tf 64 380 Td (- Prototype synchronized activity grid + Gantt + activity inspector.) Tj ET
+BT /F1 9.4 Tf 64 366 Td (- Formalize Reference / Operational / Working / History schedule-state meanings.) Tj ET
+BT /F1 9.4 Tf 64 352 Td (- Keep Live and Approved persistently distinguishable.) Tj ET
+BT /F1 9.4 Tf 64 338 Td (- Use explicit status-point grammar for actual history versus remaining future.) Tj ET
+BT /F1 9.4 Tf 64 324 Td (- Keep scenarios isolated and version-based.) Tj ET
+BT /F1 9.4 Tf 64 310 Td (- Treat "Why did this move?" as provenance-backed, never date-correlation inference.) Tj ET
+BT /F1 9.4 Tf 64 296 Td (- Preserve field report -> live result -> supervisor -> planner -> approved authority path.) Tj ET
+BT /F1 9.4 Tf 64 282 Td (- Keep communication contextual and non-authoritative.) Tj ET
+BT /F1 9.4 Tf 64 268 Td (- Preserve Queued / Accepted / Applied / Failed / Conflict distinctions.) Tj ET
+BT /F1 9.4 Tf 64 254 Td (- Ensure essential Gantt actions have non-drag alternatives.) Tj ET
+BT /F1 9.4 Tf 64 240 Td (- Apply keyboard/focus/non-colour accessibility rules.) Tj ET
+BT /F1 9.4 Tf 64 226 Td (- Run low-fidelity practitioner validation before hardening P2 screens.) Tj ET
+BT /F2 12.5 Tf 52 207 Td (CAN BE DECIDED DURING P2) Tj ET
+BT /F1 9.4 Tf 52 180 Td (Exact saved-view defaults, pane sizes, column presets, inspector ordering/names, materiality thresholds,) Tj ET
+BT /F1 9.4 Tf 52 168 Td (notification preferences, exact state copy where semantics are already fixed, final visual tokens and) Tj ET
+BT /F1 9.4 Tf 52 156 Td (polish.) Tj ET
+BT /F2 12.5 Tf 52 135 Td (DEFER TO P3/P4) Tj ET
+BT /F1 9.4 Tf 52 108 Td (Detailed Project/P6 writer screens, returned-file diff/reconciliation UI, writer-profile management,) Tj ET
+BT /F1 9.4 Tf 52 96 Td (CMMS adapter configuration and site mapping.) Tj ET
+BT /F2 12.5 Tf 52 75 Td (DEFER TO P6) Tj ET
+BT /F1 8 Tf 52 28 Td (STO Scheduling UX - Cleaned Pass 1) Tj ET
+BT /F1 8 Tf 488 28 Td (Page 11 of 14) Tj ET
+0.75 w 52 40 m 543 40 l S
+endstream
+endobj
+28 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 29 0 R >>
+endobj
+29 0 obj
+<< /Length 4610 >>
+stream
+BT /F1 9.4 Tf 52 784 Td (Resource levelling controls, crew optimisation, permit/isolation/workface planning and optimisation) Tj ET
+BT /F1 9.4 Tf 52 772 Td (explanation.) Tj ET
+BT /F2 16 Tf 52 751 Td (21. Open questions / TEST before P2) Tj ET
+BT /F1 9.4 Tf 52 718 Td (1. Terminology: Is "Execution" the clearest label for operational work? Is "Interchange" useful later?) Tj ET
+BT /F1 9.4 Tf 52 702 Td (2. Navigation: Does Schedule need a top-level zone exactly as proposed, and when should external systems) Tj ET
+BT /F1 9.4 Tf 52 690 Td (become visible?) Tj ET
+BT /F1 9.4 Tf 52 674 Td (3. Pane/inspector structure: Do planners efficiently use the proposed grid/Gantt/inspector arrangement?) Tj ET
+BT /F1 9.4 Tf 52 662 Td (Which groupings are natural?) Tj ET
+BT /F1 9.4 Tf 52 646 Td (4. Visual state grammar: Can users reliably distinguish Source, Baseline, Live, Approved and Scenario) Tj ET
+BT /F1 9.4 Tf 52 634 Td (without relying on colour?) Tj ET
+BT /F1 9.4 Tf 52 618 Td (5. Attention thresholds: Which schedule changes deserve Today-level attention in real shutdown practice?) Tj ET
+BT /F1 9.4 Tf 52 602 Td (6. Scenario promotion: What exact interaction should bridge scenario proposal, planner authority and) Tj ET
+BT /F1 9.4 Tf 52 590 Td (approved forecast under PL6/PL7?) Tj ET
+BT /F1 9.4 Tf 52 574 Td (7. Causal provenance: Does the scheduler expose enough explicit provenance to support trustworthy) Tj ET
+BT /F1 9.4 Tf 52 562 Td (movement explanation? How should multiple causes be shown?) Tj ET
+BT /F1 9.4 Tf 52 546 Td (8. Keyboard/bulk editing: Which workflows require keyboard-first and bulk operations, and what safety) Tj ET
+BT /F1 9.4 Tf 52 534 Td (preview is appropriate?) Tj ET
+BT /F1 9.4 Tf 52 518 Td (9. Practitioner comprehension: Can experienced planners identify schedule state, actual versus remaining) Tj ET
+BT /F1 9.4 Tf 52 506 Td (future, live versus approved, scenario authority and movement cause?) Tj ET
+BT /F2 16 Tf 52 485 Td (22. Recommended repository documentation after review) Tj ET
+BT /F1 9.4 Tf 52 452 Td (Do not modify the frozen Design C repository. Preserve its provenance.) Tj ET
+BT /F1 9.4 Tf 52 431 Td (The initial current-STO documentation set should be deliberately small:) Tj ET
+BT /F1 9.4 Tf 64 410 Td (- docs/research/2026-09-24-scheduling-ux-pass-1.md) Tj ET
+BT /F1 9.4 Tf 64 396 Td (- docs/product/ux-architecture-v1.md) Tj ET
+BT /F1 9.4 Tf 64 382 Td (- docs/product/scheduling-workspace.md) Tj ET
+BT /F1 9.4 Tf 64 368 Td (- docs/trials/sto-planner-ux-v1/) Tj ET
+BT /F1 9.4 Tf 64 354 Td (- One current ADR superseding the old tracker-only/no-scheduler UX boundary.) Tj ET
+BT /F1 9.4 Tf 52 335 Td (Only split movement explainability or visual semantics into separate contracts later if complexity) Tj ET
+BT /F1 9.4 Tf 52 323 Td (justifies it.) Tj ET
+BT /F2 16 Tf 52 302 Td (23. Final judgement) Tj ET
+BT /F1 9.4 Tf 52 269 Td (Pass 1 establishes a sufficiently supported design direction to begin STO UX Architecture v1 and) Tj ET
+BT /F1 9.4 Tf 52 257 Td (low-fidelity prototyping. It does not establish a finished scheduler UI.) Tj ET
+BT /F1 9.4 Tf 52 236 Td (Design C remains the foundation for STO's operational character: attention-first control-room UX,) Tj ET
+BT /F1 9.4 Tf 52 224 Td (separate desktop and field surfaces, restrained visual design, structured operational records,) Tj ET
+BT /F1 9.4 Tf 52 212 Td (role-appropriate complexity and explicit offline state.) Tj ET
+BT /F1 9.4 Tf 52 191 Td (The obsolete part of that inheritance is the assumption that Microsoft Project owns scheduling and) Tj ET
+BT /F1 9.4 Tf 52 179 Td (therefore STO should not expose professional scheduling interfaces.) Tj ET
+BT /F1 9.4 Tf 52 158 Td (The leading desktop architecture to validate is a synchronized WBS/activity table + Gantt +) Tj ET
+BT /F1 9.4 Tf 52 146 Td (progressively disclosed activity inspector, with Schedule and operational work operating on the same STO) Tj ET
+BT /F1 9.4 Tf 52 134 Td (activity identities.) Tj ET
+BT /F1 9.4 Tf 52 113 Td (STO's schedule model must visibly distinguish reference state, operational state, working scenarios and) Tj ET
+BT /F1 9.4 Tf 52 101 Td (history. Actual history and future forecast must remain separated by an explicit status point. Live) Tj ET
+BT /F1 9.4 Tf 52 89 Td (forecast and approved forecast must never be visually ambiguous.) Tj ET
+BT /F1 9.4 Tf 52 68 Td ("Why did this move?" should be a first-class STO design objective, but the UI may only present causal) Tj ET
+BT /F1 8 Tf 52 28 Td (STO Scheduling UX - Cleaned Pass 1) Tj ET
+BT /F1 8 Tf 488 28 Td (Page 12 of 14) Tj ET
+0.75 w 52 40 m 543 40 l S
+endstream
+endobj
+30 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 31 0 R >>
+endobj
+31 0 obj
+<< /Length 4190 >>
+stream
+BT /F1 9.4 Tf 52 784 Td (explanations supported by scheduler provenance. It must not infer causation from date correlation.) Tj ET
+BT /F1 9.4 Tf 52 763 Td (Exact navigation labels, pane structure, state visual treatments, scenario-promotion interaction,) Tj ET
+BT /F1 9.4 Tf 52 751 Td (materiality thresholds and attention rules remain hypotheses requiring practitioner validation.) Tj ET
+BT /F1 9.4 Tf 52 730 Td (P3/P4 integration and P6 resource/operational scheduling should be accommodated architecturally but not) Tj ET
+BT /F1 9.4 Tf 52 718 Td (designed in detail before their semantics exist.) Tj ET
+BT /F1 9.4 Tf 52 697 Td (Next step: STO UX Architecture v1 -> low-fidelity scheduler/execution prototypes -> practitioner) Tj ET
+BT /F1 9.4 Tf 52 685 Td (validation -> corrections -> P2 implementation.) Tj ET
+BT /F1 9.4 Tf 52 664 Td (No further broad scheduling-UX research is required before that work. Additional research should be) Tj ET
+BT /F1 9.4 Tf 52 652 Td (targeted only where prototyping or practitioner testing exposes a specific unresolved question.) Tj ET
+BT /F2 16 Tf 52 631 Td (Source register) Tj ET
+BT /F2 12.5 Tf 52 598 Td (Internal / project sources) Tj ET
+BT /F1 9.4 Tf 52 571 Td ([I1] Current STO README) Tj ET
+BT /F1 9.4 Tf 52 555 Td (https://github.com/dezrobbo1/STO-Scheduler-Tracker-Research/blob/main/README.md) Tj ET
+BT /F1 9.4 Tf 52 534 Td ([I2] Current STO roadmap) Tj ET
+BT /F1 9.4 Tf 52 518 Td (https://github.com/dezrobbo1/STO-Scheduler-Tracker-Research/blob/main/docs/goals/roadmap.json) Tj ET
+BT /F1 9.4 Tf 52 497 Td ([I3] ADR-016 - Field communication, offline delivery and execution authority) Tj ET
+BT /F1 9.4 Tf 52 481 Td (https://github.com/dezrobbo1/STO-Scheduler-Tracker-Research/blob/main/docs/adr/ADR-016-field-communication-offline-delivery-and-execution-authority.md) Tj ET
+BT /F1 9.4 Tf 52 460 Td ([I4] Frozen ADR-009 - UX/UI Architecture) Tj ET
+BT /F1 9.4 Tf 52 444 Td (https://github.com/dezrobbo1/Shutdown-Tracker-Claude/blob/main/docs/adr/ADR-009-ux-ui-architecture.md) Tj ET
+BT /F1 9.4 Tf 52 423 Td ([I5] Frozen UX Anti-Slop Rules) Tj ET
+BT /F1 9.4 Tf 52 407 Td (https://github.com/dezrobbo1/Shutdown-Tracker-Claude/blob/main/docs/product/ux-anti-slop-rules.md) Tj ET
+BT /F1 9.4 Tf 52 386 Td ([I6] PM-Software planner trial exit gate) Tj ET
+BT /F1 9.4 Tf 52 370 Td (https://github.com/dezrobbo1/PM-Software/blob/main/docs/trials/planner-update-recovery-v1/exit-gate.md) Tj ET
+BT /F1 9.4 Tf 52 349 Td ([I7] PM-Software completion questionnaire) Tj ET
+BT /F1 9.4 Tf 52 333 Td (https://github.com/dezrobbo1/PM-Software/blob/main/docs/trials/planner-update-recovery-v1/questionnaire.md) Tj ET
+BT /F1 9.4 Tf 52 312 Td ([I8] Current STO P1 planner implementation) Tj ET
+BT /F1 9.4 Tf 52 296 Td (https://github.com/dezrobbo1/STO-Scheduler-Tracker-Research/blob/main/src/sto/api/static/app.js) Tj ET
+BT /F1 9.4 Tf 52 275 Td ([I9] Original Pass 1 research report, uploaded 24 September 2026. This cleaned edition corrects and) Tj ET
+BT /F1 9.4 Tf 52 263 Td (supersedes its presentation while preserving its evidence base.) Tj ET
+BT /F2 12.5 Tf 52 242 Td (External documented patterns / guidance) Tj ET
+BT /F1 9.4 Tf 52 215 Td ([E1] Oracle Primavera P6 - Working with Activities) Tj ET
+BT /F1 9.4 Tf 52 199 Td (https://docs.oracle.com/cd/G48897_01/p6help/en/6672.htm) Tj ET
+BT /F1 9.4 Tf 52 178 Td ([E2] Oracle Primavera P6 - Gantt and relationships) Tj ET
+BT /F1 9.4 Tf 52 162 Td (https://docs.oracle.com/cd/G48897_01/p6help/en/38087.htm) Tj ET
+BT /F1 9.4 Tf 52 146 Td (https://docs.oracle.com/cd/G48902_01/English/User_Guides/p6_pro_user/adding_relationships_between_activities.htm) Tj ET
+BT /F1 9.4 Tf 52 125 Td ([E3] Microsoft Project - Highlight how tasks link to other tasks) Tj ET
+BT /F1 9.4 Tf 52 109 Td (https://support.microsoft.com/en-us/project/highlight-how-tasks-link-to-other-tasks) Tj ET
+BT /F1 9.4 Tf 52 88 Td ([E4] Microsoft Project - Critical path and slack) Tj ET
+BT /F1 9.4 Tf 52 72 Td (https://support.microsoft.com/en-us/project/show-the-critical-path-of-your-project-in-project) Tj ET
+BT /F1 8 Tf 52 28 Td (STO Scheduling UX - Cleaned Pass 1) Tj ET
+BT /F1 8 Tf 488 28 Td (Page 13 of 14) Tj ET
+0.75 w 52 40 m 543 40 l S
+endstream
+endobj
+32 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 33 0 R >>
+endobj
+33 0 obj
+<< /Length 2036 >>
+stream
+BT /F1 9.4 Tf 52 784 Td (https://support.microsoft.com/en-us/project/show-slack-in-your-project-in-project-desktop) Tj ET
+BT /F1 9.4 Tf 52 763 Td ([E5] Safran Project - Barchart Editor) Tj ET
+BT /F1 9.4 Tf 52 747 Td (https://docs.safran.com/docs/safran-project-introduction-to-the-barchart-editor) Tj ET
+BT /F1 9.4 Tf 52 731 Td (https://docs.safran.com/docs/safran-project-working-with-the-barchart-editor) Tj ET
+BT /F1 9.4 Tf 52 710 Td ([E6] InEight Progress - Mobile overview and data sync) Tj ET
+BT /F1 9.4 Tf 52 694 Td (https://learn.ineight.com/Progress/Content/Daily%20Planning%20Mobile/MobileOverview.htm) Tj ET
+BT /F1 9.4 Tf 52 678 Td (https://learn.ineight.com/Progress/Content/Daily%20Planning%20Mobile/DataSync.htm) Tj ET
+BT /F1 9.4 Tf 52 657 Td ([E8] HSE - Control room design) Tj ET
+BT /F1 9.4 Tf 52 641 Td (https://www.hse.gov.uk/comah/sragtech/techmeascontrol.htm) Tj ET
+BT /F1 9.4 Tf 52 620 Td ([E9] HSE - Alarm management) Tj ET
+BT /F1 9.4 Tf 52 604 Td (https://www.hse.gov.uk/humanfactors/topics/alarm-management.htm) Tj ET
+BT /F1 9.4 Tf 52 583 Td ([E10] W3C - WCAG 2.2 dragging and target-size guidance) Tj ET
+BT /F1 9.4 Tf 52 567 Td (https://www.w3.org/WAI/standards-guidelines/wcag/new-in-22/) Tj ET
+BT /F1 9.4 Tf 52 546 Td ([E11] Android Developers - Offline-first architecture) Tj ET
+BT /F1 9.4 Tf 52 530 Td (https://developer.android.com/topic/architecture/data-layer/offline-first) Tj ET
+BT /F2 12.5 Tf 52 509 Td (Source-use note) Tj ET
+BT /F1 9.4 Tf 52 482 Td (Vendor documentation in this report is used to establish documented interaction patterns and) Tj ET
+BT /F1 9.4 Tf 52 470 Td (capabilities, not to claim that a product is easy to use or that STO should copy it. Human-factors) Tj ET
+BT /F1 9.4 Tf 52 458 Td (guidance is used to support general design constraints and is not presented as a specification for) Tj ET
+BT /F1 9.4 Tf 52 446 Td (scheduling software.) Tj ET
+BT /F1 8 Tf 52 28 Td (STO Scheduling UX - Cleaned Pass 1) Tj ET
+BT /F1 8 Tf 488 28 Td (Page 14 of 14) Tj ET
+0.75 w 52 40 m 543 40 l S
+endstream
+endobj
+xref
+0 34
+0000000000 65535 f 
+0000000014 00000 n 
+0000000063 00000 n 
+0000000211 00000 n 
+0000000281 00000 n 
+0000000356 00000 n 
+0000000424 00000 n 
+0000000570 00000 n 
+0000005755 00000 n 
+0000005901 00000 n 
+0000010820 00000 n 
+0000010968 00000 n 
+0000015681 00000 n 
+0000015829 00000 n 
+0000020125 00000 n 
+0000020273 00000 n 
+0000024756 00000 n 
+0000024904 00000 n 
+0000029084 00000 n 
+0000029232 00000 n 
+0000033252 00000 n 
+0000033400 00000 n 
+0000037416 00000 n 
+0000037564 00000 n 
+0000041835 00000 n 
+0000041983 00000 n 
+0000046324 00000 n 
+0000046472 00000 n 
+0000050984 00000 n 
+0000051132 00000 n 
+0000055794 00000 n 
+0000055942 00000 n 
+0000060184 00000 n 
+0000060332 00000 n 
+trailer
+<< /Size 34 /Root 1 0 R >>
+startxref
+62420
+%%EOF
