@@ -327,20 +327,19 @@ still not started and the limited S7/PL4 exception recorded in
 records the communication boundaries and
 `docs/history/2026-09-20-field-communication-roadmap.md` the review decision.
 
-The `G2-RC02` native Microsoft Project active → inactive → active zero-lag
-FS matrix is complete and recorded in
-`docs/evidence/p1-g2-rc02-inactive-native-matrix-2026-09-24.md`. It establishes
-zero-duration date pass-through across the inactive row. The original Free-Slack
-value matched the inactive-edge gap, and a later one-field sentinel on Project
-build `16.0.20326.20140` changed `12345` to `0`, ruling out unchanged seed
-retention on that build without claiming a universal Free-Slack formula. Before
-any P2 work or production correction, the next bounded step is a diagnostic-only
-counterfactual over the exact BOILER P1-G2 pair: apply the bounded date semantic
-and observed Free-Slack shape to the RC02 zero-lag-FS boundaries and measure
-whether the RC02 first divergences and dependent paths close without worsening
-other families. No
-production correction or mismatch reduction is claimed until that real-file
-counterfactual succeeds.
+The `G2-RC02` native matrix, Free-Slack sentinel and exact BOILER
+counterfactual are now recorded in
+`docs/evidence/p1-g2-rc02-inactive-native-matrix-2026-09-24.md` and
+`docs/evidence/p1-g2-rc02-boiler-counterfactual-2026-09-24.md`. The BOILER
+counterfactual closes 239 of 258 RC02 slots and four of five RC02 first-divergence
+roots with no new mismatch slots and no worsening outside RC02, but it does not
+pass: 19 RC02 slots remain and four RC02 late-date slots worsen. Every remaining
+RC02 dependency path roots at the active predecessor of one inactive row that
+fans out to two active successors, a backward shape the native matrix did not
+measure. Before any P2 work or production correction, the next bounded step is
+a native inactive-fan-out experiment with deliberately distinct successor late
+boundaries and a Free-Slack sentinel. P1-G2 remains open and no production RC02
+correction is authorized.
 
 P2 order and ownership, maintained from `docs/goals/roadmap.json`:
 

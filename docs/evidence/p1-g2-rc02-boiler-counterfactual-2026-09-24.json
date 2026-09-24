@@ -1,0 +1,406 @@
+{
+  "schema": "sto-p1-g2-rc02-boiler-counterfactual-v1",
+  "evidence_date": "2026-09-24",
+  "basis": {
+    "fresh_main": "43333a871916368359eb705e9080a9522e12db2b",
+    "production_source_digest": "22e8bf15ed5181067b8294a0f6cb6b1b46d1612c216e8d11985284f5759ecac5",
+    "production_source_digest_verified": true,
+    "baseline": {
+      "bytes": 3361935,
+      "sha256": "e9b9b7994cc5cc50479807b82c452da742a91de9f7de52b172a6be6f4f399c70"
+    },
+    "fixed_inventory": {
+      "bytes": 376346,
+      "sha256": "2408fc99f282e9c600d3821b3c926f7deafa8c05044c7fec9a5f08b2b656bf63",
+      "schema": "sto-p1-g2-baseline-root-causes-v3"
+    },
+    "native_semantic_evidence": "docs/evidence/p1-g2-rc02-inactive-native-matrix-2026-09-24.md"
+  },
+  "scope": {
+    "kind": "diagnostic-only in-memory counterfactual",
+    "production_scheduler_changed": false,
+    "imported_schedule_changed": false,
+    "tested_relationship_shape": "one-hop active -> inactive -> active zero-lag FS",
+    "fanout_is_extrapolation_not_native_proof": true
+  },
+  "transform": {
+    "synthetic_relationship_count": 3,
+    "splices": [
+      {
+        "active_predecessor_leaf_id": "L0055",
+        "inactive_leaf_id": "L0052",
+        "active_successor_leaf_id": "L0056"
+      },
+      {
+        "active_predecessor_leaf_id": "L0055",
+        "inactive_leaf_id": "L0052",
+        "active_successor_leaf_id": "L0060"
+      },
+      {
+        "active_predecessor_leaf_id": "L0400",
+        "inactive_leaf_id": "L0388",
+        "active_successor_leaf_id": "L0389"
+      }
+    ],
+    "production_network_fingerprint": "3a14462949fe2b7ee8ffd6617bd51ee23731400345ef2005e0195a5bdbd44778",
+    "diagnostic_network_fingerprint": "b4ab596a6da0e2f6ebcb730bb1818901adec4987a81c8d79851652213efb05fd",
+    "free_slack_shape_check": {
+      "basis": "hash-verified BOILER source observations before diagnostic transform",
+      "all_equivalent": true,
+      "boundaries": [
+        {
+          "active_predecessor_leaf_id": "L0055",
+          "inactive_leaf_id": "L0052",
+          "active_successor_count": 2,
+          "source_predecessor_free_slack_seconds": 0,
+          "source_inactive_edge_gap_seconds": 0,
+          "source_direct_successor_gap_seconds_by_leaf": {
+            "L0056": 0,
+            "L0060": 0
+          },
+          "source_free_slack_matches_inactive_edge_gap": true,
+          "all_source_direct_successor_gaps_match_inactive_edge_gap": true,
+          "equivalent_for_this_boiler_boundary": true
+        },
+        {
+          "active_predecessor_leaf_id": "L0400",
+          "inactive_leaf_id": "L0388",
+          "active_successor_count": 1,
+          "source_predecessor_free_slack_seconds": 0,
+          "source_inactive_edge_gap_seconds": 0,
+          "source_direct_successor_gap_seconds_by_leaf": {
+            "L0389": 0
+          },
+          "source_free_slack_matches_inactive_edge_gap": true,
+          "all_source_direct_successor_gaps_match_inactive_edge_gap": true,
+          "equivalent_for_this_boiler_boundary": true
+        }
+      ]
+    }
+  },
+  "inventory": {
+    "before": {
+      "slots": 422,
+      "leaves": 105,
+      "by_field": {
+        "critical": 2,
+        "early_finish": 67,
+        "early_start": 62,
+        "finish": 67,
+        "free_float": 16,
+        "late_finish": 33,
+        "late_start": 42,
+        "start": 62,
+        "total_float": 71
+      },
+      "by_group": {
+        "G2-RC01": 160,
+        "G2-RC02": 258,
+        "G2-RC03": 3,
+        "G2-RC04": 1
+      }
+    },
+    "after": {
+      "slots": 166,
+      "leaves": 48,
+      "by_field": {
+        "critical": 2,
+        "early_finish": 27,
+        "early_start": 21,
+        "finish": 27,
+        "free_float": 7,
+        "late_finish": 15,
+        "late_start": 24,
+        "start": 21,
+        "total_float": 22
+      },
+      "by_group": {
+        "G2-RC01": 143,
+        "G2-RC02": 19,
+        "G2-RC03": 3,
+        "G2-RC04": 1
+      }
+    },
+    "closed_slots": 256,
+    "new_slots": 0
+  },
+  "movement_by_original_group": {
+    "G2-RC01": {
+      "closed": 17,
+      "improved": 11,
+      "unchanged": 132
+    },
+    "G2-RC02": {
+      "closed": 239,
+      "improved": 15,
+      "worsened": 4
+    },
+    "G2-RC03": {
+      "unchanged": 3
+    },
+    "G2-RC04": {
+      "improved": 1
+    }
+  },
+  "rc02": {
+    "slots_before": 258,
+    "slots_after": 19,
+    "closed_slots": 239,
+    "leaves_after": 9,
+    "root_outcomes": [
+      {
+        "leaf_id": "L0055",
+        "first_divergence_fields_before": [
+          "free_float",
+          "late_finish",
+          "late_start"
+        ],
+        "remaining_first_divergence_fields": [
+          "late_finish",
+          "late_start"
+        ],
+        "status": "PARTIAL"
+      },
+      {
+        "leaf_id": "L0056",
+        "first_divergence_fields_before": [
+          "early_finish",
+          "early_start",
+          "finish",
+          "start"
+        ],
+        "remaining_first_divergence_fields": [],
+        "status": "CLOSED"
+      },
+      {
+        "leaf_id": "L0060",
+        "first_divergence_fields_before": [
+          "early_finish",
+          "early_start",
+          "finish",
+          "start"
+        ],
+        "remaining_first_divergence_fields": [],
+        "status": "CLOSED"
+      },
+      {
+        "leaf_id": "L0389",
+        "first_divergence_fields_before": [
+          "early_finish",
+          "early_start",
+          "finish",
+          "start"
+        ],
+        "remaining_first_divergence_fields": [],
+        "status": "CLOSED"
+      },
+      {
+        "leaf_id": "L0400",
+        "first_divergence_fields_before": [
+          "free_float"
+        ],
+        "remaining_first_divergence_fields": [],
+        "status": "CLOSED"
+      }
+    ],
+    "remaining_slots": [
+      {
+        "leaf_id": "L0035",
+        "field": "late_finish",
+        "dependency_role": "DEPENDENT",
+        "before_sto_minus_source_seconds": 95400,
+        "after_sto_minus_source_seconds": -12600,
+        "movement": "improved"
+      },
+      {
+        "leaf_id": "L0035",
+        "field": "late_start",
+        "dependency_role": "DEPENDENT",
+        "before_sto_minus_source_seconds": 95400,
+        "after_sto_minus_source_seconds": -12600,
+        "movement": "improved"
+      },
+      {
+        "leaf_id": "L0045",
+        "field": "late_finish",
+        "dependency_role": "DEPENDENT",
+        "before_sto_minus_source_seconds": 10800,
+        "after_sto_minus_source_seconds": -12600,
+        "movement": "worsened"
+      },
+      {
+        "leaf_id": "L0045",
+        "field": "late_start",
+        "dependency_role": "DEPENDENT",
+        "before_sto_minus_source_seconds": 10800,
+        "after_sto_minus_source_seconds": -12600,
+        "movement": "worsened"
+      },
+      {
+        "leaf_id": "L0046",
+        "field": "late_finish",
+        "dependency_role": "DEPENDENT",
+        "before_sto_minus_source_seconds": 10800,
+        "after_sto_minus_source_seconds": -12600,
+        "movement": "worsened"
+      },
+      {
+        "leaf_id": "L0046",
+        "field": "late_start",
+        "dependency_role": "DEPENDENT",
+        "before_sto_minus_source_seconds": 10800,
+        "after_sto_minus_source_seconds": -12600,
+        "movement": "worsened"
+      },
+      {
+        "leaf_id": "L0048",
+        "field": "late_finish",
+        "dependency_role": "DEPENDENT",
+        "before_sto_minus_source_seconds": 95400,
+        "after_sto_minus_source_seconds": -12600,
+        "movement": "improved"
+      },
+      {
+        "leaf_id": "L0048",
+        "field": "late_start",
+        "dependency_role": "DEPENDENT",
+        "before_sto_minus_source_seconds": 95400,
+        "after_sto_minus_source_seconds": -12600,
+        "movement": "improved"
+      },
+      {
+        "leaf_id": "L0049",
+        "field": "late_finish",
+        "dependency_role": "DEPENDENT",
+        "before_sto_minus_source_seconds": 95400,
+        "after_sto_minus_source_seconds": -12600,
+        "movement": "improved"
+      },
+      {
+        "leaf_id": "L0049",
+        "field": "late_start",
+        "dependency_role": "DEPENDENT",
+        "before_sto_minus_source_seconds": 95400,
+        "after_sto_minus_source_seconds": -12600,
+        "movement": "improved"
+      },
+      {
+        "leaf_id": "L0051",
+        "field": "late_finish",
+        "dependency_role": "DEPENDENT",
+        "before_sto_minus_source_seconds": 649800,
+        "after_sto_minus_source_seconds": -12600,
+        "movement": "improved"
+      },
+      {
+        "leaf_id": "L0051",
+        "field": "late_start",
+        "dependency_role": "DEPENDENT",
+        "before_sto_minus_source_seconds": 649800,
+        "after_sto_minus_source_seconds": -12600,
+        "movement": "improved"
+      },
+      {
+        "leaf_id": "L0053",
+        "field": "late_finish",
+        "dependency_role": "DEPENDENT",
+        "before_sto_minus_source_seconds": 95400,
+        "after_sto_minus_source_seconds": -12600,
+        "movement": "improved"
+      },
+      {
+        "leaf_id": "L0053",
+        "field": "late_start",
+        "dependency_role": "DEPENDENT",
+        "before_sto_minus_source_seconds": 95400,
+        "after_sto_minus_source_seconds": -12600,
+        "movement": "improved"
+      },
+      {
+        "leaf_id": "L0053",
+        "field": "total_float",
+        "dependency_role": "DEPENDENT",
+        "before_sto_minus_source_seconds": 95400,
+        "after_sto_minus_source_seconds": -12600,
+        "movement": "improved"
+      },
+      {
+        "leaf_id": "L0054",
+        "field": "late_finish",
+        "dependency_role": "DEPENDENT",
+        "before_sto_minus_source_seconds": 649800,
+        "after_sto_minus_source_seconds": -12600,
+        "movement": "improved"
+      },
+      {
+        "leaf_id": "L0054",
+        "field": "late_start",
+        "dependency_role": "DEPENDENT",
+        "before_sto_minus_source_seconds": 649800,
+        "after_sto_minus_source_seconds": -12600,
+        "movement": "improved"
+      },
+      {
+        "leaf_id": "L0055",
+        "field": "late_finish",
+        "dependency_role": "FIRST_DIVERGENCE",
+        "before_sto_minus_source_seconds": 649800,
+        "after_sto_minus_source_seconds": -12600,
+        "movement": "improved"
+      },
+      {
+        "leaf_id": "L0055",
+        "field": "late_start",
+        "dependency_role": "FIRST_DIVERGENCE",
+        "before_sto_minus_source_seconds": 649800,
+        "after_sto_minus_source_seconds": -12600,
+        "movement": "improved"
+      }
+    ],
+    "fanout_residue": {
+      "remaining_rc02_path_roots": [
+        "L0055"
+      ],
+      "remaining_rc02_leaf_count": 9,
+      "remaining_rc02_by_field": {
+        "late_finish": 9,
+        "late_start": 9,
+        "total_float": 1
+      },
+      "fanout_boundary": {
+        "active_predecessor_leaf_id": "L0055",
+        "inactive_leaf_id": "L0052",
+        "active_successor_leaf_ids": [
+          "L0056",
+          "L0060"
+        ],
+        "active_successor_count": 2
+      },
+      "single_successor_boundary": {
+        "active_predecessor_leaf_id": "L0400",
+        "inactive_leaf_id": "L0388",
+        "active_successor_leaf_ids": [
+          "L0389"
+        ],
+        "active_successor_count": 1
+      },
+      "interpretation": "All remaining RC02 dependency paths root at the active predecessor of the two-active-successor inactive fan-out. This localizes the unmeasured dimension but does not establish its backward rule."
+    }
+  },
+  "acceptance": {
+    "fixed_422_inventory_reproduced": true,
+    "no_new_mismatch_slots": true,
+    "no_other_family_worsened": true,
+    "all_rc02_first_divergence_roots_closed": false,
+    "all_rc02_paths_non_worsening": false,
+    "counterfactual_success": false
+  },
+  "decision": {
+    "classification": "RC02_COUNTERFACTUAL_PARTIAL_SUPPORT_FANOUT_UNRESOLVED",
+    "production_correction_authorized": false,
+    "p1_g2_closed": false,
+    "p1_gate": "4/5 IN PROGRESS",
+    "p2_started": false,
+    "next_step": "bounded native inactive-fanout experiment: one active predecessor -> one inactive middle -> two active successors with deliberately distinct late boundaries; measure backward placement and Free Slack before any production correction"
+  }
+}
