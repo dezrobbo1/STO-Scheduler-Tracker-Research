@@ -1,6 +1,6 @@
 # P1-G2 RC02 latest-successor BOILER counterfactual — 2026-09-25
 
-Status: **PREDECLARED DIAGNOSTIC READY — RESULT NOT YET RECORDED**
+Status: **DIAGNOSTIC COMPLETE — LATEST-SUCCESSOR COUNTERFACTUAL SUPPORTED**
 
 This is a new bounded diagnostic following the completed inactive fan-out native
 experiment. It does not reinterpret that experiment's failed combined stopping
@@ -119,3 +119,53 @@ PYTHONPATH=src:. python3 \
 ```
 
 The tool refuses output/check paths that alias the private baseline.
+
+## Measured result
+
+The transform and acceptance rule were first committed at `4097d27efb723fc0c460bf0dd490687f70ea2bd0`.
+Commit `1cf0660801be86caa645338764e1ab857e09efe0` corrected only the pinned byte identity of the already-merged native evidence file. The exact tool at that corrected pre-result head was then run against the hash-pinned BOILER baseline. The baseline remained byte-identical before and after execution.
+
+The three stages are:
+
+| Stage | Mismatch slots | Affected leaves | RC02 slots |
+|---|---:|---:|---:|
+| Production | 422 | 105 | 258 |
+| Prior symmetric direct splice | 166 | 48 | 19 |
+| Latest-successor directional | **147** | **39** | **0** |
+
+The latest-successor selection was:
+
+- `L0055 -> inactive L0052`: candidate Late Starts are `L0056 = 2026-09-17 05:00` and `L0060 = 2026-09-17 08:30`; both already equal their source observations, and `L0060` is selected as the unique latest successor.
+- `L0400 -> inactive L0388`: the only candidate is `L0389 = 2026-09-24 15:00`, also source-aligned.
+
+Suppressing only the synthetic `L0055 -> L0056` relationship from the backward
+bound scan closes the exact 19-slot residue left by the prior symmetric
+counterfactual. No other symmetric-stage mismatch changes. Across the original
+422-slot inventory:
+
+- `G2-RC02`: **258 closed, 0 remain**;
+- `G2-RC01`: 17 closed, 11 improved, 132 unchanged, 0 worsened;
+- `G2-RC03`: 3 unchanged;
+- `G2-RC04`: 1 improved;
+- new mismatch slots: **0**.
+
+All five RC02 first-divergence roots close. The diagnostic wrapper with no
+filtered relationship reproduces ordinary production `backward_pass` exactly,
+so the single backward relationship filter is the isolated semantic change.
+The source-observation Free-Slack guard remains green.
+
+Every predeclared acceptance condition passes. The result is therefore:
+
+`RC02_LATEST_SUCCESSOR_COUNTERFACTUAL_SUPPORTED`
+
+and it authorizes the **next separate bounded production RC02 correction PR**.
+This evidence PR does not itself modify production scheduling.
+
+The remaining fixed inventory after the diagnostic is 147 slots: 143 `G2-RC01`,
+3 `G2-RC03`, and 1 `G2-RC04`. Therefore P1-G2 is still open and P1 remains 4/5.
+After the production RC02 correction, the exact BOILER inventory and the real-file
+forward/backward/conformance cohorts must be rerun before moving to the remaining
+root-cause families.
+
+Sanitized exact result:
+`docs/evidence/p1-g2-rc02-latest-successor-boiler-counterfactual-2026-09-25.json`.

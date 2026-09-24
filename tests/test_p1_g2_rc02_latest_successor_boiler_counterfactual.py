@@ -67,6 +67,73 @@ class LatestSuccessorBoilerCounterfactualTests(unittest.TestCase):
         self.assertEqual(record["rc02"]["slots_after"], 19)
         self.assertFalse(record["acceptance"]["counterfactual_success"])
 
+    def test_committed_result_is_exact_bounded_success(self):
+        record = json.loads(RESULT.read_text(encoding="utf-8"))
+        self.assertEqual(record["schema"], latest.SCHEMA)
+        self.assertEqual(record["basis"]["fresh_main"], latest.MAIN_BASIS)
+        self.assertEqual(
+            record["basis"]["evidence_tool"]["sha256"],
+            hashlib.sha256(SCRIPT.read_bytes()).hexdigest(),
+        )
+        self.assertEqual(record["inventory"]["production"]["slots"], 422)
+        self.assertEqual(record["inventory"]["symmetric_direct_splice"]["slots"], 166)
+        self.assertEqual(record["inventory"]["latest_successor_directional"]["slots"], 147)
+        self.assertEqual(record["inventory"]["new_slots"], 0)
+        self.assertEqual(record["rc02"]["slots_before"], 258)
+        self.assertEqual(record["rc02"]["slots_after_symmetric"], 19)
+        self.assertEqual(record["rc02"]["slots_after_latest_successor"], 0)
+        self.assertTrue(record["rc02"]["exact_prior_19_slot_residue_closed"])
+        self.assertEqual(
+            record["movement_by_original_group"]["G2-RC02"],
+            {"closed": 258},
+        )
+        self.assertEqual(
+            record["movement_by_original_group"]["G2-RC01"],
+            {"closed": 17, "improved": 11, "unchanged": 132},
+        )
+        self.assertTrue(record["acceptance"]["counterfactual_success"])
+        self.assertTrue(record["acceptance"]["all_rc02_slots_closed"])
+        self.assertTrue(record["acceptance"]["no_other_family_worsened"])
+        self.assertEqual(
+            record["decision"]["classification"],
+            "RC02_LATEST_SUCCESSOR_COUNTERFACTUAL_SUPPORTED",
+        )
+        self.assertTrue(
+            record["decision"]["separate_bounded_production_rc02_correction_pr_authorized"]
+        )
+        self.assertFalse(record["decision"]["production_scheduler_changed"])
+        self.assertFalse(record["decision"]["p1_g2_closed"])
+        self.assertEqual(record["decision"]["p1_gate"], "4/5 IN PROGRESS")
+        self.assertFalse(record["decision"]["p2_started"])
+
+    def test_committed_selection_is_unique_latest_successor(self):
+        record = json.loads(RESULT.read_text(encoding="utf-8"))
+        selection = {
+            (row["active_predecessor_leaf_id"], row["inactive_leaf_id"]): row
+            for row in record["transform"]["latest_successor_selection"]
+        }
+        self.assertEqual(
+            selection[("L0055", "L0052")]["selected_latest_successor_leaf_id"],
+            "L0060",
+        )
+        self.assertEqual(
+            selection[("L0400", "L0388")]["selected_latest_successor_leaf_id"],
+            "L0389",
+        )
+        for row in selection.values():
+            calculated = [candidate["calculated_late_start"] for candidate in row["candidates"]]
+            source = [candidate["source_late_start"] for candidate in row["candidates"]]
+            self.assertEqual(calculated, source)
+        self.assertEqual(
+            record["transform"]["dropped_backward_splices"],
+            [{
+                "predecessor_leaf_id": "L0055",
+                "inactive_leaf_id": "L0052",
+                "successor_leaf_id": "L0056",
+            }],
+        )
+        self.assertTrue(record["transform"]["unfiltered_wrapper_matches_production_backward"])
+
     def test_wrong_baseline_fails_closed(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "wrong.xml"
