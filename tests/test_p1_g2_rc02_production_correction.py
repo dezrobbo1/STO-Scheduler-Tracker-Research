@@ -17,6 +17,7 @@ from sto.core.engine import (
     build_plan,
     float_analysis,
     forward_pass,
+    validate_result,
 )
 from sto.core.model.enums import RelationshipType
 from sto.core.model.migrate.sto_v011 import migrate
@@ -117,6 +118,7 @@ class NativeInactiveBoundaryEngineTests(unittest.TestCase):
         backward = backward_pass(network, forward)
         floats = float_analysis(network, forward, backward)
         self.assertEqual(floats.by_uid()[uid("P")].free_float, 0)
+        self.assertEqual(validate_result(network, forward, backward, floats), ())
 
     def test_boundary_metadata_changes_the_network_identity(self):
         special = fanout(s1_duration=5, s2_duration=2)
