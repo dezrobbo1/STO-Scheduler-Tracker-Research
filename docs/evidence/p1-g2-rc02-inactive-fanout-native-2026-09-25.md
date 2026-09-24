@@ -1,6 +1,6 @@
 # P1-G2 RC02 inactive fan-out native experiment — 2026-09-25
 
-Status: **INPUT READY — AWAITING OWNER-SUPPLIED MICROSOFT PROJECT RETURN**
+Status: **NATIVE RETURN ANALYZED — LATEST SUCCESSOR OBSERVED; PREDECLARED AUTHORIZATION NOT MET**
 
 This is the bounded follow-up to
 `p1-g2-rc02-boiler-counterfactual-2026-09-24.md`. It changes no production
@@ -168,13 +168,97 @@ python3 scripts/evidence/p1_g2_rc02_fanout_native.py \
 The tool refuses an output path that aliases the returned XML, including
 resolved paths, symbolic links and hard links.
 
+## Native return result — 2026-09-25
+
+Owner supplied the Microsoft Project XML return produced from the pinned input.
+
+Return identity:
+
+- bytes: **183,947**
+- SHA-256: `0f98ca5ac372e0929f17d9f0f563b0631ddb4786f3d1af476df4af941087547d`
+- Microsoft Project build: `16.0.20326.20140`
+- returned project name: `P1-G2-RC02-Inactive-Fanout-Native-Matrix - Returned.xml`
+
+Input lineage remains explicit rather than inferred from the return hash: the owner
+supplied this file in direct response to the pinned native-run request. The
+returned bytes alone cannot prove which source file was opened.
+
+All fixed-input, task-identity, Active-flag, zero-lag-FS topology, date/slack and
+all-active control checks pass. The deliberately distinct inactive successor late
+boundaries also remain intact, so the backward discriminator did not collapse.
+
+Measured components:
+
+- forward semantic:
+  `ZERO_DURATION_FANOUT_FORWARD_PASSTHROUGH_SUPPORTED`;
+- backward observation:
+  `LATEST_ACTIVE_SUCCESSOR_LATE_BOUNDARY_SUPPORTED`;
+- Free-Slack observation:
+  `SENTINEL_CHANGED_MATCHES_INACTIVE_EDGE_GAP`.
+
+The backward result is consistent across all three deliberately reversed pairs:
+
+| Pair | Inactive PRED Late Finish | S1 Late Start | S2 Late Start | Match |
+|---|---|---|---|---|
+| A | 2026-10-25 08:00 | 2026-10-22 08:00 | 2026-10-25 08:00 | latest = S2 |
+| B | 2026-10-25 08:00 | 2026-10-25 08:00 | 2026-10-22 08:00 | latest = S1 |
+| C | 2026-10-25 08:00 | 2026-10-25 08:00 | 2026-10-24 08:00 | latest = S1 |
+
+Because the winner flips between S1 and S2, this is not a fixed-successor or
+declaration-order observation. In this bounded matrix the inactive predecessor
+Late Finish matches the **latest** active-successor Late Start.
+
+Pair C also resolves the sentinel question:
+
+- seeded UID 26 FreeSlack: `12345`;
+- returned FreeSlack: `0`;
+- inactive-edge gap: `0`;
+- direct S1 gap: `43200`;
+- direct S2 gap: `57600`.
+
+Unchanged sentinel retention is therefore ruled out on build
+`16.0.20326.20140`, and the returned value matches the inactive-edge gap rather
+than either direct-successor gap.
+
+The combined predeclared authorization rule nevertheless **does not pass**.
+The active/inactive predecessor Late-Finish deltas are:
+
+- Pair A: `72000` MSPDI units;
+- Pair B: `72000` MSPDI units;
+- Pair C: `43200` MSPDI units.
+
+The predeclared criterion required `28800` units (the removed 48-hour MID
+duration) in all three pairs. Therefore the committed analyzer correctly retains:
+
+`FANOUT_NATIVE_RULE_NOT_ESTABLISHED`
+
+and:
+
+- `boiler_counterfactual_rerun_authorized = false`;
+- `production_scheduler_change_authorized = false`;
+- `p1_g2_closed = false`;
+- P1 remains `4/5 IN PROGRESS`;
+- P2 remains not started.
+
+The sanitized exact analyzer result is committed at
+`docs/evidence/p1-g2-rc02-inactive-fanout-native-result-2026-09-25.json`.
+Its retained observations are sufficient to rerun the classifier without the raw
+XML, while an optional external-return test checks exact byte-for-byte analyzer
+reproduction when the private return is supplied.
+
+A later task may define a **new, separately predeclared diagnostic** based on the
+newly observed latest-successor boundary. This experiment does not retroactively
+broaden its stopping rule and does not itself authorize that BOILER rerun.
+
 ## Stopping rule
 
 Do not modify production RC02 scheduling semantics in this experiment PR.
 
-Until a valid native return is analyzed:
+The valid native return has now been analyzed. The predeclared combined
+authorization rule did not pass, so:
 
 - P1-G2 remains **OPEN**;
 - P1 remains **4/5, IN PROGRESS**;
 - P2 remains **NOT STARTED**;
+- this experiment does **not** authorize another BOILER counterfactual;
 - no production RC02 correction is authorized.

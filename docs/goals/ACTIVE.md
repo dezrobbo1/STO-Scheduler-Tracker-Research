@@ -337,13 +337,21 @@ pass: 19 RC02 slots remain and four RC02 late-date slots worsen. Every remaining
 RC02 dependency path roots at the active predecessor of one inactive row that
 fans out to two active successors.
 
-The bounded native follow-up for that exact missing dimension is prepared at
-`docs/evidence/p1-g2-rc02-inactive-fanout-native-2026-09-25.md`. Its deterministic
-31-task synthetic input has distinct successor late boundaries, a BOILER-shaped
-mixed fan-out control and a non-zero Free-Slack sentinel. The repository is now
-**awaiting the owner-supplied Microsoft Project XML return** from that pinned
-input. Before that return is analyzed, P1-G2 remains open, P1 remains 4/5, P2 is
-not started and no production RC02 correction is authorized.
+The bounded native follow-up for that exact missing dimension is recorded at
+`docs/evidence/p1-g2-rc02-inactive-fanout-native-2026-09-25.md`. The owner-
+supplied Microsoft Project build `16.0.20326.20140` return passes all controls:
+fan-out forward date pass-through is reproduced, each inactive predecessor Late
+Finish matches the **latest** of its two active-successor Late Starts across all
+three deliberately reversed pairs, and the Pair C Free-Slack sentinel changes
+from `12345` to `0`, matching the inactive-edge gap rather than either direct
+successor gap. The predeclared combined authorization still fails because the
+active/inactive predecessor Late-Finish deltas are `72000`, `72000` and
+`43200` MSPDI units rather than the required `28800` in all three pairs.
+Accordingly this experiment does not authorize the BOILER rerun or any production
+RC02 correction. A separate task may predeclare a new diagnostic hypothesis
+around the newly observed latest-successor boundary; it must not reinterpret this
+experiment's stopping rule after the fact. P1-G2 remains open, P1 remains 4/5 and
+P2 remains not started.
 
 P2 order and ownership, maintained from `docs/goals/roadmap.json`:
 

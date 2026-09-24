@@ -4,6 +4,7 @@ from __future__ import annotations
 from copy import deepcopy
 from datetime import datetime, timedelta
 import hashlib
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -18,6 +19,7 @@ from scripts.evidence import p1_g2_rc02_fanout_native_generate as generate
 NS = {"p": "http://schemas.microsoft.com/project"}
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts/evidence/p1_g2_rc02_fanout_native.py"
+EVIDENCE = ROOT / "docs/evidence/p1-g2-rc02-inactive-fanout-native-result-2026-09-25.json"
 
 
 def _write_fixture(path: Path) -> Path:
@@ -247,6 +249,62 @@ class Rc02FanoutNativeTests(unittest.TestCase):
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn("output must be separate", result.stderr)
                 self.assertEqual(source.read_bytes(), before)
+
+
+    def test_committed_native_result_is_replayable_and_preserves_stopping_rule(self):
+        record = json.loads(EVIDENCE.read_text(encoding="utf-8"))
+        self.assertEqual(record["schema"], fanout.SCHEMA)
+        self.assertEqual(
+            record["classification"],
+            fanout.classify(record["classification"]["observations"]),
+        )
+        result = record["classification"]
+        self.assertTrue(result["controls"]["valid"])
+        self.assertEqual(
+            result["components"],
+            {
+                "forward_semantic": "ZERO_DURATION_FANOUT_FORWARD_PASSTHROUGH_SUPPORTED",
+                "backward_semantic": "LATEST_ACTIVE_SUCCESSOR_LATE_BOUNDARY_SUPPORTED",
+                "free_slack_observation": "SENTINEL_CHANGED_MATCHES_INACTIVE_EDGE_GAP",
+            },
+        )
+        self.assertEqual(result["verdict"], "FANOUT_NATIVE_RULE_NOT_ESTABLISHED")
+        self.assertEqual(
+            result["paired_late_delta_units"],
+            {"A": 72000, "B": 72000, "C": 43200},
+        )
+        self.assertFalse(result["paired_late_effect_matches_removed_mid_duration"])
+        self.assertFalse(result["decision"]["boiler_counterfactual_rerun_authorized"])
+        self.assertFalse(result["decision"]["production_scheduler_change_authorized"])
+        self.assertFalse(result["decision"]["p1_g2_closed"])
+
+    def test_external_native_return_reproduces_committed_result(self):
+        value = os.environ.get("STO_RC02_FANOUT_RETURN")
+        if not value:
+            if os.environ.get("STO_REQUIRE_RC02_FANOUT_RETURN") == "1":
+                self.fail("STO_RC02_FANOUT_RETURN is required")
+            self.skipTest("external fan-out native return not supplied")
+        source = Path(value)
+        before = source.read_bytes()
+        record = fanout.analyze(before, owner_confirmed_opened_input=True)
+        self.assertEqual(
+            fanout.serialize(record).encode("utf-8"),
+            EVIDENCE.read_bytes(),
+        )
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(SCRIPT),
+                str(source),
+                "--confirm-opened-input",
+                "--check",
+                str(EVIDENCE),
+            ],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(source.read_bytes(), before)
 
 
 if __name__ == "__main__":
