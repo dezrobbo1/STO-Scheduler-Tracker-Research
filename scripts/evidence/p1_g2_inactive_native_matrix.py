@@ -23,6 +23,31 @@ REQUIRED = {
     "RC02-C-I-PRED", "RC02-C-I-MID", "RC02-C-I-OTHER", "RC02-C-I-SUCC",
 }
 INACTIVE = {"RC02-A-I-MID", "RC02-B-I-MID", "RC02-C-I-MID"}
+EXPECTED = {
+    "RC02-FINISH-DRIVER": ("1", ()),
+    "RC02-A-A-PRED": ("2", ()),
+    "RC02-A-A-MID": ("3", ("2",)),
+    "RC02-A-A-SUCC": ("4", ("3",)),
+    "RC02-A-I-PRED": ("5", ()),
+    "RC02-A-I-MID": ("6", ("5",)),
+    "RC02-A-I-SUCC": ("7", ("6",)),
+    "RC02-B-A-PRED": ("8", ()),
+    "RC02-B-A-MID": ("9", ("8",)),
+    "RC02-B-A-OTHER": ("10", ()),
+    "RC02-B-A-SUCC": ("11", ("9", "10")),
+    "RC02-B-I-PRED": ("12", ()),
+    "RC02-B-I-MID": ("13", ("12",)),
+    "RC02-B-I-OTHER": ("14", ()),
+    "RC02-B-I-SUCC": ("15", ("13", "14")),
+    "RC02-C-A-PRED": ("16", ()),
+    "RC02-C-A-MID": ("17", ("16",)),
+    "RC02-C-A-OTHER": ("18", ()),
+    "RC02-C-A-SUCC": ("19", ("17", "18")),
+    "RC02-C-I-PRED": ("20", ()),
+    "RC02-C-I-MID": ("21", ("20",)),
+    "RC02-C-I-OTHER": ("22", ()),
+    "RC02-C-I-SUCC": ("23", ("21", "22")),
+}
 
 FIELDS = (
     "UID", "ID", "Active", "Start", "Finish", "EarlyStart", "EarlyFinish",
@@ -48,11 +73,21 @@ def read(path: Path) -> tuple[dict[str, str | None], dict[str, dict[str, object]
         name = text(task, "Name")
         if not name:
             continue
+        if name in rows:
+            raise SystemExit(f"native return duplicates matrix task name: {name}")
         row: dict[str, object] = {field: text(task, field) for field in FIELDS}
-        row["predecessor_uids"] = [
-            link.findtext("p:PredecessorUID", default="", namespaces=NS)
+        links = [
+            {
+                "predecessor_uid": link.findtext(
+                    "p:PredecessorUID", default="", namespaces=NS
+                ),
+                "type": link.findtext("p:Type", default="", namespaces=NS),
+                "link_lag": link.findtext("p:LinkLag", default="", namespaces=NS),
+            }
             for link in task.findall("p:PredecessorLink", NS)
         ]
+        row["predecessor_links"] = links
+        row["predecessor_uids"] = [link["predecessor_uid"] for link in links]
         rows[name] = row
     missing = sorted(REQUIRED - rows.keys())
     if missing:
@@ -63,6 +98,32 @@ def read(path: Path) -> tuple[dict[str, str | None], dict[str, dict[str, object]
     )
     if wrong_active:
         raise SystemExit("native return changed matrix Active flags: " + ", ".join(wrong_active))
+    wrong_identity = sorted(
+        name for name, (uid, _) in EXPECTED.items()
+        if rows[name]["UID"] != uid
+    )
+    if wrong_identity:
+        raise SystemExit(
+            "native return changed matrix task identity: " + ", ".join(wrong_identity)
+        )
+    wrong_links: list[str] = []
+    for name, (_, predecessor_uids) in EXPECTED.items():
+        expected_links = sorted((uid, "1", "0") for uid in predecessor_uids)
+        actual_links = sorted(
+            (
+                str(link["predecessor_uid"]),
+                str(link["type"]),
+                str(link["link_lag"]),
+            )
+            for link in rows[name]["predecessor_links"]
+        )
+        if actual_links != expected_links:
+            wrong_links.append(name)
+    if wrong_links:
+        raise SystemExit(
+            "native return changed zero-lag FS matrix relationships: "
+            + ", ".join(wrong_links)
+        )
     return project, rows
 
 
