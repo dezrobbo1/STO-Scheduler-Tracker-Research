@@ -1,5 +1,5 @@
 {
-  "schema": "sto-p1-g2-rc02-native-result-v1",
+  "schema": "sto-p1-g2-rc02-native-result-v2",
   "date": "2026-09-24",
   "repository_basis": "43e5d2c9d45689481cf3c4233c89027a9e07624e",
   "input": {
@@ -41,5 +41,369 @@
     "P1": "4/5 IN PROGRESS",
     "P2": "NOT STARTED"
   },
-  "next_step": "Run a diagnostic-only BOILER counterfactual for the measured RC02 composite semantic before changing production scheduling behavior."
+  "next_step": "Run a diagnostic-only BOILER counterfactual for the measured RC02 composite semantic before changing production scheduling behavior.",
+  "topology_validation": {
+    "validated": true,
+    "contract": "all 23 synthetic task name-to-UID identities and every predecessor link retained as zero-lag FS",
+    "relationship_type": "1",
+    "link_lag": "0",
+    "tasks": {
+      "RC02-FINISH-DRIVER": {
+        "uid": "1",
+        "predecessor_links": []
+      },
+      "RC02-A-A-PRED": {
+        "uid": "2",
+        "predecessor_links": []
+      },
+      "RC02-A-A-MID": {
+        "uid": "3",
+        "predecessor_links": [
+          {
+            "predecessor_uid": "2",
+            "type": "1",
+            "link_lag": "0"
+          }
+        ]
+      },
+      "RC02-A-A-SUCC": {
+        "uid": "4",
+        "predecessor_links": [
+          {
+            "predecessor_uid": "3",
+            "type": "1",
+            "link_lag": "0"
+          }
+        ]
+      },
+      "RC02-A-I-PRED": {
+        "uid": "5",
+        "predecessor_links": []
+      },
+      "RC02-A-I-MID": {
+        "uid": "6",
+        "predecessor_links": [
+          {
+            "predecessor_uid": "5",
+            "type": "1",
+            "link_lag": "0"
+          }
+        ]
+      },
+      "RC02-A-I-SUCC": {
+        "uid": "7",
+        "predecessor_links": [
+          {
+            "predecessor_uid": "6",
+            "type": "1",
+            "link_lag": "0"
+          }
+        ]
+      },
+      "RC02-B-A-PRED": {
+        "uid": "8",
+        "predecessor_links": []
+      },
+      "RC02-B-A-MID": {
+        "uid": "9",
+        "predecessor_links": [
+          {
+            "predecessor_uid": "8",
+            "type": "1",
+            "link_lag": "0"
+          }
+        ]
+      },
+      "RC02-B-A-OTHER": {
+        "uid": "10",
+        "predecessor_links": []
+      },
+      "RC02-B-A-SUCC": {
+        "uid": "11",
+        "predecessor_links": [
+          {
+            "predecessor_uid": "9",
+            "type": "1",
+            "link_lag": "0"
+          },
+          {
+            "predecessor_uid": "10",
+            "type": "1",
+            "link_lag": "0"
+          }
+        ]
+      },
+      "RC02-B-I-PRED": {
+        "uid": "12",
+        "predecessor_links": []
+      },
+      "RC02-B-I-MID": {
+        "uid": "13",
+        "predecessor_links": [
+          {
+            "predecessor_uid": "12",
+            "type": "1",
+            "link_lag": "0"
+          }
+        ]
+      },
+      "RC02-B-I-OTHER": {
+        "uid": "14",
+        "predecessor_links": []
+      },
+      "RC02-B-I-SUCC": {
+        "uid": "15",
+        "predecessor_links": [
+          {
+            "predecessor_uid": "13",
+            "type": "1",
+            "link_lag": "0"
+          },
+          {
+            "predecessor_uid": "14",
+            "type": "1",
+            "link_lag": "0"
+          }
+        ]
+      },
+      "RC02-C-A-PRED": {
+        "uid": "16",
+        "predecessor_links": []
+      },
+      "RC02-C-A-MID": {
+        "uid": "17",
+        "predecessor_links": [
+          {
+            "predecessor_uid": "16",
+            "type": "1",
+            "link_lag": "0"
+          }
+        ]
+      },
+      "RC02-C-A-OTHER": {
+        "uid": "18",
+        "predecessor_links": []
+      },
+      "RC02-C-A-SUCC": {
+        "uid": "19",
+        "predecessor_links": [
+          {
+            "predecessor_uid": "17",
+            "type": "1",
+            "link_lag": "0"
+          },
+          {
+            "predecessor_uid": "18",
+            "type": "1",
+            "link_lag": "0"
+          }
+        ]
+      },
+      "RC02-C-I-PRED": {
+        "uid": "20",
+        "predecessor_links": []
+      },
+      "RC02-C-I-MID": {
+        "uid": "21",
+        "predecessor_links": [
+          {
+            "predecessor_uid": "20",
+            "type": "1",
+            "link_lag": "0"
+          }
+        ]
+      },
+      "RC02-C-I-OTHER": {
+        "uid": "22",
+        "predecessor_links": []
+      },
+      "RC02-C-I-SUCC": {
+        "uid": "23",
+        "predecessor_links": [
+          {
+            "predecessor_uid": "21",
+            "type": "1",
+            "link_lag": "0"
+          },
+          {
+            "predecessor_uid": "22",
+            "type": "1",
+            "link_lag": "0"
+          }
+        ]
+      }
+    }
+  },
+  "observations": {
+    "RC02-FINISH-DRIVER": {
+      "UID": "1",
+      "Active": "1",
+      "Start": "2026-10-05T08:00:00",
+      "Finish": "2026-10-15T08:00:00",
+      "EarlyStart": "2026-10-05T08:00:00",
+      "EarlyFinish": "2026-10-15T08:00:00",
+      "LateStart": "2026-10-05T08:00:00",
+      "LateFinish": "2026-10-15T08:00:00",
+      "TotalSlack": "0",
+      "FreeSlack": "0",
+      "predecessor_links": []
+    },
+    "RC02-A-I-PRED": {
+      "UID": "5",
+      "Active": "1",
+      "Finish": "2026-10-07T08:00:00",
+      "EarlyFinish": "2026-10-07T08:00:00",
+      "LateFinish": "2026-10-14T08:00:00",
+      "TotalSlack": "100800",
+      "FreeSlack": "0",
+      "predecessor_links": []
+    },
+    "RC02-A-I-MID": {
+      "UID": "6",
+      "Active": "0",
+      "Start": "2026-10-07T08:00:00",
+      "EarlyStart": "2026-10-07T08:00:00",
+      "LateStart": "2026-10-11T08:00:00",
+      "LateFinish": "2026-10-14T08:00:00",
+      "TotalSlack": "57600",
+      "FreeSlack": "0",
+      "predecessor_links": [
+        {
+          "predecessor_uid": "5",
+          "type": "1",
+          "link_lag": "0"
+        }
+      ]
+    },
+    "RC02-A-I-SUCC": {
+      "UID": "7",
+      "Active": "1",
+      "Start": "2026-10-07T08:00:00",
+      "EarlyStart": "2026-10-07T08:00:00",
+      "LateStart": "2026-10-14T08:00:00",
+      "TotalSlack": "100800",
+      "FreeSlack": "100800",
+      "predecessor_links": [
+        {
+          "predecessor_uid": "6",
+          "type": "1",
+          "link_lag": "0"
+        }
+      ]
+    },
+    "RC02-B-I-PRED": {
+      "UID": "12",
+      "Active": "1",
+      "Finish": "2026-10-08T08:00:00",
+      "EarlyFinish": "2026-10-08T08:00:00",
+      "LateFinish": "2026-10-14T08:00:00",
+      "TotalSlack": "86400",
+      "FreeSlack": "0",
+      "predecessor_links": []
+    },
+    "RC02-B-I-MID": {
+      "UID": "13",
+      "Active": "0",
+      "Start": "2026-10-08T08:00:00",
+      "EarlyStart": "2026-10-08T08:00:00",
+      "LateFinish": "2026-10-14T08:00:00",
+      "TotalSlack": "57600",
+      "FreeSlack": "0",
+      "predecessor_links": [
+        {
+          "predecessor_uid": "12",
+          "type": "1",
+          "link_lag": "0"
+        }
+      ]
+    },
+    "RC02-B-I-OTHER": {
+      "UID": "14",
+      "Active": "1",
+      "Finish": "2026-10-06T08:00:00",
+      "EarlyFinish": "2026-10-06T08:00:00",
+      "LateFinish": "2026-10-14T08:00:00",
+      "TotalSlack": "115200",
+      "FreeSlack": "28800",
+      "predecessor_links": []
+    },
+    "RC02-B-I-SUCC": {
+      "UID": "15",
+      "Active": "1",
+      "Start": "2026-10-08T08:00:00",
+      "EarlyStart": "2026-10-08T08:00:00",
+      "LateStart": "2026-10-14T08:00:00",
+      "TotalSlack": "86400",
+      "FreeSlack": "86400",
+      "predecessor_links": [
+        {
+          "predecessor_uid": "13",
+          "type": "1",
+          "link_lag": "0"
+        },
+        {
+          "predecessor_uid": "14",
+          "type": "1",
+          "link_lag": "0"
+        }
+      ]
+    },
+    "RC02-C-I-PRED": {
+      "UID": "20",
+      "Active": "1",
+      "Finish": "2026-10-06T08:00:00",
+      "EarlyFinish": "2026-10-06T08:00:00",
+      "LateFinish": "2026-10-14T08:00:00",
+      "TotalSlack": "115200",
+      "FreeSlack": "0",
+      "predecessor_links": []
+    },
+    "RC02-C-I-MID": {
+      "UID": "21",
+      "Active": "0",
+      "Start": "2026-10-06T08:00:00",
+      "EarlyStart": "2026-10-06T08:00:00",
+      "LateFinish": "2026-10-14T08:00:00",
+      "TotalSlack": "86400",
+      "FreeSlack": "14400",
+      "predecessor_links": [
+        {
+          "predecessor_uid": "20",
+          "type": "1",
+          "link_lag": "0"
+        }
+      ]
+    },
+    "RC02-C-I-OTHER": {
+      "UID": "22",
+      "Active": "1",
+      "Finish": "2026-10-09T08:00:00",
+      "EarlyFinish": "2026-10-09T08:00:00",
+      "LateFinish": "2026-10-14T08:00:00",
+      "TotalSlack": "72000",
+      "FreeSlack": "0",
+      "predecessor_links": []
+    },
+    "RC02-C-I-SUCC": {
+      "UID": "23",
+      "Active": "1",
+      "Start": "2026-10-09T08:00:00",
+      "EarlyStart": "2026-10-09T08:00:00",
+      "LateStart": "2026-10-14T08:00:00",
+      "TotalSlack": "72000",
+      "FreeSlack": "72000",
+      "predecessor_links": [
+        {
+          "predecessor_uid": "21",
+          "type": "1",
+          "link_lag": "0"
+        },
+        {
+          "predecessor_uid": "22",
+          "type": "1",
+          "link_lag": "0"
+        }
+      ]
+    }
+  }
 }
