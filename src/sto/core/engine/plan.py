@@ -938,6 +938,18 @@ def build_plan(
             continue
         if any(not _inactive_boundary_endpoint_is_measured(row) for row in successors):
             continue
+        successor_uids = {row.successor_uid for row in outgoing_scheduled}
+        # The native matrices did not contain a parallel direct relationship
+        # from this same active predecessor to one of the active successors.
+        # Such a graph can make forward/backward/free-slack interactions
+        # redundant in ways the bounded experiment did not distinguish. Keep
+        # it on the labelled path instead of widening the measured rule.
+        if any(
+            row.successor_uid in successor_uids
+            for row in raw_outgoing.get(incoming_edge.predecessor_uid, ())
+            if row.successor_uid in scheduled
+        ):
+            continue
         # A successor reached from several inactive rows is a different fan-in
         # shape from the native matrix; leave it on the historical labelled path.
         if any(
@@ -986,15 +998,3 @@ def build_plan(
                 relationship.predecessor_uid in inactive
                 and relationship.successor_uid in scheduled
                 and relationship.uid not in supported_inactive_successor_relationships
-                and relationship.successor_uid not in labelled_successors
-            ):
-                labelled_successors.add(relationship.successor_uid)
-                # The native evidence now covers one bounded zero-lag FS
-                # shape. Anything else still has no production rule and stays
-                # explicitly labelled rather than inheriting that result.
-                assumed.append(
-                    Assumed(
-                        relationship.successor_uid,
-                        "activity",
-                        "ACTIVITY_SUCCESSOR_OF_INACTIVE",
-                        "inactive-boundary shape is outside the measured production rule",

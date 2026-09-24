@@ -170,6 +170,29 @@ class NativeInactiveBoundaryPlanTests(unittest.TestCase):
         )
         self.assertNotIn("ACTIVITY_SUCCESSOR_OF_INACTIVE", plan.assumed_by_code())
 
+
+    def test_parallel_direct_predecessor_successor_edge_stays_labelled(self):
+        activities = [
+            _activity(1, start="2026-01-05T08:00:00", finish="2026-01-05T10:00:00", duration_seconds=7200),
+            _activity(2, start="2026-01-05T10:00:00", finish="2026-01-05T12:00:00", duration_seconds=7200, active=False),
+            _activity(3, start="2026-01-05T10:00:00", finish="2026-01-05T11:00:00", duration_seconds=3600),
+        ]
+        relationships = [
+            _relationship(1, 1, 2),
+            _relationship(2, 2, 3),
+            _relationship(3, 1, 3),
+        ]
+        schedule, _, _ = migrate(_document(activities, relationships=relationships))
+        plan = build_plan(schedule, HORIZON)
+        self.assertEqual(
+            [row for row in plan.network.relationships if row.inactive_boundary_uid],
+            [],
+        )
+        self.assertEqual(
+            plan.assumed_by_code().get("ACTIVITY_SUCCESSOR_OF_INACTIVE"),
+            1,
+        )
+
     def test_inactive_chain_without_active_predecessor_stays_labelled(self):
         _, plan = self._plan(second_successor=False, inactive_predecessor=True)
         self.assertEqual(
