@@ -86,7 +86,31 @@ class Rc02BoilerCounterfactualTests(unittest.TestCase):
         }
         self.assertEqual(actual, counterfactual.EXPECTED_SPLICES)
         self.assertEqual(record["transform"]["synthetic_relationship_count"], 3)
-        self.assertTrue(record["transform"]["free_slack_shape_check"]["all_equivalent"])
+        free_slack = record["transform"]["free_slack_shape_check"]
+        self.assertTrue(free_slack["all_equivalent"])
+        self.assertEqual(
+            free_slack["basis"],
+            "hash-verified BOILER source observations before diagnostic transform",
+        )
+        boundaries = {
+            row["active_predecessor_leaf_id"]: row
+            for row in free_slack["boundaries"]
+        }
+        self.assertEqual(
+            boundaries["L0055"]["source_direct_successor_gap_seconds_by_leaf"],
+            {"L0056": 0, "L0060": 0},
+        )
+        self.assertEqual(
+            boundaries["L0400"]["source_direct_successor_gap_seconds_by_leaf"],
+            {"L0389": 0},
+        )
+        for row in boundaries.values():
+            self.assertEqual(row["source_predecessor_free_slack_seconds"], 0)
+            self.assertEqual(row["source_inactive_edge_gap_seconds"], 0)
+            self.assertTrue(row["source_free_slack_matches_inactive_edge_gap"])
+            self.assertTrue(
+                row["all_source_direct_successor_gaps_match_inactive_edge_gap"]
+            )
         self.assertFalse(record["scope"]["production_scheduler_changed"])
         self.assertFalse(record["scope"]["imported_schedule_changed"])
 

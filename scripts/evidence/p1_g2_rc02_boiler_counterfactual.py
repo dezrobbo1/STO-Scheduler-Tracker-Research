@@ -267,55 +267,87 @@ def _movement(before: int, after: int) -> str:
     return "unchanged"
 
 
-def _free_slack_equivalence(schedule, network: Network, early, splice_rows: tuple[dict[str, object], ...]) -> dict[str, object]:
-    leaf_by_uid, uid_by_leaf, _ = _leaf_maps(schedule)
-    early_by_uid = early.by_uid()
-    activities = network.activity_by_uid()
+def _free_slack_equivalence(schedule, plan, splice_rows: tuple[dict[str, object], ...]) -> dict[str, object]:
+    """Verify the BOILER Free-Slack shape from immutable source observations.
+
+    This guard deliberately does not read the counterfactual forward pass.  The
+    splice is the thing under test, so allowing its recalculated successor dates
+    to prove equivalence would be circular.  Every coordinate below comes from
+    the hash-verified BOILER source imported before the diagnostic transform.
+    """
+
+    _, uid_by_leaf, _ = _leaf_maps(schedule)
+    activities = {row.uid: row for row in schedule.activities}
+    planned = plan.network.activity_by_uid()
     grouped: dict[tuple[str, str], list[str]] = {}
     for row in splice_rows:
         key = (row["active_predecessor_leaf_id"], row["inactive_leaf_id"])
         grouped.setdefault(key, []).append(row["active_successor_leaf_id"])
 
+    def source_seconds(leaf_id: str, field: str) -> int:
+        value = getattr(activities[uid_by_leaf[leaf_id]].source_observations, field)
+        if value is None:
+            raise CounterfactualError(
+                f"source observation missing for {leaf_id}.{field}"
+            )
+        return plan.to_seconds(value)
+
     checks: list[dict[str, object]] = []
     for (pred_leaf, inactive_leaf), successor_leaves in sorted(grouped.items()):
         pred_uid = uid_by_leaf[pred_leaf]
-        pred_finish = early_by_uid[pred_uid].early_finish
-        # The measured inactive-boundary reporting coordinate has zero duration,
-        # so with this exact BOILER shape its early coordinate is the active
-        # predecessor finish. Every selected inactive row has one active
-        # predecessor; enforce that instead of generalising to multi-predecessor.
         same_inactive = [
             row for row in splice_rows
             if row["inactive_leaf_id"] == inactive_leaf
         ]
         predecessor_set = {row["active_predecessor_leaf_id"] for row in same_inactive}
         if predecessor_set != {pred_leaf}:
-            raise CounterfactualError("multi-predecessor inactive boundary is outside this diagnostic")
-        inactive_gap = 0
-        direct_gaps = [
-            signed_working(
-                activities[pred_uid].float_calendar,
+            raise CounterfactualError(
+                "multi-predecessor inactive boundary is outside this diagnostic"
+            )
+
+        pred_finish = source_seconds(pred_leaf, "early_finish")
+        inactive_start = source_seconds(inactive_leaf, "early_start")
+        float_calendar = planned[pred_uid].float_calendar
+        inactive_gap = signed_working(float_calendar, pred_finish, inactive_start)
+
+        direct_gaps = {
+            successor_leaf: signed_working(
+                float_calendar,
                 pred_finish,
-                early_by_uid[uid_by_leaf[successor_leaf]].early_start,
+                source_seconds(successor_leaf, "early_start"),
             )
             for successor_leaf in sorted(successor_leaves)
-        ]
-        direct_min = min(direct_gaps)
+        }
+        source_free_slack = activities[pred_uid].source_observations.free_float_seconds
+        if source_free_slack is None:
+            raise CounterfactualError(
+                f"source observation missing for {pred_leaf}.free_float"
+            )
+        all_direct_match = all(gap == inactive_gap for gap in direct_gaps.values())
+        free_slack_matches = source_free_slack == inactive_gap
+        equivalent = all_direct_match and free_slack_matches
         checks.append(
             {
                 "active_predecessor_leaf_id": pred_leaf,
                 "inactive_leaf_id": inactive_leaf,
                 "active_successor_count": len(successor_leaves),
-                "inactive_edge_gap_seconds": inactive_gap,
-                "direct_successor_gap_seconds": direct_min,
-                "equivalent_for_this_boiler_boundary": inactive_gap == direct_min,
+                "source_predecessor_free_slack_seconds": source_free_slack,
+                "source_inactive_edge_gap_seconds": inactive_gap,
+                "source_direct_successor_gap_seconds_by_leaf": direct_gaps,
+                "source_free_slack_matches_inactive_edge_gap": free_slack_matches,
+                "all_source_direct_successor_gaps_match_inactive_edge_gap": all_direct_match,
+                "equivalent_for_this_boiler_boundary": equivalent,
             }
         )
     if not all(row["equivalent_for_this_boiler_boundary"] for row in checks):
         raise CounterfactualError(
-            "direct diagnostic splice would not preserve the observed Free-Slack shape"
+            "direct diagnostic splice would not preserve the source-observed Free-Slack shape"
         )
-    return {"all_equivalent": True, "boundaries": checks}
+    return {
+        "basis": "hash-verified BOILER source observations before diagnostic transform",
+        "all_equivalent": True,
+        "boundaries": checks,
+    }
 
 
 def build_record(baseline_path: Path) -> dict[str, object]:
@@ -342,6 +374,7 @@ def build_record(baseline_path: Path) -> dict[str, object]:
         )
 
     splices, splice_rows = diagnostic_splices(schedule, production.plan.network)
+    free_slack = _free_slack_equivalence(schedule, production.plan, splice_rows)
     network, early, late, floats, result_rows = _run_diagnostic(production.plan, splices)
     counter_engine = baseline_diag._engine(schedule, result_rows)
     counter_keys = _mismatch_keys(observed, counter_engine, leaf_by_source)
@@ -407,7 +440,6 @@ def build_record(baseline_path: Path) -> dict[str, object]:
             }
         )
 
-    free_slack = _free_slack_equivalence(schedule, network, early, splice_rows)
     remaining_inventory_rows = [
         fixed_by_key[(row["leaf_id"], row["field"])]
         for row in remaining_rc02

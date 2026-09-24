@@ -280,15 +280,12 @@ original native run, this remains bounded observational Free-Slack evidence, not
 a universal formula or proof of Project's internal mechanism. The evidence is
 recorded in `p1-g2-rc02-inactive-native-matrix-2026-09-24.md`.
 
-The subsequent BOILER counterfactual is recorded in
-`p1-g2-rc02-boiler-counterfactual-2026-09-24.md`. It overlays only the measured
-zero-duration active-boundary date shape on the exact BOILER network. The result
-closes 239 of this family's 258 slots and four of five first-divergence roots,
-with no new mismatch slots and no worsening outside RC02. It does **not** pass:
-19 RC02 slots remain on nine leaves, four RC02 late-date slots worsen, and every
-remaining dependency path roots at the active predecessor of one inactive row
-that fans out to two active successors. That fan-out backward behavior was not
-covered by the native matrix, so a production correction remains unjustified.
+That native result establishes the replacement shape for the synthetic
+zero-lag-FS boundary, but it does not by itself prove that applying the shape
+closes this family's five BOILER first divergences or its 258 slots. The prior
+ordinary zero-duration-node experiment still stands rejected. A real-file
+diagnostic counterfactual is required before the family's causal confidence is
+upgraded or a production correction is justified.
 
 ### G2-RC03 — elapsed-duration float basis
 
@@ -343,20 +340,23 @@ families above; only the elapsed-float family's origin currently meets the
 
 **No production root-cause fix is justified yet.**
 
-The `G2-RC02` native matrix, one-field sentinel and BOILER diagnostic
-counterfactual are complete. The BOILER run gives strong partial causal support:
-239 of 258 RC02 slots close, four of five first-divergence roots close, no new
-mismatch slots appear and no other family worsens. It still fails the stopping
-rule because the remaining 19 RC02 slots all trace to the active predecessor of
-an inactive fan-out with two active successors, and four dependent late-date
-slots worsen under the direct-splice extrapolation.
+The `G2-RC02` native matrix and one-field sentinel are complete. For the tested
+zero-lag FS shape the matrix establishes zero-duration forward/late date
+pass-through; the Free-Slack observations match the inactive-edge gap, and the
+sentinel rules out unchanged imported-value retention on its later Project
+build. The next bounded task is no longer another native run: it is a
+diagnostic-only counterfactual over the exact BOILER P1-G2 pair.
 
-The next bounded task is therefore another **native** experiment for exactly
-that unmeasured fan-out shape: one active predecessor -> one inactive middle ->
-two active successors, zero-lag FS, with deliberately distinct late boundaries
-and a Free-Slack sentinel. Measure which successor boundary Project propagates
-backward before any production correction. RC02 remains `STRONG_CANDIDATE`,
-P1-G2 remains open, and no production correction is authorized.
+That counterfactual must apply only the bounded RC02 date semantic and observed Free-Slack shape,
+reconcile it against the fixed 422-slot inventory, and show whether the five
+RC02 first divergences and their dependent paths move in the predicted
+direction without worsening RC01, RC03 or the compound slot. Until that is
+measured, RC02 remains `STRONG_CANDIDATE`, its expected mismatch reduction
+remains unknown, and no production correction is authorized.
+
+If the counterfactual succeeds, the subsequent PR should make only that one
+bounded production semantic correction and rerun the exact inventory plus the
+real-file forward, backward and conformance cohorts.
 
 ## Gate consequence
 

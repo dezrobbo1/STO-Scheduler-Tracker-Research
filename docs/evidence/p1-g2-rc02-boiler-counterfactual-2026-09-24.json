@@ -45,22 +45,34 @@
     "production_network_fingerprint": "3a14462949fe2b7ee8ffd6617bd51ee23731400345ef2005e0195a5bdbd44778",
     "diagnostic_network_fingerprint": "b4ab596a6da0e2f6ebcb730bb1818901adec4987a81c8d79851652213efb05fd",
     "free_slack_shape_check": {
+      "basis": "hash-verified BOILER source observations before diagnostic transform",
       "all_equivalent": true,
       "boundaries": [
         {
           "active_predecessor_leaf_id": "L0055",
           "inactive_leaf_id": "L0052",
           "active_successor_count": 2,
-          "inactive_edge_gap_seconds": 0,
-          "direct_successor_gap_seconds": 0,
+          "source_predecessor_free_slack_seconds": 0,
+          "source_inactive_edge_gap_seconds": 0,
+          "source_direct_successor_gap_seconds_by_leaf": {
+            "L0056": 0,
+            "L0060": 0
+          },
+          "source_free_slack_matches_inactive_edge_gap": true,
+          "all_source_direct_successor_gaps_match_inactive_edge_gap": true,
           "equivalent_for_this_boiler_boundary": true
         },
         {
           "active_predecessor_leaf_id": "L0400",
           "inactive_leaf_id": "L0388",
           "active_successor_count": 1,
-          "inactive_edge_gap_seconds": 0,
-          "direct_successor_gap_seconds": 0,
+          "source_predecessor_free_slack_seconds": 0,
+          "source_inactive_edge_gap_seconds": 0,
+          "source_direct_successor_gap_seconds_by_leaf": {
+            "L0389": 0
+          },
+          "source_free_slack_matches_inactive_edge_gap": true,
+          "all_source_direct_successor_gaps_match_inactive_edge_gap": true,
           "equivalent_for_this_boiler_boundary": true
         }
       ]

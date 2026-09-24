@@ -50,9 +50,14 @@ The first inactive boundary fans out to two active successors. That fan-out was
 **not** part of the native matrix and is explicitly an extrapolation for this
 diagnostic. The second boundary is the measured one-successor shape.
 
-For both BOILER boundaries, the diagnostic direct-successor Free-Slack gap and
-the observed inactive-edge gap are both zero, so the direct diagnostic splice
-does not create a Free-Slack distinction on these specific rows.
+Before applying the transform, the tool reads the immutable source observations
+from the hash-verified BOILER baseline. For both selected boundaries, the active
+predecessor source Free Float is zero, the source gap from predecessor Early
+Finish to inactive-middle Early Start is zero, and the source gap to **each**
+active successor Early Start is also zero (both fan-out successors included).
+The source-shape guard therefore establishes that the direct diagnostic splice
+does not substitute a different Free-Slack value on these specific rows; it does
+not use counterfactual recalculated dates to prove that equivalence.
 
 ## Measured result
 
@@ -151,8 +156,10 @@ PYTHONPATH=src python3 scripts/evidence/p1_g2_rc02_boiler_counterfactual.py \
 ```
 
 The tool hash-verifies the external BOILER baseline and fixed inventory, verifies
-the fresh-main production source digest, refuses any moved splice set, rejects
-new mismatch slots and leaves the baseline bytes unchanged.
+the fresh-main production source digest, checks the Free-Slack equivalence from
+source observations **before** applying the diagnostic transform, refuses any
+moved splice set, rejects new mismatch slots and leaves the baseline bytes
+unchanged.
 
 ## Gate consequence
 
