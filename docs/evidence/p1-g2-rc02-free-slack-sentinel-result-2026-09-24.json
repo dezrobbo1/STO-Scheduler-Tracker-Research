@@ -1,0 +1,53 @@
+{
+  "schema": "sto-rc02-free-slack-sentinel-observation-v1",
+  "source": {
+    "kind": "owner-supplied Microsoft Project XML return",
+    "repository_raw_xml_committed": false,
+    "input_lineage": "sentinel input prepared from the deterministic RC02 matrix with only UID20 FreeSlack changed 0 -> 12345"
+  },
+  "sentinel_input": {
+    "bytes": 48326,
+    "sha256": "454b536350761d56f57aea9ba47af3abff01e6afbb519c56601559596bcbf9a7",
+    "task_uid": "20",
+    "task_name": "RC02-C-I-PRED",
+    "field": "FreeSlack",
+    "seeded_value": "12345"
+  },
+  "native_return": {
+    "bytes": 139666,
+    "sha256": "fdfb87fea60bc32e0aca772fa125ad7a3b010e42fa03bc131d110fe0330c1db8"
+  },
+  "project": {
+    "build_number": "16.0.20326.20140",
+    "name": "P1-G2-RC02-Free-Slack-Sentinel-INPUT-RETURNED.xml",
+    "start": "2026-10-05T08:00:00",
+    "finish": "2026-10-15T08:00:00"
+  },
+  "validation": {
+    "expected_matrix_tasks": 23,
+    "task_identity_and_zero_lag_fs_topology_preserved": true,
+    "active_controls_valid": true,
+    "date_passthrough_shape_reproduced": true,
+    "same_build_as_original_native_run": false,
+    "original_native_build": "16.0.20228.20188"
+  },
+  "pair_c_inactive_predecessor": {
+    "uid": "20",
+    "active": "1",
+    "early_finish": "2026-10-06T08:00:00",
+    "late_finish": "2026-10-14T08:00:00",
+    "free_slack": 0,
+    "total_slack": 115200,
+    "direct_active_successor_gap": 43200,
+    "original_inactive_edge_gap": 0
+  },
+  "conclusion": {
+    "unchanged_sentinel_retention_ruled_out": true,
+    "returned_value_matches_original_inactive_edge_gap": true,
+    "returned_value_matches_direct_active_successor_gap": false,
+    "general_free_slack_formula_established": false,
+    "internal_project_mechanism_established": false,
+    "diagnostic_boiler_counterfactual_authorized": true,
+    "production_scheduler_change_authorized": false
+  }
+}

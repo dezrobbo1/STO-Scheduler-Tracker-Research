@@ -159,6 +159,37 @@ For the tested zero-lag FS shape, Project therefore preserves a forward and
 backward date boundary across the inactive row while ignoring the inactive
 row's duration.
 
+## Free-Slack sentinel follow-up — 2026-09-24
+
+A second, one-field synthetic run was performed to distinguish recalculation from
+unchanged imported Free Slack. Its input was the same generated matrix except
+for UID 20 / `RC02-C-I-PRED` / `FreeSlack`, seeded to `12345` instead of
+`0`. The sentinel input identity prepared for the owner was 48,326 bytes,
+SHA-256 `454b536350761d56f57aea9ba47af3abff01e6afbb519c56601559596bcbf9a7`.
+
+The owner-supplied returned XML is 139,666 bytes with SHA-256
+`fdfb87fea60bc32e0aca772fa125ad7a3b010e42fa03bc131d110fe0330c1db8`.
+It reports Microsoft Project build `16.0.20326.20140`, so this is not a
+same-build replay of the earlier `16.0.20228.20188` run. The complete expected
+23-task identity/topology contract survives, the active controls pass, and the
+date pass-through observations reproduce the same tested zero-lag FS shape.
+
+Most importantly, UID 20 returns `FreeSlack=0`, not the seeded `12345`.
+Its Total Slack is `115200`; the gap to the active successor is `43200`,
+while the gap to the inactive middle row is `0`. Therefore unchanged sentinel
+retention is ruled out on build `16.0.20326.20140`; the returned value matches
+the original inactive-edge gap and does not match the direct active-successor
+gap.
+
+This closes the specific retention alternative raised in review for the current
+tested build. It does **not** prove Microsoft Project's internal calculation
+mechanism, establish a universal Free-Slack formula, or retroactively prove that
+the older build recalculated rather than normalized the field. The evidence is
+bounded to the tested zero-lag FS shape and the two observed builds.
+
+Sanitized sentinel evidence:
+`docs/evidence/p1-g2-rc02-free-slack-sentinel-result-2026-09-24.json`.
+
 ### Free-Slack semantic — original inactive edge bound supported
 
 Pair C deliberately creates a three-day early gap between the inactive-chain
@@ -194,8 +225,9 @@ The native experiment **proves the candidate boundary for this tested zero-lag
 FS shape**, but it does not itself change production scheduling behavior or
 prove how many of the 258 BOILER mismatch slots will close.
 
-The next task is a separate diagnostic counterfactual over the exact BOILER
-pair:
+The sentinel closes the review's unchanged-retention alternative on the current
+Project build. The next task may therefore proceed as a **diagnostic-only**
+counterfactual over the exact BOILER pair:
 
 1. apply the measured date pass-through only to RC02 zero-lag FS inactive
    boundaries in diagnostic code;
