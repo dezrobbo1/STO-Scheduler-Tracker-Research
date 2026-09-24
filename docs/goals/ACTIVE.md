@@ -327,14 +327,17 @@ still not started and the limited S7/PL4 exception recorded in
 records the communication boundaries and
 `docs/history/2026-09-20-field-communication-roadmap.md` the review decision.
 
-Before any P2 work or production correction, the next bounded step is the
-`G2-RC02` native Microsoft Project active → inactive → active zero-lag FS
-matrix recorded in
-`docs/evidence/p1-g2-baseline-root-causes-2026-09-22.md`. It must prove or
-reject the inactive-boundary candidate semantics across forward placement and
-predecessor late/free-float influence. No mismatch reduction is predicted, and
-the experiment does not change P1-G2 or justify a scheduler correction by
-itself.
+The `G2-RC02` native Microsoft Project active → inactive → active zero-lag
+FS matrix is complete and recorded in
+`docs/evidence/p1-g2-rc02-inactive-native-matrix-2026-09-24.md`. It measured
+zero-duration date pass-through across the inactive row while predecessor Free
+Slack retained the original inactive-edge boundary. Before any P2 work or
+production correction, the next bounded step is a diagnostic-only
+counterfactual over the exact BOILER P1-G2 pair: apply that measured composite
+semantic to the RC02 zero-lag-FS boundaries and measure whether the RC02 first
+divergences and dependent paths close without worsening other families. No
+production correction or mismatch reduction is claimed until that real-file
+counterfactual succeeds.
 
 P2 order and ownership, maintained from `docs/goals/roadmap.json`:
 
