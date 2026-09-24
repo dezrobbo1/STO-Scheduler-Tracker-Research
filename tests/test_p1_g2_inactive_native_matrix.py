@@ -37,19 +37,29 @@ def _mutated_fixture(verdict: str, target: Path) -> Path:
         assert node is not None
         node.text = text
 
+    def set_start(name: str, source: str, field: str = "Finish") -> None:
+        coordinate = value(source, field)
+        set_value(name, "Start", coordinate)
+        set_value(name, "EarlyStart", coordinate)
+
     def slack_units(start: str, finish: str) -> str:
         seconds = (datetime.fromisoformat(finish) - datetime.fromisoformat(start)).total_seconds()
         return str(int(seconds / 6))
 
+    # Make the inactive middle row start at its active predecessor finish, as
+    # the real native return does, and give all pass-through cases a backward
+    # boundary from active successor to active predecessor.
     for pair in ("A", "B", "C"):
+        set_start(f"RC02-{pair}-I-MID", f"RC02-{pair}-I-PRED")
         set_value(
             f"RC02-{pair}-I-PRED", "LateFinish",
             value(f"RC02-{pair}-I-SUCC", "LateStart"),
         )
 
     if verdict in {"splice", "mixed"}:
-        set_value("RC02-A-I-SUCC", "Start", value("RC02-A-I-PRED", "Finish"))
-        set_value("RC02-B-I-SUCC", "Start", value("RC02-B-I-PRED", "Finish"))
+        set_start("RC02-A-I-SUCC", "RC02-A-I-PRED")
+        set_start("RC02-B-I-SUCC", "RC02-B-I-PRED")
+        set_start("RC02-C-I-SUCC", "RC02-C-I-OTHER")
         if verdict == "splice":
             set_value(
                 "RC02-C-I-PRED", "FreeSlack",
@@ -71,7 +81,9 @@ def _mutated_fixture(verdict: str, target: Path) -> Path:
         project_start = root.findtext("p:StartDate", namespaces=NS)
         assert project_start is not None
         set_value("RC02-A-I-SUCC", "Start", project_start)
-        set_value("RC02-B-I-SUCC", "Start", value("RC02-B-I-OTHER", "Finish"))
+        set_value("RC02-A-I-SUCC", "EarlyStart", project_start)
+        set_start("RC02-B-I-SUCC", "RC02-B-I-OTHER")
+        set_start("RC02-C-I-SUCC", "RC02-C-I-OTHER")
         set_value("RC02-C-I-PRED", "FreeSlack", "900")
         set_value("RC02-C-I-PRED", "TotalSlack", "900")
         set_value("RC02-C-I-PRED", "LateFinish", value("RC02-FINISH-DRIVER", "Finish"))
@@ -147,6 +159,9 @@ class Rc02NativeMatrixTests(unittest.TestCase):
             node = tasks["RC02-B-I-SUCC"].find("p:Start", NS)
             assert node is not None and other_finish is not None
             node.text = other_finish
+            early = tasks["RC02-B-I-SUCC"].find("p:EarlyStart", NS)
+            assert early is not None
+            early.text = other_finish
             tree.write(path, encoding="utf-8", xml_declaration=True)
             _, rows = matrix.read(path)
             self.assertEqual(
