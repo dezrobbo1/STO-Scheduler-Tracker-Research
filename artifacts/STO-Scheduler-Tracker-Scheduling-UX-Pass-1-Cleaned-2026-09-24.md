@@ -464,3 +464,190 @@ Allow the activity Context area to later expose STO identity, source schedule id
 
 The Schedule workspace should be extensible to later Resources and operational Constraints without introducing a second "advanced scheduler". Resource levelling, crew capacity, permits, isolations, workface occupancy and optimisation explanation remain deferred until P6 semantics are real. [I2]
 
+# 19. Proposed practitioner validation
+
+This report recommends adapting PM-Software's practitioner method for STO. It is a **PROPOSED STO VALIDATION METHOD**, not yet a formally adopted STO gate.
+
+PM-Software currently requires at least three independent experienced planners, with five preferable, and classifies findings A/B/C. Its exit gate requires practitioners to distinguish accepted actual history, status point, remaining work, future recovery and approved plan, and to understand material movement. [I6][I7]
+
+## Planner trial
+
+Participants should complete outcomes rather than follow click-by-click instructions:
+
+1. Identify whether they are viewing Baseline, Live, Approved or Scenario and explain what edits can affect.
+2. Distinguish accepted actual history, status point, remaining work and future forecast.
+3. Investigate a moved milestone/activity and identify supported driving causes.
+4. Inspect driving predecessor/relationship without displaying the entire network.
+5. Create an isolated scenario, change a supported planning input and recalculate.
+6. Compare scenario consequences against Approved.
+7. Explain that scenario submission/promotion is not automatic forecast approval.
+8. Resolve a stale edit or rejected update without losing intended information.
+9. Distinguish calculated criticality, float, near-critical policy and human Critical/watch status.
+10. Complete a representative keyboard-heavy sequence without repeatedly leaving the main workspace.
+
+Measure task completion, wrong-layer edits, state-identification errors, unsupported causal assumptions, ability to explain movement, whether participants invent unavailable information, error recovery, interaction effort, terminology confusion and trust sufficient to investigate/use results.
+
+## Supervisor, coordinator and field trials
+
+Supervisor: distinguish submitted execution operations from communication, inspect evidence and live consequence, request correction, and understand whether the action advances Approved.
+
+Shutdown coordinator: work through a mixed Today queue containing a blocked controlling activity, routine non-material delay, failed offline submission, newly critical path and planner decision. Observe whether highest-consequence work is found first without notification flooding.
+
+Field: use the P2 two-device offline trial and add UX observations for whether users understand Queued, Accepted, Applied, Failed and Conflict.
+
+## Finding classes
+
+- **A - Fundamental/product blocker:** authority/state is misunderstood, actual/future is confused, causal explanation is untrustworthy, or the UI encourages dangerous wrong-layer edits.
+- **B - Important usability issue:** semantics appear sound but normal practitioners materially struggle.
+- **C - Later improvement:** convenience, terminology, presentation or polish issue that does not prevent safe comprehension.
+
+# 20. Pre-P2 decisions
+
+## MUST DECIDE BEFORE P2 FRONTEND HARDENS
+
+- Preserve separate desktop Console and Field App.
+- Introduce first-class professional scheduling capability.
+- Schedule and operational work use the same STO activity identity.
+- Prototype synchronized activity grid + Gantt + activity inspector.
+- Formalize Reference / Operational / Working / History schedule-state meanings.
+- Keep Live and Approved persistently distinguishable.
+- Use explicit status-point grammar for actual history versus remaining future.
+- Keep scenarios isolated and version-based.
+- Treat "Why did this move?" as provenance-backed, never date-correlation inference.
+- Preserve field report -> live result -> supervisor -> planner -> approved authority path.
+- Keep communication contextual and non-authoritative.
+- Preserve Queued / Accepted / Applied / Failed / Conflict distinctions.
+- Ensure essential Gantt actions have non-drag alternatives.
+- Apply keyboard/focus/non-colour accessibility rules.
+- Run low-fidelity practitioner validation before hardening P2 screens.
+
+## CAN BE DECIDED DURING P2
+
+Exact saved-view defaults, pane sizes, column presets, inspector ordering/names, materiality thresholds, notification preferences, exact state copy where semantics are already fixed, final visual tokens and polish.
+
+## DEFER TO P3/P4
+
+Detailed Project/P6 writer screens, returned-file diff/reconciliation UI, writer-profile management, CMMS adapter configuration and site mapping.
+
+## DEFER TO P6
+
+Resource levelling controls, crew optimisation, permit/isolation/workface planning and optimisation explanation.
+
+# 21. Open questions / TEST before P2
+
+1. **Terminology:** Is "Execution" the clearest label for operational work? Is "Interchange" useful later?
+2. **Navigation:** Does Schedule need a top-level zone exactly as proposed, and when should external systems become visible?
+3. **Pane/inspector structure:** Do planners efficiently use the proposed grid/Gantt/inspector arrangement? Which groupings are natural?
+4. **Visual state grammar:** Can users reliably distinguish Source, Baseline, Live, Approved and Scenario without relying on colour?
+5. **Attention thresholds:** Which schedule changes deserve Today-level attention in real shutdown practice?
+6. **Scenario promotion:** What exact interaction should bridge scenario proposal, planner authority and approved forecast under PL6/PL7?
+7. **Causal provenance:** Does the scheduler expose enough explicit provenance to support trustworthy movement explanation? How should multiple causes be shown?
+8. **Keyboard/bulk editing:** Which workflows require keyboard-first and bulk operations, and what safety preview is appropriate?
+9. **Practitioner comprehension:** Can experienced planners identify schedule state, actual versus remaining future, live versus approved, scenario authority and movement cause?
+
+# 22. Recommended repository documentation after review
+
+Do not modify the frozen Design C repository. Preserve its provenance.
+
+The initial current-STO documentation set should be deliberately small:
+
+- `docs/research/2026-09-24-scheduling-ux-pass-1.md`
+- `docs/product/ux-architecture-v1.md`
+- `docs/product/scheduling-workspace.md`
+- `docs/trials/sto-planner-ux-v1/`
+- One current ADR superseding the old tracker-only/no-scheduler UX boundary.
+
+Only split movement explainability or visual semantics into separate contracts later if complexity justifies it.
+
+# 23. Final judgement
+
+Pass 1 establishes a sufficiently supported design direction to begin STO UX Architecture v1 and low-fidelity prototyping. It does not establish a finished scheduler UI.
+
+Design C remains the foundation for STO's operational character: attention-first control-room UX, separate desktop and field surfaces, restrained visual design, structured operational records, role-appropriate complexity and explicit offline state.
+
+The obsolete part of that inheritance is the assumption that Microsoft Project owns scheduling and therefore STO should not expose professional scheduling interfaces.
+
+The leading desktop architecture to validate is a synchronized WBS/activity table + Gantt + progressively disclosed activity inspector, with Schedule and operational work operating on the same STO activity identities.
+
+STO's schedule model must visibly distinguish reference state, operational state, working scenarios and history. Actual history and future forecast must remain separated by an explicit status point. Live forecast and approved forecast must never be visually ambiguous.
+
+"Why did this move?" should be a first-class STO design objective, but the UI may only present causal explanations supported by scheduler provenance. It must not infer causation from date correlation.
+
+Exact navigation labels, pane structure, state visual treatments, scenario-promotion interaction, materiality thresholds and attention rules remain hypotheses requiring practitioner validation.
+
+P3/P4 integration and P6 resource/operational scheduling should be accommodated architecturally but not designed in detail before their semantics exist.
+
+**Next step: STO UX Architecture v1 -> low-fidelity scheduler/execution prototypes -> practitioner validation -> corrections -> P2 implementation.**
+
+No further broad scheduling-UX research is required before that work. Additional research should be targeted only where prototyping or practitioner testing exposes a specific unresolved question.
+
+# Source register
+
+## Internal / project sources
+
+[I1] Current STO README  
+https://github.com/dezrobbo1/STO-Scheduler-Tracker-Research/blob/main/README.md
+
+[I2] Current STO roadmap  
+https://github.com/dezrobbo1/STO-Scheduler-Tracker-Research/blob/main/docs/goals/roadmap.json
+
+[I3] ADR-016 - Field communication, offline delivery and execution authority  
+https://github.com/dezrobbo1/STO-Scheduler-Tracker-Research/blob/main/docs/adr/ADR-016-field-communication-offline-delivery-and-execution-authority.md
+
+[I4] Frozen ADR-009 - UX/UI Architecture  
+https://github.com/dezrobbo1/Shutdown-Tracker-Claude/blob/main/docs/adr/ADR-009-ux-ui-architecture.md
+
+[I5] Frozen UX Anti-Slop Rules  
+https://github.com/dezrobbo1/Shutdown-Tracker-Claude/blob/main/docs/product/ux-anti-slop-rules.md
+
+[I6] PM-Software planner trial exit gate  
+https://github.com/dezrobbo1/PM-Software/blob/main/docs/trials/planner-update-recovery-v1/exit-gate.md
+
+[I7] PM-Software completion questionnaire  
+https://github.com/dezrobbo1/PM-Software/blob/main/docs/trials/planner-update-recovery-v1/questionnaire.md
+
+[I8] Current STO P1 planner implementation  
+https://github.com/dezrobbo1/STO-Scheduler-Tracker-Research/blob/main/src/sto/api/static/app.js
+
+[I9] Original Pass 1 research report, uploaded 24 September 2026. This cleaned edition corrects and supersedes its presentation while preserving its evidence base.
+
+## External documented patterns / guidance
+
+[E1] Oracle Primavera P6 - Working with Activities  
+https://docs.oracle.com/cd/G48897_01/p6help/en/6672.htm
+
+[E2] Oracle Primavera P6 - Gantt and relationships  
+https://docs.oracle.com/cd/G48897_01/p6help/en/38087.htm  
+https://docs.oracle.com/cd/G48902_01/English/User_Guides/p6_pro_user/adding_relationships_between_activities.htm
+
+[E3] Microsoft Project - Highlight how tasks link to other tasks  
+https://support.microsoft.com/en-us/project/highlight-how-tasks-link-to-other-tasks
+
+[E4] Microsoft Project - Critical path and slack  
+https://support.microsoft.com/en-us/project/show-the-critical-path-of-your-project-in-project  
+https://support.microsoft.com/en-us/project/show-slack-in-your-project-in-project-desktop
+
+[E5] Safran Project - Barchart Editor  
+https://docs.safran.com/docs/safran-project-introduction-to-the-barchart-editor  
+https://docs.safran.com/docs/safran-project-working-with-the-barchart-editor
+
+[E6] InEight Progress - Mobile overview and data sync  
+https://learn.ineight.com/Progress/Content/Daily%20Planning%20Mobile/MobileOverview.htm  
+https://learn.ineight.com/Progress/Content/Daily%20Planning%20Mobile/DataSync.htm
+
+[E8] HSE - Control room design  
+https://www.hse.gov.uk/comah/sragtech/techmeascontrol.htm
+
+[E9] HSE - Alarm management  
+https://www.hse.gov.uk/humanfactors/topics/alarm-management.htm
+
+[E10] W3C - WCAG 2.2 dragging and target-size guidance  
+https://www.w3.org/WAI/standards-guidelines/wcag/new-in-22/
+
+[E11] Android Developers - Offline-first architecture  
+https://developer.android.com/topic/architecture/data-layer/offline-first
+
+## Source-use note
+
+Vendor documentation in this report is used to establish documented interaction patterns and capabilities, not to claim that a product is easy to use or that STO should copy it. Human-factors guidance is used to support general design constraints and is not presented as a specification for scheduling software.
+
