@@ -156,3 +156,174 @@ The future external-systems concept should reserve a coherent home for Project/P
 
 Communication remains contextual to activities/workfronts/entities and may appear in a timeline. It should not become a generic top-level Chat area.
 
+# 7. Candidate scheduler workspace
+
+**RECOMMENDATION TO PROTOTYPE.** The main professional scheduling surface should be a synchronized table/Gantt workspace with persistent schedule-state context and progressive detail.
+
+```
+Project / status point / viewed state / scenario / freshness
+------------------------------------------------------------
+Today | Schedule | Operational work | Problems | Evidence
+------------------------------------------------------------
+Search | View | Group | Filter | Compare | Scenario | Recalculate
+------------------------------------------------------------
+WBS / ACTIVITY TABLE        | GANTT
+ID  Name  Dur  Start  Float | baseline / actual / live / scenario
+                            |
+[same row model and selection across both panes]
+------------------------------------------------------------
+SELECTED ACTIVITY INSPECTOR
+Summary | Plan | Logic | Execution | Context | History  [TEST labels]
+
+Movement / impact explanation when provenance supports it
+```
+
+The table and Gantt should share one row identity and selection model. Recalculation should preserve selected activity, filters, relevant scroll position and timescale wherever possible.
+
+Default grid density should remain professional rather than card-based. Progressive disclosure prevents the default grid from becoming a fifty-column dump.
+
+Keyboard navigation, multi-selection and bulk operations are candidate architectural requirements, but exact shortcuts and bulk-edit semantics require prototype testing.
+
+# 8. Activity detail architecture
+
+The central architectural decision is one STO activity identity viewed through planning and execution lenses. Exact tab names and order are TEST.
+
+- **Summary** - identity, WBS/workfront, live timing, approved timing, movement, current execution state and immediate attention.
+- **Plan** - duration, calendar, constraints, early/late dates, total/free float and supported planning assumptions.
+- **Logic** - predecessors, successors, relationship type/lag, driving relationship/path and selected-path highlighting.
+- **Execution** - actual start/finish, status point, remaining duration, submitted operations, acceptance/application state, review state and live forecast effect.
+- **Context** - Problems/Actions, Evidence/photos, communication and later work-order/equipment context.
+- **History** - source/import provenance, baseline, accepted authoritative changes, corrections, scenario/promotion history and audit.
+
+Opening an activity from Schedule can emphasize Summary/Plan; opening the same activity from operational work can emphasize Execution. These are lenses over one record, not separate task databases.
+
+# 9. Schedule-state and execution-time model
+
+**CURRENT STO FACT.** P1 already distinguishes imported/source observations, an immutable calculated baseline and a persisted scenario. P2 adds live execution semantics and requires that approved forecast move only on planner approval after supervisor then planner review. [I1][I2]
+
+**RECOMMENDATION.** Do not present Source, Baseline, Live, Approved, Scenario and History as equal peer tabs. They belong to different dimensions.
+
+```
+REFERENCE
+  Source/imported observations
+  Immutable STO baseline
+
+OPERATIONAL
+  Approved forecast
+  Live forecast
+    may include authoritative execution effects
+    not yet incorporated into Approved
+
+WORKING
+  Scenario / planner draft
+    explicitly based on a version
+    isolated until governed promotion
+
+HISTORY
+  Immutable prior versions and audit
+```
+
+The execution-time model is separate:
+
+```
+ACTUAL HISTORY | STATUS POINT | REMAINING FORECAST
+===============|==============|====================
+```
+
+The global context should make the viewed state explicit: what is being viewed, what version it is based on, the data/status point, current approved version, whether unreviewed effects exist, and whether edits can affect live execution.
+
+When viewing a scenario, the UI should explicitly state that it is not live and not approved, identify its base version, last calculation and edited inputs. Exact visual treatment remains TEST.
+
+# 10. Trustworthy movement and impact explanation
+
+**DESIGN OBJECTIVE.** "Why did this move?" should be a first-class STO interaction because it connects scheduler mechanics to operational decisions. PM-Software's practitioner trial explicitly asks whether planners understand important reasons work moved. [I7]
+
+**CORRECTION.** The UI must not infer a cause from coincident date changes. A trustworthy explanation requires scheduler provenance/causal data. Current STO can identify changed activities and expose some calculation/placement metadata, but that is not yet equivalent to a complete causal chain. [I8]
+
+The scheduler should eventually make sufficient evidence available to express:
+
+```
+Version v31 -> v32
+
+AUTHORITATIVE CHANGE
+A-101 Remaining Duration: 2h -> 3h
+Execution operation: E-4821
+
+SCHEDULING CONSEQUENCE
+A-101 Finish: +1h
+
+PLACEMENT OF A-102
+Driving edge: A-101 -> A-102
+Relationship: FS + 0h
+Calendar/constraint decision: DAY / none
+Result: A-102 Start +1h
+
+DOWNSTREAM IMPACT
+A-117 Start +1h
+Milestone M-12 Finish +1h
+Total float: 1h -> 0h
+
+OTHER SIMULTANEOUS DRIVERS
+None / multiple / unresolved
+```
+
+The explanation hierarchy should be:
+
+**What moved -> direct driver(s) -> changed authoritative input/event -> scheduling rule/placement -> downstream consequence.**
+
+Potential cause types include predecessor timing, relationship/lag, actual start/finish, remaining duration, calendar, constraint, planner/scenario edit and, later, resource or operational constraints.
+
+Where multiple causes are possible, the UI must show that ambiguity rather than invent a single cause. A production explainability contract therefore depends on scheduler provenance becoming sufficiently explicit.
+
+# 11. Criticality, float and attention semantics
+
+STO should keep the following facts visibly separate:
+
+- Calculated CPM criticality.
+- Total float.
+- Free float.
+- Near-critical threshold/view policy.
+- Driving logic / causal path.
+- Human Critical/watch operational classification.
+- Future resource-constrained executable risk.
+- Future operational-constraint risk.
+
+Near-critical is a configured view/filter policy, not a scheduler truth equivalent to total or free float.
+
+Microsoft Project itself documents configurable critical/slack concepts, which reinforces the need for STO to state the basis rather than rely on a generic red bar. [E4]
+
+Human Critical placement and calculated criticality must remain separate. A planner or control-room operator may deliberately watch work that the current CPM calculation does not classify as critical.
+
+# 12. Scenario and recovery UX
+
+**CURRENT STO FACT.** P1 has one persisted duration scenario. P2 PL7 plans planner editing, leases and immutable scenarios with governed promotion. [I1][I2]
+
+**RECOMMENDATION.**
+
+```
+Explicit reference version
+        |
+Create scenario / planner draft
+        |
+Edit supported inputs
+        |
+Recalculate
+        |
+Impact summary + changed-only comparison
+        |
+Investigate movement and adverse effects
+        |
+   +----+------------------+
+   |                       |
+Discard              Submit proposed
+                     scenario outcome
+                           |
+                 Governed promotion process
+                           |
+              Exact P2 semantics still to define
+```
+
+A scenario should always identify its base version and must never silently mutate live or approved state.
+
+Useful comparison patterns to prototype include overlay comparison, changed-only table, impact summary and explicit provenance. Exact promotion/approval interaction remains TEST until PL7/PL6 semantics are designed together.
+
