@@ -110,6 +110,56 @@ class Rc02NativeMatrixTests(unittest.TestCase):
         self.assertEqual(rows["RC02-A-I-MID"]["predecessor_uids"], ["5"])
         self.assertEqual(rows["RC02-B-I-SUCC"]["predecessor_uids"], ["13", "14"])
         self.assertEqual(rows["RC02-C-I-SUCC"]["predecessor_uids"], ["21", "22"])
+        self.assertEqual(
+            rows["RC02-C-I-SUCC"]["predecessor_links"],
+            [
+                {"predecessor_uid": "21", "type": "1", "link_lag": "0"},
+                {"predecessor_uid": "22", "type": "1", "link_lag": "0"},
+            ],
+        )
+
+    def test_reader_rejects_changed_task_identity(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = _write_fixture(Path(directory) / "identity.xml")
+            tree = ET.parse(path)
+            root = tree.getroot()
+            task = next(
+                row for row in root.findall("p:Tasks/p:Task", NS)
+                if row.findtext("p:Name", namespaces=NS) == "RC02-A-I-MID"
+            )
+            uid = task.find("p:UID", NS)
+            assert uid is not None
+            uid.text = "600"
+            tree.write(path, encoding="utf-8", xml_declaration=True)
+            with self.assertRaisesRegex(SystemExit, "task identity"):
+                matrix.read(path)
+
+    def test_reader_rejects_changed_zero_lag_fs_topology(self):
+        for mutation in ("predecessor", "type", "lag", "removed"):
+            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as directory:
+                path = _write_fixture(Path(directory) / f"{mutation}.xml")
+                tree = ET.parse(path)
+                root = tree.getroot()
+                task = next(
+                    row for row in root.findall("p:Tasks/p:Task", NS)
+                    if row.findtext("p:Name", namespaces=NS) == "RC02-B-I-SUCC"
+                )
+                links = task.findall("p:PredecessorLink", NS)
+                assert links
+                if mutation == "removed":
+                    task.remove(links[0])
+                else:
+                    field = {
+                        "predecessor": "PredecessorUID",
+                        "type": "Type",
+                        "lag": "LinkLag",
+                    }[mutation]
+                    node = links[0].find(f"p:{field}", NS)
+                    assert node is not None
+                    node.text = {"predecessor": "999", "type": "2", "lag": "10"}[mutation]
+                tree.write(path, encoding="utf-8", xml_declaration=True)
+                with self.assertRaisesRegex(SystemExit, "zero-lag FS matrix relationships"):
+                    matrix.read(path)
 
     def test_classifier_distinguishes_three_supported_shapes(self):
         with tempfile.TemporaryDirectory() as directory:
