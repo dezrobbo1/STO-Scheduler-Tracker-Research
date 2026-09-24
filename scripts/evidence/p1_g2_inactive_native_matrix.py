@@ -220,6 +220,13 @@ def classify(rows: dict[str, dict[str, object]]) -> dict[str, object]:
             "direct_active_successor_gap": c_direct_gap,
             "original_inactive_edge_gap": c_inactive_edge_gap,
         },
+        "validated_topology": {
+            name: {
+                "uid": rows[name]["UID"],
+                "predecessor_links": rows[name]["predecessor_links"],
+            }
+            for name in sorted(EXPECTED)
+        },
         "observations": {
             name: rows[name]
             for name in (
