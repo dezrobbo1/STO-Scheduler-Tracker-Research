@@ -21,5 +21,8 @@ jobs:
             pyproject.toml
             uv.lock
             AGENTS.md
+            docs/evidence/p1-g2-baseline-root-causes-2026-09-22.json
+            docs/evidence/p1-g2-baseline-root-causes-2026-09-22.md
+            docs/goals/ACTIVE.md
           if-no-files-found: error
           retention-days: 1
