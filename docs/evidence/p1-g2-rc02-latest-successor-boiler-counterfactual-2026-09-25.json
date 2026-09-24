@@ -1,0 +1,329 @@
+{
+  "schema": "sto-p1-g2-rc02-latest-successor-boiler-counterfactual-v1",
+  "evidence_date": "2026-09-25",
+  "basis": {
+    "fresh_main": "d6ce148e6d3ff489d5173a99ebd2f0c4176de636",
+    "evidence_tool": {
+      "path": "scripts/evidence/p1_g2_rc02_latest_successor_boiler_counterfactual.py",
+      "bytes": 37963,
+      "sha256": "74ce2196c84645cbc1bdcf94d589b21bb9dc033114a04836033e5de586b30178"
+    },
+    "prior_counterfactual_tool": {
+      "path": "scripts/evidence/p1_g2_rc02_boiler_counterfactual.py",
+      "bytes": 26310,
+      "sha256": "bda6daa6cf1b741b661814738adf1c3f3a1c1139b024c4096ccf2571cc4e4696"
+    },
+    "production_source_digest": "22e8bf15ed5181067b8294a0f6cb6b1b46d1612c216e8d11985284f5759ecac5",
+    "production_source_digest_verified": true,
+    "baseline": {
+      "bytes": 3361935,
+      "sha256": "e9b9b7994cc5cc50479807b82c452da742a91de9f7de52b172a6be6f4f399c70"
+    },
+    "fixed_inventory": {
+      "bytes": 376346,
+      "sha256": "2408fc99f282e9c600d3821b3c926f7deafa8c05044c7fec9a5f08b2b656bf63",
+      "schema": "sto-p1-g2-baseline-root-causes-v3"
+    },
+    "native_fanout_result": {
+      "bytes": 34511,
+      "sha256": "4468a7a4fd922007d654cb1e78c4284d59044ce6b242c08a78b091635c6ec361",
+      "project_build": "16.0.20326.20140",
+      "forward_semantic": "ZERO_DURATION_FANOUT_FORWARD_PASSTHROUGH_SUPPORTED",
+      "backward_semantic": "LATEST_ACTIVE_SUCCESSOR_LATE_BOUNDARY_SUPPORTED",
+      "free_slack_observation": "SENTINEL_CHANGED_MATCHES_INACTIVE_EDGE_GAP",
+      "original_combined_authorization_passed": false
+    },
+    "prior_symmetric_counterfactual": {
+      "bytes": 12191,
+      "sha256": "3ba80ee3db6bd6a6a3be3349ed8621e23b5269fde86c3a789bb18d8d48292769",
+      "slots_after": 166,
+      "rc02_slots_after": 19
+    }
+  },
+  "scope": {
+    "kind": "diagnostic-only directional in-memory counterfactual",
+    "production_scheduler_changed": false,
+    "imported_schedule_changed": false,
+    "production_network_model_changed": false,
+    "forward_semantic": "all exact active->inactive->active zero-lag FS boundaries receive direct zero-lag forward splices",
+    "backward_semantic": "for each such inactive boundary, only the direct splice to the unique latest calculated active-successor LateStart participates in the predecessor backward bound",
+    "selection_guard": "candidate successor calculated LateStarts must already equal immutable BOILER source LateStarts before selection"
+  },
+  "transform": {
+    "full_forward_splice_count": 3,
+    "full_forward_splices": [
+      {
+        "active_predecessor_leaf_id": "L0055",
+        "inactive_leaf_id": "L0052",
+        "active_successor_leaf_id": "L0056"
+      },
+      {
+        "active_predecessor_leaf_id": "L0055",
+        "inactive_leaf_id": "L0052",
+        "active_successor_leaf_id": "L0060"
+      },
+      {
+        "active_predecessor_leaf_id": "L0400",
+        "inactive_leaf_id": "L0388",
+        "active_successor_leaf_id": "L0389"
+      }
+    ],
+    "latest_successor_selection": [
+      {
+        "active_predecessor_leaf_id": "L0055",
+        "inactive_leaf_id": "L0052",
+        "candidates": [
+          {
+            "successor_leaf_id": "L0056",
+            "calculated_late_start": "2026-09-17T05:00:00",
+            "source_late_start": "2026-09-17T05:00:00"
+          },
+          {
+            "successor_leaf_id": "L0060",
+            "calculated_late_start": "2026-09-17T08:30:00",
+            "source_late_start": "2026-09-17T08:30:00"
+          }
+        ],
+        "selected_latest_successor_leaf_id": "L0060"
+      },
+      {
+        "active_predecessor_leaf_id": "L0400",
+        "inactive_leaf_id": "L0388",
+        "candidates": [
+          {
+            "successor_leaf_id": "L0389",
+            "calculated_late_start": "2026-09-24T15:00:00",
+            "source_late_start": "2026-09-24T15:00:00"
+          }
+        ],
+        "selected_latest_successor_leaf_id": "L0389"
+      }
+    ],
+    "selected_backward_splices": [
+      {
+        "predecessor_leaf_id": "L0055",
+        "inactive_leaf_id": "L0052",
+        "successor_leaf_id": "L0060"
+      },
+      {
+        "predecessor_leaf_id": "L0400",
+        "inactive_leaf_id": "L0388",
+        "successor_leaf_id": "L0389"
+      }
+    ],
+    "dropped_backward_splice_count": 1,
+    "dropped_backward_splices": [
+      {
+        "predecessor_leaf_id": "L0055",
+        "inactive_leaf_id": "L0052",
+        "successor_leaf_id": "L0056"
+      }
+    ],
+    "free_slack_shape_check": {
+      "basis": "hash-verified BOILER source observations before diagnostic transform",
+      "all_equivalent": true,
+      "boundaries": [
+        {
+          "active_predecessor_leaf_id": "L0055",
+          "inactive_leaf_id": "L0052",
+          "active_successor_count": 2,
+          "source_predecessor_free_slack_seconds": 0,
+          "source_inactive_edge_gap_seconds": 0,
+          "source_direct_successor_gap_seconds_by_leaf": {
+            "L0056": 0,
+            "L0060": 0
+          },
+          "source_free_slack_matches_inactive_edge_gap": true,
+          "all_source_direct_successor_gaps_match_inactive_edge_gap": true,
+          "equivalent_for_this_boiler_boundary": true
+        },
+        {
+          "active_predecessor_leaf_id": "L0400",
+          "inactive_leaf_id": "L0388",
+          "active_successor_count": 1,
+          "source_predecessor_free_slack_seconds": 0,
+          "source_inactive_edge_gap_seconds": 0,
+          "source_direct_successor_gap_seconds_by_leaf": {
+            "L0389": 0
+          },
+          "source_free_slack_matches_inactive_edge_gap": true,
+          "all_source_direct_successor_gaps_match_inactive_edge_gap": true,
+          "equivalent_for_this_boiler_boundary": true
+        }
+      ]
+    },
+    "production_network_fingerprint": "3a14462949fe2b7ee8ffd6617bd51ee23731400345ef2005e0195a5bdbd44778",
+    "full_directional_network_fingerprint": "b4ab596a6da0e2f6ebcb730bb1818901adec4987a81c8d79851652213efb05fd",
+    "symmetric_backward_fingerprint": "eb1de6fc129333b3931f06b99b7798c792e5ac5f1e0bbb28678177d94bda0987",
+    "directional_backward_fingerprint": "7c2fdd3c1a034584224ee0d387810d067850024ff2d2d2e1d019225f6be88af1",
+    "unfiltered_wrapper_matches_production_backward": true
+  },
+  "inventory": {
+    "production": {
+      "slots": 422,
+      "leaves": 105,
+      "by_field": {
+        "critical": 2,
+        "early_finish": 67,
+        "early_start": 62,
+        "finish": 67,
+        "free_float": 16,
+        "late_finish": 33,
+        "late_start": 42,
+        "start": 62,
+        "total_float": 71
+      },
+      "by_group": {
+        "G2-RC01": 160,
+        "G2-RC02": 258,
+        "G2-RC03": 3,
+        "G2-RC04": 1
+      }
+    },
+    "symmetric_direct_splice": {
+      "slots": 166,
+      "leaves": 48,
+      "by_field": {
+        "critical": 2,
+        "early_finish": 27,
+        "early_start": 21,
+        "finish": 27,
+        "free_float": 7,
+        "late_finish": 15,
+        "late_start": 24,
+        "start": 21,
+        "total_float": 22
+      },
+      "by_group": {
+        "G2-RC01": 143,
+        "G2-RC02": 19,
+        "G2-RC03": 3,
+        "G2-RC04": 1
+      }
+    },
+    "latest_successor_directional": {
+      "slots": 147,
+      "leaves": 39,
+      "by_field": {
+        "critical": 2,
+        "early_finish": 27,
+        "early_start": 21,
+        "finish": 27,
+        "free_float": 7,
+        "late_finish": 6,
+        "late_start": 15,
+        "start": 21,
+        "total_float": 21
+      },
+      "by_group": {
+        "G2-RC01": 143,
+        "G2-RC03": 3,
+        "G2-RC04": 1
+      }
+    },
+    "closed_from_production": 275,
+    "closed_from_prior_symmetric": 19,
+    "new_slots": 0
+  },
+  "movement_by_original_group": {
+    "G2-RC01": {
+      "closed": 17,
+      "improved": 11,
+      "unchanged": 132
+    },
+    "G2-RC02": {
+      "closed": 258
+    },
+    "G2-RC03": {
+      "unchanged": 3
+    },
+    "G2-RC04": {
+      "improved": 1
+    }
+  },
+  "rc02": {
+    "slots_before": 258,
+    "slots_after_symmetric": 19,
+    "slots_after_latest_successor": 0,
+    "closed_slots_from_production": 258,
+    "root_outcomes": [
+      {
+        "leaf_id": "L0055",
+        "first_divergence_fields_before": [
+          "free_float",
+          "late_finish",
+          "late_start"
+        ],
+        "remaining_first_divergence_fields": [],
+        "status": "CLOSED"
+      },
+      {
+        "leaf_id": "L0056",
+        "first_divergence_fields_before": [
+          "early_finish",
+          "early_start",
+          "finish",
+          "start"
+        ],
+        "remaining_first_divergence_fields": [],
+        "status": "CLOSED"
+      },
+      {
+        "leaf_id": "L0060",
+        "first_divergence_fields_before": [
+          "early_finish",
+          "early_start",
+          "finish",
+          "start"
+        ],
+        "remaining_first_divergence_fields": [],
+        "status": "CLOSED"
+      },
+      {
+        "leaf_id": "L0389",
+        "first_divergence_fields_before": [
+          "early_finish",
+          "early_start",
+          "finish",
+          "start"
+        ],
+        "remaining_first_divergence_fields": [],
+        "status": "CLOSED"
+      },
+      {
+        "leaf_id": "L0400",
+        "first_divergence_fields_before": [
+          "free_float"
+        ],
+        "remaining_first_divergence_fields": [],
+        "status": "CLOSED"
+      }
+    ],
+    "exact_prior_19_slot_residue_closed": true
+  },
+  "acceptance": {
+    "fixed_422_inventory_reproduced": true,
+    "native_latest_successor_basis_verified": true,
+    "prior_166_slot_symmetric_stage_reproduced": true,
+    "prior_19_slot_rc02_residue_reproduced": true,
+    "exact_symmetric_stage_transition": true,
+    "selection_late_starts_source_aligned": true,
+    "unfiltered_wrapper_matches_production_backward": true,
+    "no_new_mismatch_slots": true,
+    "no_other_family_worsened": true,
+    "all_rc02_first_divergence_roots_closed": true,
+    "all_rc02_slots_closed": true,
+    "all_rc02_paths_non_worsening": true,
+    "exact_prior_19_slot_residue_closed": true,
+    "counterfactual_success": true
+  },
+  "decision": {
+    "classification": "RC02_LATEST_SUCCESSOR_COUNTERFACTUAL_SUPPORTED",
+    "separate_bounded_production_rc02_correction_pr_authorized": true,
+    "production_scheduler_changed": false,
+    "p1_g2_closed": false,
+    "p1_gate": "4/5 IN PROGRESS",
+    "p2_started": false,
+    "next_step": "separate bounded production RC02 semantic correction PR; implement only the measured directional inactive-boundary rule, then rerun the exact 422-slot BOILER inventory and the real-file forward/backward/conformance cohorts"
+  }
+}

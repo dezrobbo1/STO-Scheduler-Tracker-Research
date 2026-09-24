@@ -344,14 +344,20 @@ fan-out forward date pass-through is reproduced, each inactive predecessor Late
 Finish matches the **latest** of its two active-successor Late Starts across all
 three deliberately reversed pairs, and the Pair C Free-Slack sentinel changes
 from `12345` to `0`, matching the inactive-edge gap rather than either direct
-successor gap. The predeclared combined authorization still fails because the
-active/inactive predecessor Late-Finish deltas are `72000`, `72000` and
-`43200` MSPDI units rather than the required `28800` in all three pairs.
-Accordingly this experiment does not authorize the BOILER rerun or any production
-RC02 correction. A separate task may predeclare a new diagnostic hypothesis
-around the newly observed latest-successor boundary; it must not reinterpret this
-experiment's stopping rule after the fact. P1-G2 remains open, P1 remains 4/5 and
-P2 remains not started.
+successor gap. That experiment's own combined authorization remained false and
+has not been reinterpreted.
+
+A separate latest-successor BOILER diagnostic is now recorded at
+`docs/evidence/p1-g2-rc02-latest-successor-boiler-counterfactual-2026-09-25.md`.
+Its transform and acceptance rule were committed before execution. It reproduces
+the 422-slot production inventory and the prior 166-slot / 19-RC02 symmetric
+stage, then applies the measured directional fan-out rule. The result is
+**147 total mismatches across 39 leaves and zero RC02 mismatches**: all 258 RC02
+slots and all five RC02 first-divergence roots close, with zero new mismatch
+slots and no worsening outside RC02. The remaining inventory is 143 RC01 slots,
+3 RC03 slots and 1 RC04 slot. This authorizes a separate bounded production RC02
+correction PR only; production is not changed by the evidence PR, P1-G2 remains
+open, P1 remains 4/5 and P2 remains not started.
 
 P2 order and ownership, maintained from `docs/goals/roadmap.json`:
 
