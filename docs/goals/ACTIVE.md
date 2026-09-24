@@ -347,17 +347,26 @@ from `12345` to `0`, matching the inactive-edge gap rather than either direct
 successor gap. That experiment's own combined authorization remained false and
 has not been reinterpreted.
 
-A separate latest-successor BOILER diagnostic is now recorded at
+A separate latest-successor BOILER diagnostic is recorded at
 `docs/evidence/p1-g2-rc02-latest-successor-boiler-counterfactual-2026-09-25.md`.
-Its transform and acceptance rule were committed before execution. It reproduces
-the 422-slot production inventory and the prior 166-slot / 19-RC02 symmetric
-stage, then applies the measured directional fan-out rule. The result is
-**147 total mismatches across 39 leaves and zero RC02 mismatches**: all 258 RC02
-slots and all five RC02 first-divergence roots close, with zero new mismatch
-slots and no worsening outside RC02. The remaining inventory is 143 RC01 slots,
-3 RC03 slots and 1 RC04 slot. This authorizes a separate bounded production RC02
-correction PR only; production is not changed by the evidence PR, P1-G2 remains
-open, P1 remains 4/5 and P2 remains not started.
+Its transform and acceptance rule were committed before execution and it closed
+all 258 RC02 slots diagnostically with no new mismatch slots or worsening outside
+RC02.
+
+The authorized bounded production correction is now verified in
+`docs/evidence/p1-g2-rc02-production-correction-2026-09-25.md`. Production
+represents only the measured ordinary zero-lag-FS inactive-boundary subset:
+all supported active successors bind forward, the unique latest active-successor
+late boundary binds backward, and Free Slack retains the measured inactive-edge
+reporting boundary. Unsupported shapes remain explicitly labelled. The exact
+post-correction BOILER production projection and remaining key set match the
+supported counterfactual byte-for-byte by digest: **422 -> 147 mismatch slots,
+105 -> 39 affected leaves, and RC02 258 -> 0**. The remaining inventory is
+143 RC01 slots, 3 RC03 slots and 1 RC04 slot. BOILER, KILN and CALCINER retain
+clean validator results under the corrected profiles. RC02 is therefore closed
+in production for the bounded measured semantic, but P1-G2 remains open, P1
+remains 4/5 and P2 remains not started. The next root-cause review begins from
+the 147-slot post-correction inventory, with RC01 the dominant remaining family.
 
 P2 order and ownership, maintained from `docs/goals/roadmap.json`:
 

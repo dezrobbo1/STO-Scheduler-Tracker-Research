@@ -147,7 +147,7 @@ class Rc02BoilerCounterfactualTests(unittest.TestCase):
                 text=True,
             )
             self.assertNotEqual(result.returncode, 0)
-            self.assertIn("fixture identity mismatch", result.stderr)
+            self.assertIn("production source basis changed", result.stderr)
 
     def test_external_baseline_reproduces_committed_record(self):
         value = os.environ.get("STO_RC02_BOILER_BASELINE")

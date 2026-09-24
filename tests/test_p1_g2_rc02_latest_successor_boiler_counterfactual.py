@@ -177,7 +177,7 @@ class LatestSuccessorBoilerCounterfactualTests(unittest.TestCase):
                 text=True,
             )
             self.assertNotEqual(result.returncode, 0)
-            self.assertIn("fixture identity mismatch", result.stderr)
+            self.assertIn("production source basis changed", result.stderr)
 
     def test_cli_refuses_output_aliases_before_reading_fixture(self):
         with tempfile.TemporaryDirectory() as directory:
