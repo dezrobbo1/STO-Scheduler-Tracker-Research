@@ -155,6 +155,51 @@ def read_prior_counterfactual() -> dict[str, object]:
     return record
 
 
+def _expected_prior_rc02_keys(prior: dict[str, object]) -> frozenset[tuple[str, str]]:
+    rows = prior.get("rc02", {}).get("remaining_slots")
+    if not isinstance(rows, list):
+        raise LatestSuccessorCounterfactualError("prior counterfactual RC02 rows are missing")
+    expected_count = prior.get("rc02", {}).get("slots_after")
+    if expected_count != 19 or len(rows) != expected_count:
+        raise LatestSuccessorCounterfactualError("prior counterfactual RC02 row count changed")
+    keys: list[tuple[str, str]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            raise LatestSuccessorCounterfactualError("prior counterfactual RC02 row is invalid")
+        leaf_id, field = row.get("leaf_id"), row.get("field")
+        if not isinstance(leaf_id, str) or not isinstance(field, str):
+            raise LatestSuccessorCounterfactualError("prior counterfactual RC02 key is invalid")
+        keys.append((leaf_id, field))
+    expected = frozenset(keys)
+    if len(expected) != len(keys):
+        raise LatestSuccessorCounterfactualError("prior counterfactual RC02 keys are duplicated")
+    return expected
+
+
+def _require_exact_prior_rc02_residue(
+    actual: set[tuple[str, str]] | frozenset[tuple[str, str]],
+    prior: dict[str, object],
+) -> frozenset[tuple[str, str]]:
+    expected = _expected_prior_rc02_keys(prior)
+    if frozenset(actual) != expected:
+        raise LatestSuccessorCounterfactualError(
+            "symmetric RC02 key set does not reproduce the exact prior 19-slot residue"
+        )
+    return expected
+
+
+def _require_exact_symmetric_to_directional_transition(
+    symmetric_keys: set[tuple[str, str]],
+    directional_keys: set[tuple[str, str]],
+    expected_prior_rc02: frozenset[tuple[str, str]],
+) -> None:
+    expected_directional = symmetric_keys - set(expected_prior_rc02)
+    if directional_keys != expected_directional:
+        raise LatestSuccessorCounterfactualError(
+            "directional stage changed slots outside the exact prior RC02 residue"
+        )
+
+
 def _directional_backward_pass(
     network,
     forward,
@@ -539,18 +584,16 @@ def build_record(baseline_path: Path) -> dict[str, object]:
     )
     symmetric_engine = baseline_diag._engine(schedule, symmetric_rows)
     symmetric_keys = prior_cf._mismatch_keys(observed, symmetric_engine, leaf_by_source)
-    if len(symmetric_keys) != prior["inventory"]["after"]["slots"]:
+    symmetric_summary = _inventory_summary(symmetric_keys, fixed_by_key)
+    if symmetric_summary != prior["inventory"]["after"]:
         raise LatestSuccessorCounterfactualError(
-            "symmetric direct-splice stage no longer reproduces the prior counterfactual"
+            "symmetric direct-splice stage no longer reproduces the prior counterfactual summary"
         )
     symmetric_rc02 = {
         key for key in symmetric_keys
         if fixed_by_key[key]["diagnostic_group"] == baseline_diag.INACTIVE_BOUNDARY
     }
-    if len(symmetric_rc02) != prior["rc02"]["slots_after"]:
-        raise LatestSuccessorCounterfactualError(
-            "symmetric RC02 residue no longer reproduces the prior counterfactual"
-        )
+    expected_prior_rc02 = _require_exact_prior_rc02_residue(symmetric_rc02, prior)
 
     selected_relationships, dropped_backward, selection = _select_latest_successor(
         schedule,
@@ -597,6 +640,9 @@ def build_record(baseline_path: Path) -> dict[str, object]:
         raise LatestSuccessorCounterfactualError(
             "latest-successor diagnostic introduced mismatches outside the fixed 422-slot inventory"
         )
+    _require_exact_symmetric_to_directional_transition(
+        symmetric_keys, directional_keys, expected_prior_rc02
+    )
 
     status_by_group: dict[str, Counter] = {}
     for key in sorted(fixed_keys):
@@ -653,7 +699,8 @@ def build_record(baseline_path: Path) -> dict[str, object]:
     all_roots_closed = all(row["status"] == "CLOSED" for row in root_outcomes)
     all_rc02_closed = not rc02_keys
     rc02_has_worsening = status_by_group[baseline_diag.INACTIVE_BOUNDARY].get("worsened", 0) > 0
-    exact_prior_residue_closed = symmetric_keys - directional_keys == symmetric_rc02
+    exact_prior_residue_closed = symmetric_keys - directional_keys == set(expected_prior_rc02)
+    exact_symmetric_stage_transition = directional_keys == symmetric_keys - set(expected_prior_rc02)
     diagnostic_pass = (
         all_roots_closed
         and all_rc02_closed
@@ -661,6 +708,7 @@ def build_record(baseline_path: Path) -> dict[str, object]:
         and other_worsened == 0
         and not new_keys
         and exact_prior_residue_closed
+        and exact_symmetric_stage_transition
     )
 
     selected_tuples = [
@@ -765,8 +813,9 @@ def build_record(baseline_path: Path) -> dict[str, object]:
         "acceptance": {
             "fixed_422_inventory_reproduced": production_keys == fixed_keys,
             "native_latest_successor_basis_verified": True,
-            "prior_166_slot_symmetric_stage_reproduced": len(symmetric_keys) == 166,
-            "prior_19_slot_rc02_residue_reproduced": len(symmetric_rc02) == 19,
+            "prior_166_slot_symmetric_stage_reproduced": symmetric_summary == prior["inventory"]["after"],
+            "prior_19_slot_rc02_residue_reproduced": frozenset(symmetric_rc02) == expected_prior_rc02,
+            "exact_symmetric_stage_transition": exact_symmetric_stage_transition,
             "selection_late_starts_source_aligned": True,
             "unfiltered_wrapper_matches_production_backward": True,
             "no_new_mismatch_slots": not new_keys,

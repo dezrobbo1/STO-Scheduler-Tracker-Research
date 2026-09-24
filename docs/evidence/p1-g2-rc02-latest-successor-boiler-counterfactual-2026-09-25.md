@@ -120,6 +120,29 @@ PYTHONPATH=src:. python3 \
 
 The tool refuses output/check paths that alias the private baseline.
 
+## Review correction — exact stage-transition integrity
+
+A Codex-style review found two false-pass paths in the first result recorder:
+matching only the prior symmetric stage's **counts** could accept a different
+19-slot RC02 residue, and comparing the directional stage only with production
+could allow a non-RC02 slot closed by the symmetric stage to reopen unnoticed.
+
+The corrected analyzer now fails closed unless:
+
+- the symmetric RC02 key set exactly equals the 19 retained `(leaf_id, field)`
+  rows in the hash-pinned prior counterfactual;
+- the complete symmetric stage summary (slots, leaves, fields and groups) exactly
+  matches that prior record; and
+- the directional key set equals **exactly** the symmetric key set minus those
+  19 RC02 keys.
+
+Regression tests swap one RC02 key while preserving the count and reopen one
+synthetic non-RC02 symmetric-closed key; both are refused. The corrected tool was
+rerun against the same hash-pinned BOILER baseline, reproduced the same 147 / 0
+RC02 measured result, and regenerated the committed result record. This hardening
+does not change the predeclared transform or broaden its acceptance criteria; it
+only makes the documented exact-stage claims mechanically enforceable.
+
 ## Measured result
 
 The transform and acceptance rule were first committed at `4097d27efb723fc0c460bf0dd490687f70ea2bd0`.

@@ -65,7 +65,36 @@ class LatestSuccessorBoilerCounterfactualTests(unittest.TestCase):
         self.assertEqual(record["inventory"]["after"]["slots"], 166)
         self.assertEqual(record["rc02"]["slots_before"], 258)
         self.assertEqual(record["rc02"]["slots_after"], 19)
+        self.assertEqual(len(latest._expected_prior_rc02_keys(record)), 19)
         self.assertFalse(record["acceptance"]["counterfactual_success"])
+
+    def test_same_count_different_rc02_residue_fails_closed(self):
+        prior = latest.read_prior_counterfactual()
+        expected = set(latest._expected_prior_rc02_keys(prior))
+        wrong = set(expected)
+        wrong.remove(sorted(wrong)[0])
+        wrong.add(("L0056", "early_start"))
+        self.assertEqual(len(wrong), len(expected))
+        with self.assertRaisesRegex(
+            latest.LatestSuccessorCounterfactualError,
+            "exact prior 19-slot residue",
+        ):
+            latest._require_exact_prior_rc02_residue(wrong, prior)
+
+    def test_reopened_non_rc02_symmetric_slot_fails_closed(self):
+        prior = latest.read_prior_counterfactual()
+        expected_rc02 = latest._expected_prior_rc02_keys(prior)
+        retained_non_rc02 = ("L9998", "late_start")
+        reopened_non_rc02 = ("L9999", "late_start")
+        symmetric = set(expected_rc02) | {retained_non_rc02}
+        directional = {retained_non_rc02, reopened_non_rc02}
+        with self.assertRaisesRegex(
+            latest.LatestSuccessorCounterfactualError,
+            "outside the exact prior RC02 residue",
+        ):
+            latest._require_exact_symmetric_to_directional_transition(
+                symmetric, directional, expected_rc02
+            )
 
     def test_committed_result_is_exact_bounded_success(self):
         record = json.loads(RESULT.read_text(encoding="utf-8"))
@@ -92,6 +121,9 @@ class LatestSuccessorBoilerCounterfactualTests(unittest.TestCase):
             {"closed": 17, "improved": 11, "unchanged": 132},
         )
         self.assertTrue(record["acceptance"]["counterfactual_success"])
+        self.assertTrue(record["acceptance"]["prior_166_slot_symmetric_stage_reproduced"])
+        self.assertTrue(record["acceptance"]["prior_19_slot_rc02_residue_reproduced"])
+        self.assertTrue(record["acceptance"]["exact_symmetric_stage_transition"])
         self.assertTrue(record["acceptance"]["all_rc02_slots_closed"])
         self.assertTrue(record["acceptance"]["no_other_family_worsened"])
         self.assertEqual(

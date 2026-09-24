@@ -5,8 +5,8 @@
     "fresh_main": "d6ce148e6d3ff489d5173a99ebd2f0c4176de636",
     "evidence_tool": {
       "path": "scripts/evidence/p1_g2_rc02_latest_successor_boiler_counterfactual.py",
-      "bytes": 35578,
-      "sha256": "9d2ec79013c1f99a44eae2469feaa509f2a8b55c11602ef3771c2f44898f8209"
+      "bytes": 37963,
+      "sha256": "74ce2196c84645cbc1bdcf94d589b21bb9dc033114a04836033e5de586b30178"
     },
     "prior_counterfactual_tool": {
       "path": "scripts/evidence/p1_g2_rc02_boiler_counterfactual.py",
@@ -306,6 +306,7 @@
     "native_latest_successor_basis_verified": true,
     "prior_166_slot_symmetric_stage_reproduced": true,
     "prior_19_slot_rc02_residue_reproduced": true,
+    "exact_symmetric_stage_transition": true,
     "selection_late_starts_source_aligned": true,
     "unfiltered_wrapper_matches_production_backward": true,
     "no_new_mismatch_slots": true,
