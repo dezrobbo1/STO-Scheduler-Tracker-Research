@@ -328,18 +328,22 @@ records the communication boundaries and
 `docs/history/2026-09-20-field-communication-roadmap.md` the review decision.
 
 The `G2-RC02` native matrix, Free-Slack sentinel and exact BOILER
-counterfactual are now recorded in
+counterfactual are recorded in
 `docs/evidence/p1-g2-rc02-inactive-native-matrix-2026-09-24.md` and
 `docs/evidence/p1-g2-rc02-boiler-counterfactual-2026-09-24.md`. The BOILER
 counterfactual closes 239 of 258 RC02 slots and four of five RC02 first-divergence
 roots with no new mismatch slots and no worsening outside RC02, but it does not
 pass: 19 RC02 slots remain and four RC02 late-date slots worsen. Every remaining
 RC02 dependency path roots at the active predecessor of one inactive row that
-fans out to two active successors, a backward shape the native matrix did not
-measure. Before any P2 work or production correction, the next bounded step is
-a native inactive-fan-out experiment with deliberately distinct successor late
-boundaries and a Free-Slack sentinel. P1-G2 remains open and no production RC02
-correction is authorized.
+fans out to two active successors.
+
+The bounded native follow-up for that exact missing dimension is prepared at
+`docs/evidence/p1-g2-rc02-inactive-fanout-native-2026-09-25.md`. Its deterministic
+31-task synthetic input has distinct successor late boundaries, a BOILER-shaped
+mixed fan-out control and a non-zero Free-Slack sentinel. The repository is now
+**awaiting the owner-supplied Microsoft Project XML return** from that pinned
+input. Before that return is analyzed, P1-G2 remains open, P1 remains 4/5, P2 is
+not started and no production RC02 correction is authorized.
 
 P2 order and ownership, maintained from `docs/goals/roadmap.json`:
 
