@@ -1,6 +1,7 @@
 """Tests for the bounded P1-G2 RC02 inactive native matrix tooling."""
 from __future__ import annotations
 
+from datetime import datetime
 import tempfile
 from pathlib import Path
 import unittest
@@ -36,11 +37,36 @@ def _mutated_fixture(verdict: str, target: Path) -> Path:
         assert node is not None
         node.text = text
 
-    if verdict == "splice":
+    def slack_units(start: str, finish: str) -> str:
+        seconds = (datetime.fromisoformat(finish) - datetime.fromisoformat(start)).total_seconds()
+        return str(int(seconds / 6))
+
+    for pair in ("A", "B", "C"):
+        set_value(
+            f"RC02-{pair}-I-PRED", "LateFinish",
+            value(f"RC02-{pair}-I-SUCC", "LateStart"),
+        )
+
+    if verdict in {"splice", "mixed"}:
         set_value("RC02-A-I-SUCC", "Start", value("RC02-A-I-PRED", "Finish"))
         set_value("RC02-B-I-SUCC", "Start", value("RC02-B-I-PRED", "Finish"))
-        set_value("RC02-C-I-PRED", "FreeSlack", "100")
-        set_value("RC02-C-I-PRED", "TotalSlack", "900")
+        if verdict == "splice":
+            set_value(
+                "RC02-C-I-PRED", "FreeSlack",
+                slack_units(
+                    value("RC02-C-I-PRED", "EarlyFinish"),
+                    value("RC02-C-I-SUCC", "EarlyStart"),
+                ),
+            )
+        else:
+            set_value(
+                "RC02-C-I-PRED", "FreeSlack",
+                slack_units(
+                    value("RC02-C-I-PRED", "EarlyFinish"),
+                    value("RC02-C-I-MID", "EarlyStart"),
+                ),
+            )
+        set_value("RC02-C-I-PRED", "TotalSlack", "115200")
     elif verdict == "drop":
         project_start = root.findtext("p:StartDate", namespaces=NS)
         assert project_start is not None
@@ -48,6 +74,7 @@ def _mutated_fixture(verdict: str, target: Path) -> Path:
         set_value("RC02-B-I-SUCC", "Start", value("RC02-B-I-OTHER", "Finish"))
         set_value("RC02-C-I-PRED", "FreeSlack", "900")
         set_value("RC02-C-I-PRED", "TotalSlack", "900")
+        set_value("RC02-C-I-PRED", "LateFinish", value("RC02-FINISH-DRIVER", "Finish"))
     else:
         raise AssertionError(verdict)
     tree.write(target, encoding="utf-8", xml_declaration=True)
@@ -72,11 +99,12 @@ class Rc02NativeMatrixTests(unittest.TestCase):
         self.assertEqual(rows["RC02-B-I-SUCC"]["predecessor_uids"], ["13", "14"])
         self.assertEqual(rows["RC02-C-I-SUCC"]["predecessor_uids"], ["21", "22"])
 
-    def test_classifier_distinguishes_direct_splice_and_drop(self):
+    def test_classifier_distinguishes_three_supported_shapes(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             for fixture_verdict, expected in (
                 ("splice", "DIRECT_ZERO_LAG_FS_SPLICE_SUPPORTED"),
+                ("mixed", "ZERO_DURATION_DATE_PASSTHROUGH_WITH_INACTIVE_EDGE_FREE_SLACK"),
                 ("drop", "DROP_BOTH_ENDPOINT_EDGES_SUPPORTED"),
             ):
                 with self.subTest(fixture_verdict=fixture_verdict):
@@ -84,9 +112,31 @@ class Rc02NativeMatrixTests(unittest.TestCase):
                     _, rows = matrix.read(path)
                     self.assertEqual(matrix.classify(rows)["verdict"], expected)
 
-    def test_mixed_observations_do_not_establish_a_rule(self):
+    def test_mixed_native_shape_separates_dates_from_free_slack(self):
         with tempfile.TemporaryDirectory() as directory:
-            path = _mutated_fixture("splice", Path(directory) / "mixed.xml")
+            path = _mutated_fixture("mixed", Path(directory) / "mixed.xml")
+            _, rows = matrix.read(path)
+            result = matrix.classify(rows)
+        self.assertEqual(
+            result["components"],
+            {
+                "date_semantic": "ZERO_DURATION_FS_PASSTHROUGH_SUPPORTED",
+                "free_slack_semantic": "ORIGINAL_INACTIVE_EDGE_BOUND_SUPPORTED",
+            },
+        )
+        self.assertEqual(
+            result["pair_c_slack_units"],
+            {
+                "observed_free_slack": 0,
+                "total_slack": 115200,
+                "direct_active_successor_gap": 43200,
+                "original_inactive_edge_gap": 0,
+            },
+        )
+
+    def test_inconsistent_observations_do_not_establish_a_rule(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = _mutated_fixture("splice", Path(directory) / "inconsistent.xml")
             tree = ET.parse(path)
             root = tree.getroot()
             tasks = {
