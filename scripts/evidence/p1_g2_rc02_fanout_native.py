@@ -269,6 +269,21 @@ def control_checks(rows: dict[str, dict[str, object]]) -> dict[str, bool]:
     checks["pair_a_late_discriminator"] = at("RC02-FO-A-A-S1", "LateStart") < at("RC02-FO-A-A-S2", "LateStart")
     checks["pair_b_late_discriminator"] = at("RC02-FO-B-A-S2", "LateStart") < at("RC02-FO-B-A-S1", "LateStart")
     checks["pair_c_late_discriminator"] = at("RC02-FO-C-A-S2", "LateStart") < at("RC02-FO-C-A-S1", "LateStart")
+
+    # The inactive successors are the discriminator under test. Require their
+    # terminal late boundaries to stay distinct in the same deliberately
+    # reversed pattern as the controls; otherwise "earliest" and "latest" can
+    # collapse to the same coordinate and falsely look like a proven rule.
+    for pair in "ABC":
+        p = f"RC02-FO-{pair}-I-"
+        s1, s2 = p + "S1", p + "S2"
+        checks[f"pair_{pair.lower()}_inactive_successors_terminal"] = (
+            at(s1, "LateFinish") == project_finish
+            and at(s2, "LateFinish") == project_finish
+        )
+    checks["pair_a_inactive_late_discriminator"] = at("RC02-FO-A-I-S1", "LateStart") < at("RC02-FO-A-I-S2", "LateStart")
+    checks["pair_b_inactive_late_discriminator"] = at("RC02-FO-B-I-S2", "LateStart") < at("RC02-FO-B-I-S1", "LateStart")
+    checks["pair_c_inactive_late_discriminator"] = at("RC02-FO-C-I-S2", "LateStart") < at("RC02-FO-C-I-S1", "LateStart")
     return checks
 
 

@@ -184,6 +184,29 @@ class Rc02FanoutNativeTests(unittest.TestCase):
         self.assertEqual(result["components"]["free_slack_observation"], "SENTINEL_RETAINED_NOT_ESTABLISHED")
         self.assertFalse(result["decision"]["boiler_counterfactual_rerun_authorized"])
 
+
+    def test_collapsed_inactive_late_boundaries_fail_closed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = _calculated_fixture(Path(directory) / "collapsed.xml")
+            tree = ET.parse(path)
+            tasks = {
+                task.findtext("p:Name", namespaces=NS): task
+                for task in tree.getroot().findall("p:Tasks/p:Task", NS)
+            }
+            for field, value in (
+                ("LateStart", "2026-10-22T08:00:00"),
+                ("LateFinish", "2026-10-23T08:00:00"),
+            ):
+                node = tasks["RC02-FO-B-I-S1"].find(f"p:{field}", NS)
+                assert node is not None
+                node.text = value
+            tree.write(path, encoding="utf-8", xml_declaration=True)
+            _, rows = fanout.read(path)
+            result = fanout.classify(rows)
+        self.assertFalse(result["controls"]["valid"])
+        self.assertEqual(result["verdict"], "FANOUT_NATIVE_RULE_NOT_ESTABLISHED")
+        self.assertFalse(result["decision"]["boiler_counterfactual_rerun_authorized"])
+
     def test_unrecalculated_input_does_not_establish_rule(self):
         record = fanout.analyze(generate.build_fixture(), owner_confirmed_opened_input=True)
         self.assertFalse(record["classification"]["controls"]["valid"])
