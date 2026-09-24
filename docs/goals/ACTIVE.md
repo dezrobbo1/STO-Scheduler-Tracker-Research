@@ -328,18 +328,30 @@ records the communication boundaries and
 `docs/history/2026-09-20-field-communication-roadmap.md` the review decision.
 
 The `G2-RC02` native matrix, Free-Slack sentinel and exact BOILER
-counterfactual are now recorded in
+counterfactual are recorded in
 `docs/evidence/p1-g2-rc02-inactive-native-matrix-2026-09-24.md` and
 `docs/evidence/p1-g2-rc02-boiler-counterfactual-2026-09-24.md`. The BOILER
 counterfactual closes 239 of 258 RC02 slots and four of five RC02 first-divergence
 roots with no new mismatch slots and no worsening outside RC02, but it does not
 pass: 19 RC02 slots remain and four RC02 late-date slots worsen. Every remaining
 RC02 dependency path roots at the active predecessor of one inactive row that
-fans out to two active successors, a backward shape the native matrix did not
-measure. Before any P2 work or production correction, the next bounded step is
-a native inactive-fan-out experiment with deliberately distinct successor late
-boundaries and a Free-Slack sentinel. P1-G2 remains open and no production RC02
-correction is authorized.
+fans out to two active successors.
+
+The bounded native follow-up for that exact missing dimension is recorded at
+`docs/evidence/p1-g2-rc02-inactive-fanout-native-2026-09-25.md`. The owner-
+supplied Microsoft Project build `16.0.20326.20140` return passes all controls:
+fan-out forward date pass-through is reproduced, each inactive predecessor Late
+Finish matches the **latest** of its two active-successor Late Starts across all
+three deliberately reversed pairs, and the Pair C Free-Slack sentinel changes
+from `12345` to `0`, matching the inactive-edge gap rather than either direct
+successor gap. The predeclared combined authorization still fails because the
+active/inactive predecessor Late-Finish deltas are `72000`, `72000` and
+`43200` MSPDI units rather than the required `28800` in all three pairs.
+Accordingly this experiment does not authorize the BOILER rerun or any production
+RC02 correction. A separate task may predeclare a new diagnostic hypothesis
+around the newly observed latest-successor boundary; it must not reinterpret this
+experiment's stopping rule after the fact. P1-G2 remains open, P1 remains 4/5 and
+P2 remains not started.
 
 P2 order and ownership, maintained from `docs/goals/roadmap.json`:
 
