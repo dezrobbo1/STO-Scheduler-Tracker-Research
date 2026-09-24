@@ -1,6 +1,6 @@
 # P1-G2 RC02 inactive-activity native matrix — 2026-09-24
 
-Status: **NATIVE EXPERIMENT COMPLETE — bounded zero-lag FS semantics measured**
+Status: **NATIVE EXPERIMENT COMPLETE — date semantics measured; Free-Slack observation bounded by paired sentinel evidence**
 
 This is a bounded causal experiment for `G2-RC02`. It changes no scheduler,
 importer, canonical model, API, UI, gate or mismatch classification.
@@ -20,9 +20,12 @@ across an inactive row for:
 - active-predecessor late placement; and
 - active-predecessor Free Slack.
 
-The native result establishes a bounded composite semantic for the tested
-zero-lag FS shape. It does not establish a general rule for other relationship
-types, lags, calendars, constraints, progress or consecutive inactive rows.
+The original native result establishes the bounded date-pass-through semantic
+for the tested zero-lag FS shape. Its zero Free-Slack value is an observation,
+not by itself proof of how Project obtained that value. The later one-field
+sentinel run rules out unchanged imported-value retention on its tested build.
+Neither run establishes a general rule for other relationship types, lags,
+calendars, constraints, progress or consecutive inactive rows.
 
 ## Synthetic matrix
 
@@ -51,10 +54,11 @@ comparisons do not depend on which experimental chain finishes last.
 
 This last distinction matters. The first analyzer version treated any
 Free-Slack influence below Total Slack as sufficient proof of a direct splice.
-The returned native values show that was too broad: Pair C retains a zero
-Free-Slack boundary to the inactive middle row even though forward and late
-dates pass through its duration. The classifier was corrected before the
-experiment conclusion was recorded.
+The returned native values showed that was too broad: Pair C Free Slack is
+zero, matching the gap to the inactive middle row rather than the gap to the
+active successor. Because that input also seeded zero, the original return alone
+could not prove whether Project recalculated the field. The classifier now
+records that result as an observational gap match rather than causal support.
 
 ## Native execution
 
@@ -78,7 +82,7 @@ python3 scripts/evidence/p1_g2_inactive_native_matrix.py "$STO_RC02_NATIVE_RETUR
 ```
 
 The committed JSON is now the exact UTF-8 analyzer output under schema
-`sto-p1-g2-rc02-native-matrix-v3`, not a manually reshaped result. Its
+`sto-p1-g2-rc02-native-matrix-v4`, not a manually reshaped result. Its
 `native_return` size and SHA-256 are computed from the same bytes parsed by the
 analyzer. Build and project coordinates are read from that return. The input
 identity, repository basis and gate decisions are separately sourced context
@@ -120,7 +124,7 @@ STO_REQUIRE_RC02_NATIVE=1 STO_RC02_NATIVE_RETURN="/path/to/native-return.xml" PY
 
 Verdict:
 
-`ZERO_DURATION_DATE_PASSTHROUGH_WITH_INACTIVE_EDGE_FREE_SLACK`
+`ZERO_DURATION_DATE_PASSTHROUGH_WITH_FREE_SLACK_MATCHING_INACTIVE_EDGE_GAP`
 
 The result separates two measured components. The native return retained the
 complete generated relationship graph unchanged: every expected predecessor
@@ -190,7 +194,25 @@ bounded to the tested zero-lag FS shape and the two observed builds.
 Sanitized sentinel evidence:
 `docs/evidence/p1-g2-rc02-free-slack-sentinel-result-2026-09-24.json`.
 
-### Free-Slack semantic — original inactive edge bound supported
+The sentinel input and returned evidence now have a deterministic repository
+path. Generate the exact 48,326-byte input with:
+
+```bash
+python3 scripts/evidence/p1_g2_inactive_native_matrix_generate.py /tmp/P1-G2-RC02-Free-Slack-Sentinel-INPUT.xml --free-slack-sentinel
+```
+
+Verify the owner-confirmed return without rewriting it with:
+
+```bash
+python3 scripts/evidence/p1_g2_free_slack_sentinel.py "$STO_RC02_SENTINEL_RETURN" --confirm-opened-sentinel --check docs/evidence/p1-g2-rc02-free-slack-sentinel-result-2026-09-24.json
+```
+
+The verifier records the owner confirmation separately and explicitly states
+that the return hash alone cannot prove which input was opened. Its compact
+replay rows retain every matrix field and predecessor link needed to rerun the
+validation without the external XML.
+
+### Free-Slack observation — matches inactive-edge gap
 
 Pair C deliberately creates a three-day early gap between the inactive-chain
 active predecessor and the active successor. On the 24-hour matrix this is
@@ -203,14 +225,18 @@ Observed Pair C active-predecessor values:
 - gap to active successor Early Start: `43200`
 - gap to inactive middle Early Start: `0`
 
-Therefore Free Slack is **not** the ordinary direct-splice gap to the active
-successor. It remains bounded by the original edge to the inactive middle row
-in this tested shape.
+In the original return, Free Slack therefore **matches** the inactive-middle
+gap and does not match the ordinary direct active-successor gap. Because the
+original input also seeded zero, that run alone does not prove a calculation
+mechanism. The later sentinel build rewrote `12345` to `0`, ruling out unchanged
+sentinel retention on that build while still leaving the general formula and
+Project-internal mechanism unproven.
 
 This is why the experiment does not resurrect the previously rejected
 "make the inactive task a zero-duration scheduled node" implementation. The
-measured behavior is composite: date propagation bypasses inactive duration,
-while Free Slack retains the original inactive-edge reporting boundary.
+bounded observation used for the next diagnostic is composite: dates bypass the
+inactive duration, while the observed Free-Slack value matches the original
+inactive-edge gap.
 
 Microsoft's public Active-field documentation says inactive tasks no longer
 affect other tasks or the overall plan, while retaining their dependencies for
@@ -221,9 +247,13 @@ that detail.
 
 ## Consequence for G2-RC02
 
-The native experiment **proves the candidate boundary for this tested zero-lag
-FS shape**, but it does not itself change production scheduling behavior or
-prove how many of the 258 BOILER mismatch slots will close.
+The native matrix proves the date-pass-through boundary for this tested
+zero-lag FS shape. The later sentinel rules out unchanged imported Free-Slack
+retention on its tested build and returns a value matching the inactive-edge
+gap. Together they are sufficient to authorize the next diagnostic
+counterfactual, but they do not establish a universal Free-Slack formula, change
+production scheduling behavior, or prove how many of the 258 BOILER mismatch
+slots will close.
 
 The sentinel closes the review's unchanged-retention alternative on the current
 Project build. The next task may therefore proceed as a **diagnostic-only**
@@ -231,7 +261,7 @@ counterfactual over the exact BOILER pair:
 
 1. apply the measured date pass-through only to RC02 zero-lag FS inactive
    boundaries in diagnostic code;
-2. preserve the measured original inactive-edge Free-Slack boundary;
+2. use the observed Free-Slack match to the inactive-edge gap as a diagnostic-only hypothesis;
 3. rerun the fixed 422-slot inventory;
 4. require the RC02 first divergences and dependent paths to move in the
    predicted direction without worsening other families; and

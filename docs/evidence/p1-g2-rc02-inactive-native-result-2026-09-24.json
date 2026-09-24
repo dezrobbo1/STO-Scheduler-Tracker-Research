@@ -1,5 +1,5 @@
 {
-  "schema": "sto-p1-g2-rc02-native-matrix-v3",
+  "schema": "sto-p1-g2-rc02-native-matrix-v4",
   "native_return": {
     "bytes": 139672,
     "sha256": "c245ef00b9ae71a9f901bb3775158c21dd87b88115e5e028656d176abda2d549"
@@ -11,7 +11,7 @@
     "finish": "2026-10-15T08:00:00"
   },
   "classification": {
-    "verdict": "ZERO_DURATION_DATE_PASSTHROUGH_WITH_INACTIVE_EDGE_FREE_SLACK",
+    "verdict": "ZERO_DURATION_DATE_PASSTHROUGH_WITH_FREE_SLACK_MATCHING_INACTIVE_EDGE_GAP",
     "controls": {
       "valid": true,
       "checks": {
@@ -43,7 +43,7 @@
     },
     "components": {
       "date_semantic": "ZERO_DURATION_FS_PASSTHROUGH_SUPPORTED",
-      "free_slack_semantic": "ORIGINAL_INACTIVE_EDGE_BOUND_SUPPORTED"
+      "free_slack_observation": "MATCHES_INACTIVE_EDGE_GAP"
     },
     "predicates": {
       "pair_a_drop": false,

@@ -163,8 +163,8 @@ class Rc02NativeMatrixTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             for fixture_verdict, expected in (
-                ("splice", "DIRECT_ZERO_LAG_FS_SPLICE_SUPPORTED"),
-                ("mixed", "ZERO_DURATION_DATE_PASSTHROUGH_WITH_INACTIVE_EDGE_FREE_SLACK"),
+                ("splice", "ZERO_DURATION_DATE_PASSTHROUGH_WITH_FREE_SLACK_MATCHING_ACTIVE_SUCCESSOR_GAP"),
+                ("mixed", "ZERO_DURATION_DATE_PASSTHROUGH_WITH_FREE_SLACK_MATCHING_INACTIVE_EDGE_GAP"),
                 ("drop", "DROP_BOTH_ENDPOINT_EDGES_SUPPORTED"),
             ):
                 with self.subTest(fixture_verdict=fixture_verdict):
@@ -181,7 +181,7 @@ class Rc02NativeMatrixTests(unittest.TestCase):
             result["components"],
             {
                 "date_semantic": "ZERO_DURATION_FS_PASSTHROUGH_SUPPORTED",
-                "free_slack_semantic": "ORIGINAL_INACTIVE_EDGE_BOUND_SUPPORTED",
+                "free_slack_observation": "MATCHES_INACTIVE_EDGE_GAP",
             },
         )
         self.assertEqual(
@@ -379,7 +379,7 @@ class Rc02NativeMatrixTests(unittest.TestCase):
         self.assertTrue(record["classification"]["controls"]["valid"])
         self.assertTrue(all(record["classification"]["paired_effects"].values()))
         self.assertEqual(record["classification"]["verdict"],
-                         "ZERO_DURATION_DATE_PASSTHROUGH_WITH_INACTIVE_EDGE_FREE_SLACK")
+                         "ZERO_DURATION_DATE_PASSTHROUGH_WITH_FREE_SLACK_MATCHING_INACTIVE_EDGE_GAP")
         self.assertEqual(record["native_return"], {
             "bytes": 139672,
             "sha256": "c245ef00b9ae71a9f901bb3775158c21dd87b88115e5e028656d176abda2d549",

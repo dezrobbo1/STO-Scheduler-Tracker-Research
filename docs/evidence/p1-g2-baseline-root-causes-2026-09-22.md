@@ -271,11 +271,14 @@ The 258 slots are:
 | Free Float | 8 |
 
 This remains the strongest causal candidate for the mechanically isolated
-family. The bounded native matrix completed on 2026-09-24 now measures a
-composite zero-lag-FS semantic: forward and late date boundaries pass through
-the inactive row with its duration removed, while predecessor Free Slack
-retains the original edge to the inactive row. The evidence is recorded in
-`p1-g2-rc02-inactive-native-matrix-2026-09-24.md`.
+family. The bounded native matrix completed on 2026-09-24 establishes forward
+and late date pass-through with the inactive duration removed. In the original
+run predecessor Free Slack matched the inactive-edge gap; a later one-field
+sentinel on build `16.0.20326.20140` rewrote `12345` to `0`, ruling out unchanged
+seed retention on that build. Because the sentinel build differs from the
+original native run, this remains bounded observational Free-Slack evidence, not
+a universal formula or proof of Project's internal mechanism. The evidence is
+recorded in `p1-g2-rc02-inactive-native-matrix-2026-09-24.md`.
 
 That native result establishes the replacement shape for the synthetic
 zero-lag-FS boundary, but it does not by itself prove that applying the shape
@@ -337,12 +340,14 @@ families above; only the elapsed-float family's origin currently meets the
 
 **No production root-cause fix is justified yet.**
 
-The `G2-RC02` native matrix is complete. For the tested zero-lag FS shape it
-establishes zero-duration forward/late date pass-through plus an original-edge
-Free-Slack boundary. The next bounded task is no longer another native run: it
-is a diagnostic-only counterfactual over the exact BOILER P1-G2 pair.
+The `G2-RC02` native matrix and one-field sentinel are complete. For the tested
+zero-lag FS shape the matrix establishes zero-duration forward/late date
+pass-through; the Free-Slack observations match the inactive-edge gap, and the
+sentinel rules out unchanged imported-value retention on its later Project
+build. The next bounded task is no longer another native run: it is a
+diagnostic-only counterfactual over the exact BOILER P1-G2 pair.
 
-That counterfactual must apply only the measured RC02 composite semantic,
+That counterfactual must apply only the bounded RC02 date semantic and observed Free-Slack shape,
 reconcile it against the fixed 422-slot inventory, and show whether the five
 RC02 first divergences and their dependent paths move in the predicted
 direction without worsening RC01, RC03 or the compound slot. Until that is

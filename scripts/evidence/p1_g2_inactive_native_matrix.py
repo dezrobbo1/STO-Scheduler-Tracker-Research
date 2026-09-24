@@ -69,7 +69,7 @@ HOURS = {"RC02-FINISH-DRIVER": 240} | {
     for pair, roles in PAIR_HOURS.items()
     for twin in ("A", "I") for role, hours in roles.items()
 }
-SCHEMA = "sto-p1-g2-rc02-native-matrix-v3"
+SCHEMA = "sto-p1-g2-rc02-native-matrix-v4"
 
 
 
@@ -322,9 +322,9 @@ def classify(rows: dict[str, dict[str, object]]) -> dict[str, object]:
     dropped = controls_valid and a_drop and b_drop and c_drop and late_drop
 
     if direct_splice:
-        verdict = "DIRECT_ZERO_LAG_FS_SPLICE_SUPPORTED"
+        verdict = "ZERO_DURATION_DATE_PASSTHROUGH_WITH_FREE_SLACK_MATCHING_ACTIVE_SUCCESSOR_GAP"
     elif mixed_native:
-        verdict = "ZERO_DURATION_DATE_PASSTHROUGH_WITH_INACTIVE_EDGE_FREE_SLACK"
+        verdict = "ZERO_DURATION_DATE_PASSTHROUGH_WITH_FREE_SLACK_MATCHING_INACTIVE_EDGE_GAP"
     elif dropped:
         verdict = "DROP_BOTH_ENDPOINT_EDGES_SUPPORTED"
     else:
@@ -339,11 +339,11 @@ def classify(rows: dict[str, dict[str, object]]) -> dict[str, object]:
                 "ZERO_DURATION_FS_PASSTHROUGH_SUPPORTED"
                 if date_passthrough else "NOT_ESTABLISHED"
             ),
-            "free_slack_semantic": (
-                "ORIGINAL_INACTIVE_EDGE_BOUND_SUPPORTED"
+            "free_slack_observation": (
+                "MATCHES_INACTIVE_EDGE_GAP"
                 if controls_valid and c_inactive_edge_free and not c_direct_free
                 else (
-                    "DIRECT_ACTIVE_SUCCESSOR_BOUND_SUPPORTED"
+                    "MATCHES_ACTIVE_SUCCESSOR_GAP"
                     if controls_valid and c_direct_free else "NOT_ESTABLISHED"
                 )
             ),

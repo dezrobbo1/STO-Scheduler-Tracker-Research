@@ -329,13 +329,16 @@ records the communication boundaries and
 
 The `G2-RC02` native Microsoft Project active → inactive → active zero-lag
 FS matrix is complete and recorded in
-`docs/evidence/p1-g2-rc02-inactive-native-matrix-2026-09-24.md`. It measured
-zero-duration date pass-through across the inactive row while predecessor Free
-Slack retained the original inactive-edge boundary. Before any P2 work or
-production correction, the next bounded step is a diagnostic-only
-counterfactual over the exact BOILER P1-G2 pair: apply that measured composite
-semantic to the RC02 zero-lag-FS boundaries and measure whether the RC02 first
-divergences and dependent paths close without worsening other families. No
+`docs/evidence/p1-g2-rc02-inactive-native-matrix-2026-09-24.md`. It establishes
+zero-duration date pass-through across the inactive row. The original Free-Slack
+value matched the inactive-edge gap, and a later one-field sentinel on Project
+build `16.0.20326.20140` changed `12345` to `0`, ruling out unchanged seed
+retention on that build without claiming a universal Free-Slack formula. Before
+any P2 work or production correction, the next bounded step is a diagnostic-only
+counterfactual over the exact BOILER P1-G2 pair: apply the bounded date semantic
+and observed Free-Slack shape to the RC02 zero-lag-FS boundaries and measure
+whether the RC02 first divergences and dependent paths close without worsening
+other families. No
 production correction or mismatch reduction is claimed until that real-file
 counterfactual succeeds.
 

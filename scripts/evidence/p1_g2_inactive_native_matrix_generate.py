@@ -12,6 +12,8 @@ import xml.etree.ElementTree as ET
 URI = "http://schemas.microsoft.com/project"
 ET.register_namespace("", URI)
 
+SENTINEL_FREE_SLACK = "12345"
+
 
 def q(tag: str) -> str:
     return f"{{{URI}}}{tag}"
@@ -23,7 +25,7 @@ def add(parent: ET.Element, tag: str, value: object) -> ET.Element:
     return child
 
 
-def build_fixture() -> bytes:
+def build_fixture(*, pair_c_inactive_pred_free_slack: str = "0") -> bytes:
     start = datetime(2026, 10, 5, 8, 0, 0)
     root = ET.Element(q("Project"))
     for tag, value in (
@@ -70,6 +72,7 @@ def build_fixture() -> bytes:
         predecessors: tuple[int, ...] = (),
         *,
         active: bool = True,
+        free_slack: str = "0",
     ) -> None:
         row = ET.SubElement(tasks, q("Task"))
         finish = start + timedelta(hours=hours)
@@ -88,7 +91,7 @@ def build_fixture() -> bytes:
             ("Critical", "0"), ("IsSubproject", "0"), ("IsSubprojectReadOnly", "0"),
             ("ExternalTask", "0"), ("EarlyStart", start.isoformat()),
             ("EarlyFinish", finish.isoformat()), ("LateStart", start.isoformat()),
-            ("LateFinish", finish.isoformat()), ("FreeSlack", "0"),
+            ("LateFinish", finish.isoformat()), ("FreeSlack", free_slack),
             ("TotalSlack", "0"), ("PercentComplete", "0"),
             ("PercentWorkComplete", "0"), ("ActualDuration", "PT0H0M0S"),
             ("ActualWork", "PT0H0M0S"), ("RegularWork", "PT0H0M0S"),
@@ -130,7 +133,7 @@ def build_fixture() -> bytes:
     task(17, "RC02-C-A-MID", 48, (16,))
     task(18, "RC02-C-A-OTHER", 96)
     task(19, "RC02-C-A-SUCC", 24, (17, 18))
-    task(20, "RC02-C-I-PRED", 24)
+    task(20, "RC02-C-I-PRED", 24, free_slack=pair_c_inactive_pred_free_slack)
     task(21, "RC02-C-I-MID", 48, (20,), active=False)
     task(22, "RC02-C-I-OTHER", 96)
     task(23, "RC02-C-I-SUCC", 24, (21, 22))
@@ -138,11 +141,21 @@ def build_fixture() -> bytes:
     return ET.tostring(root, encoding="utf-8", xml_declaration=True)
 
 
+def build_free_slack_sentinel_fixture() -> bytes:
+    """Return the one-field UID20 Free-Slack sentinel input."""
+    return build_fixture(pair_c_inactive_pred_free_slack=SENTINEL_FREE_SLACK)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("output", type=Path)
+    parser.add_argument("--free-slack-sentinel", action="store_true")
     args = parser.parse_args()
-    payload = build_fixture()
+    payload = (
+        build_free_slack_sentinel_fixture()
+        if args.free_slack_sentinel
+        else build_fixture()
+    )
     args.output.write_bytes(payload)
     print(json.dumps({
         "path": str(args.output),
