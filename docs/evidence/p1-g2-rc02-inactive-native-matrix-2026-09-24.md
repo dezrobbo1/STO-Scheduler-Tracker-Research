@@ -75,6 +75,11 @@ Analyze it with:
 `python3 scripts/evidence/p1_g2_inactive_native_matrix.py P1-G2-RC02-Inactive-Native-Returned.xml --output /tmp/p1-g2-rc02-native-result.json`
 
 The committed JSON is the sanitized analyzer result, not the raw Project file.
+Before classification, the analyzer now fails closed unless all 23 synthetic
+name-to-UID identities and every generated predecessor relationship survive the
+native save with MSPDI relationship type `1` (FS) and `LinkLag=0`. The sanitized
+result retains that validated topology plus the task dates/slack coordinates
+needed to recalculate every verdict predicate without the external XML.
 
 ## Native result
 
@@ -82,7 +87,10 @@ Verdict:
 
 `ZERO_DURATION_DATE_PASSTHROUGH_WITH_INACTIVE_EDGE_FREE_SLACK`
 
-The result separates two measured components.
+The result separates two measured components. The native return retained the
+complete generated relationship graph unchanged: every expected predecessor
+UID remained present as zero-lag FS, with no added or removed matrix links.
+
 
 ### Date semantic — zero-duration FS pass-through supported
 
