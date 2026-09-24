@@ -1,0 +1,45 @@
+{
+  "schema": "sto-p1-g2-rc02-native-result-v1",
+  "date": "2026-09-24",
+  "repository_basis": "43e5d2c9d45689481cf3c4233c89027a9e07624e",
+  "input": {
+    "bytes": 48322,
+    "sha256": "ca4cbe0495180a232c4498998a4de94ab0d2863f4bd2f01cecd08cdf68b38024"
+  },
+  "native_return": {
+    "bytes": 139672,
+    "sha256": "c245ef00b9ae71a9f901bb3775158c21dd87b88115e5e028656d176abda2d549",
+    "project_build": "16.0.20228.20188"
+  },
+  "verdict": "ZERO_DURATION_DATE_PASSTHROUGH_WITH_INACTIVE_EDGE_FREE_SLACK",
+  "components": {
+    "date_semantic": "ZERO_DURATION_FS_PASSTHROUGH_SUPPORTED",
+    "free_slack_semantic": "ORIGINAL_INACTIVE_EDGE_BOUND_SUPPORTED"
+  },
+  "predicates": {
+    "pair_a_drop": false,
+    "pair_a_date_passthrough": true,
+    "pair_b_drop": false,
+    "pair_b_date_passthrough": true,
+    "all_pairs_late_passthrough": true,
+    "pair_c_drop_free_equals_total": false,
+    "pair_c_free_equals_direct_active_successor_gap": false,
+    "pair_c_free_equals_original_inactive_edge_gap": true
+  },
+  "pair_c_slack_units": {
+    "observed_free_slack": 0,
+    "total_slack": 115200,
+    "direct_active_successor_gap": 43200,
+    "original_inactive_edge_gap": 0
+  },
+  "gate_consequence": {
+    "P1-G1": "PASS",
+    "P1-G2": "OPEN",
+    "P1-G3": "PASS",
+    "P1-G4": "PASS",
+    "P1-G5": "PASS",
+    "P1": "4/5 IN PROGRESS",
+    "P2": "NOT STARTED"
+  },
+  "next_step": "Run a diagnostic-only BOILER counterfactual for the measured RC02 composite semantic before changing production scheduling behavior."
+}
