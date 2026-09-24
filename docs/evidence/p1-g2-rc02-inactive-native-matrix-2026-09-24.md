@@ -70,16 +70,51 @@ Returned Microsoft Project build: `16.0.20228.20188`.
 
 The raw returned XML remains external evidence and is not committed.
 
-Analyze it with:
+Analyze it with a separate output candidate:
 
-`python3 scripts/evidence/p1_g2_inactive_native_matrix.py P1-G2-RC02-Inactive-Native-Returned.xml --output /tmp/p1-g2-rc02-native-result.json`
+```bash
+python3 scripts/evidence/p1_g2_inactive_native_matrix.py "$STO_RC02_NATIVE_RETURN" --output /tmp/p1-g2-rc02-native-result.json
+python3 scripts/evidence/p1_g2_inactive_native_matrix.py "$STO_RC02_NATIVE_RETURN" --check docs/evidence/p1-g2-rc02-inactive-native-result-2026-09-24.json
+```
 
-The committed JSON is the sanitized analyzer result, not the raw Project file.
-Before classification, the analyzer now fails closed unless all 23 synthetic
-name-to-UID identities and every generated predecessor relationship survive the
-native save with MSPDI relationship type `1` (FS) and `LinkLag=0`. The sanitized
-result retains that validated topology plus the task dates/slack coordinates
-needed to recalculate every verdict predicate without the external XML.
+The committed JSON is now the exact UTF-8 analyzer output under schema
+`sto-p1-g2-rc02-native-matrix-v3`, not a manually reshaped result. Its
+`native_return` size and SHA-256 are computed from the same bytes parsed by the
+analyzer. Build and project coordinates are read from that return. The input
+identity, repository basis and gate decisions are separately sourced context
+in this document, not purported analyzer observations. The experiment basis
+remains main `43e5d2c9d45689481cf3c4233c89027a9e07624e`.
+
+The v3 record supersedes the v2 result from reviewed head
+`cfad02060bbd697fc4ca85a91a2dcd26ed0d5c83`; it does not represent a new native run.
+The same hash-pinned return was reanalyzed. The v2 claim that the earlier
+committed shape was direct analyzer output was incorrect.
+
+Before classification, the analyzer requires the complete synthetic name/UID
+and zero-lag FS topology, unchanged fixed task inputs, valid wall-clock date
+coordinates and numeric slack. Missing dates cannot compare equal. It retains
+observations for every task, including the active controls, so the entire
+classification can be replayed without the external XML. All-active forward,
+backward and Free-Slack controls, matched root placement, observed duration
+spans and the independent finish driver must pass before a semantic verdict
+can be supported. Paired forward and late deltas are checked explicitly.
+
+The drop-both-edges verdict additionally requires each inactive-chain active
+predecessor Late Finish to equal the independent project finish rather than
+its active successor Late Start. Retained or mixed backward boundaries cannot
+support that verdict.
+
+The CLI rejects output aliases of its input, including normalized paths,
+symbolic links and hard links. Separate output candidates are atomically
+replaced rather than written through a linked inode. `--check` performs an
+exact-byte equivalence check and never rewrites either file.
+
+The committed-record replay test runs without the raw return. To require the
+actual native-byte equivalence test rather than skip it:
+
+```bash
+STO_REQUIRE_RC02_NATIVE=1 STO_RC02_NATIVE_RETURN="/path/to/native-return.xml" PYTHONPATH=src python3 -m unittest discover -s tests -p 'test_p1_g2_inactive_native_matrix.py' -v
+```
 
 ## Native result
 
@@ -91,6 +126,23 @@ The result separates two measured components. The native return retained the
 complete generated relationship graph unchanged: every expected predecessor
 UID remained present as zero-lag FS, with no added or removed matrix links.
 
+
+### Active-control observations on the same native return
+
+All active controls retain their middle task duration. Values below are hours
+from the common project start for early placement, and hours of separation for
+late placement; they are derived from the retained native coordinates.
+
+| Pair | Active successor start | Inactive-twin successor start | Active PRED Late Finish to SUCC Late Start | Inactive-twin late gap |
+|---|---:|---:|---:|---:|
+| A | 120 | 48 | 72 | 0 |
+| B | 120 | 72 | 48 | 0 |
+| C | 96 | 96 | 48 | 0 |
+
+Pair C's unchanged forward start is expected: OTHER drives both twins. Its
+late separation still distinguishes inclusion from bypass of the middle
+duration. The active PRED-to-MID Free Slack is zero in each pair. All fixed
+controls and paired-effect predicates pass on the same native return.
 
 ### Date semantic — zero-duration FS pass-through supported
 

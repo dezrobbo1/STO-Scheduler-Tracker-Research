@@ -1,61 +1,68 @@
 {
-  "schema": "sto-p1-g2-rc02-native-result-v2",
-  "date": "2026-09-24",
-  "repository_basis": "43e5d2c9d45689481cf3c4233c89027a9e07624e",
-  "input": {
-    "bytes": 48322,
-    "sha256": "ca4cbe0495180a232c4498998a4de94ab0d2863f4bd2f01cecd08cdf68b38024"
-  },
+  "schema": "sto-p1-g2-rc02-native-matrix-v3",
   "native_return": {
     "bytes": 139672,
-    "sha256": "c245ef00b9ae71a9f901bb3775158c21dd87b88115e5e028656d176abda2d549",
-    "project_build": "16.0.20228.20188"
+    "sha256": "c245ef00b9ae71a9f901bb3775158c21dd87b88115e5e028656d176abda2d549"
   },
-  "verdict": "ZERO_DURATION_DATE_PASSTHROUGH_WITH_INACTIVE_EDGE_FREE_SLACK",
-  "components": {
-    "date_semantic": "ZERO_DURATION_FS_PASSTHROUGH_SUPPORTED",
-    "free_slack_semantic": "ORIGINAL_INACTIVE_EDGE_BOUND_SUPPORTED"
+  "project": {
+    "build_number": "16.0.20228.20188",
+    "name": "P1-G2-RC02-Inactive-Native-Matrix - Round Trip File.xml",
+    "start": "2026-10-05T08:00:00",
+    "finish": "2026-10-15T08:00:00"
   },
-  "predicates": {
-    "pair_a_drop": false,
-    "pair_a_date_passthrough": true,
-    "pair_b_drop": false,
-    "pair_b_date_passthrough": true,
-    "all_pairs_late_passthrough": true,
-    "pair_c_drop_free_equals_total": false,
-    "pair_c_free_equals_direct_active_successor_gap": false,
-    "pair_c_free_equals_original_inactive_edge_gap": true
-  },
-  "pair_c_slack_units": {
-    "observed_free_slack": 0,
-    "total_slack": 115200,
-    "direct_active_successor_gap": 43200,
-    "original_inactive_edge_gap": 0
-  },
-  "gate_consequence": {
-    "P1-G1": "PASS",
-    "P1-G2": "OPEN",
-    "P1-G3": "PASS",
-    "P1-G4": "PASS",
-    "P1-G5": "PASS",
-    "P1": "4/5 IN PROGRESS",
-    "P2": "NOT STARTED"
-  },
-  "next_step": "Run a diagnostic-only BOILER counterfactual for the measured RC02 composite semantic before changing production scheduling behavior.",
-  "topology_validation": {
-    "validated": true,
-    "contract": "all 23 synthetic task name-to-UID identities and every predecessor link retained as zero-lag FS",
-    "relationship_type": "1",
-    "link_lag": "0",
-    "tasks": {
-      "RC02-FINISH-DRIVER": {
-        "uid": "1",
-        "predecessor_links": []
-      },
-      "RC02-A-A-PRED": {
-        "uid": "2",
-        "predecessor_links": []
-      },
+  "classification": {
+    "verdict": "ZERO_DURATION_DATE_PASSTHROUGH_WITH_INACTIVE_EDGE_FREE_SLACK",
+    "controls": {
+      "valid": true,
+      "checks": {
+        "finish_driver": true,
+        "all_observed_spans_and_early_dates": true,
+        "pair_a_active_forward": true,
+        "pair_a_active_backward": true,
+        "pair_a_matched_roots_and_terminal": true,
+        "pair_a_active_free_slack": true,
+        "pair_b_active_forward": true,
+        "pair_b_active_backward": true,
+        "pair_b_matched_roots_and_terminal": true,
+        "pair_b_active_free_slack": true,
+        "pair_c_active_forward": true,
+        "pair_c_active_backward": true,
+        "pair_c_matched_roots_and_terminal": true,
+        "pair_c_active_free_slack": true,
+        "pair_b_competing_path_is_earlier": true,
+        "pair_c_other_drives_both_twins": true
+      }
+    },
+    "paired_effects": {
+      "pair_a_forward_delta": true,
+      "pair_b_forward_delta": true,
+      "pair_c_forward_delta": true,
+      "pair_a_late_delta": true,
+      "pair_b_late_delta": true,
+      "pair_c_late_delta": true
+    },
+    "components": {
+      "date_semantic": "ZERO_DURATION_FS_PASSTHROUGH_SUPPORTED",
+      "free_slack_semantic": "ORIGINAL_INACTIVE_EDGE_BOUND_SUPPORTED"
+    },
+    "predicates": {
+      "pair_a_drop": false,
+      "pair_a_date_passthrough": true,
+      "pair_b_drop": false,
+      "pair_b_date_passthrough": true,
+      "all_pairs_late_passthrough": true,
+      "all_pairs_late_drop_to_project_finish": false,
+      "pair_c_drop_free_equals_total": false,
+      "pair_c_free_equals_direct_active_successor_gap": false,
+      "pair_c_free_equals_original_inactive_edge_gap": true
+    },
+    "pair_c_slack_units": {
+      "observed_free_slack": 0,
+      "total_slack": 115200,
+      "direct_active_successor_gap": 43200,
+      "original_inactive_edge_gap": 0
+    },
+    "validated_topology": {
       "RC02-A-A-MID": {
         "uid": "3",
         "predecessor_links": [
@@ -65,6 +72,10 @@
             "link_lag": "0"
           }
         ]
+      },
+      "RC02-A-A-PRED": {
+        "uid": "2",
+        "predecessor_links": []
       },
       "RC02-A-A-SUCC": {
         "uid": "4",
@@ -76,10 +87,6 @@
           }
         ]
       },
-      "RC02-A-I-PRED": {
-        "uid": "5",
-        "predecessor_links": []
-      },
       "RC02-A-I-MID": {
         "uid": "6",
         "predecessor_links": [
@@ -90,6 +97,10 @@
           }
         ]
       },
+      "RC02-A-I-PRED": {
+        "uid": "5",
+        "predecessor_links": []
+      },
       "RC02-A-I-SUCC": {
         "uid": "7",
         "predecessor_links": [
@@ -99,10 +110,6 @@
             "link_lag": "0"
           }
         ]
-      },
-      "RC02-B-A-PRED": {
-        "uid": "8",
-        "predecessor_links": []
       },
       "RC02-B-A-MID": {
         "uid": "9",
@@ -116,6 +123,10 @@
       },
       "RC02-B-A-OTHER": {
         "uid": "10",
+        "predecessor_links": []
+      },
+      "RC02-B-A-PRED": {
+        "uid": "8",
         "predecessor_links": []
       },
       "RC02-B-A-SUCC": {
@@ -133,10 +144,6 @@
           }
         ]
       },
-      "RC02-B-I-PRED": {
-        "uid": "12",
-        "predecessor_links": []
-      },
       "RC02-B-I-MID": {
         "uid": "13",
         "predecessor_links": [
@@ -149,6 +156,10 @@
       },
       "RC02-B-I-OTHER": {
         "uid": "14",
+        "predecessor_links": []
+      },
+      "RC02-B-I-PRED": {
+        "uid": "12",
         "predecessor_links": []
       },
       "RC02-B-I-SUCC": {
@@ -166,10 +177,6 @@
           }
         ]
       },
-      "RC02-C-A-PRED": {
-        "uid": "16",
-        "predecessor_links": []
-      },
       "RC02-C-A-MID": {
         "uid": "17",
         "predecessor_links": [
@@ -182,6 +189,10 @@
       },
       "RC02-C-A-OTHER": {
         "uid": "18",
+        "predecessor_links": []
+      },
+      "RC02-C-A-PRED": {
+        "uid": "16",
         "predecessor_links": []
       },
       "RC02-C-A-SUCC": {
@@ -199,10 +210,6 @@
           }
         ]
       },
-      "RC02-C-I-PRED": {
-        "uid": "20",
-        "predecessor_links": []
-      },
       "RC02-C-I-MID": {
         "uid": "21",
         "predecessor_links": [
@@ -215,6 +222,10 @@
       },
       "RC02-C-I-OTHER": {
         "uid": "22",
+        "predecessor_links": []
+      },
+      "RC02-C-I-PRED": {
+        "uid": "20",
         "predecessor_links": []
       },
       "RC02-C-I-SUCC": {
@@ -231,179 +242,616 @@
             "link_lag": "0"
           }
         ]
+      },
+      "RC02-FINISH-DRIVER": {
+        "uid": "1",
+        "predecessor_links": []
       }
-    }
-  },
-  "observations": {
-    "RC02-FINISH-DRIVER": {
-      "UID": "1",
-      "Active": "1",
-      "Start": "2026-10-05T08:00:00",
-      "Finish": "2026-10-15T08:00:00",
-      "EarlyStart": "2026-10-05T08:00:00",
-      "EarlyFinish": "2026-10-15T08:00:00",
-      "LateStart": "2026-10-05T08:00:00",
-      "LateFinish": "2026-10-15T08:00:00",
-      "TotalSlack": "0",
-      "FreeSlack": "0",
-      "predecessor_links": []
     },
-    "RC02-A-I-PRED": {
-      "UID": "5",
-      "Active": "1",
-      "Finish": "2026-10-07T08:00:00",
-      "EarlyFinish": "2026-10-07T08:00:00",
-      "LateFinish": "2026-10-14T08:00:00",
-      "TotalSlack": "100800",
-      "FreeSlack": "0",
-      "predecessor_links": []
-    },
-    "RC02-A-I-MID": {
-      "UID": "6",
-      "Active": "0",
-      "Start": "2026-10-07T08:00:00",
-      "EarlyStart": "2026-10-07T08:00:00",
-      "LateStart": "2026-10-11T08:00:00",
-      "LateFinish": "2026-10-14T08:00:00",
-      "TotalSlack": "57600",
-      "FreeSlack": "0",
-      "predecessor_links": [
-        {
-          "predecessor_uid": "5",
-          "type": "1",
-          "link_lag": "0"
-        }
-      ]
-    },
-    "RC02-A-I-SUCC": {
-      "UID": "7",
-      "Active": "1",
-      "Start": "2026-10-07T08:00:00",
-      "EarlyStart": "2026-10-07T08:00:00",
-      "LateStart": "2026-10-14T08:00:00",
-      "TotalSlack": "100800",
-      "FreeSlack": "100800",
-      "predecessor_links": [
-        {
-          "predecessor_uid": "6",
-          "type": "1",
-          "link_lag": "0"
-        }
-      ]
-    },
-    "RC02-B-I-PRED": {
-      "UID": "12",
-      "Active": "1",
-      "Finish": "2026-10-08T08:00:00",
-      "EarlyFinish": "2026-10-08T08:00:00",
-      "LateFinish": "2026-10-14T08:00:00",
-      "TotalSlack": "86400",
-      "FreeSlack": "0",
-      "predecessor_links": []
-    },
-    "RC02-B-I-MID": {
-      "UID": "13",
-      "Active": "0",
-      "Start": "2026-10-08T08:00:00",
-      "EarlyStart": "2026-10-08T08:00:00",
-      "LateFinish": "2026-10-14T08:00:00",
-      "TotalSlack": "57600",
-      "FreeSlack": "0",
-      "predecessor_links": [
-        {
-          "predecessor_uid": "12",
-          "type": "1",
-          "link_lag": "0"
-        }
-      ]
-    },
-    "RC02-B-I-OTHER": {
-      "UID": "14",
-      "Active": "1",
-      "Finish": "2026-10-06T08:00:00",
-      "EarlyFinish": "2026-10-06T08:00:00",
-      "LateFinish": "2026-10-14T08:00:00",
-      "TotalSlack": "115200",
-      "FreeSlack": "28800",
-      "predecessor_links": []
-    },
-    "RC02-B-I-SUCC": {
-      "UID": "15",
-      "Active": "1",
-      "Start": "2026-10-08T08:00:00",
-      "EarlyStart": "2026-10-08T08:00:00",
-      "LateStart": "2026-10-14T08:00:00",
-      "TotalSlack": "86400",
-      "FreeSlack": "86400",
-      "predecessor_links": [
-        {
-          "predecessor_uid": "13",
-          "type": "1",
-          "link_lag": "0"
-        },
-        {
-          "predecessor_uid": "14",
-          "type": "1",
-          "link_lag": "0"
-        }
-      ]
-    },
-    "RC02-C-I-PRED": {
-      "UID": "20",
-      "Active": "1",
-      "Finish": "2026-10-06T08:00:00",
-      "EarlyFinish": "2026-10-06T08:00:00",
-      "LateFinish": "2026-10-14T08:00:00",
-      "TotalSlack": "115200",
-      "FreeSlack": "0",
-      "predecessor_links": []
-    },
-    "RC02-C-I-MID": {
-      "UID": "21",
-      "Active": "0",
-      "Start": "2026-10-06T08:00:00",
-      "EarlyStart": "2026-10-06T08:00:00",
-      "LateFinish": "2026-10-14T08:00:00",
-      "TotalSlack": "86400",
-      "FreeSlack": "14400",
-      "predecessor_links": [
-        {
-          "predecessor_uid": "20",
-          "type": "1",
-          "link_lag": "0"
-        }
-      ]
-    },
-    "RC02-C-I-OTHER": {
-      "UID": "22",
-      "Active": "1",
-      "Finish": "2026-10-09T08:00:00",
-      "EarlyFinish": "2026-10-09T08:00:00",
-      "LateFinish": "2026-10-14T08:00:00",
-      "TotalSlack": "72000",
-      "FreeSlack": "0",
-      "predecessor_links": []
-    },
-    "RC02-C-I-SUCC": {
-      "UID": "23",
-      "Active": "1",
-      "Start": "2026-10-09T08:00:00",
-      "EarlyStart": "2026-10-09T08:00:00",
-      "LateStart": "2026-10-14T08:00:00",
-      "TotalSlack": "72000",
-      "FreeSlack": "72000",
-      "predecessor_links": [
-        {
-          "predecessor_uid": "21",
-          "type": "1",
-          "link_lag": "0"
-        },
-        {
-          "predecessor_uid": "22",
-          "type": "1",
-          "link_lag": "0"
-        }
-      ]
+    "observations": {
+      "RC02-A-A-MID": {
+        "UID": "3",
+        "ID": "3",
+        "Active": "1",
+        "Start": "2026-10-07T08:00:00",
+        "Finish": "2026-10-10T08:00:00",
+        "EarlyStart": "2026-10-07T08:00:00",
+        "EarlyFinish": "2026-10-10T08:00:00",
+        "LateStart": "2026-10-11T08:00:00",
+        "LateFinish": "2026-10-14T08:00:00",
+        "TotalSlack": "57600",
+        "FreeSlack": "0",
+        "Critical": "0",
+        "Duration": "PT72H0M0S",
+        "Manual": "0",
+        "ConstraintType": "0",
+        "CalendarUID": "1",
+        "PercentComplete": "0",
+        "predecessor_links": [
+          {
+            "predecessor_uid": "2",
+            "type": "1",
+            "link_lag": "0"
+          }
+        ],
+        "predecessor_uids": [
+          "2"
+        ]
+      },
+      "RC02-A-A-PRED": {
+        "UID": "2",
+        "ID": "2",
+        "Active": "1",
+        "Start": "2026-10-05T08:00:00",
+        "Finish": "2026-10-07T08:00:00",
+        "EarlyStart": "2026-10-05T08:00:00",
+        "EarlyFinish": "2026-10-07T08:00:00",
+        "LateStart": "2026-10-09T08:00:00",
+        "LateFinish": "2026-10-11T08:00:00",
+        "TotalSlack": "57600",
+        "FreeSlack": "0",
+        "Critical": "0",
+        "Duration": "PT48H0M0S",
+        "Manual": "0",
+        "ConstraintType": "0",
+        "CalendarUID": "1",
+        "PercentComplete": "0",
+        "predecessor_links": [],
+        "predecessor_uids": []
+      },
+      "RC02-A-A-SUCC": {
+        "UID": "4",
+        "ID": "4",
+        "Active": "1",
+        "Start": "2026-10-10T08:00:00",
+        "Finish": "2026-10-11T08:00:00",
+        "EarlyStart": "2026-10-10T08:00:00",
+        "EarlyFinish": "2026-10-11T08:00:00",
+        "LateStart": "2026-10-14T08:00:00",
+        "LateFinish": "2026-10-15T08:00:00",
+        "TotalSlack": "57600",
+        "FreeSlack": "57600",
+        "Critical": "0",
+        "Duration": "PT24H0M0S",
+        "Manual": "0",
+        "ConstraintType": "0",
+        "CalendarUID": "1",
+        "PercentComplete": "0",
+        "predecessor_links": [
+          {
+            "predecessor_uid": "3",
+            "type": "1",
+            "link_lag": "0"
+          }
+        ],
+        "predecessor_uids": [
+          "3"
+        ]
+      },
+      "RC02-A-I-MID": {
+        "UID": "6",
+        "ID": "6",
+        "Active": "0",
+        "Start": "2026-10-07T08:00:00",
+        "Finish": "2026-10-10T08:00:00",
+        "EarlyStart": "2026-10-07T08:00:00",
+        "EarlyFinish": "2026-10-10T08:00:00",
+        "LateStart": "2026-10-11T08:00:00",
+        "LateFinish": "2026-10-14T08:00:00",
+        "TotalSlack": "57600",
+        "FreeSlack": "0",
+        "Critical": "0",
+        "Duration": "PT72H0M0S",
+        "Manual": "0",
+        "ConstraintType": "0",
+        "CalendarUID": "1",
+        "PercentComplete": "0",
+        "predecessor_links": [
+          {
+            "predecessor_uid": "5",
+            "type": "1",
+            "link_lag": "0"
+          }
+        ],
+        "predecessor_uids": [
+          "5"
+        ]
+      },
+      "RC02-A-I-PRED": {
+        "UID": "5",
+        "ID": "5",
+        "Active": "1",
+        "Start": "2026-10-05T08:00:00",
+        "Finish": "2026-10-07T08:00:00",
+        "EarlyStart": "2026-10-05T08:00:00",
+        "EarlyFinish": "2026-10-07T08:00:00",
+        "LateStart": "2026-10-12T08:00:00",
+        "LateFinish": "2026-10-14T08:00:00",
+        "TotalSlack": "100800",
+        "FreeSlack": "0",
+        "Critical": "0",
+        "Duration": "PT48H0M0S",
+        "Manual": "0",
+        "ConstraintType": "0",
+        "CalendarUID": "1",
+        "PercentComplete": "0",
+        "predecessor_links": [],
+        "predecessor_uids": []
+      },
+      "RC02-A-I-SUCC": {
+        "UID": "7",
+        "ID": "7",
+        "Active": "1",
+        "Start": "2026-10-07T08:00:00",
+        "Finish": "2026-10-08T08:00:00",
+        "EarlyStart": "2026-10-07T08:00:00",
+        "EarlyFinish": "2026-10-08T08:00:00",
+        "LateStart": "2026-10-14T08:00:00",
+        "LateFinish": "2026-10-15T08:00:00",
+        "TotalSlack": "100800",
+        "FreeSlack": "100800",
+        "Critical": "0",
+        "Duration": "PT24H0M0S",
+        "Manual": "0",
+        "ConstraintType": "0",
+        "CalendarUID": "1",
+        "PercentComplete": "0",
+        "predecessor_links": [
+          {
+            "predecessor_uid": "6",
+            "type": "1",
+            "link_lag": "0"
+          }
+        ],
+        "predecessor_uids": [
+          "6"
+        ]
+      },
+      "RC02-B-A-MID": {
+        "UID": "9",
+        "ID": "9",
+        "Active": "1",
+        "Start": "2026-10-08T08:00:00",
+        "Finish": "2026-10-10T08:00:00",
+        "EarlyStart": "2026-10-08T08:00:00",
+        "EarlyFinish": "2026-10-10T08:00:00",
+        "LateStart": "2026-10-12T08:00:00",
+        "LateFinish": "2026-10-14T08:00:00",
+        "TotalSlack": "57600",
+        "FreeSlack": "0",
+        "Critical": "0",
+        "Duration": "PT48H0M0S",
+        "Manual": "0",
+        "ConstraintType": "0",
+        "CalendarUID": "1",
+        "PercentComplete": "0",
+        "predecessor_links": [
+          {
+            "predecessor_uid": "8",
+            "type": "1",
+            "link_lag": "0"
+          }
+        ],
+        "predecessor_uids": [
+          "8"
+        ]
+      },
+      "RC02-B-A-OTHER": {
+        "UID": "10",
+        "ID": "10",
+        "Active": "1",
+        "Start": "2026-10-05T08:00:00",
+        "Finish": "2026-10-06T08:00:00",
+        "EarlyStart": "2026-10-05T08:00:00",
+        "EarlyFinish": "2026-10-06T08:00:00",
+        "LateStart": "2026-10-13T08:00:00",
+        "LateFinish": "2026-10-14T08:00:00",
+        "TotalSlack": "115200",
+        "FreeSlack": "57600",
+        "Critical": "0",
+        "Duration": "PT24H0M0S",
+        "Manual": "0",
+        "ConstraintType": "0",
+        "CalendarUID": "1",
+        "PercentComplete": "0",
+        "predecessor_links": [],
+        "predecessor_uids": []
+      },
+      "RC02-B-A-PRED": {
+        "UID": "8",
+        "ID": "8",
+        "Active": "1",
+        "Start": "2026-10-05T08:00:00",
+        "Finish": "2026-10-08T08:00:00",
+        "EarlyStart": "2026-10-05T08:00:00",
+        "EarlyFinish": "2026-10-08T08:00:00",
+        "LateStart": "2026-10-09T08:00:00",
+        "LateFinish": "2026-10-12T08:00:00",
+        "TotalSlack": "57600",
+        "FreeSlack": "0",
+        "Critical": "0",
+        "Duration": "PT72H0M0S",
+        "Manual": "0",
+        "ConstraintType": "0",
+        "CalendarUID": "1",
+        "PercentComplete": "0",
+        "predecessor_links": [],
+        "predecessor_uids": []
+      },
+      "RC02-B-A-SUCC": {
+        "UID": "11",
+        "ID": "11",
+        "Active": "1",
+        "Start": "2026-10-10T08:00:00",
+        "Finish": "2026-10-11T08:00:00",
+        "EarlyStart": "2026-10-10T08:00:00",
+        "EarlyFinish": "2026-10-11T08:00:00",
+        "LateStart": "2026-10-14T08:00:00",
+        "LateFinish": "2026-10-15T08:00:00",
+        "TotalSlack": "57600",
+        "FreeSlack": "57600",
+        "Critical": "0",
+        "Duration": "PT24H0M0S",
+        "Manual": "0",
+        "ConstraintType": "0",
+        "CalendarUID": "1",
+        "PercentComplete": "0",
+        "predecessor_links": [
+          {
+            "predecessor_uid": "9",
+            "type": "1",
+            "link_lag": "0"
+          },
+          {
+            "predecessor_uid": "10",
+            "type": "1",
+            "link_lag": "0"
+          }
+        ],
+        "predecessor_uids": [
+          "9",
+          "10"
+        ]
+      },
+      "RC02-B-I-MID": {
+        "UID": "13",
+        "ID": "13",
+        "Active": "0",
+        "Start": "2026-10-08T08:00:00",
+        "Finish": "2026-10-10T08:00:00",
+        "EarlyStart": "2026-10-08T08:00:00",
+        "EarlyFinish": "2026-10-10T08:00:00",
+        "LateStart": "2026-10-12T08:00:00",
+        "LateFinish": "2026-10-14T08:00:00",
+        "TotalSlack": "57600",
+        "FreeSlack": "0",
+        "Critical": "0",
+        "Duration": "PT48H0M0S",
+        "Manual": "0",
+        "ConstraintType": "0",
+        "CalendarUID": "1",
+        "PercentComplete": "0",
+        "predecessor_links": [
+          {
+            "predecessor_uid": "12",
+            "type": "1",
+            "link_lag": "0"
+          }
+        ],
+        "predecessor_uids": [
+          "12"
+        ]
+      },
+      "RC02-B-I-OTHER": {
+        "UID": "14",
+        "ID": "14",
+        "Active": "1",
+        "Start": "2026-10-05T08:00:00",
+        "Finish": "2026-10-06T08:00:00",
+        "EarlyStart": "2026-10-05T08:00:00",
+        "EarlyFinish": "2026-10-06T08:00:00",
+        "LateStart": "2026-10-13T08:00:00",
+        "LateFinish": "2026-10-14T08:00:00",
+        "TotalSlack": "115200",
+        "FreeSlack": "28800",
+        "Critical": "0",
+        "Duration": "PT24H0M0S",
+        "Manual": "0",
+        "ConstraintType": "0",
+        "CalendarUID": "1",
+        "PercentComplete": "0",
+        "predecessor_links": [],
+        "predecessor_uids": []
+      },
+      "RC02-B-I-PRED": {
+        "UID": "12",
+        "ID": "12",
+        "Active": "1",
+        "Start": "2026-10-05T08:00:00",
+        "Finish": "2026-10-08T08:00:00",
+        "EarlyStart": "2026-10-05T08:00:00",
+        "EarlyFinish": "2026-10-08T08:00:00",
+        "LateStart": "2026-10-11T08:00:00",
+        "LateFinish": "2026-10-14T08:00:00",
+        "TotalSlack": "86400",
+        "FreeSlack": "0",
+        "Critical": "0",
+        "Duration": "PT72H0M0S",
+        "Manual": "0",
+        "ConstraintType": "0",
+        "CalendarUID": "1",
+        "PercentComplete": "0",
+        "predecessor_links": [],
+        "predecessor_uids": []
+      },
+      "RC02-B-I-SUCC": {
+        "UID": "15",
+        "ID": "15",
+        "Active": "1",
+        "Start": "2026-10-08T08:00:00",
+        "Finish": "2026-10-09T08:00:00",
+        "EarlyStart": "2026-10-08T08:00:00",
+        "EarlyFinish": "2026-10-09T08:00:00",
+        "LateStart": "2026-10-14T08:00:00",
+        "LateFinish": "2026-10-15T08:00:00",
+        "TotalSlack": "86400",
+        "FreeSlack": "86400",
+        "Critical": "0",
+        "Duration": "PT24H0M0S",
+        "Manual": "0",
+        "ConstraintType": "0",
+        "CalendarUID": "1",
+        "PercentComplete": "0",
+        "predecessor_links": [
+          {
+            "predecessor_uid": "13",
+            "type": "1",
+            "link_lag": "0"
+          },
+          {
+            "predecessor_uid": "14",
+            "type": "1",
+            "link_lag": "0"
+          }
+        ],
+        "predecessor_uids": [
+          "13",
+          "14"
+        ]
+      },
+      "RC02-C-A-MID": {
+        "UID": "17",
+        "ID": "17",
+        "Active": "1",
+        "Start": "2026-10-06T08:00:00",
+        "Finish": "2026-10-08T08:00:00",
+        "EarlyStart": "2026-10-06T08:00:00",
+        "EarlyFinish": "2026-10-08T08:00:00",
+        "LateStart": "2026-10-12T08:00:00",
+        "LateFinish": "2026-10-14T08:00:00",
+        "TotalSlack": "86400",
+        "FreeSlack": "14400",
+        "Critical": "0",
+        "Duration": "PT48H0M0S",
+        "Manual": "0",
+        "ConstraintType": "0",
+        "CalendarUID": "1",
+        "PercentComplete": "0",
+        "predecessor_links": [
+          {
+            "predecessor_uid": "16",
+            "type": "1",
+            "link_lag": "0"
+          }
+        ],
+        "predecessor_uids": [
+          "16"
+        ]
+      },
+      "RC02-C-A-OTHER": {
+        "UID": "18",
+        "ID": "18",
+        "Active": "1",
+        "Start": "2026-10-05T08:00:00",
+        "Finish": "2026-10-09T08:00:00",
+        "EarlyStart": "2026-10-05T08:00:00",
+        "EarlyFinish": "2026-10-09T08:00:00",
+        "LateStart": "2026-10-10T08:00:00",
+        "LateFinish": "2026-10-14T08:00:00",
+        "TotalSlack": "72000",
+        "FreeSlack": "0",
+        "Critical": "0",
+        "Duration": "PT96H0M0S",
+        "Manual": "0",
+        "ConstraintType": "0",
+        "CalendarUID": "1",
+        "PercentComplete": "0",
+        "predecessor_links": [],
+        "predecessor_uids": []
+      },
+      "RC02-C-A-PRED": {
+        "UID": "16",
+        "ID": "16",
+        "Active": "1",
+        "Start": "2026-10-05T08:00:00",
+        "Finish": "2026-10-06T08:00:00",
+        "EarlyStart": "2026-10-05T08:00:00",
+        "EarlyFinish": "2026-10-06T08:00:00",
+        "LateStart": "2026-10-11T08:00:00",
+        "LateFinish": "2026-10-12T08:00:00",
+        "TotalSlack": "86400",
+        "FreeSlack": "0",
+        "Critical": "0",
+        "Duration": "PT24H0M0S",
+        "Manual": "0",
+        "ConstraintType": "0",
+        "CalendarUID": "1",
+        "PercentComplete": "0",
+        "predecessor_links": [],
+        "predecessor_uids": []
+      },
+      "RC02-C-A-SUCC": {
+        "UID": "19",
+        "ID": "19",
+        "Active": "1",
+        "Start": "2026-10-09T08:00:00",
+        "Finish": "2026-10-10T08:00:00",
+        "EarlyStart": "2026-10-09T08:00:00",
+        "EarlyFinish": "2026-10-10T08:00:00",
+        "LateStart": "2026-10-14T08:00:00",
+        "LateFinish": "2026-10-15T08:00:00",
+        "TotalSlack": "72000",
+        "FreeSlack": "72000",
+        "Critical": "0",
+        "Duration": "PT24H0M0S",
+        "Manual": "0",
+        "ConstraintType": "0",
+        "CalendarUID": "1",
+        "PercentComplete": "0",
+        "predecessor_links": [
+          {
+            "predecessor_uid": "17",
+            "type": "1",
+            "link_lag": "0"
+          },
+          {
+            "predecessor_uid": "18",
+            "type": "1",
+            "link_lag": "0"
+          }
+        ],
+        "predecessor_uids": [
+          "17",
+          "18"
+        ]
+      },
+      "RC02-C-I-MID": {
+        "UID": "21",
+        "ID": "21",
+        "Active": "0",
+        "Start": "2026-10-06T08:00:00",
+        "Finish": "2026-10-08T08:00:00",
+        "EarlyStart": "2026-10-06T08:00:00",
+        "EarlyFinish": "2026-10-08T08:00:00",
+        "LateStart": "2026-10-12T08:00:00",
+        "LateFinish": "2026-10-14T08:00:00",
+        "TotalSlack": "86400",
+        "FreeSlack": "14400",
+        "Critical": "0",
+        "Duration": "PT48H0M0S",
+        "Manual": "0",
+        "ConstraintType": "0",
+        "CalendarUID": "1",
+        "PercentComplete": "0",
+        "predecessor_links": [
+          {
+            "predecessor_uid": "20",
+            "type": "1",
+            "link_lag": "0"
+          }
+        ],
+        "predecessor_uids": [
+          "20"
+        ]
+      },
+      "RC02-C-I-OTHER": {
+        "UID": "22",
+        "ID": "22",
+        "Active": "1",
+        "Start": "2026-10-05T08:00:00",
+        "Finish": "2026-10-09T08:00:00",
+        "EarlyStart": "2026-10-05T08:00:00",
+        "EarlyFinish": "2026-10-09T08:00:00",
+        "LateStart": "2026-10-10T08:00:00",
+        "LateFinish": "2026-10-14T08:00:00",
+        "TotalSlack": "72000",
+        "FreeSlack": "0",
+        "Critical": "0",
+        "Duration": "PT96H0M0S",
+        "Manual": "0",
+        "ConstraintType": "0",
+        "CalendarUID": "1",
+        "PercentComplete": "0",
+        "predecessor_links": [],
+        "predecessor_uids": []
+      },
+      "RC02-C-I-PRED": {
+        "UID": "20",
+        "ID": "20",
+        "Active": "1",
+        "Start": "2026-10-05T08:00:00",
+        "Finish": "2026-10-06T08:00:00",
+        "EarlyStart": "2026-10-05T08:00:00",
+        "EarlyFinish": "2026-10-06T08:00:00",
+        "LateStart": "2026-10-13T08:00:00",
+        "LateFinish": "2026-10-14T08:00:00",
+        "TotalSlack": "115200",
+        "FreeSlack": "0",
+        "Critical": "0",
+        "Duration": "PT24H0M0S",
+        "Manual": "0",
+        "ConstraintType": "0",
+        "CalendarUID": "1",
+        "PercentComplete": "0",
+        "predecessor_links": [],
+        "predecessor_uids": []
+      },
+      "RC02-C-I-SUCC": {
+        "UID": "23",
+        "ID": "23",
+        "Active": "1",
+        "Start": "2026-10-09T08:00:00",
+        "Finish": "2026-10-10T08:00:00",
+        "EarlyStart": "2026-10-09T08:00:00",
+        "EarlyFinish": "2026-10-10T08:00:00",
+        "LateStart": "2026-10-14T08:00:00",
+        "LateFinish": "2026-10-15T08:00:00",
+        "TotalSlack": "72000",
+        "FreeSlack": "72000",
+        "Critical": "0",
+        "Duration": "PT24H0M0S",
+        "Manual": "0",
+        "ConstraintType": "0",
+        "CalendarUID": "1",
+        "PercentComplete": "0",
+        "predecessor_links": [
+          {
+            "predecessor_uid": "21",
+            "type": "1",
+            "link_lag": "0"
+          },
+          {
+            "predecessor_uid": "22",
+            "type": "1",
+            "link_lag": "0"
+          }
+        ],
+        "predecessor_uids": [
+          "21",
+          "22"
+        ]
+      },
+      "RC02-FINISH-DRIVER": {
+        "UID": "1",
+        "ID": "1",
+        "Active": "1",
+        "Start": "2026-10-05T08:00:00",
+        "Finish": "2026-10-15T08:00:00",
+        "EarlyStart": "2026-10-05T08:00:00",
+        "EarlyFinish": "2026-10-15T08:00:00",
+        "LateStart": "2026-10-05T08:00:00",
+        "LateFinish": "2026-10-15T08:00:00",
+        "TotalSlack": "0",
+        "FreeSlack": "0",
+        "Critical": "1",
+        "Duration": "PT240H0M0S",
+        "Manual": "0",
+        "ConstraintType": "0",
+        "CalendarUID": "1",
+        "PercentComplete": "0",
+        "predecessor_links": [],
+        "predecessor_uids": []
+      }
     }
   }
 }

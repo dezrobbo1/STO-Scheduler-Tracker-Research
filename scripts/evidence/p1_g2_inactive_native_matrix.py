@@ -6,9 +6,12 @@ This is evidence tooling only. It does not calculate a replacement schedule.
 from __future__ import annotations
 
 import argparse
-from datetime import datetime
+from datetime import datetime, timedelta
+import hashlib
 import json
+import os
 from pathlib import Path
+import tempfile
 import xml.etree.ElementTree as ET
 
 NS = {"p": "http://schemas.microsoft.com/project"}
@@ -52,7 +55,22 @@ EXPECTED = {
 FIELDS = (
     "UID", "ID", "Active", "Start", "Finish", "EarlyStart", "EarlyFinish",
     "LateStart", "LateFinish", "TotalSlack", "FreeSlack", "Critical",
+    "Duration", "Manual", "ConstraintType", "CalendarUID", "PercentComplete",
 )
+DATE_FIELDS = ("Start", "Finish", "EarlyStart", "EarlyFinish", "LateStart", "LateFinish")
+# Fixed input contract, not a scheduler or a rule for arbitrary inactive tasks.
+PAIR_HOURS = {
+    "A": {"PRED": 48, "MID": 72, "SUCC": 24},
+    "B": {"PRED": 72, "MID": 48, "OTHER": 24, "SUCC": 24},
+    "C": {"PRED": 24, "MID": 48, "OTHER": 96, "SUCC": 24},
+}
+HOURS = {"RC02-FINISH-DRIVER": 240} | {
+    f"RC02-{pair}-{twin}-{role}": hours
+    for pair, roles in PAIR_HOURS.items()
+    for twin in ("A", "I") for role, hours in roles.items()
+}
+SCHEMA = "sto-p1-g2-rc02-native-matrix-v3"
+
 
 
 def text(task: ET.Element, field: str) -> str | None:
@@ -61,7 +79,12 @@ def text(task: ET.Element, field: str) -> str | None:
 
 
 def read(path: Path) -> tuple[dict[str, str | None], dict[str, dict[str, object]]]:
-    root = ET.parse(path).getroot()
+    return parse(path.read_bytes())
+
+
+def parse(payload: bytes) -> tuple[dict[str, str | None], dict[str, dict[str, object]]]:
+    """Read the exact bytes whose digest the evidence record will retain."""
+    root = ET.fromstring(payload)
     project = {
         "build_number": root.findtext("p:BuildNumber", default=None, namespaces=NS),
         "name": root.findtext("p:Name", default=None, namespaces=NS),
@@ -89,12 +112,17 @@ def read(path: Path) -> tuple[dict[str, str | None], dict[str, dict[str, object]
         row["predecessor_links"] = links
         row["predecessor_uids"] = [link["predecessor_uid"] for link in links]
         rows[name] = row
+    validate_rows(rows)
+    return project, rows
+
+
+def validate_rows(rows: dict[str, dict[str, object]]) -> None:
     missing = sorted(REQUIRED - rows.keys())
     if missing:
         raise SystemExit("native return is missing matrix tasks: " + ", ".join(missing))
     wrong_active = sorted(
         name for name in REQUIRED
-        if (rows[name]["Active"] == "0") != (name in INACTIVE)
+        if rows[name].get("Active") != ("0" if name in INACTIVE else "1")
     )
     if wrong_active:
         raise SystemExit("native return changed matrix Active flags: " + ", ".join(wrong_active))
@@ -124,21 +152,111 @@ def read(path: Path) -> tuple[dict[str, str | None], dict[str, dict[str, object]
             "native return changed zero-lag FS matrix relationships: "
             + ", ".join(wrong_links)
         )
-    return project, rows
+    for name in sorted(REQUIRED):
+        row = rows[name]
+        for field in DATE_FIELDS:
+            if date_value(row.get(field)) is None:
+                raise SystemExit(f"native return missing or invalid date: {name}.{field}")
+        for field in ("FreeSlack", "TotalSlack"):
+            value = row.get(field)
+            if not isinstance(value, str) or not value.lstrip("-").isdigit():
+                raise SystemExit(f"native return missing or invalid slack: {name}.{field}")
+        expected = {
+            "Duration": f"PT{HOURS[name]}H0M0S", "Manual": "0",
+            "ConstraintType": "0", "CalendarUID": "1", "PercentComplete": "0",
+        }
+        for field, value in expected.items():
+            if row.get(field) != value:
+                raise SystemExit(f"native return changed fixed matrix input: {name}.{field}")
+
+
+def date_value(value: object) -> datetime | None:
+    if not isinstance(value, str) or "T" not in value:
+        return None
+    try:
+        result = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    return result if result.tzinfo is None else None
 
 
 def eq(rows: dict[str, dict[str, object]], left: tuple[str, str], right: tuple[str, str]) -> bool:
-    return rows[left[0]][left[1]] == rows[right[0]][right[1]]
+    a = date_value(rows[left[0]].get(left[1]))
+    b = date_value(rows[right[0]].get(right[1]))
+    return a is not None and b is not None and a == b
 
 
 def slack_units_between(start: object, finish: object) -> int | None:
     """Return MSPDI slack units (tenths of a minute) for this 24-hour matrix."""
-    if not isinstance(start, str) or not isinstance(finish, str):
+    a, b = date_value(start), date_value(finish)
+    if a is None or b is None:
         return None
-    return int((datetime.fromisoformat(finish) - datetime.fromisoformat(start)).total_seconds() / 6)
+    seconds = (b - a).total_seconds()
+    return int(seconds / 6) if seconds % 6 == 0 else None
+
+
+def control_checks(rows: dict[str, dict[str, object]]) -> dict[str, bool]:
+    """Prove the all-active counter-case and the fixed 24-hour experiment."""
+    def at(name: str, field: str) -> datetime:
+        value = date_value(rows[name][field])
+        assert value is not None  # validate_rows has already checked every coordinate.
+        return value
+
+    driver = "RC02-FINISH-DRIVER"
+    start, finish = at(driver, "Start"), at(driver, "Finish")
+    checks = {
+        "finish_driver": finish - start == timedelta(hours=240)
+        and at(driver, "LateStart") == start and at(driver, "LateFinish") == finish,
+        "all_observed_spans_and_early_dates": all(
+            at(name, "Finish") - at(name, "Start") == timedelta(hours=HOURS[name])
+            and at(name, "LateFinish") - at(name, "LateStart") == timedelta(hours=HOURS[name])
+            and at(name, "EarlyStart") == at(name, "Start")
+            and at(name, "EarlyFinish") == at(name, "Finish")
+            for name in REQUIRED
+        ),
+    }
+    for pair, roles in PAIR_HOURS.items():
+        prefix = f"RC02-{pair}-A-"
+        pred, mid, succ = (prefix + role for role in ("PRED", "MID", "SUCC"))
+        boundaries = [at(mid, "Finish")]
+        if "OTHER" in roles:
+            boundaries.append(at(prefix + "OTHER", "Finish"))
+        checks[f"pair_{pair.lower()}_active_forward"] = (
+            at(mid, "Start") == at(pred, "Finish")
+            and at(succ, "Start") == max(boundaries)
+        )
+        checks[f"pair_{pair.lower()}_active_backward"] = (
+            at(pred, "LateFinish") == at(mid, "LateStart")
+            and at(mid, "LateFinish") == at(succ, "LateStart")
+            and at(succ, "LateFinish") == finish
+            and ("OTHER" not in roles or
+                 at(prefix + "OTHER", "LateFinish") == at(succ, "LateStart"))
+        )
+        checks[f"pair_{pair.lower()}_matched_roots_and_terminal"] = all(
+            at(f"RC02-{pair}-{twin}-{role}", "Start") == start
+            for twin in ("A", "I") for role in roles if role in ("PRED", "OTHER")
+        ) and at(f"RC02-{pair}-I-SUCC", "LateFinish") == finish
+        checks[f"pair_{pair.lower()}_active_free_slack"] = (
+            int(rows[pred]["FreeSlack"]) ==
+            slack_units_between(rows[pred]["EarlyFinish"], rows[mid]["EarlyStart"])
+            and int(rows[mid]["FreeSlack"]) ==
+            slack_units_between(rows[mid]["EarlyFinish"], rows[succ]["EarlyStart"])
+        )
+    checks["pair_b_competing_path_is_earlier"] = (
+        at("RC02-B-I-OTHER", "Finish") < at("RC02-B-I-PRED", "Finish")
+    )
+    checks["pair_c_other_drives_both_twins"] = (
+        at("RC02-C-I-OTHER", "Finish") > at("RC02-C-I-PRED", "Finish")
+        and at("RC02-C-I-SUCC", "Start") == at("RC02-C-I-OTHER", "Finish")
+        and at("RC02-C-A-SUCC", "Start") == at("RC02-C-I-SUCC", "Start")
+    )
+    return checks
 
 
 def classify(rows: dict[str, dict[str, object]]) -> dict[str, object]:
+    validate_rows(rows)
+    controls = control_checks(rows)
+    controls_valid = all(controls.values())
     # Pair A distinguishes "drop both endpoint edges" from date pass-through.
     a_drop = eq(rows, ("RC02-A-I-SUCC", "Start"), ("RC02-FINISH-DRIVER", "Start"))
     a_passthrough = eq(rows, ("RC02-A-I-SUCC", "Start"), ("RC02-A-I-PRED", "Finish"))
@@ -174,10 +292,34 @@ def classify(rows: dict[str, dict[str, object]]) -> dict[str, object]:
     c_inactive_edge_free = c_free is not None and c_free == c_inactive_edge_gap
     c_drop = c_free is not None and c_total is not None and c_free == c_total
 
-    date_passthrough = a_passthrough and b_passthrough and late_passthrough
+    # Paired effects are measured, not inferred from inactive coordinates alone.
+    paired_effects = {
+        f"pair_{pair.lower()}_forward_delta": slack_units_between(
+            rows[f"RC02-{pair}-I-SUCC"]["Start"],
+            rows[f"RC02-{pair}-A-SUCC"]["Start"],
+        ) == (0 if pair == "C" else PAIR_HOURS[pair]["MID"] * 600)
+        for pair in PAIR_HOURS
+    } | {
+        f"pair_{pair.lower()}_late_delta": slack_units_between(
+            rows[f"RC02-{pair}-A-PRED"]["LateFinish"],
+            rows[f"RC02-{pair}-I-PRED"]["LateFinish"],
+        ) == PAIR_HOURS[pair]["MID"] * 600
+        for pair in PAIR_HOURS
+    }
+    late_drop = all(
+        eq(rows, (f"RC02-{pair}-I-PRED", "LateFinish"),
+           ("RC02-FINISH-DRIVER", "Finish"))
+        and not eq(rows, (f"RC02-{pair}-I-PRED", "LateFinish"),
+                   (f"RC02-{pair}-I-SUCC", "LateStart"))
+        for pair in PAIR_HOURS
+    )
+    date_passthrough = (
+        controls_valid and all(paired_effects.values())
+        and a_passthrough and b_passthrough and late_passthrough
+    )
     direct_splice = date_passthrough and c_direct_free
     mixed_native = date_passthrough and c_inactive_edge_free and not c_direct_free
-    dropped = a_drop and b_drop and c_drop and not date_passthrough
+    dropped = controls_valid and a_drop and b_drop and c_drop and late_drop
 
     if direct_splice:
         verdict = "DIRECT_ZERO_LAG_FS_SPLICE_SUPPORTED"
@@ -190,6 +332,8 @@ def classify(rows: dict[str, dict[str, object]]) -> dict[str, object]:
 
     return {
         "verdict": verdict,
+        "controls": {"valid": controls_valid, "checks": controls},
+        "paired_effects": paired_effects,
         "components": {
             "date_semantic": (
                 "ZERO_DURATION_FS_PASSTHROUGH_SUPPORTED"
@@ -197,10 +341,10 @@ def classify(rows: dict[str, dict[str, object]]) -> dict[str, object]:
             ),
             "free_slack_semantic": (
                 "ORIGINAL_INACTIVE_EDGE_BOUND_SUPPORTED"
-                if c_inactive_edge_free and not c_direct_free
+                if controls_valid and c_inactive_edge_free and not c_direct_free
                 else (
                     "DIRECT_ACTIVE_SUCCESSOR_BOUND_SUPPORTED"
-                    if c_direct_free else "NOT_ESTABLISHED"
+                    if controls_valid and c_direct_free else "NOT_ESTABLISHED"
                 )
             ),
         },
@@ -210,6 +354,7 @@ def classify(rows: dict[str, dict[str, object]]) -> dict[str, object]:
             "pair_b_drop": b_drop,
             "pair_b_date_passthrough": b_passthrough,
             "all_pairs_late_passthrough": late_passthrough,
+            "all_pairs_late_drop_to_project_finish": late_drop,
             "pair_c_drop_free_equals_total": c_drop,
             "pair_c_free_equals_direct_active_successor_gap": c_direct_free,
             "pair_c_free_equals_original_inactive_edge_gap": c_inactive_edge_free,
@@ -227,32 +372,66 @@ def classify(rows: dict[str, dict[str, object]]) -> dict[str, object]:
             }
             for name in sorted(EXPECTED)
         },
-        "observations": {
-            name: rows[name]
-            for name in (
-                "RC02-FINISH-DRIVER",
-                "RC02-A-I-PRED", "RC02-A-I-MID", "RC02-A-I-SUCC",
-                "RC02-B-I-PRED", "RC02-B-I-MID", "RC02-B-I-OTHER", "RC02-B-I-SUCC",
-                "RC02-C-I-PRED", "RC02-C-I-MID", "RC02-C-I-OTHER", "RC02-C-I-SUCC",
-            )
-        },
+        "observations": {name: rows[name] for name in sorted(REQUIRED)},
     }
+
+
+def analyze(payload: bytes) -> dict[str, object]:
+    project, rows = parse(payload)
+    return {
+        "schema": SCHEMA,
+        "native_return": {"bytes": len(payload), "sha256": hashlib.sha256(payload).hexdigest()},
+        "project": project,
+        "classification": classify(rows),
+    }
+
+
+def serialize(record: dict[str, object]) -> str:
+    return json.dumps(record, indent=2, sort_keys=False) + "\n"
+
+
+def require_separate_output(source: Path, output: Path) -> None:
+    if output.resolve() == source.resolve() or (
+        output.exists() and output.samefile(source)
+    ):
+        raise SystemExit("output must be separate from native return (including file aliases)")
+
+
+def write_candidate(source: Path, output: Path, payload: str) -> None:
+    require_separate_output(source, output)
+    # Replace the destination entry, never truncate an existing linked inode.
+    # The second check also catches aliases introduced during analysis.
+    temporary: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", newline="\n", dir=output.parent, delete=False,
+        ) as handle:
+            temporary = Path(handle.name)
+            handle.write(payload)
+        require_separate_output(source, output)
+        os.replace(temporary, output)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("native_return", type=Path)
-    parser.add_argument("--output", type=Path)
+    destination = parser.add_mutually_exclusive_group()
+    destination.add_argument("--output", type=Path)
+    destination.add_argument("--check", type=Path, help="verify exact committed analyzer output without writing")
     args = parser.parse_args()
-    project, rows = read(args.native_return)
-    record = {
-        "schema": "sto-p1-g2-rc02-native-matrix-v2",
-        "project": project,
-        "classification": classify(rows),
-    }
-    payload = json.dumps(record, indent=2, sort_keys=False) + "\n"
     if args.output:
-        args.output.write_text(payload, encoding="utf-8")
+        require_separate_output(args.native_return, args.output)
+    payload = serialize(analyze(args.native_return.read_bytes()))
+    if args.check:
+        if args.check.read_bytes() != payload.encode("utf-8"):
+            raise SystemExit("committed evidence differs from exact analyzer output")
+        print("committed evidence matches exact analyzer output")
+    elif args.output:
+        write_candidate(args.native_return, args.output, payload)
     else:
         print(payload, end="")
     return 0
