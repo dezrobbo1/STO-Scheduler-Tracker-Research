@@ -327,3 +327,140 @@ A scenario should always identify its base version and must never silently mutat
 
 Useful comparison patterns to prototype include overlay comparison, changed-only table, impact summary and explicit provenance. Exact promotion/approval interaction remains TEST until PL7/PL6 semantics are designed together.
 
+# 13. Core workflows and authority
+
+## 13.1 Planner edit and recalculation
+
+Schedule -> find/select activity -> edit supported Plan/Logic input -> draft visibly dirty -> validate -> recalculate -> changed-only impact -> inspect movement/provenance -> keep in scenario / undo / discard / submit proposal.
+
+Invalid edits should preserve user input and explain the correction required. Essential operations need keyboard/form paths; drag may be an optional convenience.
+
+## 13.2 Field execution command to live schedule
+
+ADR-016 distinguishes queueing, server acceptance and application. The UI must preserve that distinction. [I3]
+
+```
+Field execution command
+  -> queued locally
+  -> server authenticates and validates
+  -> ACCEPTED
+  -> authoritative execution effect applied
+  -> S7 deterministic recalculation
+  -> APPLIED
+  -> live schedule updated
+```
+
+An accepted receipt must not falsely imply that recalculation or downstream application has finished.
+
+## 13.3 Live forecast to approved forecast
+
+```
+Authoritative execution effect
+  -> live forecast changes
+  -> supervisor review
+  -> planner forecast review
+  -> approved forecast advances
+```
+
+The exact review interaction is P2 design work, but the authority boundary is already explicit in the roadmap. [I2]
+
+## 13.4 Movement investigation
+
+Today/Schedule attention -> open affected milestone/activity -> focus selected activity -> inspect provenance-backed "Why did this move?" -> highlight supported driving chain -> open causal event -> inspect actual/remaining/logic/calendar -> create recovery scenario if required.
+
+## 13.5 Supervisor review
+
+The supervisor should see the submitted execution operation, prior authoritative state, relevant evidence/context and live schedule consequence. Communication acknowledgements or reactions must never perform review implicitly. [I3]
+
+## 13.6 Field communication and photos
+
+My Work -> activity -> contextual timeline -> text or photo/markup -> local queued state if offline -> server acceptance/delivery -> visible to permitted users. **No schedule mutation.**
+
+A separate "Mark complete" or progress action opens an explicit ExecutionCommand path. Message text is never interpreted as scheduling authority. [I3]
+
+## 13.7 Offline reconnect and rejection
+
+Offline capture -> durable local outbox -> process termination/reopen -> queued work remains visible -> reconnect/current permission check -> idempotent submission -> accepted/applied OR rejected.
+
+Rejected/stale/conflicting work becomes **Needs attention** and must show what the user entered, current server state, why it cannot apply, and allowed resolution. Android offline-first guidance and InEight mobile sync states provide external patterns, but STO's authority/idempotency contract comes from ADR-016. [E6][E11][I3]
+
+# 14. Desktop versus mobile responsibility
+
+## Desktop / Master Console
+
+- Full WBS/activity table and professional Gantt.
+- Logic and float investigation.
+- Planner editing and scenarios.
+- Changed-only and comparison views.
+- Planner forecast review/approval.
+- Supervisor/control-room review where authorised.
+- Import/reconciliation/export in later phases.
+- Future CMMS/P6 mapping/configuration.
+
+## Field App
+
+- Assigned work / My Work.
+- Start, progress, remaining duration and finish through supported execution commands.
+- Problems/actions where in scope.
+- Evidence/photo capture.
+- Contextual communication.
+- Durable offline submission.
+- Sync diagnostics/recovery understandable to field users.
+- Summary schedule context only where useful; no professional scheduler.
+
+This preserves Design C's strongest premise: the field app is a different application surface with different jobs and density.
+
+# 15. Design-system implications
+
+Design C's restrained operational language should be retained. Scheduling adds semantic tokens named by meaning rather than colour, for example:
+
+`schedule.reference.source`, `schedule.reference.baseline`, `schedule.history.actual`, `schedule.forecast.live`, `schedule.forecast.approved`, `schedule.forecast.unreviewed`, `schedule.working.scenario`, `schedule.working.edited`, `schedule.logic.driving`, `schedule.logic.related`, `schedule.risk.critical`, `schedule.risk.nearCritical`.
+
+Exact colours, fills and patterns remain TEST.
+
+Gantt semantics should use combinations of position, fill/outline/pattern, labels and persistent state context rather than colour alone. Actual history and future forecast should be separated by an explicit status point.
+
+WCAG 2.2 requires alternatives to drag-only interaction and defines minimum target-size rules. STO's field UX should go beyond minimum web compliance where real device/PPE/time-pressure conditions justify it. [E10]
+
+High-contrast/night use should be prototyped rather than assumed. HSE control-room guidance emphasizes task analysis, readable displays, logical grouping and clear feedback. [E8]
+
+# 16. Large-schedule UX
+
+Candidate architectural requirements:
+
+- Virtualized activity and Gantt rows.
+- One shared vertical row/selection model.
+- Pinned identity/name/state columns.
+- Collapsible WBS.
+- Search-to-activity rather than manual scrolling.
+- Saved views and filters.
+- Changed-only, critical/near-critical, needs-review, shift/lookahead and workfront views.
+- Selection-local/driving-path dependency display rather than global lines by default.
+- Preserve selection, filters, relevant scroll position and zoom after recalculation.
+- Multi-select and keyboard operations.
+- Asynchronous detail loading where appropriate.
+
+**TEST COHORTS, NOT PRODUCT LIMITS:** 500, 2,000 and 5,000+ activity fixtures may be used as representative performance/usability cohorts. They are not supported limits, SLAs or latency promises. Actual interaction budgets should come from profiling representative real schedules.
+
+# 17. Human factors and attention design
+
+HSE control-room guidance says HMI design should be based on task analysis, displays should be logically grouped, and operators should receive clear feedback about actions and delays. HSE alarm guidance emphasizes useful, relevant alarms tied to timely operator action rather than flooding. [E8][E9]
+
+Applied to STO, this supports an attention-by-action model rather than treating every schedule movement as an alert.
+
+Candidate Today categories are Decision required, Schedule risk, Execution risk, Review queues and Data/sync exceptions. Exact materiality thresholds are TEST.
+
+# 18. Future readiness without premature design
+
+## P3 - Project/P6 interchange
+
+Reserve a coherent external-systems area and activity provenance seam for import, identity reconciliation, candidate export, difference review and returned-file evidence. Do not design the full P3 writer/reconciliation UI before semantics and evidence profiles exist. [I2]
+
+## P4 - CMMS/EAM
+
+Allow the activity Context area to later expose STO identity, source schedule identity, work order, operation, equipment, CMMS provenance and mapping status. Do not design vendor adapter configuration in P2. [I2]
+
+## P6 - scheduler depth
+
+The Schedule workspace should be extensible to later Resources and operational Constraints without introducing a second "advanced scheduler". Resource levelling, crew capacity, permits, isolations, workface occupancy and optimisation explanation remain deferred until P6 semantics are real. [I2]
+
