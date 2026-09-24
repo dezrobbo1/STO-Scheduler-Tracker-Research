@@ -1,0 +1,22 @@
+name: TEMP RC02 source export
+on:
+  push:
+    branches:
+      - evidence/p1-g2-rc02-boiler-counterfactual
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rc02-source-snapshot
+          path: |
+            src
+            scripts
+            tests
+            pyproject.toml
+            uv.lock
+            AGENTS.md
+          if-no-files-found: error
+          retention-days: 1
