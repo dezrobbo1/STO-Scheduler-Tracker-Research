@@ -270,12 +270,19 @@ The 258 slots are:
 | Total Float | 46 |
 | Free Float | 8 |
 
-This is the strongest current causal candidate for the mechanically isolated
-family. Adjacency and replay do not prove the inactive semantic itself caused
-each first divergence. The recorded zero-duration pass-through experiment made
-BOILER worse, and the existing files do not expose one consistent inactive-task
-rule. A native causal experiment is required to prove or reject the candidate;
-a production correction now would be speculation.
+This remains the strongest causal candidate for the mechanically isolated
+family. The bounded native matrix completed on 2026-09-24 now measures a
+composite zero-lag-FS semantic: forward and late date boundaries pass through
+the inactive row with its duration removed, while predecessor Free Slack
+retains the original edge to the inactive row. The evidence is recorded in
+`p1-g2-rc02-inactive-native-matrix-2026-09-24.md`.
+
+That native result establishes the replacement shape for the synthetic
+zero-lag-FS boundary, but it does not by itself prove that applying the shape
+closes this family's five BOILER first divergences or its 258 slots. The prior
+ordinary zero-duration-node experiment still stands rejected. A real-file
+diagnostic counterfactual is required before the family's causal confidence is
+upgraded or a production correction is justified.
 
 ### G2-RC03 — elapsed-duration float basis
 
@@ -330,18 +337,21 @@ families above; only the elapsed-float family's origin currently meets the
 
 **No production root-cause fix is justified yet.**
 
-The best next target remains `G2-RC02`, because it owns 258 slots across 66
-affected leaves, but its causal attribution and replacement semantics are not
-established. The required next experiment is a minimal Microsoft Project native matrix for an
-active-to-inactive-to-active zero-lag FS chain, covering both forward placement
-and predecessor late/free-float influence. It must produce one rule that
-predicts both sides of the inactive row, prove or reject the candidate semantic,
-and must not reuse the rejected zero-duration pass-through guess.
+The `G2-RC02` native matrix is complete. For the tested zero-lag FS shape it
+establishes zero-duration forward/late date pass-through plus an original-edge
+Free-Slack boundary. The next bounded task is no longer another native run: it
+is a diagnostic-only counterfactual over the exact BOILER P1-G2 pair.
 
-Therefore no numerical mismatch reduction is promised yet. If that experiment
-establishes a rule, the subsequent PR should make only that one semantic
-correction and rerun this exact 422-slot inventory plus the real-file forward,
-backward and conformance cohorts.
+That counterfactual must apply only the measured RC02 composite semantic,
+reconcile it against the fixed 422-slot inventory, and show whether the five
+RC02 first divergences and their dependent paths move in the predicted
+direction without worsening RC01, RC03 or the compound slot. Until that is
+measured, RC02 remains `STRONG_CANDIDATE`, its expected mismatch reduction
+remains unknown, and no production correction is authorized.
+
+If the counterfactual succeeds, the subsequent PR should make only that one
+bounded production semantic correction and rerun the exact inventory plus the
+real-file forward, backward and conformance cohorts.
 
 ## Gate consequence
 
