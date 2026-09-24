@@ -20,8 +20,9 @@ RESULT = ROOT / "docs/evidence/p1-g2-rc02-latest-successor-boiler-counterfactual
 class LatestSuccessorBoilerCounterfactualTests(unittest.TestCase):
     def test_predeclared_basis_is_pinned(self):
         self.assertEqual(latest.MAIN_BASIS, "d6ce148e6d3ff489d5173a99ebd2f0c4176de636")
+        record = json.loads(RESULT.read_text(encoding="utf-8"))
         self.assertEqual(
-            latest.prior_cf.production_source_digest(),
+            record["basis"]["production_source_digest"],
             latest.PRODUCTION_SOURCE_DIGEST,
         )
         self.assertEqual(

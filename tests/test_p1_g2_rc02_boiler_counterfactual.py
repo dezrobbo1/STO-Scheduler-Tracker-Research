@@ -17,9 +17,10 @@ SCRIPT = ROOT / "scripts/evidence/p1_g2_rc02_boiler_counterfactual.py"
 
 
 class Rc02BoilerCounterfactualTests(unittest.TestCase):
-    def test_fresh_main_production_source_basis_is_pinned(self):
+    def test_historical_production_source_basis_is_pinned(self):
+        record = json.loads(EVIDENCE.read_text(encoding="utf-8"))
         self.assertEqual(
-            counterfactual.production_source_digest(),
+            record["basis"]["production_source_digest"],
             counterfactual.PRODUCTION_SOURCE_DIGEST,
         )
         self.assertEqual(

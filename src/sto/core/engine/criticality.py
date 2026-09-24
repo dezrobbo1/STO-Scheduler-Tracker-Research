@@ -107,7 +107,9 @@ from .progress import ProgressState
 #: finish. A completed span cannot absorb float on either coordinate. Version
 #: six measures an in-progress start component from its late remaining start
 #: while preserving the reported actual LateStart.
-CRITICALITY_PROFILE = "sto-criticality-v6"
+#: Version seven adds the native-measured inactive-boundary Free-Slack
+#: reporting rule while leaving ordinary relationships unchanged.
+CRITICALITY_PROFILE = "sto-criticality-v7"
 
 
 class CriticalityError(NetworkError):
@@ -256,6 +258,14 @@ def _free_float(
 
     slacks: list[int] = []
     for relationship in outgoing:
+        if relationship.inactive_boundary_uid is not None:
+            # The native sentinel measured the reporting boundary separately
+            # from date pass-through. For the supported zero-lag FS shape the
+            # predecessor retains the original predecessor->inactive gap, which
+            # is exactly zero; the direct active-successor gap must not replace
+            # it when another predecessor drives that successor later.
+            slacks.append(0)
+            continue
         anchor = early_finish if relationship.anchors_predecessor_finish else early_start
         lag_calendar = lag_calendar_for(
             relationship, scheduling_calendars[relationship.successor_uid]

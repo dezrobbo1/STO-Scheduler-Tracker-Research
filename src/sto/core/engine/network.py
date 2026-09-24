@@ -232,6 +232,11 @@ class PlannedRelationship:
     type: RelationshipType = RelationshipType.FS
     lag: int = 0
     lag_calendar: CompiledIntervals | None = None
+    #: Synthetic active-to-active edge derived from one measured inactive-task
+    #: boundary. ``None`` is an ordinary relationship. A value names the
+    #: excluded inactive activity whose zero-lag FS logic this edge carries
+    #: forward while the backward pass applies the measured fan-out rule.
+    inactive_boundary_uid: UUID | None = None
 
     @property
     def anchors_predecessor_finish(self) -> bool:
@@ -318,14 +323,27 @@ class Network:
                     for a in self.activities
                 ],
                 "relationships": [
-                    [
-                        str(r.uid),
-                        str(r.predecessor_uid),
-                        str(r.successor_uid),
-                        r.type.value,
-                        r.lag,
-                        calendar_digest(r.lag_calendar),
-                    ]
+                    (
+                        [
+                            str(r.uid),
+                            str(r.predecessor_uid),
+                            str(r.successor_uid),
+                            r.type.value,
+                            r.lag,
+                            calendar_digest(r.lag_calendar),
+                        ]
+                        if r.inactive_boundary_uid is None
+                        else [
+                            str(r.uid),
+                            str(r.predecessor_uid),
+                            str(r.successor_uid),
+                            r.type.value,
+                            r.lag,
+                            calendar_digest(r.lag_calendar),
+                            "inactive_boundary",
+                            str(r.inactive_boundary_uid),
+                        ]
+                    )
                     for r in self.relationships
                 ],
             }
@@ -429,6 +447,9 @@ class Network:
                 )
 
         edges: set[UUID] = set()
+        inactive_boundaries: dict[UUID, list[PlannedRelationship]] = {}
+        boundary_by_predecessor: dict[UUID, UUID] = {}
+        activities_by_uid = self.activity_by_uid()
         for relationship in self.relationships:
             if relationship.uid in edges:
                 raise ForwardPassError("SCHEDULE_DUPLICATE_RELATIONSHIP", relationship.uid)
@@ -440,6 +461,58 @@ class Network:
                     )
             if relationship.predecessor_uid == relationship.successor_uid:
                 raise ForwardPassError("SCHEDULE_SELF_RELATIONSHIP", relationship.uid)
+
+            boundary_uid = relationship.inactive_boundary_uid
+            if boundary_uid is None:
+                continue
+            if (
+                relationship.type is not RelationshipType.FS
+                or relationship.lag != 0
+                or relationship.lag_calendar is not None
+            ):
+                raise ForwardPassError(
+                    "SCHEDULE_INACTIVE_BOUNDARY_UNSUPPORTED",
+                    boundary_uid,
+                    "native inactive-boundary edges are zero-lag FS only",
+                )
+            predecessor = activities_by_uid[relationship.predecessor_uid]
+            successor = activities_by_uid[relationship.successor_uid]
+            if predecessor.has_started or successor.has_started:
+                raise ForwardPassError(
+                    "SCHEDULE_INACTIVE_BOUNDARY_UNSUPPORTED",
+                    boundary_uid,
+                    "progressed boundary endpoints are outside the measured native shape",
+                )
+            previous = boundary_by_predecessor.setdefault(
+                relationship.predecessor_uid, boundary_uid
+            )
+            if previous != boundary_uid:
+                raise ForwardPassError(
+                    "SCHEDULE_INACTIVE_BOUNDARY_UNSUPPORTED",
+                    relationship.predecessor_uid,
+                    "one predecessor participates in several inactive boundaries",
+                )
+            inactive_boundaries.setdefault(boundary_uid, []).append(relationship)
+
+        for boundary_uid, rows in inactive_boundaries.items():
+            if len(rows) not in (1, 2):
+                raise ForwardPassError(
+                    "SCHEDULE_INACTIVE_BOUNDARY_UNSUPPORTED",
+                    boundary_uid,
+                    f"measured native shape carries one or two active successors, got {len(rows)}",
+                )
+            if len({row.predecessor_uid for row in rows}) != 1:
+                raise ForwardPassError(
+                    "SCHEDULE_INACTIVE_BOUNDARY_UNSUPPORTED",
+                    boundary_uid,
+                    "inactive boundary carries several active predecessors",
+                )
+            if len({row.successor_uid for row in rows}) != len(rows):
+                raise ForwardPassError(
+                    "SCHEDULE_INACTIVE_BOUNDARY_UNSUPPORTED",
+                    boundary_uid,
+                    "inactive boundary repeats an active successor",
+                )
 
 
 def lag_calendar_for(
