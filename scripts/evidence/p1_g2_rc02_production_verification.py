@@ -30,6 +30,7 @@ from scripts.evidence.p1_g2_execution import (
     verify_production_basis,
 )
 from sto.core.engine import BACKWARD_PASS_PROFILE, CRITICALITY_PROFILE, VALIDATOR_PROFILE
+from sto.core.engine.result import RESULT_PROFILE
 from sto.core.engine.validate import validate_result
 
 SCHEMA = "sto-p1-g2-rc02-production-verification-v1"
@@ -253,6 +254,7 @@ def build_record(baseline_path: Path) -> dict[str, object]:
             "backward_profile": BACKWARD_PASS_PROFILE,
             "criticality_profile": CRITICALITY_PROFILE,
             "validator_profile": VALIDATOR_PROFILE,
+            "result_profile": RESULT_PROFILE,
             "inactive_boundary_relationships": [
                 {
                     "active_predecessor_leaf_id": pred,

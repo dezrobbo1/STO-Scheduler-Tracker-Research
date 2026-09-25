@@ -20,15 +20,15 @@ Fresh main before the correction:
 
 Final production-source commit for this correction:
 
-`55a27c99d0ca031890221c66ec4e0d8ede059690`
+`1982789f1c0aab83892dbac2f2d7b690ec9a85d6`
 
 Production source identity:
 
-- source digest: `3f80c59c7ff807d7d08803cb6f6697ce95f657da9aa15ee3c41586a70f4224d3`;
-- pinned production path-tree SHA-256: `f7ca47d7e71f9c1e92fd13eaf2b02f351ffb8ca5a8fbb707c51aacb8b8a2ef11`;
+- pinned production path-tree SHA-256: `a0ad82dfd2777c2acef2f5346e37e034f295e08c1992e6cd122bfc816a17b715`;
 - `BACKWARD_PASS_PROFILE`: `sto-backward-pass-v8`;
 - `CRITICALITY_PROFILE`: `sto-criticality-v7`;
-- `VALIDATOR_PROFILE`: `sto-validator-v4`.
+- `VALIDATOR_PROFILE`: `sto-validator-v4`;
+- `RESULT_PROFILE`: `sto-result-v3`.
 
 The shared P1-G2 source execution helper now verifies this correction commit and
 path-tree for current calculations. The immutable 2026-09-22 evidence record
@@ -49,11 +49,11 @@ The supported subset requires:
 - exactly one scheduled active predecessor of the inactive row;
 - one or two scheduled active successors;
 - ordinary zero-lag FS relationships on both sides;
-- automatic, unprogressed, unconstrained active endpoints;
+- automatic, unprogressed, unconstrained, **non-elapsed** active endpoints;
 - an automatic, unprogressed, ordinary inactive task;
 - no second inactive predecessor on the same successor; and
-- no ambiguous reuse of one active predecessor across several supported inactive
-  boundaries.
+- no active predecessor participating in more than one inactive boundary at all,
+  counted from the raw inactive graph before per-boundary eligibility filtering.
 
 Anything outside that boundary retains the existing
 `ACTIVITY_SUCCESSOR_OF_INACTIVE` assumption path.
@@ -86,6 +86,15 @@ The inactive-boundary identity participates in `Network.fingerprint()`, so a
 network with this native-evidence-derived policy cannot hash as the ordinary
 active-to-active graph.
 
+Each derived boundary relationship is also projected into
+`ScheduleResult.relationships` under
+`RELATIONSHIP_NATIVE_INACTIVE_BOUNDARY_DERIVED`. Its deterministic detail
+records the inactive activity, both original source relationship UIDs and the
+active endpoints. Result profile `sto-result-v3` fingerprints that durable
+lineage. On reload the workspace verifies the source relationships and inactive
+row before accepting the derived relationship, so a published forward or late
+driver UUID remains explainable after persistence/restart.
+
 ## Exact BOILER verification
 
 Raw BOILER schedule remains external.
@@ -93,19 +102,28 @@ Raw BOILER schedule remains external.
 - bytes: **3,361,935**;
 - SHA-256: `e9b9b7994cc5cc50479807b82c452da742a91de9f7de52b172a6be6f4f399c70`.
 
-The post-correction verifier reproduces the fixed historical 422-slot inventory,
-runs current production and compares its complete 451-row nine-field projection
-against the independently recorded PR #60 directional diagnostic.
+The post-correction verifier reproduces the fixed historical 422-slot inventory
+and compares current production only with claims mechanically present in the
+immutable merged PR #60 evidence. It requires exact equality with PR #60's
+recorded **147-slot / 39-leaf by-field and by-group inventory summary** and its
+full movement contract over all original 422 mismatch keys:
 
-Projection identity:
+- RC01 — 17 closed, 11 improved, 132 unchanged;
+- RC02 — 258 closed;
+- RC03 — 3 unchanged;
+- RC04 — 1 improved.
 
-`e638c48a40fa572a1f98333b7628c15a1f9562203efc8c03c2a441f1d3ec0a73`
+The verifier deliberately does **not** treat a projection hash first introduced
+by this production PR as an independent oracle. It still records deterministic
+current-production identities for replay/audit only:
 
-Remaining-key-set identity:
+- production projection SHA-256:
+  `e638c48a40fa572a1f98333b7628c15a1f9562203efc8c03c2a441f1d3ec0a73`;
+- production remaining-key-set SHA-256:
+  `bfb1b5113ac3f4adf8656a731935dee7387fcce95efb08ff601ce77fb38ed9ec`.
 
-`bfb1b5113ac3f4adf8656a731935dee7387fcce95efb08ff601ce77fb38ed9ec`
-
-Both identities match the supported counterfactual exactly.
+Those two hashes identify this production result; they are not described as
+independent PR #60 oracle values.
 
 | State | Mismatch slots | Affected leaves | RC02 slots |
 |---|---:|---:|---:|
@@ -183,7 +201,12 @@ Focused production regressions cover:
 - Free-Slack inactive-edge reporting semantics;
 - validator acceptance of that reporting semantic;
 - network fingerprint isolation;
-- plan construction of measured boundary edges; and
+- plan construction of measured boundary edges;
+- elapsed active endpoints retaining the explicit inactive-successor assumption;
+- mixed eligible/ineligible inactive boundaries from one active predecessor
+  retaining the explicit assumption for every branch;
+- durable derived-driver lineage through result fingerprinting and persistence;
+  and
 - unsupported inactive shapes retaining the explicit assumption.
 
 Post-correction evidence is generated by:
@@ -217,3 +240,25 @@ The next root-cause review should begin from this post-correction 147-slot
 inventory. `G2-RC01` is now the dominant remaining family at 143 slots; its
 cause and next bounded experiment/correction must be revalidated against current
 production before any further scheduler change.
+
+
+## Review hardening — 2026-09-25
+
+A fresh Codex-style review found four production/evidence integrity gaps. The
+bounded correction was tightened without broadening its measured semantic:
+
+1. elapsed active endpoints are now outside the RC02 rule, keeping RC03
+   independent;
+2. reuse of one active predecessor across several inactive rows is counted from
+   the raw graph before eligibility, so a supported branch cannot coexist with
+   an ignored unmeasured inactive branch;
+3. synthetic boundary relationships now have durable, fingerprinted source-edge
+   lineage in result profile `sto-result-v3`, verified again after reload; and
+4. the verifier no longer calls production-created projection/key-set hashes an
+   independent PR #60 oracle. Acceptance is based on PR #60's immutable
+   inventory summary and movement contract.
+
+The BOILER raw graph was rechecked after these guards were introduced. Its
+supported RC02 boundaries remain exactly the three recorded above and none of
+their active endpoints is elapsed, so the added scope guards do not change the
+BOILER boundary cohort.

@@ -3,9 +3,8 @@
   "evidence_date": "2026-09-25",
   "basis": {
     "fresh_main_before_correction": "26dc06b6352fd882fa32f6b60a03eddd9b2b3f68",
-    "production_correction_commit": "55a27c99d0ca031890221c66ec4e0d8ede059690",
-    "production_source_digest": "3f80c59c7ff807d7d08803cb6f6697ce95f657da9aa15ee3c41586a70f4224d3",
-    "production_path_tree_sha256": "f7ca47d7e71f9c1e92fd13eaf2b02f351ffb8ca5a8fbb707c51aacb8b8a2ef11",
+    "production_correction_commit": "1982789f1c0aab83892dbac2f2d7b690ec9a85d6",
+    "production_path_tree_sha256": "a0ad82dfd2777c2acef2f5346e37e034f295e08c1992e6cd122bfc816a17b715",
     "production_basis_verified": true,
     "baseline": {
       "bytes": 3361935,
@@ -20,14 +19,49 @@
       "bytes": 10610,
       "sha256": "439e8ef6a4e7f90b9866e76fa2a5f4a8bc4060e82b7ef7d7c144b19d0b24dc9c",
       "classification": "RC02_LATEST_SUCCESSOR_COUNTERFACTUAL_SUPPORTED",
-      "expected_projection_sha256": "e638c48a40fa572a1f98333b7628c15a1f9562203efc8c03c2a441f1d3ec0a73",
-      "expected_remaining_keyset_sha256": "bfb1b5113ac3f4adf8656a731935dee7387fcce95efb08ff601ce77fb38ed9ec"
+      "expected_inventory_summary": {
+        "slots": 147,
+        "leaves": 39,
+        "by_field": {
+          "critical": 2,
+          "early_finish": 27,
+          "early_start": 21,
+          "finish": 27,
+          "free_float": 7,
+          "late_finish": 6,
+          "late_start": 15,
+          "start": 21,
+          "total_float": 21
+        },
+        "by_group": {
+          "G2-RC01": 143,
+          "G2-RC03": 3,
+          "G2-RC04": 1
+        }
+      },
+      "expected_movement_by_original_group": {
+        "G2-RC01": {
+          "closed": 17,
+          "improved": 11,
+          "unchanged": 132
+        },
+        "G2-RC02": {
+          "closed": 258
+        },
+        "G2-RC03": {
+          "unchanged": 3
+        },
+        "G2-RC04": {
+          "improved": 1
+        }
+      }
     }
   },
   "production_semantics": {
     "backward_profile": "sto-backward-pass-v8",
     "criticality_profile": "sto-criticality-v7",
     "validator_profile": "sto-validator-v4",
+    "result_profile": "sto-result-v3",
     "inactive_boundary_relationships": [
       {
         "active_predecessor_leaf_id": "L0055",
@@ -49,10 +83,10 @@
   },
   "verification": {
     "calculation_validator_clean": true,
-    "projection_sha256": "e638c48a40fa572a1f98333b7628c15a1f9562203efc8c03c2a441f1d3ec0a73",
-    "projection_matches_supported_counterfactual": true,
-    "remaining_keyset_sha256": "bfb1b5113ac3f4adf8656a731935dee7387fcce95efb08ff601ce77fb38ed9ec",
-    "remaining_keyset_matches_supported_counterfactual": true,
+    "production_projection_sha256": "e638c48a40fa572a1f98333b7628c15a1f9562203efc8c03c2a441f1d3ec0a73",
+    "production_remaining_keyset_sha256": "bfb1b5113ac3f4adf8656a731935dee7387fcce95efb08ff601ce77fb38ed9ec",
+    "inventory_summary_matches_supported_counterfactual": true,
+    "movement_contract_matches_supported_counterfactual": true,
     "new_mismatch_slots": 0
   },
   "inventory": {

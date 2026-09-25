@@ -358,15 +358,22 @@ The authorized bounded production correction is now verified in
 represents only the measured ordinary zero-lag-FS inactive-boundary subset:
 all supported active successors bind forward, the unique latest active-successor
 late boundary binds backward, and Free Slack retains the measured inactive-edge
-reporting boundary. Unsupported shapes remain explicitly labelled. The exact
-post-correction BOILER production projection and remaining key set match the
-supported counterfactual byte-for-byte by digest: **422 -> 147 mismatch slots,
-105 -> 39 affected leaves, and RC02 258 -> 0**. The remaining inventory is
-143 RC01 slots, 3 RC03 slots and 1 RC04 slot. BOILER, KILN and CALCINER retain
-clean validator results under the corrected profiles. RC02 is therefore closed
-in production for the bounded measured semantic, but P1-G2 remains open, P1
-remains 4/5 and P2 remains not started. The next root-cause review begins from
-the 147-slot post-correction inventory, with RC01 the dominant remaining family.
+reporting boundary. Elapsed active endpoints, reuse of one active predecessor
+across several inactive rows and every other unmeasured shape remain explicitly
+labelled. Synthetic boundary drivers carry durable source-edge lineage in result
+profile `sto-result-v3`.
+
+The post-correction BOILER inventory reproduces the immutable merged PR #60
+acceptance contract: **422 -> 147 mismatch slots, 105 -> 39 affected leaves,
+and RC02 258 -> 0**, with the same by-field/by-group inventory and the same
+movement classification across all original 422 mismatch keys. Production
+projection/key-set hashes are retained as current-run identities only, not as a
+self-declared counterfactual oracle. The remaining inventory is 143 RC01 slots,
+3 RC03 slots and 1 RC04 slot. BOILER, KILN and CALCINER retain clean validator
+results under the corrected profiles. RC02 is therefore closed in production
+for the bounded measured semantic, but P1-G2 remains open, P1 remains 4/5 and
+P2 remains not started. The next root-cause review begins from the 147-slot
+post-correction inventory, with RC01 the dominant remaining family.
 
 P2 order and ownership, maintained from `docs/goals/roadmap.json`:
 

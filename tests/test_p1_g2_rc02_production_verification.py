@@ -43,6 +43,7 @@ class Rc02ProductionVerificationTests(unittest.TestCase):
         self.assertEqual(record["production_semantics"]["backward_profile"], "sto-backward-pass-v8")
         self.assertEqual(record["production_semantics"]["criticality_profile"], "sto-criticality-v7")
         self.assertEqual(record["production_semantics"]["validator_profile"], "sto-validator-v4")
+        self.assertEqual(record["production_semantics"]["result_profile"], "sto-result-v3")
         self.assertTrue(
             record["verification"]["inventory_summary_matches_supported_counterfactual"]
         )
