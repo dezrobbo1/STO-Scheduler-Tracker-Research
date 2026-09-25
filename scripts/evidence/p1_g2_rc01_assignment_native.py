@@ -348,8 +348,9 @@ def _case_observations(parsed: dict[str, object]) -> dict[str, object]:
                 "duration": task["duration"],
             },
             "assignments": {
-                row["role"]: {
+                str(row["uid"]): {
                     "uid": row["uid"],
+                    "role": row["role"],
                     "resource_uid": row["resource_uid"],
                     "start": row["start"],
                     "finish": row["finish"],
@@ -371,17 +372,24 @@ def classify(observations: dict[str, object]) -> dict[str, object]:
         return _dt(observations[case]["task"][field])
 
     def assignment(case: str, role: str, field: str) -> datetime:
-        return _dt(observations[case]["assignments"][role][field])
+        matches = [
+            row
+            for row in observations[case]["assignments"].values()
+            if row["role"] == role
+        ]
+        _require(len(matches) == 1, f"case {case} does not have one {role} assignment")
+        return _dt(matches[0][field])
 
     assignment_calendar_compatible: dict[str, bool] = {}
     for case in "ABCD":
-        for role, row in observations[case]["assignments"].items():
+        for uid, row in observations[case]["assignments"].items():
+            role = row["role"]
             expected = (
                 (datetime(2026, 10, 12, 13), datetime(2026, 10, 12, 17))
                 if role == "PM"
                 else (datetime(2026, 10, 12, 8), datetime(2026, 10, 12, 12))
             )
-            assignment_calendar_compatible[f"{case}.{role}"] = (
+            assignment_calendar_compatible[f"{case}.{uid}"] = (
                 _dt(row["start"]) == expected[0]
                 and _dt(row["finish"]) == expected[1]
                 and row["work"] == generate.ASSIGNMENT_WORK
@@ -412,10 +420,14 @@ def classify(observations: dict[str, object]) -> dict[str, object]:
         and task("C", "start") == datetime(2026, 10, 12, 8)
         and task("C", "finish") == datetime(2026, 10, 12, 12)
     )
-    single = observations["D"]["assignments"]["AM"]
+    single_rows = list(observations["D"]["assignments"].values())
+    _require(len(single_rows) == 1, "case D does not have exactly one assignment")
+    single = single_rows[0]
     single_control = (
         task("D", "start") == _dt(single["start"])
         and task("D", "finish") == _dt(single["finish"])
+        and task("D", "early_start") == task("D", "start")
+        and task("D", "early_finish") == task("D", "finish")
         and task("D", "start") == datetime(2026, 10, 12, 8)
         and task("D", "finish") == datetime(2026, 10, 12, 12)
     )

@@ -190,6 +190,32 @@ class Rc01AssignmentNativeTests(unittest.TestCase):
         classified = native.classify(mutated)
         self.assertNotEqual(classified["verdict"], "ASSIGNMENT_ENVELOPE_SUPPORTED")
 
+    def test_overlap_control_validates_both_assignment_spans(self):
+        root = ET.fromstring(_simulated_supported_return())
+        assignments = {
+            row.findtext("p:UID", namespaces=NS): row
+            for row in root.findall("p:Assignments/p:Assignment", NS)
+        }
+        _set(assignments["105"], "Start", "2026-10-12T09:00:00")
+        _set(assignments["105"], "Finish", "2026-10-12T13:00:00")
+        result = native.analyze(
+            ET.tostring(root, encoding="utf-8", xml_declaration=True)
+        )
+        self.assertEqual(len(result["classification"]["observations"]["C"]["assignments"]), 2)
+        self.assertEqual(result["classification"]["verdict"], "NATIVE_RESULT_INCONCLUSIVE")
+        self.assertFalse(result["decision"]["boiler_counterfactual_authorized"])
+
+    def test_single_resource_control_validates_early_coordinates(self):
+        root = ET.fromstring(_simulated_supported_return())
+        task = _node(root, "p:Tasks/p:Task", "RC01-CASE-D")
+        _set(task, "EarlyStart", "2026-10-13T08:00:00")
+        _set(task, "EarlyFinish", "2026-10-13T12:00:00")
+        result = native.analyze(
+            ET.tostring(root, encoding="utf-8", xml_declaration=True)
+        )
+        self.assertEqual(result["classification"]["verdict"], "NATIVE_RESULT_INCONCLUSIVE")
+        self.assertFalse(result["decision"]["boiler_counterfactual_authorized"])
+
     def test_output_aliases_are_refused_and_separate_output_is_atomic(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
