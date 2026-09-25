@@ -163,8 +163,14 @@ def _relationship_context_codes(
             incoming = relationships.get(source_predecessor_uid)
             outgoing = relationships.get(source_successor_uid)
             inactive = activities.get(inactive_uid)
+            expected_uid = uuid.uuid5(
+                uuid.NAMESPACE_URL,
+                "sto:native-inactive-boundary:"
+                f"{predecessor_uid}:{inactive_uid}:{successor_uid}",
+            )
             if (
-                incoming is None
+                relationship_uid != expected_uid
+                or incoming is None
                 or outgoing is None
                 or inactive is None
                 or inactive.active
@@ -1045,6 +1051,17 @@ class Workspace:
                 f"calculation {header['id']} for project {project_id} is stored under "
                 f"{header['result_fingerprint']} but its rows fingerprint to {recomputed}"
             )
+        # Relationship dispositions are part of the fingerprint, but a
+        # synthetically derived driver also has to resolve back to the exact
+        # source relationships it claims after a restart. Validate that lineage
+        # before serving the stored calculation.
+        _relationship_context_codes(
+            named.schedule,
+            (
+                (edge.uid, edge.code, edge.detail)
+                for edge in result.relationships
+            ),
+        )
         return StoredCalculation(
             project_id=project_id,
             version_id=header["version_id"],
