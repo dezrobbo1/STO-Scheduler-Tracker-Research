@@ -918,11 +918,13 @@ def build_plan(
         if not _inactive_middle_is_measured(middle):
             continue
         incoming_scheduled = [
-            row for row in raw_incoming.get(inactive_uid, ())
+            row
+            for row in raw_incoming.get(inactive_uid, ())
             if row.predecessor_uid in scheduled
         ]
         outgoing_scheduled = [
-            row for row in raw_outgoing.get(inactive_uid, ())
+            row
+            for row in raw_outgoing.get(inactive_uid, ())
             if row.successor_uid in scheduled
         ]
         if len(incoming_scheduled) != 1 or len(outgoing_scheduled) not in (1, 2):
@@ -938,6 +940,7 @@ def build_plan(
             continue
         if any(not _inactive_boundary_endpoint_is_measured(row) for row in successors):
             continue
+
         successor_uids = {row.successor_uid for row in outgoing_scheduled}
         # The native matrices did not contain a parallel direct relationship
         # from this same active predecessor to one of the active successors.
@@ -950,6 +953,7 @@ def build_plan(
             if row.successor_uid in scheduled
         ):
             continue
+
         # A successor reached from several inactive rows is a different fan-in
         # shape from the native matrix; leave it on the historical labelled path.
         if any(
@@ -957,7 +961,8 @@ def build_plan(
                 1
                 for incoming in raw_incoming.get(row.successor_uid, ())
                 if incoming.predecessor_uid in inactive
-            ) != 1
+            )
+            != 1
             for row in outgoing_scheduled
         ):
             continue
@@ -992,9 +997,256 @@ def build_plan(
             or relationship.successor_uid not in scheduled
         ):
             excluded.append(
-                Excluded(relationship.uid, "relationship", "RELATIONSHIP_ENDPOINT_NOT_SCHEDULED")
+                Excluded(                    relationship.uid,
+                    "relationship",
+                    "RELATIONSHIP_ENDPOINT_NOT_SCHEDULED",
+                )
             )
             if (
                 relationship.predecessor_uid in inactive
                 and relationship.successor_uid in scheduled
                 and relationship.uid not in supported_inactive_successor_relationships
+                and relationship.successor_uid not in labelled_successors
+            ):
+                labelled_successors.add(relationship.successor_uid)
+                assumed.append(
+                    Assumed(
+                        relationship.successor_uid,
+                        "activity",
+                        "ACTIVITY_SUCCESSOR_OF_INACTIVE",
+                        "inactive-boundary shape is outside the measured production rule",
+                    )
+                )
+            continue
+
+        lag = relationship.lag
+        lag_seconds = 0 if lag is None else lag.seconds
+        policy = relationship.lag_calendar
+        inherited = policy is LagCalendar.INHERIT_PROJECT_POLICY
+        if inherited:
+            policy = project.lag_calendar_policy
+        if lag is not None and lag.elapsed:
+            policy = LagCalendar.ELAPSED_24H
+
+        lag_calendar: CompiledIntervals | None
+        if lag_seconds == 0:
+            lag_calendar = None
+        elif policy is LagCalendar.ELAPSED_24H:
+            lag_calendar = continuous
+        elif policy is LagCalendar.SUCCESSOR and not inherited:
+            lag_calendar = activity_calendars[relationship.successor_uid]
+        elif policy is LagCalendar.SUCCESSOR:
+            lag_calendar, on_project_calendar = lag_calendar_of(relationship.successor_uid)
+            if lag_calendar is None:
+                excluded.append(
+                    Excluded(
+                        relationship.uid,
+                        "relationship",
+                        "RELATIONSHIP_LAG_CALENDAR_UNRESOLVED",
+                        policy.value,
+                    )
+                )
+                continue
+            if on_project_calendar:
+                assumed.append(
+                    Assumed(
+                        relationship.uid,
+                        "relationship",
+                        "RELATIONSHIP_LAG_ON_PROJECT_CALENDAR",
+                        "successor has no task calendar; project calendar and "
+                        "elapsed time are not distinguishable on this estate",
+                    )
+                )
+        elif policy is LagCalendar.PREDECESSOR:
+            lag_calendar = activity_calendars[relationship.predecessor_uid]
+        elif policy is LagCalendar.PROJECT:
+            default = project.default_calendar_uid
+            compiled = calendars.get(default) if default is not None else None
+            if compiled is None:
+                excluded.append(
+                    Excluded(
+                        relationship.uid,
+                        "relationship",
+                        "RELATIONSHIP_LAG_CALENDAR_UNRESOLVED",
+                        policy.value,
+                    )
+                )
+                continue
+            lag_calendar = compiled.intervals
+        else:
+            excluded.append(
+                Excluded(
+                    relationship.uid,
+                    "relationship",
+                    "RELATIONSHIP_LAG_CALENDAR_UNRESOLVED",
+                    policy.value,
+                )
+            )
+            continue
+
+        relationships.append(
+            PlannedRelationship(
+                uid=relationship.uid,
+                predecessor_uid=relationship.predecessor_uid,
+                successor_uid=relationship.successor_uid,
+                type=relationship.type,
+                lag=lag_seconds,
+                lag_calendar=lag_calendar,
+            )
+        )
+
+    for inactive_uid, (incoming_edge, outgoing_rows) in sorted(
+        boundary_candidates.items(), key=lambda row: str(row[0])
+    ):
+        for outgoing_edge in outgoing_rows:
+            relationships.append(
+                PlannedRelationship(
+                    uid=uuid5(
+                        NAMESPACE_URL,
+                        "sto:native-inactive-boundary:"
+                        f"{incoming_edge.predecessor_uid}:{inactive_uid}:"
+                        f"{outgoing_edge.successor_uid}",
+                    ),
+                    predecessor_uid=incoming_edge.predecessor_uid,
+                    successor_uid=outgoing_edge.successor_uid,
+                    type=RelationshipType.FS,
+                    lag=0,
+                    lag_calendar=None,
+                    inactive_boundary_uid=inactive_uid,
+                )
+            )
+
+    # Evidence labels describe the network the passes actually evaluate, not
+    # the raw source graph. An edge whose other endpoint was excluded above is
+    # absent from that network and therefore cannot make a started activity
+    # look like the measured predecessor/successor trial shape.
+    incident_by_activity: dict[UUID, list[PlannedRelationship]] = {
+        uid: [] for uid in scheduled
+    }
+    for relationship in relationships:
+        incident_by_activity[relationship.predecessor_uid].append(relationship)
+        incident_by_activity[relationship.successor_uid].append(relationship)
+    # The hierarchy, in source order, so the rollup answers a summary the same
+    # way twice. Every node appears, including one with nothing beneath it:
+    # the rollup reports those rather than leaving them out.
+    # Children of both kinds are collected together and ordered by the source
+    # sequence they share. Appending every nested summary and then every
+    # activity put a summary before an activity the file lists after it, which
+    # is not the source order this field promises and not the order a reader
+    # of the hierarchy expects.
+    wbs_children: dict[UUID, list[UUID]] = {node.uid: [] for node in schedule.wbs_nodes}
+    gathered: dict[UUID, list[tuple[int, UUID]]] = {node.uid: [] for node in schedule.wbs_nodes}
+    for node in schedule.wbs_nodes:
+        if node.parent_uid is not None and node.parent_uid in gathered:
+            gathered[node.parent_uid].append((node.seq, node.uid))
+    for activity in schedule.activities:
+        if activity.wbs_uid is not None and activity.wbs_uid in gathered:
+            gathered[activity.wbs_uid].append((activity.seq, activity.uid))
+    for parent, rows in gathered.items():
+        wbs_children[parent] = [uid for _, uid in sorted(rows, key=lambda row: (row[0], str(row[1])))]
+
+    if project.start is None:
+        # Every floor in this pass is the project start: a task nothing else
+        # places sits there, and so does the start of a task whose
+        # predecessors bound only its finish. Substituting the compiled
+        # window's first coordinate made all of those the caller's choice
+        # rather than the schedule's -- move the window a day and the dates
+        # move a day. A schedule that declares no start has no such anchor,
+        # and the plan says so instead of inventing one.
+        raise PlanError(
+            "PROJECT_START_MISSING",
+            None,
+            "the schedule declares no start, so there is no coordinate to floor a task at",
+        )
+    project_start = to_seconds(project.start)
+    status_time: int | None = None
+    status_outside = False
+    if project.status_date is not None:
+        candidate = to_seconds(project.status_date)
+        if project_start <= candidate <= window[1]:
+            status_time = candidate
+        else:
+            status_outside = True
+
+    network = Network(
+        activities=tuple(activities),
+        relationships=tuple(relationships),
+        project_start=project_start,
+        horizon=window[1],
+        status_time=status_time,
+    )
+    dynamic_evidence_candidates: list[Activity] = []
+    for activity in schedule.activities:
+        if activity.uid not in scheduled:
+            continue
+        static_failures = _measured_in_progress_native_shape_static_failures(
+            activity,
+            assignment_rows_by_activity.get(activity.uid, []),
+            resource_uids,
+            incident_by_activity[activity.uid],
+            project.progress_policy,
+        )
+        if static_failures is None:
+            continue
+        if static_failures:
+            assumed.append(
+                Assumed(
+                    activity.uid,
+                    "activity",
+                    "ACTIVITY_IN_PROGRESS_LATE_DATES_ASSUMED",
+                    "; ".join(static_failures),
+                )
+            )
+        else:
+            dynamic_evidence_candidates.append(activity)
+
+    if dynamic_evidence_candidates:
+        early = forward_pass(
+            network,
+            snap_milestones=(
+                project.milestone_snap_policy is MilestoneSnapPolicy.NEXT_WORKING
+            ),
+            progress_policy=project.progress_policy,
+        ).by_uid()
+        planned_by_uid = network.activity_by_uid()
+        for activity in dynamic_evidence_candidates:
+            dynamic_failures = _measured_in_progress_native_shape_dynamic_failures(
+                activity,
+                incident_by_activity[activity.uid],
+                early,
+                planned_by_uid[activity.uid],
+                project.progress_policy,
+                status_time,
+            )
+            if dynamic_failures:
+                assumed.append(
+                    Assumed(
+                        activity.uid,
+                        "activity",
+                        "ACTIVITY_IN_PROGRESS_LATE_DATES_ASSUMED",
+                        "; ".join(dynamic_failures),
+                    )
+                )
+
+    # An assumption is a statement about a row the plan scheduled. One about
+    # an excluded row would count in ``assumed_by_code`` against a calculation
+    # it took no part in, so the plan refuses to carry it rather than report it.
+    for row in assumed:
+        if row.kind == "activity" and row.uid not in scheduled:
+            raise ValueError(
+                f"assumption {row.code} names activity {row.uid}, which the plan did not schedule"
+            )
+
+    return Plan(
+        network=network,
+        epoch=shared_epoch,
+        calendars=calendars,
+        excluded=tuple(excluded),
+        assumed=tuple(assumed),
+        snap_milestones=project.milestone_snap_policy is MilestoneSnapPolicy.NEXT_WORKING,
+        critical_float_threshold=project.critical_float_threshold_seconds,
+        progress_policy=project.progress_policy,
+        status_time_outside_window=status_outside,
+        resource_calendars_apply=resource_calendars_apply,
+        wbs_children={uid: tuple(kids) for uid, kids in wbs_children.items()},
+    )
