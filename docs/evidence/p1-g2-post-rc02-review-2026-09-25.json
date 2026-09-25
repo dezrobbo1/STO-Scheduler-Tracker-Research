@@ -1,5 +1,6 @@
 {
   "basis": {
+    "classification_lineage": "post-RC02 labels are comparison-only; current group, role, path and driver fields come exclusively from current production replay",
     "historical_root_cause_record": {
       "git_blob_sha": "f4eeb06bccb9681342db58ef84a06fa2c26742f8",
       "path": "docs/evidence/p1-g2-baseline-root-causes-2026-09-22.json",
@@ -26,78 +27,3412 @@
       "total_float": 21
     },
     "by_group": {
-      "G2-RC01": 143,
-      "G2-RC03": 3,
-      "G2-RC04": 1
+      "G2-RC01": 144,
+      "G2-RC03": 3
     },
     "by_role": {
-      "COMPOUND": 1,
-      "DEPENDENT": 119,
+      "DEPENDENT": 120,
       "DERIVED": 2,
       "FIRST_DIVERGENCE": 25
     },
     "leaves": 39,
     "rc02_slots": 0,
+    "root_leaf_ids_by_group": {
+      "G2-RC01": [
+        "L0070",
+        "L0075",
+        "L0080",
+        "L0083",
+        "L0084",
+        "L0114",
+        "L0127",
+        "L0148",
+        "L0157",
+        "L0190"
+      ],
+      "G2-RC03": [
+        "L0407",
+        "L0411"
+      ]
+    },
     "slots": 147
   },
+  "current_recomputation": {
+    "fixture": {
+      "bytes": 3361935,
+      "sha256": "e9b9b7994cc5cc50479807b82c452da742a91de9f7de52b172a6be6f4f399c70"
+    },
+    "method": "CURRENT_PRODUCTION_SOURCE_COORDINATE_REPLAY",
+    "method_contract": {
+      "backward": "source successor late coordinates through current backward bounds/place/driver",
+      "critical": "derive provenance from recomputed Total Float only",
+      "float": "source early/late coordinates through current production float analysis",
+      "forward": "source predecessor coordinates through current forward bounds/place/driver",
+      "start_finish": "duplicate the corresponding recomputed early-coordinate provenance"
+    },
+    "mismatches": [
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C05",
+        "dependency_paths": [
+          [
+            "L0070"
+          ]
+        ],
+        "dependency_role": "FIRST_DIVERGENCE",
+        "diagnostic_group": "G2-RC01",
+        "field": "early_finish",
+        "forward_driver_predecessor_leaf_id": "L0069",
+        "late_driver_successor_leaf_id": "L0071",
+        "leaf_id": "L0070",
+        "mismatched_engine_driver": false,
+        "source_replay_driver_leaf_id": "L0069",
+        "sto_minus_source_seconds": -10800
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C05",
+        "dependency_paths": [
+          [
+            "L0070"
+          ]
+        ],
+        "dependency_role": "FIRST_DIVERGENCE",
+        "diagnostic_group": "G2-RC01",
+        "field": "finish",
+        "forward_driver_predecessor_leaf_id": "L0069",
+        "late_driver_successor_leaf_id": "L0071",
+        "leaf_id": "L0070",
+        "mismatched_engine_driver": false,
+        "source_replay_driver_leaf_id": "L0069",
+        "sto_minus_source_seconds": -10800
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C05",
+        "dependency_paths": [
+          [
+            "L0070"
+          ]
+        ],
+        "dependency_role": "FIRST_DIVERGENCE",
+        "diagnostic_group": "G2-RC01",
+        "field": "late_start",
+        "forward_driver_predecessor_leaf_id": "L0069",
+        "late_driver_successor_leaf_id": "L0071",
+        "leaf_id": "L0070",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0071",
+        "sto_minus_source_seconds": 43200
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C05",
+        "dependency_paths": [
+          [
+            "L0070"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "total_float",
+        "forward_driver_predecessor_leaf_id": "L0069",
+        "late_driver_successor_leaf_id": "L0071",
+        "leaf_id": "L0070",
+        "mismatched_engine_driver": null,
+        "source_replay_driver_leaf_id": null,
+        "sto_minus_source_seconds": 5400
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C05",
+        "dependency_paths": [
+          [
+            "L0070",
+            "L0071"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "early_finish",
+        "forward_driver_predecessor_leaf_id": "L0070",
+        "late_driver_successor_leaf_id": "L0072",
+        "leaf_id": "L0071",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0070",
+        "sto_minus_source_seconds": -61200
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C05",
+        "dependency_paths": [
+          [
+            "L0070",
+            "L0071"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "early_start",
+        "forward_driver_predecessor_leaf_id": "L0070",
+        "late_driver_successor_leaf_id": "L0072",
+        "leaf_id": "L0071",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0070",
+        "sto_minus_source_seconds": -7200
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C05",
+        "dependency_paths": [
+          [
+            "L0070",
+            "L0071"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "finish",
+        "forward_driver_predecessor_leaf_id": "L0070",
+        "late_driver_successor_leaf_id": "L0072",
+        "leaf_id": "L0071",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0070",
+        "sto_minus_source_seconds": -61200
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C05",
+        "dependency_paths": [
+          [
+            "L0070",
+            "L0071"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "start",
+        "forward_driver_predecessor_leaf_id": "L0070",
+        "late_driver_successor_leaf_id": "L0072",
+        "leaf_id": "L0071",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0070",
+        "sto_minus_source_seconds": -7200
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C05",
+        "dependency_paths": [
+          [
+            "L0070",
+            "L0071"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "total_float",
+        "forward_driver_predecessor_leaf_id": "L0070",
+        "late_driver_successor_leaf_id": "L0072",
+        "leaf_id": "L0071",
+        "mismatched_engine_driver": null,
+        "source_replay_driver_leaf_id": null,
+        "sto_minus_source_seconds": 5400
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C05",
+        "dependency_paths": [
+          [
+            "L0070",
+            "L0071",
+            "L0072"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "early_finish",
+        "forward_driver_predecessor_leaf_id": "L0071",
+        "late_driver_successor_leaf_id": "L0073",
+        "leaf_id": "L0072",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0071",
+        "sto_minus_source_seconds": -61200
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C05",
+        "dependency_paths": [
+          [
+            "L0070",
+            "L0071",
+            "L0072"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "early_start",
+        "forward_driver_predecessor_leaf_id": "L0071",
+        "late_driver_successor_leaf_id": "L0073",
+        "leaf_id": "L0072",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0071",
+        "sto_minus_source_seconds": -61200
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C05",
+        "dependency_paths": [
+          [
+            "L0070",
+            "L0071",
+            "L0072"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "finish",
+        "forward_driver_predecessor_leaf_id": "L0071",
+        "late_driver_successor_leaf_id": "L0073",
+        "leaf_id": "L0072",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0071",
+        "sto_minus_source_seconds": -61200
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C05",
+        "dependency_paths": [
+          [
+            "L0070",
+            "L0071",
+            "L0072"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "free_float",
+        "forward_driver_predecessor_leaf_id": "L0071",
+        "late_driver_successor_leaf_id": "L0073",
+        "leaf_id": "L0072",
+        "mismatched_engine_driver": null,
+        "source_replay_driver_leaf_id": null,
+        "sto_minus_source_seconds": 9000
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C05",
+        "dependency_paths": [
+          [
+            "L0070",
+            "L0071",
+            "L0072"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "start",
+        "forward_driver_predecessor_leaf_id": "L0071",
+        "late_driver_successor_leaf_id": "L0073",
+        "leaf_id": "L0072",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0071",
+        "sto_minus_source_seconds": -61200
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C05",
+        "dependency_paths": [
+          [
+            "L0070",
+            "L0071",
+            "L0072"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "total_float",
+        "forward_driver_predecessor_leaf_id": "L0071",
+        "late_driver_successor_leaf_id": "L0073",
+        "leaf_id": "L0072",
+        "mismatched_engine_driver": null,
+        "source_replay_driver_leaf_id": null,
+        "sto_minus_source_seconds": 9000
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C04",
+        "dependency_paths": [
+          [
+            "L0075"
+          ]
+        ],
+        "dependency_role": "FIRST_DIVERGENCE",
+        "diagnostic_group": "G2-RC01",
+        "field": "early_finish",
+        "forward_driver_predecessor_leaf_id": "L0074",
+        "late_driver_successor_leaf_id": "L0076",
+        "leaf_id": "L0075",
+        "mismatched_engine_driver": false,
+        "source_replay_driver_leaf_id": "L0074",
+        "sto_minus_source_seconds": -3600
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C04",
+        "dependency_paths": [
+          [
+            "L0075"
+          ]
+        ],
+        "dependency_role": "FIRST_DIVERGENCE",
+        "diagnostic_group": "G2-RC01",
+        "field": "finish",
+        "forward_driver_predecessor_leaf_id": "L0074",
+        "late_driver_successor_leaf_id": "L0076",
+        "leaf_id": "L0075",
+        "mismatched_engine_driver": false,
+        "source_replay_driver_leaf_id": "L0074",
+        "sto_minus_source_seconds": -3600
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C04",
+        "dependency_paths": [
+          [
+            "L0075"
+          ]
+        ],
+        "dependency_role": "FIRST_DIVERGENCE",
+        "diagnostic_group": "G2-RC01",
+        "field": "late_start",
+        "forward_driver_predecessor_leaf_id": "L0074",
+        "late_driver_successor_leaf_id": "L0076",
+        "leaf_id": "L0075",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0076",
+        "sto_minus_source_seconds": -7200
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C04",
+        "dependency_paths": [
+          [
+            "L0075"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "total_float",
+        "forward_driver_predecessor_leaf_id": "L0074",
+        "late_driver_successor_leaf_id": "L0076",
+        "leaf_id": "L0075",
+        "mismatched_engine_driver": null,
+        "source_replay_driver_leaf_id": null,
+        "sto_minus_source_seconds": -5400
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C04",
+        "dependency_paths": [
+          [
+            "L0075",
+            "L0076"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "early_finish",
+        "forward_driver_predecessor_leaf_id": "L0075",
+        "late_driver_successor_leaf_id": "L0077",
+        "leaf_id": "L0076",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0075",
+        "sto_minus_source_seconds": -3600
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C04",
+        "dependency_paths": [
+          [
+            "L0075",
+            "L0076"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "early_start",
+        "forward_driver_predecessor_leaf_id": "L0075",
+        "late_driver_successor_leaf_id": "L0077",
+        "leaf_id": "L0076",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0075",
+        "sto_minus_source_seconds": -3600
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C04",
+        "dependency_paths": [
+          [
+            "L0075",
+            "L0076"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "finish",
+        "forward_driver_predecessor_leaf_id": "L0075",
+        "late_driver_successor_leaf_id": "L0077",
+        "leaf_id": "L0076",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0075",
+        "sto_minus_source_seconds": -3600
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C04",
+        "dependency_paths": [
+          [
+            "L0075",
+            "L0076"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "start",
+        "forward_driver_predecessor_leaf_id": "L0075",
+        "late_driver_successor_leaf_id": "L0077",
+        "leaf_id": "L0076",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0075",
+        "sto_minus_source_seconds": -3600
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C04",
+        "dependency_paths": [
+          [
+            "L0075",
+            "L0076"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "total_float",
+        "forward_driver_predecessor_leaf_id": "L0075",
+        "late_driver_successor_leaf_id": "L0077",
+        "leaf_id": "L0076",
+        "mismatched_engine_driver": null,
+        "source_replay_driver_leaf_id": null,
+        "sto_minus_source_seconds": 3600
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C04",
+        "dependency_paths": [
+          [
+            "L0075",
+            "L0076",
+            "L0077"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "early_finish",
+        "forward_driver_predecessor_leaf_id": "L0076",
+        "late_driver_successor_leaf_id": "L0078",
+        "leaf_id": "L0077",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0076",
+        "sto_minus_source_seconds": -3600
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C04",
+        "dependency_paths": [
+          [
+            "L0075",
+            "L0076",
+            "L0077"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "early_start",
+        "forward_driver_predecessor_leaf_id": "L0076",
+        "late_driver_successor_leaf_id": "L0078",
+        "leaf_id": "L0077",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0076",
+        "sto_minus_source_seconds": -3600
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C04",
+        "dependency_paths": [
+          [
+            "L0075",
+            "L0076",
+            "L0077"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "finish",
+        "forward_driver_predecessor_leaf_id": "L0076",
+        "late_driver_successor_leaf_id": "L0078",
+        "leaf_id": "L0077",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0076",
+        "sto_minus_source_seconds": -3600
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C04",
+        "dependency_paths": [
+          [
+            "L0075",
+            "L0076",
+            "L0077"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "start",
+        "forward_driver_predecessor_leaf_id": "L0076",
+        "late_driver_successor_leaf_id": "L0078",
+        "leaf_id": "L0077",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0076",
+        "sto_minus_source_seconds": -3600
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C04",
+        "dependency_paths": [
+          [
+            "L0075",
+            "L0076",
+            "L0077"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "total_float",
+        "forward_driver_predecessor_leaf_id": "L0076",
+        "late_driver_successor_leaf_id": "L0078",
+        "leaf_id": "L0077",
+        "mismatched_engine_driver": null,
+        "source_replay_driver_leaf_id": null,
+        "sto_minus_source_seconds": 3600
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C04",
+        "dependency_paths": [
+          [
+            "L0075",
+            "L0076",
+            "L0077",
+            "L0078"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "early_finish",
+        "forward_driver_predecessor_leaf_id": "L0077",
+        "late_driver_successor_leaf_id": "L0079",
+        "leaf_id": "L0078",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0077",
+        "sto_minus_source_seconds": -3600
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C04",
+        "dependency_paths": [
+          [
+            "L0075",
+            "L0076",
+            "L0077",
+            "L0078"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "early_start",
+        "forward_driver_predecessor_leaf_id": "L0077",
+        "late_driver_successor_leaf_id": "L0079",
+        "leaf_id": "L0078",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0077",
+        "sto_minus_source_seconds": -3600
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C04",
+        "dependency_paths": [
+          [
+            "L0075",
+            "L0076",
+            "L0077",
+            "L0078"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "finish",
+        "forward_driver_predecessor_leaf_id": "L0077",
+        "late_driver_successor_leaf_id": "L0079",
+        "leaf_id": "L0078",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0077",
+        "sto_minus_source_seconds": -3600
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C04",
+        "dependency_paths": [
+          [
+            "L0075",
+            "L0076",
+            "L0077",
+            "L0078"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "free_float",
+        "forward_driver_predecessor_leaf_id": "L0077",
+        "late_driver_successor_leaf_id": "L0079",
+        "leaf_id": "L0078",
+        "mismatched_engine_driver": null,
+        "source_replay_driver_leaf_id": null,
+        "sto_minus_source_seconds": 3600
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C04",
+        "dependency_paths": [
+          [
+            "L0075",
+            "L0076",
+            "L0077",
+            "L0078"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "start",
+        "forward_driver_predecessor_leaf_id": "L0077",
+        "late_driver_successor_leaf_id": "L0079",
+        "leaf_id": "L0078",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0077",
+        "sto_minus_source_seconds": -3600
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C04",
+        "dependency_paths": [
+          [
+            "L0075",
+            "L0076",
+            "L0077",
+            "L0078"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "total_float",
+        "forward_driver_predecessor_leaf_id": "L0077",
+        "late_driver_successor_leaf_id": "L0079",
+        "leaf_id": "L0078",
+        "mismatched_engine_driver": null,
+        "source_replay_driver_leaf_id": null,
+        "sto_minus_source_seconds": 3600
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C06",
+        "dependency_paths": [
+          [
+            "L0084",
+            "L0080"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "early_finish",
+        "forward_driver_predecessor_leaf_id": "L0084",
+        "late_driver_successor_leaf_id": "L0085",
+        "leaf_id": "L0080",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0084",
+        "sto_minus_source_seconds": -1800
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C06",
+        "dependency_paths": [
+          [
+            "L0084",
+            "L0080"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "early_start",
+        "forward_driver_predecessor_leaf_id": "L0084",
+        "late_driver_successor_leaf_id": "L0085",
+        "leaf_id": "L0080",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0084",
+        "sto_minus_source_seconds": -1800
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C06",
+        "dependency_paths": [
+          [
+            "L0084",
+            "L0080"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "finish",
+        "forward_driver_predecessor_leaf_id": "L0084",
+        "late_driver_successor_leaf_id": "L0085",
+        "leaf_id": "L0080",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0084",
+        "sto_minus_source_seconds": -1800
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C06",
+        "dependency_paths": [
+          [
+            "L0080"
+          ]
+        ],
+        "dependency_role": "FIRST_DIVERGENCE",
+        "diagnostic_group": "G2-RC01",
+        "field": "late_start",
+        "forward_driver_predecessor_leaf_id": "L0084",
+        "late_driver_successor_leaf_id": "L0085",
+        "leaf_id": "L0080",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0085",
+        "sto_minus_source_seconds": 32400
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C06",
+        "dependency_paths": [
+          [
+            "L0084",
+            "L0080"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "start",
+        "forward_driver_predecessor_leaf_id": "L0084",
+        "late_driver_successor_leaf_id": "L0085",
+        "leaf_id": "L0080",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0084",
+        "sto_minus_source_seconds": -1800
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C06",
+        "dependency_paths": [
+          [
+            "L0084",
+            "L0080"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "total_float",
+        "forward_driver_predecessor_leaf_id": "L0084",
+        "late_driver_successor_leaf_id": "L0085",
+        "leaf_id": "L0080",
+        "mismatched_engine_driver": null,
+        "source_replay_driver_leaf_id": null,
+        "sto_minus_source_seconds": 1800
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C03",
+        "dependency_paths": [
+          [
+            "L0083"
+          ]
+        ],
+        "dependency_role": "FIRST_DIVERGENCE",
+        "diagnostic_group": "G2-RC01",
+        "field": "early_finish",
+        "forward_driver_predecessor_leaf_id": "L0082",
+        "late_driver_successor_leaf_id": "L0087",
+        "leaf_id": "L0083",
+        "mismatched_engine_driver": false,
+        "source_replay_driver_leaf_id": "L0082",
+        "sto_minus_source_seconds": -7200
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C03",
+        "dependency_paths": [
+          [
+            "L0083"
+          ]
+        ],
+        "dependency_role": "FIRST_DIVERGENCE",
+        "diagnostic_group": "G2-RC01",
+        "field": "finish",
+        "forward_driver_predecessor_leaf_id": "L0082",
+        "late_driver_successor_leaf_id": "L0087",
+        "leaf_id": "L0083",
+        "mismatched_engine_driver": false,
+        "source_replay_driver_leaf_id": "L0082",
+        "sto_minus_source_seconds": -7200
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C03",
+        "dependency_paths": [
+          [
+            "L0083"
+          ]
+        ],
+        "dependency_role": "FIRST_DIVERGENCE",
+        "diagnostic_group": "G2-RC01",
+        "field": "late_start",
+        "forward_driver_predecessor_leaf_id": "L0082",
+        "late_driver_successor_leaf_id": "L0087",
+        "leaf_id": "L0083",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0087",
+        "sto_minus_source_seconds": 43200
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C06",
+        "dependency_paths": [
+          [
+            "L0084"
+          ]
+        ],
+        "dependency_role": "FIRST_DIVERGENCE",
+        "diagnostic_group": "G2-RC01",
+        "field": "early_finish",
+        "forward_driver_predecessor_leaf_id": "L0062",
+        "late_driver_successor_leaf_id": "L0080",
+        "leaf_id": "L0084",
+        "mismatched_engine_driver": false,
+        "source_replay_driver_leaf_id": "L0062",
+        "sto_minus_source_seconds": -1800
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C06",
+        "dependency_paths": [
+          [
+            "L0084"
+          ]
+        ],
+        "dependency_role": "FIRST_DIVERGENCE",
+        "diagnostic_group": "G2-RC01",
+        "field": "finish",
+        "forward_driver_predecessor_leaf_id": "L0062",
+        "late_driver_successor_leaf_id": "L0080",
+        "leaf_id": "L0084",
+        "mismatched_engine_driver": false,
+        "source_replay_driver_leaf_id": "L0062",
+        "sto_minus_source_seconds": -1800
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C06",
+        "dependency_paths": [
+          [
+            "L0080",
+            "L0084"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "late_finish",
+        "forward_driver_predecessor_leaf_id": "L0062",
+        "late_driver_successor_leaf_id": "L0080",
+        "leaf_id": "L0084",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0080",
+        "sto_minus_source_seconds": 32400
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C06",
+        "dependency_paths": [
+          [
+            "L0084"
+          ]
+        ],
+        "dependency_role": "FIRST_DIVERGENCE",
+        "diagnostic_group": "G2-RC01",
+        "field": "late_start",
+        "forward_driver_predecessor_leaf_id": "L0062",
+        "late_driver_successor_leaf_id": "L0080",
+        "leaf_id": "L0084",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0080",
+        "sto_minus_source_seconds": 18000
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C06",
+        "dependency_paths": [
+          [
+            "L0080",
+            "L0084"
+          ],
+          [
+            "L0084"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "total_float",
+        "forward_driver_predecessor_leaf_id": "L0062",
+        "late_driver_successor_leaf_id": "L0080",
+        "leaf_id": "L0084",
+        "mismatched_engine_driver": null,
+        "source_replay_driver_leaf_id": null,
+        "sto_minus_source_seconds": 12600
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C06",
+        "dependency_paths": [
+          [
+            "L0084",
+            "L0080",
+            "L0085"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "early_finish",
+        "forward_driver_predecessor_leaf_id": "L0080",
+        "late_driver_successor_leaf_id": "L0086",
+        "leaf_id": "L0085",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0080",
+        "sto_minus_source_seconds": -1800
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C06",
+        "dependency_paths": [
+          [
+            "L0084",
+            "L0080",
+            "L0085"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "early_start",
+        "forward_driver_predecessor_leaf_id": "L0080",
+        "late_driver_successor_leaf_id": "L0086",
+        "leaf_id": "L0085",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0080",
+        "sto_minus_source_seconds": -1800
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C06",
+        "dependency_paths": [
+          [
+            "L0084",
+            "L0080",
+            "L0085"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "finish",
+        "forward_driver_predecessor_leaf_id": "L0080",
+        "late_driver_successor_leaf_id": "L0086",
+        "leaf_id": "L0085",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0080",
+        "sto_minus_source_seconds": -1800
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C06",
+        "dependency_paths": [
+          [
+            "L0084",
+            "L0080",
+            "L0085"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "start",
+        "forward_driver_predecessor_leaf_id": "L0080",
+        "late_driver_successor_leaf_id": "L0086",
+        "leaf_id": "L0085",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0080",
+        "sto_minus_source_seconds": -1800
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C03",
+        "dependency_paths": [
+          [
+            "L0083",
+            "L0087"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "early_finish",
+        "forward_driver_predecessor_leaf_id": "L0083",
+        "late_driver_successor_leaf_id": "L0089",
+        "leaf_id": "L0087",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0083",
+        "sto_minus_source_seconds": -7200
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C03",
+        "dependency_paths": [
+          [
+            "L0083",
+            "L0087"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "early_start",
+        "forward_driver_predecessor_leaf_id": "L0083",
+        "late_driver_successor_leaf_id": "L0089",
+        "leaf_id": "L0087",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0083",
+        "sto_minus_source_seconds": -7200
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C03",
+        "dependency_paths": [
+          [
+            "L0083",
+            "L0087"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "finish",
+        "forward_driver_predecessor_leaf_id": "L0083",
+        "late_driver_successor_leaf_id": "L0089",
+        "leaf_id": "L0087",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0083",
+        "sto_minus_source_seconds": -7200
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C03",
+        "dependency_paths": [
+          [
+            "L0083",
+            "L0087"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "start",
+        "forward_driver_predecessor_leaf_id": "L0083",
+        "late_driver_successor_leaf_id": "L0089",
+        "leaf_id": "L0087",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0083",
+        "sto_minus_source_seconds": -7200
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C03",
+        "dependency_paths": [
+          [
+            "L0083",
+            "L0087",
+            "L0089"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "early_finish",
+        "forward_driver_predecessor_leaf_id": "L0087",
+        "late_driver_successor_leaf_id": "L0091",
+        "leaf_id": "L0089",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0087",
+        "sto_minus_source_seconds": -57600
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C03",
+        "dependency_paths": [
+          [
+            "L0083",
+            "L0087",
+            "L0089"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "early_start",
+        "forward_driver_predecessor_leaf_id": "L0087",
+        "late_driver_successor_leaf_id": "L0091",
+        "leaf_id": "L0089",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0087",
+        "sto_minus_source_seconds": -7200
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C03",
+        "dependency_paths": [
+          [
+            "L0083",
+            "L0087",
+            "L0089"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "finish",
+        "forward_driver_predecessor_leaf_id": "L0087",
+        "late_driver_successor_leaf_id": "L0091",
+        "leaf_id": "L0089",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0087",
+        "sto_minus_source_seconds": -57600
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C03",
+        "dependency_paths": [
+          [
+            "L0083",
+            "L0087",
+            "L0089"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "start",
+        "forward_driver_predecessor_leaf_id": "L0087",
+        "late_driver_successor_leaf_id": "L0091",
+        "leaf_id": "L0089",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0087",
+        "sto_minus_source_seconds": -7200
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C03",
+        "dependency_paths": [
+          [
+            "L0083",
+            "L0087",
+            "L0089",
+            "L0091"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "early_finish",
+        "forward_driver_predecessor_leaf_id": "L0089",
+        "late_driver_successor_leaf_id": "L0371",
+        "leaf_id": "L0091",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0089",
+        "sto_minus_source_seconds": -57600
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C03",
+        "dependency_paths": [
+          [
+            "L0083",
+            "L0087",
+            "L0089",
+            "L0091"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "early_start",
+        "forward_driver_predecessor_leaf_id": "L0089",
+        "late_driver_successor_leaf_id": "L0371",
+        "leaf_id": "L0091",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0089",
+        "sto_minus_source_seconds": -57600
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C03",
+        "dependency_paths": [
+          [
+            "L0083",
+            "L0087",
+            "L0089",
+            "L0091"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "finish",
+        "forward_driver_predecessor_leaf_id": "L0089",
+        "late_driver_successor_leaf_id": "L0371",
+        "leaf_id": "L0091",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0089",
+        "sto_minus_source_seconds": -57600
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C03",
+        "dependency_paths": [
+          [
+            "L0083",
+            "L0087",
+            "L0089",
+            "L0091"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "start",
+        "forward_driver_predecessor_leaf_id": "L0089",
+        "late_driver_successor_leaf_id": "L0371",
+        "leaf_id": "L0091",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0089",
+        "sto_minus_source_seconds": -57600
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C01",
+        "dependency_paths": [
+          [
+            "L0114",
+            "L0115",
+            "L0116",
+            "L0117",
+            "L0118"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "free_float",
+        "forward_driver_predecessor_leaf_id": "L0110",
+        "late_driver_successor_leaf_id": "L0118",
+        "leaf_id": "L0111",
+        "mismatched_engine_driver": null,
+        "source_replay_driver_leaf_id": null,
+        "sto_minus_source_seconds": -14400
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C01",
+        "dependency_paths": [
+          [
+            "L0114",
+            "L0113",
+            "L0112"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "late_finish",
+        "forward_driver_predecessor_leaf_id": "L0100",
+        "late_driver_successor_leaf_id": "L0113",
+        "leaf_id": "L0112",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0113",
+        "sto_minus_source_seconds": -7200
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C01",
+        "dependency_paths": [
+          [
+            "L0114",
+            "L0113",
+            "L0112"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "late_start",
+        "forward_driver_predecessor_leaf_id": "L0100",
+        "late_driver_successor_leaf_id": "L0113",
+        "leaf_id": "L0112",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0113",
+        "sto_minus_source_seconds": -7200
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C01",
+        "dependency_paths": [
+          [
+            "L0114",
+            "L0113"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "late_finish",
+        "forward_driver_predecessor_leaf_id": "L0156",
+        "late_driver_successor_leaf_id": "L0114",
+        "leaf_id": "L0113",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0114",
+        "sto_minus_source_seconds": -7200
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C01",
+        "dependency_paths": [
+          [
+            "L0114",
+            "L0113"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "late_start",
+        "forward_driver_predecessor_leaf_id": "L0156",
+        "late_driver_successor_leaf_id": "L0114",
+        "leaf_id": "L0113",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0114",
+        "sto_minus_source_seconds": -7200
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C01",
+        "dependency_paths": [
+          [
+            "L0114"
+          ]
+        ],
+        "dependency_role": "DERIVED",
+        "diagnostic_group": "G2-RC01",
+        "field": "critical",
+        "forward_driver_predecessor_leaf_id": "L0113",
+        "late_driver_successor_leaf_id": "L0115",
+        "leaf_id": "L0114",
+        "mismatched_engine_driver": null,
+        "source_replay_driver_leaf_id": null,
+        "sto_minus_source_seconds": 1
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C01",
+        "dependency_paths": [
+          [
+            "L0114"
+          ]
+        ],
+        "dependency_role": "FIRST_DIVERGENCE",
+        "diagnostic_group": "G2-RC01",
+        "field": "early_finish",
+        "forward_driver_predecessor_leaf_id": "L0113",
+        "late_driver_successor_leaf_id": "L0115",
+        "leaf_id": "L0114",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0113",
+        "sto_minus_source_seconds": -14400
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C01",
+        "dependency_paths": [
+          [
+            "L0114"
+          ]
+        ],
+        "dependency_role": "FIRST_DIVERGENCE",
+        "diagnostic_group": "G2-RC01",
+        "field": "finish",
+        "forward_driver_predecessor_leaf_id": "L0113",
+        "late_driver_successor_leaf_id": "L0115",
+        "leaf_id": "L0114",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0113",
+        "sto_minus_source_seconds": -14400
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C01",
+        "dependency_paths": [
+          [
+            "L0114"
+          ]
+        ],
+        "dependency_role": "FIRST_DIVERGENCE",
+        "diagnostic_group": "G2-RC01",
+        "field": "late_start",
+        "forward_driver_predecessor_leaf_id": "L0113",
+        "late_driver_successor_leaf_id": "L0115",
+        "leaf_id": "L0114",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0115",
+        "sto_minus_source_seconds": -14400
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C01",
+        "dependency_paths": [
+          [
+            "L0114"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "total_float",
+        "forward_driver_predecessor_leaf_id": "L0113",
+        "late_driver_successor_leaf_id": "L0115",
+        "leaf_id": "L0114",
+        "mismatched_engine_driver": null,
+        "source_replay_driver_leaf_id": null,
+        "sto_minus_source_seconds": -1800
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C01",
+        "dependency_paths": [
+          [
+            "L0114",
+            "L0115"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "early_finish",
+        "forward_driver_predecessor_leaf_id": "L0114",
+        "late_driver_successor_leaf_id": "L0116",
+        "leaf_id": "L0115",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0114",
+        "sto_minus_source_seconds": -154800
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C01",
+        "dependency_paths": [
+          [
+            "L0114",
+            "L0115"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "early_start",
+        "forward_driver_predecessor_leaf_id": "L0114",
+        "late_driver_successor_leaf_id": "L0116",
+        "leaf_id": "L0115",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0114",
+        "sto_minus_source_seconds": -14400
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C01",
+        "dependency_paths": [
+          [
+            "L0114",
+            "L0115"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "finish",
+        "forward_driver_predecessor_leaf_id": "L0114",
+        "late_driver_successor_leaf_id": "L0116",
+        "leaf_id": "L0115",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0114",
+        "sto_minus_source_seconds": -154800
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C01",
+        "dependency_paths": [
+          [
+            "L0114",
+            "L0115"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "start",
+        "forward_driver_predecessor_leaf_id": "L0114",
+        "late_driver_successor_leaf_id": "L0116",
+        "leaf_id": "L0115",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0114",
+        "sto_minus_source_seconds": -14400
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C01",
+        "dependency_paths": [
+          [
+            "L0114",
+            "L0115",
+            "L0116"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "early_finish",
+        "forward_driver_predecessor_leaf_id": "L0115",
+        "late_driver_successor_leaf_id": "L0117",
+        "leaf_id": "L0116",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0115",
+        "sto_minus_source_seconds": -154800
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C01",
+        "dependency_paths": [
+          [
+            "L0114",
+            "L0115",
+            "L0116"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "early_start",
+        "forward_driver_predecessor_leaf_id": "L0115",
+        "late_driver_successor_leaf_id": "L0117",
+        "leaf_id": "L0116",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0115",
+        "sto_minus_source_seconds": -154800
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C01",
+        "dependency_paths": [
+          [
+            "L0114",
+            "L0115",
+            "L0116"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "finish",
+        "forward_driver_predecessor_leaf_id": "L0115",
+        "late_driver_successor_leaf_id": "L0117",
+        "leaf_id": "L0116",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0115",
+        "sto_minus_source_seconds": -154800
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C01",
+        "dependency_paths": [
+          [
+            "L0114",
+            "L0115",
+            "L0116"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "start",
+        "forward_driver_predecessor_leaf_id": "L0115",
+        "late_driver_successor_leaf_id": "L0117",
+        "leaf_id": "L0116",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0115",
+        "sto_minus_source_seconds": -154800
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C01",
+        "dependency_paths": [
+          [
+            "L0114",
+            "L0115",
+            "L0116"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "total_float",
+        "forward_driver_predecessor_leaf_id": "L0115",
+        "late_driver_successor_leaf_id": "L0117",
+        "leaf_id": "L0116",
+        "mismatched_engine_driver": null,
+        "source_replay_driver_leaf_id": null,
+        "sto_minus_source_seconds": 9000
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C01",
+        "dependency_paths": [
+          [
+            "L0114",
+            "L0115",
+            "L0116",
+            "L0117"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "early_finish",
+        "forward_driver_predecessor_leaf_id": "L0116",
+        "late_driver_successor_leaf_id": "L0118",
+        "leaf_id": "L0117",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0116",
+        "sto_minus_source_seconds": -154800
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C01",
+        "dependency_paths": [
+          [
+            "L0114",
+            "L0115",
+            "L0116",
+            "L0117"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "early_start",
+        "forward_driver_predecessor_leaf_id": "L0116",
+        "late_driver_successor_leaf_id": "L0118",
+        "leaf_id": "L0117",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0116",
+        "sto_minus_source_seconds": -154800
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C01",
+        "dependency_paths": [
+          [
+            "L0114",
+            "L0115",
+            "L0116",
+            "L0117"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "finish",
+        "forward_driver_predecessor_leaf_id": "L0116",
+        "late_driver_successor_leaf_id": "L0118",
+        "leaf_id": "L0117",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0116",
+        "sto_minus_source_seconds": -154800
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C01",
+        "dependency_paths": [
+          [
+            "L0114",
+            "L0115",
+            "L0116",
+            "L0117"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "start",
+        "forward_driver_predecessor_leaf_id": "L0116",
+        "late_driver_successor_leaf_id": "L0118",
+        "leaf_id": "L0117",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0116",
+        "sto_minus_source_seconds": -154800
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C01",
+        "dependency_paths": [
+          [
+            "L0114",
+            "L0115",
+            "L0116",
+            "L0117"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "total_float",
+        "forward_driver_predecessor_leaf_id": "L0116",
+        "late_driver_successor_leaf_id": "L0118",
+        "leaf_id": "L0117",
+        "mismatched_engine_driver": null,
+        "source_replay_driver_leaf_id": null,
+        "sto_minus_source_seconds": 14400
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C01",
+        "dependency_paths": [
+          [
+            "L0114",
+            "L0115",
+            "L0116",
+            "L0117",
+            "L0118"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "early_finish",
+        "forward_driver_predecessor_leaf_id": "L0117",
+        "late_driver_successor_leaf_id": "L0123",
+        "leaf_id": "L0118",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0117",
+        "sto_minus_source_seconds": -154800
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C01",
+        "dependency_paths": [
+          [
+            "L0114",
+            "L0115",
+            "L0116",
+            "L0117",
+            "L0118"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "early_start",
+        "forward_driver_predecessor_leaf_id": "L0117",
+        "late_driver_successor_leaf_id": "L0123",
+        "leaf_id": "L0118",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0117",
+        "sto_minus_source_seconds": -154800
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C01",
+        "dependency_paths": [
+          [
+            "L0114",
+            "L0115",
+            "L0116",
+            "L0117",
+            "L0118"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "finish",
+        "forward_driver_predecessor_leaf_id": "L0117",
+        "late_driver_successor_leaf_id": "L0123",
+        "leaf_id": "L0118",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0117",
+        "sto_minus_source_seconds": -154800
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C01",
+        "dependency_paths": [
+          [
+            "L0114",
+            "L0115",
+            "L0116",
+            "L0117",
+            "L0118"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "start",
+        "forward_driver_predecessor_leaf_id": "L0117",
+        "late_driver_successor_leaf_id": "L0123",
+        "leaf_id": "L0118",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0117",
+        "sto_minus_source_seconds": -154800
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C01",
+        "dependency_paths": [
+          [
+            "L0114",
+            "L0115",
+            "L0116",
+            "L0117",
+            "L0118"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "total_float",
+        "forward_driver_predecessor_leaf_id": "L0117",
+        "late_driver_successor_leaf_id": "L0123",
+        "leaf_id": "L0118",
+        "mismatched_engine_driver": null,
+        "source_replay_driver_leaf_id": null,
+        "sto_minus_source_seconds": 14400
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C01",
+        "dependency_paths": [
+          [
+            "L0114",
+            "L0115",
+            "L0116",
+            "L0117",
+            "L0118",
+            "L0123"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "free_float",
+        "forward_driver_predecessor_leaf_id": "L0125",
+        "late_driver_successor_leaf_id": "L0123",
+        "leaf_id": "L0122",
+        "mismatched_engine_driver": null,
+        "source_replay_driver_leaf_id": null,
+        "sto_minus_source_seconds": -28800
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C01",
+        "dependency_paths": [
+          [
+            "L0114",
+            "L0115",
+            "L0116",
+            "L0117",
+            "L0118",
+            "L0123"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "early_finish",
+        "forward_driver_predecessor_leaf_id": "L0118",
+        "late_driver_successor_leaf_id": "L0369",
+        "leaf_id": "L0123",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0118",
+        "sto_minus_source_seconds": -154800
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C01",
+        "dependency_paths": [
+          [
+            "L0114",
+            "L0115",
+            "L0116",
+            "L0117",
+            "L0118",
+            "L0123"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "early_start",
+        "forward_driver_predecessor_leaf_id": "L0118",
+        "late_driver_successor_leaf_id": "L0369",
+        "leaf_id": "L0123",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0118",
+        "sto_minus_source_seconds": -154800
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C01",
+        "dependency_paths": [
+          [
+            "L0114",
+            "L0115",
+            "L0116",
+            "L0117",
+            "L0118",
+            "L0123"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "finish",
+        "forward_driver_predecessor_leaf_id": "L0118",
+        "late_driver_successor_leaf_id": "L0369",
+        "leaf_id": "L0123",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0118",
+        "sto_minus_source_seconds": -154800
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C01",
+        "dependency_paths": [
+          [
+            "L0114",
+            "L0115",
+            "L0116",
+            "L0117",
+            "L0118",
+            "L0123"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "free_float",
+        "forward_driver_predecessor_leaf_id": "L0118",
+        "late_driver_successor_leaf_id": "L0369",
+        "leaf_id": "L0123",
+        "mismatched_engine_driver": null,
+        "source_replay_driver_leaf_id": null,
+        "sto_minus_source_seconds": 28800
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C01",
+        "dependency_paths": [
+          [
+            "L0114",
+            "L0115",
+            "L0116",
+            "L0117",
+            "L0118",
+            "L0123"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "start",
+        "forward_driver_predecessor_leaf_id": "L0118",
+        "late_driver_successor_leaf_id": "L0369",
+        "leaf_id": "L0123",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0118",
+        "sto_minus_source_seconds": -154800
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C01",
+        "dependency_paths": [
+          [
+            "L0114",
+            "L0115",
+            "L0116",
+            "L0117",
+            "L0118",
+            "L0123"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "total_float",
+        "forward_driver_predecessor_leaf_id": "L0118",
+        "late_driver_successor_leaf_id": "L0369",
+        "leaf_id": "L0123",
+        "mismatched_engine_driver": null,
+        "source_replay_driver_leaf_id": null,
+        "sto_minus_source_seconds": 28800
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C07",
+        "dependency_paths": [
+          [
+            "L0127"
+          ]
+        ],
+        "dependency_role": "FIRST_DIVERGENCE",
+        "diagnostic_group": "G2-RC01",
+        "field": "late_start",
+        "forward_driver_predecessor_leaf_id": "L0126",
+        "late_driver_successor_leaf_id": "L0128",
+        "leaf_id": "L0127",
+        "mismatched_engine_driver": false,
+        "source_replay_driver_leaf_id": "L0128",
+        "sto_minus_source_seconds": -14400
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C07",
+        "dependency_paths": [
+          [
+            "L0127"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "total_float",
+        "forward_driver_predecessor_leaf_id": "L0126",
+        "late_driver_successor_leaf_id": "L0128",
+        "leaf_id": "L0127",
+        "mismatched_engine_driver": null,
+        "source_replay_driver_leaf_id": null,
+        "sto_minus_source_seconds": -14400
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C08",
+        "dependency_paths": [
+          [
+            "L0148"
+          ]
+        ],
+        "dependency_role": "DERIVED",
+        "diagnostic_group": "G2-RC01",
+        "field": "critical",
+        "forward_driver_predecessor_leaf_id": "L0147",
+        "late_driver_successor_leaf_id": "L0145",
+        "leaf_id": "L0148",
+        "mismatched_engine_driver": null,
+        "source_replay_driver_leaf_id": null,
+        "sto_minus_source_seconds": 1
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C08",
+        "dependency_paths": [
+          [
+            "L0148"
+          ]
+        ],
+        "dependency_role": "FIRST_DIVERGENCE",
+        "diagnostic_group": "G2-RC01",
+        "field": "late_start",
+        "forward_driver_predecessor_leaf_id": "L0147",
+        "late_driver_successor_leaf_id": "L0145",
+        "leaf_id": "L0148",
+        "mismatched_engine_driver": false,
+        "source_replay_driver_leaf_id": "L0145",
+        "sto_minus_source_seconds": -14400
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C08",
+        "dependency_paths": [
+          [
+            "L0148"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "total_float",
+        "forward_driver_predecessor_leaf_id": "L0147",
+        "late_driver_successor_leaf_id": "L0145",
+        "leaf_id": "L0148",
+        "mismatched_engine_driver": null,
+        "source_replay_driver_leaf_id": null,
+        "sto_minus_source_seconds": -12600
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C01",
+        "dependency_paths": [
+          [
+            "L0114",
+            "L0113",
+            "L0156",
+            "L0155"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "late_finish",
+        "forward_driver_predecessor_leaf_id": "L0081",
+        "late_driver_successor_leaf_id": "L0156",
+        "leaf_id": "L0155",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0156",
+        "sto_minus_source_seconds": -7200
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C01",
+        "dependency_paths": [
+          [
+            "L0114",
+            "L0113",
+            "L0156",
+            "L0155"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "late_start",
+        "forward_driver_predecessor_leaf_id": "L0081",
+        "late_driver_successor_leaf_id": "L0156",
+        "leaf_id": "L0155",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0156",
+        "sto_minus_source_seconds": -7200
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C01",
+        "dependency_paths": [
+          [
+            "L0114",
+            "L0113",
+            "L0156"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "late_finish",
+        "forward_driver_predecessor_leaf_id": "L0147",
+        "late_driver_successor_leaf_id": "L0113",
+        "leaf_id": "L0156",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0113",
+        "sto_minus_source_seconds": -7200
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C01",
+        "dependency_paths": [
+          [
+            "L0114",
+            "L0113",
+            "L0156"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "late_start",
+        "forward_driver_predecessor_leaf_id": "L0147",
+        "late_driver_successor_leaf_id": "L0113",
+        "leaf_id": "L0156",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0113",
+        "sto_minus_source_seconds": -7200
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C01",
+        "dependency_paths": [
+          [
+            "L0157"
+          ]
+        ],
+        "dependency_role": "FIRST_DIVERGENCE",
+        "diagnostic_group": "G2-RC01",
+        "field": "late_start",
+        "forward_driver_predecessor_leaf_id": "L0156",
+        "late_driver_successor_leaf_id": "L0158",
+        "leaf_id": "L0157",
+        "mismatched_engine_driver": false,
+        "source_replay_driver_leaf_id": "L0158",
+        "sto_minus_source_seconds": -3600
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C02",
+        "dependency_paths": [
+          [
+            "L0190",
+            "L0189"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "late_finish",
+        "forward_driver_predecessor_leaf_id": "L0188",
+        "late_driver_successor_leaf_id": "L0190",
+        "leaf_id": "L0189",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0190",
+        "sto_minus_source_seconds": -16200
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C02",
+        "dependency_paths": [
+          [
+            "L0190",
+            "L0189"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "late_start",
+        "forward_driver_predecessor_leaf_id": "L0188",
+        "late_driver_successor_leaf_id": "L0190",
+        "leaf_id": "L0189",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0190",
+        "sto_minus_source_seconds": -16200
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C02",
+        "dependency_paths": [
+          [
+            "L0190"
+          ]
+        ],
+        "dependency_role": "FIRST_DIVERGENCE",
+        "diagnostic_group": "G2-RC01",
+        "field": "early_finish",
+        "forward_driver_predecessor_leaf_id": "L0189",
+        "late_driver_successor_leaf_id": "L0191",
+        "leaf_id": "L0190",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0189",
+        "sto_minus_source_seconds": -7200
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C02",
+        "dependency_paths": [
+          [
+            "L0190"
+          ]
+        ],
+        "dependency_role": "FIRST_DIVERGENCE",
+        "diagnostic_group": "G2-RC01",
+        "field": "finish",
+        "forward_driver_predecessor_leaf_id": "L0189",
+        "late_driver_successor_leaf_id": "L0191",
+        "leaf_id": "L0190",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0189",
+        "sto_minus_source_seconds": -7200
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C02",
+        "dependency_paths": [
+          [
+            "L0190"
+          ]
+        ],
+        "dependency_role": "FIRST_DIVERGENCE",
+        "diagnostic_group": "G2-RC01",
+        "field": "late_start",
+        "forward_driver_predecessor_leaf_id": "L0189",
+        "late_driver_successor_leaf_id": "L0191",
+        "leaf_id": "L0190",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0191",
+        "sto_minus_source_seconds": -21600
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C02",
+        "dependency_paths": [
+          [
+            "L0190",
+            "L0191"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "early_finish",
+        "forward_driver_predecessor_leaf_id": "L0190",
+        "late_driver_successor_leaf_id": "L0192",
+        "leaf_id": "L0191",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0190",
+        "sto_minus_source_seconds": -7200
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C02",
+        "dependency_paths": [
+          [
+            "L0190",
+            "L0191"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "early_start",
+        "forward_driver_predecessor_leaf_id": "L0190",
+        "late_driver_successor_leaf_id": "L0192",
+        "leaf_id": "L0191",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0190",
+        "sto_minus_source_seconds": -7200
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C02",
+        "dependency_paths": [
+          [
+            "L0190",
+            "L0191"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "finish",
+        "forward_driver_predecessor_leaf_id": "L0190",
+        "late_driver_successor_leaf_id": "L0192",
+        "leaf_id": "L0191",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0190",
+        "sto_minus_source_seconds": -7200
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C02",
+        "dependency_paths": [
+          [
+            "L0190",
+            "L0191"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "start",
+        "forward_driver_predecessor_leaf_id": "L0190",
+        "late_driver_successor_leaf_id": "L0192",
+        "leaf_id": "L0191",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0190",
+        "sto_minus_source_seconds": -7200
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C02",
+        "dependency_paths": [
+          [
+            "L0190",
+            "L0191"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "total_float",
+        "forward_driver_predecessor_leaf_id": "L0190",
+        "late_driver_successor_leaf_id": "L0192",
+        "leaf_id": "L0191",
+        "mismatched_engine_driver": null,
+        "source_replay_driver_leaf_id": null,
+        "sto_minus_source_seconds": 7200
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C02",
+        "dependency_paths": [
+          [
+            "L0190",
+            "L0191",
+            "L0192"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "early_finish",
+        "forward_driver_predecessor_leaf_id": "L0191",
+        "late_driver_successor_leaf_id": "L0193",
+        "leaf_id": "L0192",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0191",
+        "sto_minus_source_seconds": -7200
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C02",
+        "dependency_paths": [
+          [
+            "L0190",
+            "L0191",
+            "L0192"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "early_start",
+        "forward_driver_predecessor_leaf_id": "L0191",
+        "late_driver_successor_leaf_id": "L0193",
+        "leaf_id": "L0192",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0191",
+        "sto_minus_source_seconds": -7200
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C02",
+        "dependency_paths": [
+          [
+            "L0190",
+            "L0191",
+            "L0192"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "finish",
+        "forward_driver_predecessor_leaf_id": "L0191",
+        "late_driver_successor_leaf_id": "L0193",
+        "leaf_id": "L0192",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0191",
+        "sto_minus_source_seconds": -7200
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C02",
+        "dependency_paths": [
+          [
+            "L0190",
+            "L0191",
+            "L0192"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "start",
+        "forward_driver_predecessor_leaf_id": "L0191",
+        "late_driver_successor_leaf_id": "L0193",
+        "leaf_id": "L0192",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0191",
+        "sto_minus_source_seconds": -7200
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C02",
+        "dependency_paths": [
+          [
+            "L0190",
+            "L0191",
+            "L0192"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "total_float",
+        "forward_driver_predecessor_leaf_id": "L0191",
+        "late_driver_successor_leaf_id": "L0193",
+        "leaf_id": "L0192",
+        "mismatched_engine_driver": null,
+        "source_replay_driver_leaf_id": null,
+        "sto_minus_source_seconds": 7200
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C02",
+        "dependency_paths": [
+          [
+            "L0190",
+            "L0191",
+            "L0192",
+            "L0193"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "early_finish",
+        "forward_driver_predecessor_leaf_id": "L0192",
+        "late_driver_successor_leaf_id": "L0202",
+        "leaf_id": "L0193",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0192",
+        "sto_minus_source_seconds": -57600
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C02",
+        "dependency_paths": [
+          [
+            "L0190",
+            "L0191",
+            "L0192",
+            "L0193"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "early_start",
+        "forward_driver_predecessor_leaf_id": "L0192",
+        "late_driver_successor_leaf_id": "L0202",
+        "leaf_id": "L0193",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0192",
+        "sto_minus_source_seconds": -7200
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C02",
+        "dependency_paths": [
+          [
+            "L0190",
+            "L0191",
+            "L0192",
+            "L0193"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "finish",
+        "forward_driver_predecessor_leaf_id": "L0192",
+        "late_driver_successor_leaf_id": "L0202",
+        "leaf_id": "L0193",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0192",
+        "sto_minus_source_seconds": -57600
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C02",
+        "dependency_paths": [
+          [
+            "L0190",
+            "L0191",
+            "L0192",
+            "L0193"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "start",
+        "forward_driver_predecessor_leaf_id": "L0192",
+        "late_driver_successor_leaf_id": "L0202",
+        "leaf_id": "L0193",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0192",
+        "sto_minus_source_seconds": -7200
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C02",
+        "dependency_paths": [
+          [
+            "L0190",
+            "L0191",
+            "L0192",
+            "L0193",
+            "L0202"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "early_finish",
+        "forward_driver_predecessor_leaf_id": "L0193",
+        "late_driver_successor_leaf_id": "L0203",
+        "leaf_id": "L0202",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0193",
+        "sto_minus_source_seconds": -57600
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C02",
+        "dependency_paths": [
+          [
+            "L0190",
+            "L0191",
+            "L0192",
+            "L0193",
+            "L0202"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "early_start",
+        "forward_driver_predecessor_leaf_id": "L0193",
+        "late_driver_successor_leaf_id": "L0203",
+        "leaf_id": "L0202",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0193",
+        "sto_minus_source_seconds": -57600
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C02",
+        "dependency_paths": [
+          [
+            "L0190",
+            "L0191",
+            "L0192",
+            "L0193",
+            "L0202"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "finish",
+        "forward_driver_predecessor_leaf_id": "L0193",
+        "late_driver_successor_leaf_id": "L0203",
+        "leaf_id": "L0202",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0193",
+        "sto_minus_source_seconds": -57600
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C02",
+        "dependency_paths": [
+          [
+            "L0190",
+            "L0191",
+            "L0192",
+            "L0193",
+            "L0202"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "start",
+        "forward_driver_predecessor_leaf_id": "L0193",
+        "late_driver_successor_leaf_id": "L0203",
+        "leaf_id": "L0202",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0193",
+        "sto_minus_source_seconds": -57600
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C02",
+        "dependency_paths": [
+          [
+            "L0190",
+            "L0191",
+            "L0192",
+            "L0193",
+            "L0202",
+            "L0203"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "early_finish",
+        "forward_driver_predecessor_leaf_id": "L0202",
+        "late_driver_successor_leaf_id": "L0369",
+        "leaf_id": "L0203",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0202",
+        "sto_minus_source_seconds": -57600
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C02",
+        "dependency_paths": [
+          [
+            "L0190",
+            "L0191",
+            "L0192",
+            "L0193",
+            "L0202",
+            "L0203"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "early_start",
+        "forward_driver_predecessor_leaf_id": "L0202",
+        "late_driver_successor_leaf_id": "L0369",
+        "leaf_id": "L0203",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0202",
+        "sto_minus_source_seconds": -57600
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C02",
+        "dependency_paths": [
+          [
+            "L0190",
+            "L0191",
+            "L0192",
+            "L0193",
+            "L0202",
+            "L0203"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "finish",
+        "forward_driver_predecessor_leaf_id": "L0202",
+        "late_driver_successor_leaf_id": "L0369",
+        "leaf_id": "L0203",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0202",
+        "sto_minus_source_seconds": -57600
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C02",
+        "dependency_paths": [
+          [
+            "L0190",
+            "L0191",
+            "L0192",
+            "L0193",
+            "L0202",
+            "L0203"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "free_float",
+        "forward_driver_predecessor_leaf_id": "L0202",
+        "late_driver_successor_leaf_id": "L0369",
+        "leaf_id": "L0203",
+        "mismatched_engine_driver": null,
+        "source_replay_driver_leaf_id": null,
+        "sto_minus_source_seconds": 1800
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C02",
+        "dependency_paths": [
+          [
+            "L0190",
+            "L0191",
+            "L0192",
+            "L0193",
+            "L0202",
+            "L0203"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "start",
+        "forward_driver_predecessor_leaf_id": "L0202",
+        "late_driver_successor_leaf_id": "L0369",
+        "leaf_id": "L0203",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0202",
+        "sto_minus_source_seconds": -57600
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C02",
+        "dependency_paths": [
+          [
+            "L0190",
+            "L0191",
+            "L0192",
+            "L0193",
+            "L0202",
+            "L0203"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "total_float",
+        "forward_driver_predecessor_leaf_id": "L0202",
+        "late_driver_successor_leaf_id": "L0369",
+        "leaf_id": "L0203",
+        "mismatched_engine_driver": null,
+        "source_replay_driver_leaf_id": null,
+        "sto_minus_source_seconds": 1800
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C03",
+        "dependency_paths": [
+          [
+            "L0083",
+            "L0087",
+            "L0089",
+            "L0091",
+            "L0371"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "early_finish",
+        "forward_driver_predecessor_leaf_id": "L0091",
+        "late_driver_successor_leaf_id": "L0400",
+        "leaf_id": "L0371",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0091",
+        "sto_minus_source_seconds": -57600
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C03",
+        "dependency_paths": [
+          [
+            "L0083",
+            "L0087",
+            "L0089",
+            "L0091",
+            "L0371"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "early_start",
+        "forward_driver_predecessor_leaf_id": "L0091",
+        "late_driver_successor_leaf_id": "L0400",
+        "leaf_id": "L0371",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0091",
+        "sto_minus_source_seconds": -57600
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C03",
+        "dependency_paths": [
+          [
+            "L0083",
+            "L0087",
+            "L0089",
+            "L0091",
+            "L0371"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "finish",
+        "forward_driver_predecessor_leaf_id": "L0091",
+        "late_driver_successor_leaf_id": "L0400",
+        "leaf_id": "L0371",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0091",
+        "sto_minus_source_seconds": -57600
+      },
+      {
+        "causal_confidence": "STRONG_CANDIDATE",
+        "component_id": "G2-C03",
+        "dependency_paths": [
+          [
+            "L0083",
+            "L0087",
+            "L0089",
+            "L0091",
+            "L0371"
+          ]
+        ],
+        "dependency_role": "DEPENDENT",
+        "diagnostic_group": "G2-RC01",
+        "field": "start",
+        "forward_driver_predecessor_leaf_id": "L0091",
+        "late_driver_successor_leaf_id": "L0400",
+        "leaf_id": "L0371",
+        "mismatched_engine_driver": true,
+        "source_replay_driver_leaf_id": "L0091",
+        "sto_minus_source_seconds": -57600
+      },
+      {
+        "causal_confidence": "PROVEN",
+        "component_id": "G2-C09",
+        "dependency_paths": [
+          [
+            "L0407"
+          ]
+        ],
+        "dependency_role": "FIRST_DIVERGENCE",
+        "diagnostic_group": "G2-RC03",
+        "field": "free_float",
+        "forward_driver_predecessor_leaf_id": "L0408",
+        "late_driver_successor_leaf_id": "L0414",
+        "leaf_id": "L0407",
+        "mismatched_engine_driver": null,
+        "source_replay_driver_leaf_id": null,
+        "sto_minus_source_seconds": -7200
+      },
+      {
+        "causal_confidence": "PROVEN",
+        "component_id": "G2-C09",
+        "dependency_paths": [
+          [
+            "L0407"
+          ]
+        ],
+        "dependency_role": "FIRST_DIVERGENCE",
+        "diagnostic_group": "G2-RC03",
+        "field": "total_float",
+        "forward_driver_predecessor_leaf_id": "L0408",
+        "late_driver_successor_leaf_id": "L0414",
+        "leaf_id": "L0407",
+        "mismatched_engine_driver": null,
+        "source_replay_driver_leaf_id": null,
+        "sto_minus_source_seconds": -300600
+      },
+      {
+        "causal_confidence": "PROVEN",
+        "component_id": "G2-C10",
+        "dependency_paths": [
+          [
+            "L0411"
+          ]
+        ],
+        "dependency_role": "FIRST_DIVERGENCE",
+        "diagnostic_group": "G2-RC03",
+        "field": "total_float",
+        "forward_driver_predecessor_leaf_id": "L0409",
+        "late_driver_successor_leaf_id": "L0416",
+        "leaf_id": "L0411",
+        "mismatched_engine_driver": null,
+        "source_replay_driver_leaf_id": null,
+        "sto_minus_source_seconds": -291600
+      }
+    ],
+    "production_basis": {
+      "commit": "1982789f1c0aab83892dbac2f2d7b690ec9a85d6",
+      "path_tree_sha256": "a0ad82dfd2777c2acef2f5346e37e034f295e08c1992e6cd122bfc816a17b715",
+      "projection_sha256": "e638c48a40fa572a1f98333b7628c15a1f9562203efc8c03c2a441f1d3ec0a73",
+      "remaining_keyset_sha256": "bfb1b5113ac3f4adf8656a731935dee7387fcce95efb08ff601ce77fb38ed9ec",
+      "verified_against_worktree": true
+    },
+    "root_activity_context": {
+      "L0070": {
+        "active": true,
+        "activity_kind": "task",
+        "assignment_count": 2,
+        "assumption_codes": [
+          "ACTIVITY_RESOURCE_CALENDARS_UNITED"
+        ],
+        "calendar_class": "resource_calendar_union",
+        "constraint_type": "asap",
+        "disposition": "ASSUMED_LABELLED",
+        "incoming_lag_classes": [
+          "zero"
+        ],
+        "incoming_relationship_types": [
+          "FS"
+        ],
+        "manual": false,
+        "outgoing_lag_classes": [
+          "zero"
+        ],
+        "outgoing_relationship_types": [
+          "FS"
+        ],
+        "planned_duration_class": "positive_working",
+        "progress_state": "not_started",
+        "remaining_duration_class": "positive_working",
+        "resource_calendar_count": 2
+      },
+      "L0075": {
+        "active": true,
+        "activity_kind": "task",
+        "assignment_count": 2,
+        "assumption_codes": [
+          "ACTIVITY_RESOURCE_CALENDARS_UNITED"
+        ],
+        "calendar_class": "resource_calendar_union",
+        "constraint_type": "asap",
+        "disposition": "ASSUMED_LABELLED",
+        "incoming_lag_classes": [
+          "zero"
+        ],
+        "incoming_relationship_types": [
+          "FS"
+        ],
+        "manual": false,
+        "outgoing_lag_classes": [
+          "zero"
+        ],
+        "outgoing_relationship_types": [
+          "FS"
+        ],
+        "planned_duration_class": "positive_working",
+        "progress_state": "not_started",
+        "remaining_duration_class": "positive_working",
+        "resource_calendar_count": 2
+      },
+      "L0080": {
+        "active": true,
+        "activity_kind": "task",
+        "assignment_count": 2,
+        "assumption_codes": [
+          "ACTIVITY_RESOURCE_CALENDARS_UNITED"
+        ],
+        "calendar_class": "resource_calendar_union",
+        "constraint_type": "asap",
+        "disposition": "ASSUMED_LABELLED",
+        "incoming_lag_classes": [
+          "zero"
+        ],
+        "incoming_relationship_types": [
+          "FS"
+        ],
+        "manual": false,
+        "outgoing_lag_classes": [
+          "zero"
+        ],
+        "outgoing_relationship_types": [
+          "FS"
+        ],
+        "planned_duration_class": "positive_working",
+        "progress_state": "not_started",
+        "remaining_duration_class": "positive_working",
+        "resource_calendar_count": 2
+      },
+      "L0083": {
+        "active": true,
+        "activity_kind": "task",
+        "assignment_count": 2,
+        "assumption_codes": [
+          "ACTIVITY_RESOURCE_CALENDARS_UNITED"
+        ],
+        "calendar_class": "resource_calendar_union",
+        "constraint_type": "asap",
+        "disposition": "ASSUMED_LABELLED",
+        "incoming_lag_classes": [
+          "zero"
+        ],
+        "incoming_relationship_types": [
+          "FS"
+        ],
+        "manual": false,
+        "outgoing_lag_classes": [
+          "zero"
+        ],
+        "outgoing_relationship_types": [
+          "FS"
+        ],
+        "planned_duration_class": "positive_working",
+        "progress_state": "not_started",
+        "remaining_duration_class": "positive_working",
+        "resource_calendar_count": 2
+      },
+      "L0084": {
+        "active": true,
+        "activity_kind": "task",
+        "assignment_count": 2,
+        "assumption_codes": [
+          "ACTIVITY_RESOURCE_CALENDARS_UNITED"
+        ],
+        "calendar_class": "resource_calendar_union",
+        "constraint_type": "asap",
+        "disposition": "ASSUMED_LABELLED",
+        "incoming_lag_classes": [
+          "zero"
+        ],
+        "incoming_relationship_types": [
+          "FS"
+        ],
+        "manual": false,
+        "outgoing_lag_classes": [
+          "zero"
+        ],
+        "outgoing_relationship_types": [
+          "FS"
+        ],
+        "planned_duration_class": "positive_working",
+        "progress_state": "not_started",
+        "remaining_duration_class": "positive_working",
+        "resource_calendar_count": 2
+      },
+      "L0114": {
+        "active": true,
+        "activity_kind": "task",
+        "assignment_count": 2,
+        "assumption_codes": [
+          "ACTIVITY_RESOURCE_CALENDARS_UNITED"
+        ],
+        "calendar_class": "resource_calendar_union",
+        "constraint_type": "asap",
+        "disposition": "ASSUMED_LABELLED",
+        "incoming_lag_classes": [
+          "zero"
+        ],
+        "incoming_relationship_types": [
+          "FS"
+        ],
+        "manual": false,
+        "outgoing_lag_classes": [
+          "zero"
+        ],
+        "outgoing_relationship_types": [
+          "FS"
+        ],
+        "planned_duration_class": "positive_working",
+        "progress_state": "not_started",
+        "remaining_duration_class": "positive_working",
+        "resource_calendar_count": 2
+      },
+      "L0127": {
+        "active": true,
+        "activity_kind": "task",
+        "assignment_count": 2,
+        "assumption_codes": [
+          "ACTIVITY_RESOURCE_CALENDARS_UNITED"
+        ],
+        "calendar_class": "resource_calendar_union",
+        "constraint_type": "asap",
+        "disposition": "ASSUMED_LABELLED",
+        "incoming_lag_classes": [
+          "zero"
+        ],
+        "incoming_relationship_types": [
+          "FS"
+        ],
+        "manual": false,
+        "outgoing_lag_classes": [
+          "zero"
+        ],
+        "outgoing_relationship_types": [
+          "FS"
+        ],
+        "planned_duration_class": "positive_working",
+        "progress_state": "not_started",
+        "remaining_duration_class": "positive_working",
+        "resource_calendar_count": 2
+      },
+      "L0148": {
+        "active": true,
+        "activity_kind": "task",
+        "assignment_count": 2,
+        "assumption_codes": [
+          "ACTIVITY_RESOURCE_CALENDARS_UNITED"
+        ],
+        "calendar_class": "resource_calendar_union",
+        "constraint_type": "asap",
+        "disposition": "ASSUMED_LABELLED",
+        "incoming_lag_classes": [
+          "zero"
+        ],
+        "incoming_relationship_types": [
+          "FS"
+        ],
+        "manual": false,
+        "outgoing_lag_classes": [
+          "zero"
+        ],
+        "outgoing_relationship_types": [
+          "FS"
+        ],
+        "planned_duration_class": "positive_working",
+        "progress_state": "not_started",
+        "remaining_duration_class": "positive_working",
+        "resource_calendar_count": 2
+      },
+      "L0157": {
+        "active": true,
+        "activity_kind": "task",
+        "assignment_count": 2,
+        "assumption_codes": [
+          "ACTIVITY_RESOURCE_CALENDARS_UNITED"
+        ],
+        "calendar_class": "resource_calendar_union",
+        "constraint_type": "asap",
+        "disposition": "ASSUMED_LABELLED",
+        "incoming_lag_classes": [
+          "zero"
+        ],
+        "incoming_relationship_types": [
+          "FS"
+        ],
+        "manual": false,
+        "outgoing_lag_classes": [
+          "zero"
+        ],
+        "outgoing_relationship_types": [
+          "FS"
+        ],
+        "planned_duration_class": "positive_working",
+        "progress_state": "not_started",
+        "remaining_duration_class": "positive_working",
+        "resource_calendar_count": 2
+      },
+      "L0190": {
+        "active": true,
+        "activity_kind": "task",
+        "assignment_count": 2,
+        "assumption_codes": [
+          "ACTIVITY_RESOURCE_CALENDARS_UNITED"
+        ],
+        "calendar_class": "resource_calendar_union",
+        "constraint_type": "asap",
+        "disposition": "ASSUMED_LABELLED",
+        "incoming_lag_classes": [
+          "zero"
+        ],
+        "incoming_relationship_types": [
+          "FS"
+        ],
+        "manual": false,
+        "outgoing_lag_classes": [
+          "zero"
+        ],
+        "outgoing_relationship_types": [
+          "FS"
+        ],
+        "planned_duration_class": "positive_working",
+        "progress_state": "not_started",
+        "remaining_duration_class": "positive_working",
+        "resource_calendar_count": 2
+      },
+      "L0407": {
+        "active": true,
+        "activity_kind": "task",
+        "assignment_count": 1,
+        "assumption_codes": [
+          "ACTIVITY_DURATION_ELAPSED"
+        ],
+        "calendar_class": "elapsed_continuous",
+        "constraint_type": "asap",
+        "disposition": "ASSUMED_LABELLED",
+        "incoming_lag_classes": [
+          "zero"
+        ],
+        "incoming_relationship_types": [
+          "FS"
+        ],
+        "manual": false,
+        "outgoing_lag_classes": [
+          "zero"
+        ],
+        "outgoing_relationship_types": [
+          "FS"
+        ],
+        "planned_duration_class": "positive_elapsed",
+        "progress_state": "not_started",
+        "remaining_duration_class": "positive_elapsed",
+        "resource_calendar_count": 1
+      },
+      "L0411": {
+        "active": true,
+        "activity_kind": "task",
+        "assignment_count": 1,
+        "assumption_codes": [
+          "ACTIVITY_DURATION_ELAPSED"
+        ],
+        "calendar_class": "elapsed_continuous",
+        "constraint_type": "asap",
+        "disposition": "ASSUMED_LABELLED",
+        "incoming_lag_classes": [
+          "zero"
+        ],
+        "incoming_relationship_types": [
+          "FS"
+        ],
+        "manual": false,
+        "outgoing_lag_classes": [
+          "zero"
+        ],
+        "outgoing_relationship_types": [
+          "FS"
+        ],
+        "planned_duration_class": "positive_elapsed",
+        "progress_state": "not_started",
+        "remaining_duration_class": "positive_elapsed",
+        "resource_calendar_count": 1
+      }
+    }
+  },
   "decision": {
-    "next_action": "build and run the predeclared synthetic RC01 assignment-envelope native matrix; do not change production scheduling semantics yet",
+    "next_action": "run the exact committed synthetic RC01 matrix in Microsoft Project and return the recalculated XML; do not change production scheduling semantics",
     "p1_g2_closed": false,
     "p1_gate": "4/5 IN PROGRESS",
     "p2_started": false
   },
   "evidence_date": "2026-09-25",
   "next_experiment": {
-    "acceptance_rule": [
-      "each assignment span is compatible with its own resource calendar",
-      "for every two-assignment case task Start equals the earliest assignment Start",
-      "for every two-assignment case task Finish equals the latest assignment Finish",
-      "reversing assignment declaration order does not change the result",
-      "the single-resource control remains consistent with the existing resource-calendar rule",
-      "the separated-calendar case differs from the current union-calendar placement"
-    ],
+    "analyzer": "scripts/evidence/p1_g2_rc01_assignment_native.py",
+    "analyzer_contract": {
+      "inconclusive": "any invalid control, order effect or mixed result",
+      "input_validation": "identity, calendars, task settings, duration/start/topology, assignment Work/Units/order all fail closed",
+      "rejection": "controls and order twin pass but A/B do not equal their assignment envelopes",
+      "support": "all assignment spans fit their resource calendars; A/B task spans equal assignment envelopes and are order-independent; C/D controls pass; A/B differ from union placement"
+    },
     "boiler_counterfactual_authorized": false,
-    "cases": [
-      {
-        "discriminator": "assignment-level scheduling must create a task span with a calendar gap that a union-calendar duration placement cannot reproduce",
-        "id": "A",
-        "shape": "two assignments on deliberately separated resource calendars"
+    "cases": {
+      "A": "AM 08:00-12:00 then PM 13:00-17:00 assignment declarations",
+      "B": "semantic twin of A with PM then AM declaration order",
+      "C": "two distinct resource calendars, both 08:00-12:00",
+      "D": "one AM 08:00-12:00 resource assignment"
+    },
+    "fixed_inputs": {
+      "assignment_order": [
+        101,
+        102,
+        103,
+        104,
+        105,
+        106,
+        107
+      ],
+      "assignment_units": "1",
+      "assignment_work": "PT4H0M0S",
+      "constraint": "ASAP",
+      "effort_driven": false,
+      "ignore_resource_calendar": false,
+      "levelling": "non-participating: resource CanLevel 0; task delays zero",
+      "manual": false,
+      "progress": "none",
+      "project_calendar": {
+        "uid": 1,
+        "working_intervals": [
+          [
+            "08:00:00",
+            "12:00:00"
+          ],
+          [
+            "13:00:00",
+            "17:00:00"
+          ]
+        ]
       },
-      {
-        "discriminator": "same calculated task and assignment coordinates as A",
-        "id": "B",
-        "shape": "case A with assignment declaration order reversed"
-      },
-      {
-        "discriminator": "control for the no-gap case",
-        "id": "C",
-        "shape": "two assignments whose resource calendars overlap over the complete work window"
-      },
-      {
-        "discriminator": "control for the already-supported one-resource calendar rule",
-        "id": "D",
-        "shape": "single resource assignment"
-      }
-    ],
+      "task_calendar": null,
+      "task_duration": "PT4H0M0S",
+      "task_type": "FIXED_UNITS (MSPDI Type 0)",
+      "topology": "four independent tasks; no relationships"
+    },
     "id": "P1-G2-RC01-ASSIGNMENT-ENVELOPE-NATIVE-MATRIX-V1",
+    "importer_contract": {
+      "assignment_work_units_start_finish": "canonical fields",
+      "effort_driven": "raw value preserved as opaque extension; canonical false semantic",
+      "ignore_resource_calendar": "raw value preserved as opaque extension; clear maps to canonical false semantic",
+      "resource_calendar_identity": "canonical field",
+      "task_type": "canonical DurationType fixed_units"
+    },
+    "input": {
+      "bytes": 20989,
+      "path": "tests/fixtures/P1-G2-RC01-ASSIGNMENT-ENVELOPE-NATIVE-MATRIX-V1.xml",
+      "project_guid": "01010101-0101-4101-8101-010101010101",
+      "project_start": "2026-10-12T08:00:00",
+      "sha256": "9d7ad7a8a845fcf036827fe90b51d41431d0452ece57097ce86934bec8119313"
+    },
     "native_return_required": true,
     "production_correction_authorized": false,
-    "purpose": "distinguish the current union-of-resource-calendars approximation from assignment-level scheduling whose task span is the envelope of the calculated assignment spans",
-    "required_return_observations": [
-      "task Start, Finish and Duration",
-      "each assignment Start, Finish, Work and Units",
-      "resource identity and resource-calendar identity",
-      "task type, effort-driven flag and IgnoreResourceCalendar",
-      "Microsoft Project build number"
-    ],
-    "status": "PREDECLARED_NOT_RUN",
-    "stopping_rule": "only a return satisfying every acceptance condition authorizes a separate diagnostic-only BOILER RC01 counterfactual; it does not authorize a production change",
-    "synthetic_only": true
+    "status": "EXACT_INPUT_COMMITTED_NATIVE_RETURN_REQUIRED",
+    "stopping_rule": "only ASSIGNMENT_ENVELOPE_SUPPORTED authorizes a later diagnostic-only BOILER counterfactual; no native outcome directly authorizes production"
   },
   "rc01_review": {
     "boiler_counterfactual_authorized": false,
     "causal_confidence": "STRONG_CANDIDATE",
-    "classification": "REVALIDATED_STRONG_CANDIDATE",
+    "classification": "CURRENT_RECOMPUTATION_STRONG_CANDIDATE",
     "current_by_field": {
       "critical": 2,
       "early_finish": 27,
@@ -107,22 +3442,16 @@
       "late_finish": 6,
       "late_start": 15,
       "start": 21,
-      "total_float": 18
+      "total_float": 19
     },
     "current_by_role": {
-      "DEPENDENT": 119,
+      "DEPENDENT": 120,
       "DERIVED": 2,
       "FIRST_DIVERGENCE": 22
     },
     "current_leaves": 37,
-    "current_slots": 143,
+    "current_slots": 144,
     "historical_name": "multi-resource calendar-union approximation",
-    "movement_during_rc02_correction": {
-      "closed": 17,
-      "improved": 11,
-      "unchanged": 132
-    },
-    "original_slots": 160,
     "production_correction_authorized": false,
     "replacement_semantics_status": "NOT_ESTABLISHED",
     "root_leaf_count": 10,
@@ -148,7 +3477,7 @@
   },
   "rc03_review": {
     "causal_confidence": "PROVEN",
-    "classification": "PROVEN_ORIGIN_REMAINS",
+    "classification": "CURRENT_RECOMPUTATION_PROVEN_ORIGIN_REMAINS",
     "current_leaves": 2,
     "current_slots": 3,
     "historical_name": "elapsed-duration float basis",
@@ -160,18 +3489,28 @@
     ]
   },
   "rc04_review": {
-    "classification": "HISTORICAL_COMPOUND_LABEL_REQUIRES_RECLASSIFICATION",
-    "current_leaf_ids": [
-      "L0084"
-    ],
-    "current_rc02_slots": 0,
-    "current_slots": 1,
-    "historical_parent_groups": [
-      "G2-RC01",
-      "G2-RC02"
-    ],
+    "classification": "HISTORICAL_COMPOUND_SLOT_RECLASSIFIED_BY_CURRENT_REPLAY",
+    "current_slots": 0,
+    "historical_name": "multi-resource/inactive total-float convergence",
+    "historical_slots": 1,
     "independent_fix_authorized": false,
-    "reason": "the historical one-slot compound diagnosis depended on RC01 and RC02; RC02 now has zero residual slots, so the old parent decomposition is not a current production explanation and must be reassessed after RC01"
+    "reclassified_slots": [
+      {
+        "current_group": "G2-RC01",
+        "current_paths": [
+          [
+            "L0080",
+            "L0084"
+          ],
+          [
+            "L0084"
+          ]
+        ],
+        "current_role": "DEPENDENT",
+        "field": "total_float",
+        "leaf_id": "L0084"
+      }
+    ]
   },
-  "schema": "sto-p1-g2-post-rc02-review-v1"
+  "schema": "sto-p1-g2-post-rc02-review-v2"
 }
