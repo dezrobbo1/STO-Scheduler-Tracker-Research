@@ -175,7 +175,7 @@
           "evidence": "docs/evidence/p1-final-native-progress-2026-09-20.md",
           "evidence_conditional": {
             "env": "STO_REQUIRE_CONTROLLED_NATIVE_REPEAT",
-            "why": "the clean controlled baseline/repeat pair lives outside the repository; its transition has zero unexpected changes, but 422 unchanged engine/source field mismatches remain across 105 leaves"
+            "why": "the clean controlled baseline/repeat pair lives outside the repository; current post-RC02 production replay has 147 engine/source field mismatches across 39 leaves (144 RC01 and 3 RC03), so P1-G2 remains open"
           }
         },
         {
