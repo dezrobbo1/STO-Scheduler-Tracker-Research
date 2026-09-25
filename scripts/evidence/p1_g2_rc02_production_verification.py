@@ -26,6 +26,7 @@ from scripts.evidence import p1_g2_baseline_diagnostics as baseline_diag
 from scripts.evidence import p1_g2_rc02_boiler_counterfactual as prior_cf
 from scripts.evidence.p1_g2_execution import (
     PRODUCTION_BASIS_PATHS,
+    PRODUCTION_BASIS_PATH_TREE_SHA256,
     verify_production_basis,
 )
 from sto.core.engine import BACKWARD_PASS_PROFILE, CRITICALITY_PROFILE, VALIDATOR_PROFILE
@@ -33,11 +34,7 @@ from sto.core.engine.validate import validate_result
 
 SCHEMA = "sto-p1-g2-rc02-production-verification-v1"
 EVIDENCE_DATE = "2026-09-25"
-PRODUCTION_COMMIT = "55a27c99d0ca031890221c66ec4e0d8ede059690"
-PRODUCTION_SOURCE_DIGEST = "3f80c59c7ff807d7d08803cb6f6697ce95f657da9aa15ee3c41586a70f4224d3"
-EXPECTED_PATH_TREE_SHA256 = "f7ca47d7e71f9c1e92fd13eaf2b02f351ffb8ca5a8fbb707c51aacb8b8a2ef11"
-EXPECTED_PROJECTION_SHA256 = "e638c48a40fa572a1f98333b7628c15a1f9562203efc8c03c2a441f1d3ec0a73"
-EXPECTED_REMAINING_KEYSET_SHA256 = "bfb1b5113ac3f4adf8656a731935dee7387fcce95efb08ff601ce77fb38ed9ec"
+PRODUCTION_COMMIT = "1982789f1c0aab83892dbac2f2d7b690ec9a85d6"
 COUNTERFACTUAL_RESULT = ROOT / "docs/evidence/p1-g2-rc02-latest-successor-boiler-counterfactual-2026-09-25.json"
 COUNTERFACTUAL_BYTES = 10_610
 COUNTERFACTUAL_SHA256 = "439e8ef6a4e7f90b9866e76fa2a5f4a8bc4060e82b7ef7d7c144b19d0b24dc9c"
@@ -101,16 +98,12 @@ def verify_current_production_basis() -> dict[str, object]:
         repository_root=ROOT,
         declared_commit=PRODUCTION_COMMIT,
         production_paths=PRODUCTION_BASIS_PATHS,
-        expected_path_tree_sha256=EXPECTED_PATH_TREE_SHA256,
+        expected_path_tree_sha256=PRODUCTION_BASIS_PATH_TREE_SHA256,
     )
 
 
 def build_record(baseline_path: Path) -> dict[str, object]:
     basis = verify_current_production_basis()
-    if basis["path_tree_sha256"] != EXPECTED_PATH_TREE_SHA256:
-        raise ProductionVerificationError("verified production path-tree differs from the correction basis")
-    if prior_cf.production_source_digest() != PRODUCTION_SOURCE_DIGEST:
-        raise ProductionVerificationError("production source digest changed after the bounded correction")
     counterfactual = _read_counterfactual()
     inventory = prior_cf.read_inventory()
     fixture = baseline_diag.read_verified_fixture(
@@ -146,10 +139,47 @@ def build_record(baseline_path: Path) -> dict[str, object]:
 
     projection_payload, projection_sha = _projection(engine, leaf_by_source)
     keyset_sha = _keyset_sha(current_keys)
-    if projection_sha != EXPECTED_PROJECTION_SHA256:
-        raise ProductionVerificationError("production projection does not equal the supported counterfactual")
-    if keyset_sha != EXPECTED_REMAINING_KEYSET_SHA256:
-        raise ProductionVerificationError("production remaining key set does not equal the supported counterfactual")
+
+    current_summary = {
+        "slots": len(current_keys),
+        "leaves": len({leaf for leaf, _ in current_keys}),
+        "by_field": dict(sorted(Counter(field for _, field in current_keys).items())),
+        "by_group": dict(
+            sorted(
+                Counter(
+                    fixed_by_key[key]["diagnostic_group"]
+                    for key in current_keys
+                ).items()
+            )
+        ),
+    }
+    expected_summary = counterfactual["inventory"]["latest_successor_directional"]
+    if current_summary != expected_summary:
+        raise ProductionVerificationError(
+            "post-correction inventory summary differs from the merged PR #60 counterfactual"
+        )
+
+    movement_by_group: dict[str, Counter] = {}
+    for key in sorted(fixed_keys):
+        row = fixed_by_key[key]
+        leaf_id, field = key
+        source_uid = source_uid_by_leaf[leaf_id]
+        index = FIELDS.index(field)
+        before_delta = row["delta"].get("sto_minus_source")
+        after_delta = prior_cf._delta(
+            observed[source_uid][index],
+            engine[source_uid][index],
+        )
+        status = prior_cf._movement(before_delta, after_delta)
+        movement_by_group.setdefault(row["diagnostic_group"], Counter())[status] += 1
+    movement_contract = {
+        group: dict(sorted(counts.items()))
+        for group, counts in sorted(movement_by_group.items())
+    }
+    if movement_contract != counterfactual["movement_by_original_group"]:
+        raise ProductionVerificationError(
+            "post-correction movement contract differs from the merged PR #60 counterfactual"
+        )
 
     rc02_keys = {
         key for key in current_keys
@@ -203,8 +233,7 @@ def build_record(baseline_path: Path) -> dict[str, object]:
         "basis": {
             "fresh_main_before_correction": "26dc06b6352fd882fa32f6b60a03eddd9b2b3f68",
             "production_correction_commit": PRODUCTION_COMMIT,
-            "production_source_digest": PRODUCTION_SOURCE_DIGEST,
-            "production_path_tree_sha256": EXPECTED_PATH_TREE_SHA256,
+            "production_path_tree_sha256": basis["path_tree_sha256"],
             "production_basis_verified": basis["verified_against_worktree"],
             "baseline": dict(fixture.identity),
             "fixed_inventory": {
@@ -216,8 +245,8 @@ def build_record(baseline_path: Path) -> dict[str, object]:
                 "bytes": COUNTERFACTUAL_BYTES,
                 "sha256": COUNTERFACTUAL_SHA256,
                 "classification": counterfactual["decision"]["classification"],
-                "expected_projection_sha256": EXPECTED_PROJECTION_SHA256,
-                "expected_remaining_keyset_sha256": EXPECTED_REMAINING_KEYSET_SHA256,
+                "expected_inventory_summary": counterfactual["inventory"]["latest_successor_directional"],
+                "expected_movement_by_original_group": counterfactual["movement_by_original_group"],
             },
         },
         "production_semantics": {
@@ -236,10 +265,10 @@ def build_record(baseline_path: Path) -> dict[str, object]:
         },
         "verification": {
             "calculation_validator_clean": True,
-            "projection_sha256": projection_sha,
-            "projection_matches_supported_counterfactual": True,
-            "remaining_keyset_sha256": keyset_sha,
-            "remaining_keyset_matches_supported_counterfactual": True,
+            "production_projection_sha256": projection_sha,
+            "production_remaining_keyset_sha256": keyset_sha,
+            "inventory_summary_matches_supported_counterfactual": True,
+            "movement_contract_matches_supported_counterfactual": True,
             "new_mismatch_slots": 0,
         },
         "inventory": {

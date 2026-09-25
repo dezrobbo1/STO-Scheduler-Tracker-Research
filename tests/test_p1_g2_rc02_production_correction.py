@@ -169,7 +169,87 @@ class NativeInactiveBoundaryPlanTests(unittest.TestCase):
             {schedule.activities[2].uid, schedule.activities[3].uid},
         )
         self.assertNotIn("ACTIVITY_SUCCESSOR_OF_INACTIVE", plan.assumed_by_code())
+        self.assertEqual(len(plan.derived_relationships), 2)
+        self.assertEqual(
+            {row.uid for row in plan.derived_relationships},
+            {row.uid for row in boundary},
+        )
+        self.assertEqual(
+            {row.source_predecessor_relationship_uid for row in plan.derived_relationships},
+            {schedule.relationships[0].uid},
+        )
+        self.assertEqual(
+            {row.source_successor_relationship_uid for row in plan.derived_relationships},
+            {schedule.relationships[1].uid, schedule.relationships[2].uid},
+        )
 
+    def test_elapsed_active_endpoint_stays_labelled(self):
+        for elapsed_uid in (1, 3):
+            with self.subTest(elapsed_uid=elapsed_uid):
+                activities = [
+                    _activity(
+                        1,
+                        start="2026-01-05T08:00:00",
+                        finish="2026-01-05T10:00:00",
+                        duration_seconds=7200,
+                        duration_format="8" if elapsed_uid == 1 else "5",
+                    ),
+                    _activity(
+                        2,
+                        start="2026-01-05T10:00:00",
+                        finish="2026-01-05T12:00:00",
+                        duration_seconds=7200,
+                        active=False,
+                    ),
+                    _activity(
+                        3,
+                        start="2026-01-05T10:00:00",
+                        finish="2026-01-05T11:00:00",
+                        duration_seconds=3600,
+                        duration_format="8" if elapsed_uid == 3 else "5",
+                    ),
+                ]
+                relationships = [_relationship(1, 1, 2), _relationship(2, 2, 3)]
+                schedule, _, _ = migrate(_document(activities, relationships=relationships))
+                plan = build_plan(schedule, HORIZON)
+                self.assertEqual(
+                    [row for row in plan.network.relationships if row.inactive_boundary_uid],
+                    [],
+                )
+                self.assertEqual(
+                    plan.assumed_by_code().get("ACTIVITY_SUCCESSOR_OF_INACTIVE"),
+                    1,
+                )
+
+    def test_mixed_supported_and_unsupported_boundaries_from_one_predecessor_stay_labelled(self):
+        activities = [
+            _activity(1, start="2026-01-05T08:00:00", finish="2026-01-05T10:00:00", duration_seconds=7200),
+            _activity(2, start="2026-01-05T10:00:00", finish="2026-01-05T12:00:00", duration_seconds=7200, active=False),
+            _activity(3, start="2026-01-05T10:00:00", finish="2026-01-05T11:00:00", duration_seconds=3600),
+            _activity(4, start="2026-01-05T10:00:00", finish="2026-01-05T12:00:00", duration_seconds=7200, active=False),
+            _activity(5, start="2026-01-05T10:00:00", finish="2026-01-05T11:00:00", duration_seconds=3600),
+            _activity(6, start="2026-01-05T10:00:00", finish="2026-01-05T11:00:00", duration_seconds=3600),
+            _activity(7, start="2026-01-05T10:00:00", finish="2026-01-05T11:00:00", duration_seconds=3600),
+        ]
+        relationships = [
+            _relationship(1, 1, 2),
+            _relationship(2, 2, 3),
+            _relationship(3, 1, 4),
+            _relationship(4, 4, 5),
+            _relationship(5, 4, 6),
+            _relationship(6, 4, 7),
+        ]
+        schedule, _, _ = migrate(_document(activities, relationships=relationships))
+        plan = build_plan(schedule, HORIZON)
+        self.assertEqual(
+            [row for row in plan.network.relationships if row.inactive_boundary_uid],
+            [],
+        )
+        self.assertEqual(plan.derived_relationships, ())
+        self.assertEqual(
+            plan.assumed_by_code().get("ACTIVITY_SUCCESSOR_OF_INACTIVE"),
+            4,
+        )
 
     def test_parallel_direct_predecessor_successor_edge_stays_labelled(self):
         activities = [

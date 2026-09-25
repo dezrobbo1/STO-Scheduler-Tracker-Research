@@ -36,7 +36,7 @@ if sys._getframe().f_code != compile(
     raise RuntimeError("execution helper bytecode differs from source")
 
 ROOT = Path(__file__).resolve().parents[2]
-REPOSITORY_BASE = "55a27c99d0ca031890221c66ec4e0d8ede059690"
+REPOSITORY_BASE = "1982789f1c0aab83892dbac2f2d7b690ec9a85d6"
 PRODUCTION_BASIS_PATHS = (
     "src/sto/core", "src/sto/legacy", "tests/controlled_native_progress_evidence.py",
 )
@@ -198,6 +198,7 @@ def verify_production_basis(
     if path_tree_sha256 != expected_path_tree_sha256:
         raise DiagnosticError(
             "production basis differs from the declared evidence commit; "
+            f"actual={path_tree_sha256} expected={expected_path_tree_sha256}; "
             "refusing stale lineage"
         )
 

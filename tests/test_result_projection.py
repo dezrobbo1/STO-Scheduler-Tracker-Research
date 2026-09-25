@@ -13,6 +13,7 @@ CI job sets.
 
 from __future__ import annotations
 
+import json
 import os
 import secrets
 import tempfile
@@ -21,7 +22,7 @@ from dataclasses import replace
 from datetime import datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
-from uuid import uuid4
+from uuid import NAMESPACE_URL, uuid4, uuid5
 from threading import Event, Thread
 
 from calculation_fixture import _activity, _document, _duration, _relationship
@@ -33,10 +34,12 @@ from sto.core.engine import (
     forward_pass,
     roll_up,
 )
+from sto.core.engine.plan import NATIVE_INACTIVE_BOUNDARY_CODE
 from sto.core.engine.result import (
     EXCLUDED,
     RELEASED,
     SCHEDULED,
+    RelationshipResult,
     fingerprint_result,
     project_result,
 )
@@ -463,6 +466,54 @@ class WhatElseDecidedTheseDatesTests(unittest.TestCase):
         self.assertEqual(
             [(row.disposition, row.code) for row in result.relationships],
             [(SCHEDULED, row.code) for row in labelled],
+        )
+
+    def test_native_inactive_boundary_driver_has_durable_source_lineage(self):
+        inactive, inactive_extensions = _task(2, hour=10)
+        inactive["active"] = False
+        document = _document(
+            [_task(1, hour=9), (inactive, inactive_extensions), _task(3, hour=11)],
+            relationships=[
+                _relationship(1, 1, 2),
+                _relationship(2, 2, 3),
+            ],
+        )
+        schedule, plan, result = _projected_document(document)
+        derived = [
+            row
+            for row in result.relationships
+            if row.code == NATIVE_INACTIVE_BOUNDARY_CODE
+        ]
+        self.assertEqual(len(derived), 1)
+        lineage = json.loads(derived[0].detail)
+        self.assertEqual(
+            lineage["source_predecessor_relationship_uid"],
+            str(schedule.relationships[0].uid),
+        )
+        self.assertEqual(
+            lineage["source_successor_relationship_uid"],
+            str(schedule.relationships[1].uid),
+        )
+        self.assertEqual(
+            lineage["inactive_boundary_uid"],
+            str(schedule.activities[1].uid),
+        )
+        source_relationship_uids = {row.uid for row in schedule.relationships}
+        durable_relationship_uids = {row.uid for row in result.relationships}
+        driver_uids = {
+            uid
+            for row in result.activities
+            for uid in (row.driving_relationship_uid, row.late_driving_relationship_uid)
+            if uid is not None
+        }
+        self.assertIn(derived[0].uid, driver_uids)
+        self.assertTrue(
+            driver_uids <= source_relationship_uids | durable_relationship_uids,
+            "a published driver UID is not resolvable from source or durable result provenance",
+        )
+        self.assertEqual(
+            {row.uid for row in plan.derived_relationships},
+            {derived[0].uid},
         )
 
     def test_a_dropped_edge_is_recorded_too(self):
@@ -1071,7 +1122,7 @@ class AStoredCalculationComesBackTests(unittest.TestCase):
 
         self.assertEqual(header["result_fingerprint"], expected.fingerprint)
         self.assertEqual(header["canonical_hash"], stored.canonical_hash)
-        self.assertEqual(header["profiles"]["result"], "sto-result-v2")
+        self.assertEqual(header["profiles"]["result"], "sto-result-v3")
         self.assertEqual(len(rows), len(expected.activities))
         self.assertEqual(
             len(summaries), len(expected.summaries) + len(expected.empty_summaries)
@@ -1090,6 +1141,81 @@ class AStoredCalculationComesBackTests(unittest.TestCase):
                 self.assertEqual(row["total_float_seconds"], source.total_float)
                 self.assertEqual(row["critical"], source.critical)
                 self.assertEqual(row["exclusion_code"], source.exclusion_code)
+
+    def test_native_derived_relationship_driver_survives_persistence_restart(self):
+        from sto.persistence import repositories as repo
+
+        workspace, project_id = self._imported()
+        stored = workspace.calculate(project_id)
+        schedule, expected = _projected(FIXTURE)
+        target = next(
+            row
+            for row in expected.activities
+            if row.disposition == SCHEDULED
+        )
+        derived_uid = uuid5(
+            NAMESPACE_URL,
+            f"sto:test-persisted-native-boundary:{stored.calculation_id}",
+        )
+        source = schedule.relationships[0]
+        detail = json.dumps(
+            {
+                "active_predecessor_uid": str(source.predecessor_uid),
+                "active_successor_uid": str(source.successor_uid),
+                "inactive_boundary_uid": str(source.successor_uid),
+                "source_predecessor_relationship_uid": str(source.uid),
+                "source_successor_relationship_uid": str(source.uid),
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        changed = replace(target, driving_relationship_uid=derived_uid)
+        candidate = replace(
+            expected,
+            activities=tuple(
+                changed if row.uid == target.uid else row
+                for row in expected.activities
+            ),
+            relationships=expected.relationships
+            + (
+                RelationshipResult(
+                    derived_uid,
+                    SCHEDULED,
+                    NATIVE_INACTIVE_BOUNDARY_CODE,
+                    detail,
+                ),
+            ),
+            fingerprint="",
+        )
+        candidate = replace(candidate, fingerprint=fingerprint_result(candidate))
+        with self.connect() as conn:
+            calculation_id = repo.insert_calculation(
+                conn,
+                project_id=project_id,
+                version_id=stored.version_id,
+                result=candidate,
+            )
+            conn.commit()
+        self.assertIsNotNone(calculation_id)
+
+        restarted = self._workspace()
+        reread = restarted.read_calculation(
+            project_id,
+            calculation_id=calculation_id,
+        )
+        persisted = reread.result.by_uid()[target.uid]
+        self.assertEqual(persisted.driving_relationship_uid, derived_uid)
+        persisted_edges = {row.uid: row for row in reread.result.relationships}
+        self.assertIn(derived_uid, persisted_edges)
+        self.assertEqual(
+            persisted_edges[derived_uid].code,
+            NATIVE_INACTIVE_BOUNDARY_CODE,
+        )
+        self.assertEqual(
+            json.loads(persisted_edges[derived_uid].detail),
+            json.loads(detail),
+        )
+        self.assertEqual(reread.result.fingerprint, candidate.fingerprint)
 
     def test_negative_float_progress_keeps_both_late_start_coordinates(self):
         """The public actual start may follow the late remaining finish."""

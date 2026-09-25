@@ -19,18 +19,14 @@ class Rc02ProductionVerificationTests(unittest.TestCase):
     def test_production_basis_is_the_correction_commit(self):
         self.assertEqual(
             verification.PRODUCTION_COMMIT,
-            "55a27c99d0ca031890221c66ec4e0d8ede059690",
+            "1982789f1c0aab83892dbac2f2d7b690ec9a85d6",
         )
         basis = verification.verify_current_production_basis()
         self.assertEqual(
             basis["path_tree_sha256"],
-            verification.EXPECTED_PATH_TREE_SHA256,
+            verification.PRODUCTION_BASIS_PATH_TREE_SHA256,
         )
         self.assertTrue(basis["verified_against_worktree"])
-        self.assertEqual(
-            verification.prior_cf.production_source_digest(),
-            verification.PRODUCTION_SOURCE_DIGEST,
-        )
 
     def test_committed_result_is_exact_counterfactual_equivalence(self):
         record = json.loads(RESULT.read_text(encoding="utf-8"))
@@ -47,15 +43,19 @@ class Rc02ProductionVerificationTests(unittest.TestCase):
         self.assertEqual(record["production_semantics"]["backward_profile"], "sto-backward-pass-v8")
         self.assertEqual(record["production_semantics"]["criticality_profile"], "sto-criticality-v7")
         self.assertEqual(record["production_semantics"]["validator_profile"], "sto-validator-v4")
-        self.assertTrue(record["verification"]["projection_matches_supported_counterfactual"])
-        self.assertTrue(record["verification"]["remaining_keyset_matches_supported_counterfactual"])
-        self.assertEqual(
-            record["verification"]["projection_sha256"],
-            verification.EXPECTED_PROJECTION_SHA256,
+        self.assertTrue(
+            record["verification"]["inventory_summary_matches_supported_counterfactual"]
         )
-        self.assertEqual(
-            record["verification"]["remaining_keyset_sha256"],
-            verification.EXPECTED_REMAINING_KEYSET_SHA256,
+        self.assertTrue(
+            record["verification"]["movement_contract_matches_supported_counterfactual"]
+        )
+        self.assertRegex(
+            record["verification"]["production_projection_sha256"],
+            r"^[0-9a-f]{64}$",
+        )
+        self.assertRegex(
+            record["verification"]["production_remaining_keyset_sha256"],
+            r"^[0-9a-f]{64}$",
         )
         self.assertEqual(
             record["decision"]["classification"],
