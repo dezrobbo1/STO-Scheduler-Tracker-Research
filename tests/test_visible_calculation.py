@@ -131,7 +131,7 @@ class VisibleCalculationTests(unittest.TestCase):
             project = self._imported(client)
             client.post(f"/api/projects/{project}/calculations")
             body = client.get(f"/api/projects/{project}/calculations/latest").json()
-            self.assertEqual(body["profiles"]["result"], "sto-result-v2")
+            self.assertEqual(body["profiles"]["result"], "sto-result-v3")
             self.assertTrue(body["profiles"]["forward"].startswith("sto-forward-pass-"))
             self.assertLess(body["horizon_start"], body["horizon_finish"])
 
