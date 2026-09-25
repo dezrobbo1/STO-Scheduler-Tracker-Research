@@ -1,0 +1,177 @@
+{
+  "basis": {
+    "historical_root_cause_record": {
+      "git_blob_sha": "f4eeb06bccb9681342db58ef84a06fa2c26742f8",
+      "path": "docs/evidence/p1-g2-baseline-root-causes-2026-09-22.json",
+      "schema": "sto-p1-g2-baseline-root-causes-v3"
+    },
+    "post_rc02_production_record": {
+      "git_blob_sha": "5ea13c477735bf52bd2ee2e07c62597036b09f2b",
+      "path": "docs/evidence/p1-g2-rc02-production-correction-2026-09-25.json",
+      "production_correction_commit": "1982789f1c0aab83892dbac2f2d7b690ec9a85d6",
+      "schema": "sto-p1-g2-rc02-production-verification-v1"
+    },
+    "repository_base": "a4a401c42dcacfb3122467b017607aa6be1ee0e5"
+  },
+  "current_inventory": {
+    "by_field": {
+      "critical": 2,
+      "early_finish": 27,
+      "early_start": 21,
+      "finish": 27,
+      "free_float": 7,
+      "late_finish": 6,
+      "late_start": 15,
+      "start": 21,
+      "total_float": 21
+    },
+    "by_group": {
+      "G2-RC01": 143,
+      "G2-RC03": 3,
+      "G2-RC04": 1
+    },
+    "by_role": {
+      "COMPOUND": 1,
+      "DEPENDENT": 119,
+      "DERIVED": 2,
+      "FIRST_DIVERGENCE": 25
+    },
+    "leaves": 39,
+    "rc02_slots": 0,
+    "slots": 147
+  },
+  "decision": {
+    "next_action": "build and run the predeclared synthetic RC01 assignment-envelope native matrix; do not change production scheduling semantics yet",
+    "p1_g2_closed": false,
+    "p1_gate": "4/5 IN PROGRESS",
+    "p2_started": false
+  },
+  "evidence_date": "2026-09-25",
+  "next_experiment": {
+    "acceptance_rule": [
+      "each assignment span is compatible with its own resource calendar",
+      "for every two-assignment case task Start equals the earliest assignment Start",
+      "for every two-assignment case task Finish equals the latest assignment Finish",
+      "reversing assignment declaration order does not change the result",
+      "the single-resource control remains consistent with the existing resource-calendar rule",
+      "the separated-calendar case differs from the current union-calendar placement"
+    ],
+    "boiler_counterfactual_authorized": false,
+    "cases": [
+      {
+        "discriminator": "assignment-level scheduling must create a task span with a calendar gap that a union-calendar duration placement cannot reproduce",
+        "id": "A",
+        "shape": "two assignments on deliberately separated resource calendars"
+      },
+      {
+        "discriminator": "same calculated task and assignment coordinates as A",
+        "id": "B",
+        "shape": "case A with assignment declaration order reversed"
+      },
+      {
+        "discriminator": "control for the no-gap case",
+        "id": "C",
+        "shape": "two assignments whose resource calendars overlap over the complete work window"
+      },
+      {
+        "discriminator": "control for the already-supported one-resource calendar rule",
+        "id": "D",
+        "shape": "single resource assignment"
+      }
+    ],
+    "id": "P1-G2-RC01-ASSIGNMENT-ENVELOPE-NATIVE-MATRIX-V1",
+    "native_return_required": true,
+    "production_correction_authorized": false,
+    "purpose": "distinguish the current union-of-resource-calendars approximation from assignment-level scheduling whose task span is the envelope of the calculated assignment spans",
+    "required_return_observations": [
+      "task Start, Finish and Duration",
+      "each assignment Start, Finish, Work and Units",
+      "resource identity and resource-calendar identity",
+      "task type, effort-driven flag and IgnoreResourceCalendar",
+      "Microsoft Project build number"
+    ],
+    "status": "PREDECLARED_NOT_RUN",
+    "stopping_rule": "only a return satisfying every acceptance condition authorizes a separate diagnostic-only BOILER RC01 counterfactual; it does not authorize a production change",
+    "synthetic_only": true
+  },
+  "rc01_review": {
+    "boiler_counterfactual_authorized": false,
+    "causal_confidence": "STRONG_CANDIDATE",
+    "classification": "REVALIDATED_STRONG_CANDIDATE",
+    "current_by_field": {
+      "critical": 2,
+      "early_finish": 27,
+      "early_start": 21,
+      "finish": 27,
+      "free_float": 6,
+      "late_finish": 6,
+      "late_start": 15,
+      "start": 21,
+      "total_float": 18
+    },
+    "current_by_role": {
+      "DEPENDENT": 119,
+      "DERIVED": 2,
+      "FIRST_DIVERGENCE": 22
+    },
+    "current_leaves": 37,
+    "current_slots": 143,
+    "historical_name": "multi-resource calendar-union approximation",
+    "movement_during_rc02_correction": {
+      "closed": 17,
+      "improved": 11,
+      "unchanged": 132
+    },
+    "original_slots": 160,
+    "production_correction_authorized": false,
+    "replacement_semantics_status": "NOT_ESTABLISHED",
+    "root_leaf_count": 10,
+    "root_leaf_ids": [
+      "L0070",
+      "L0075",
+      "L0080",
+      "L0083",
+      "L0084",
+      "L0114",
+      "L0127",
+      "L0148",
+      "L0157",
+      "L0190"
+    ],
+    "root_shape": {
+      "all_roots_match": true,
+      "assignment_count": 2,
+      "assumption_code": "ACTIVITY_RESOURCE_CALENDARS_UNITED",
+      "calendar_class": "resource_calendar_union",
+      "resource_calendar_count": 2
+    }
+  },
+  "rc03_review": {
+    "causal_confidence": "PROVEN",
+    "classification": "PROVEN_ORIGIN_REMAINS",
+    "current_leaves": 2,
+    "current_slots": 3,
+    "historical_name": "elapsed-duration float basis",
+    "production_correction_authorized": false,
+    "replacement_semantics_status": "NOT_ESTABLISHED",
+    "root_leaf_ids": [
+      "L0407",
+      "L0411"
+    ]
+  },
+  "rc04_review": {
+    "classification": "HISTORICAL_COMPOUND_LABEL_REQUIRES_RECLASSIFICATION",
+    "current_leaf_ids": [
+      "L0084"
+    ],
+    "current_rc02_slots": 0,
+    "current_slots": 1,
+    "historical_parent_groups": [
+      "G2-RC01",
+      "G2-RC02"
+    ],
+    "independent_fix_authorized": false,
+    "reason": "the historical one-slot compound diagnosis depended on RC01 and RC02; RC02 now has zero residual slots, so the old parent decomposition is not a current production explanation and must be reassessed after RC01"
+  },
+  "schema": "sto-p1-g2-post-rc02-review-v1"
+}
