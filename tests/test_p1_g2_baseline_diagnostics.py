@@ -246,7 +246,10 @@ class RecordedP1G2BaselineDiagnosticsTests(unittest.TestCase):
         self.assertEqual(self.record["schema"], "sto-p1-g2-baseline-root-causes-v3")
         lineage = self.record["lineage"]
         production = lineage["production_basis"]
-        self.assertEqual(production["declared_commit"], REPOSITORY_BASE)
+        self.assertEqual(
+            production["declared_commit"],
+            "0805bcb44f5122e9499e1dc2449dc25ee6b01abd",
+        )
         self.assertTrue(production["verified_against_worktree"])
         self.assertRegex(production["path_tree_sha256"], r"^[0-9a-f]{64}$")
         self.assertIn("src/sto/core", production["paths"])

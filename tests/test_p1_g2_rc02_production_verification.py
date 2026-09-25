@@ -16,12 +16,17 @@ SCRIPT = ROOT / "scripts/evidence/p1_g2_rc02_production_verification.py"
 
 
 class Rc02ProductionVerificationTests(unittest.TestCase):
-    def test_worker_and_production_basis_are_the_correction_commit(self):
-        self.assertEqual(verification.REPOSITORY_BASE, verification.PRODUCTION_COMMIT)
+    def test_production_basis_is_the_correction_commit(self):
         self.assertEqual(
-            verification.PRODUCTION_BASIS_PATH_TREE_SHA256,
+            verification.PRODUCTION_COMMIT,
+            "55a27c99d0ca031890221c66ec4e0d8ede059690",
+        )
+        basis = verification.verify_current_production_basis()
+        self.assertEqual(
+            basis["path_tree_sha256"],
             verification.EXPECTED_PATH_TREE_SHA256,
         )
+        self.assertTrue(basis["verified_against_worktree"])
         self.assertEqual(
             verification.prior_cf.production_source_digest(),
             verification.PRODUCTION_SOURCE_DIGEST,
@@ -30,6 +35,7 @@ class Rc02ProductionVerificationTests(unittest.TestCase):
     def test_committed_result_is_exact_counterfactual_equivalence(self):
         record = json.loads(RESULT.read_text(encoding="utf-8"))
         self.assertEqual(record["schema"], verification.SCHEMA)
+        self.assertTrue(record["basis"]["production_basis_verified"])
         self.assertEqual(record["inventory"]["before_slots"], 422)
         self.assertEqual(record["inventory"]["after_slots"], 147)
         self.assertEqual(record["inventory"]["after_leaves"], 39)

@@ -6,6 +6,7 @@
     "production_correction_commit": "55a27c99d0ca031890221c66ec4e0d8ede059690",
     "production_source_digest": "3f80c59c7ff807d7d08803cb6f6697ce95f657da9aa15ee3c41586a70f4224d3",
     "production_path_tree_sha256": "f7ca47d7e71f9c1e92fd13eaf2b02f351ffb8ca5a8fbb707c51aacb8b8a2ef11",
+    "production_basis_verified": true,
     "baseline": {
       "bytes": 3361935,
       "sha256": "e9b9b7994cc5cc50479807b82c452da742a91de9f7de52b172a6be6f4f399c70"

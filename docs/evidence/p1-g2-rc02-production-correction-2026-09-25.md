@@ -30,9 +30,12 @@ Production source identity:
 - `CRITICALITY_PROFILE`: `sto-criticality-v7`;
 - `VALIDATOR_PROFILE`: `sto-validator-v4`.
 
-The P1-G2 execution helper now names this final production basis, so later
-root-cause evidence cannot accidentally execute against the pre-correction
-scheduler while claiming current-main lineage.
+The shared P1-G2 source execution helper now verifies this correction commit and
+path-tree for current calculations. The immutable 2026-09-22 evidence record
+continues to retain its original `0805bcb` lineage explicitly; its regression
+asserts that historical value directly rather than conflating it with the
+current execution basis. Current production evidence therefore fails closed on
+stale source bytes without rewriting historical evidence.
 
 ## Bounded production semantic
 

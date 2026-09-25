@@ -25,8 +25,8 @@ for import_root in (str(ROOT), str(SRC)):
 from scripts.evidence import p1_g2_baseline_diagnostics as baseline_diag
 from scripts.evidence import p1_g2_rc02_boiler_counterfactual as prior_cf
 from scripts.evidence.p1_g2_execution import (
-    PRODUCTION_BASIS_PATH_TREE_SHA256,
-    REPOSITORY_BASE,
+    PRODUCTION_BASIS_PATHS,
+    verify_production_basis,
 )
 from sto.core.engine import BACKWARD_PASS_PROFILE, CRITICALITY_PROFILE, VALIDATOR_PROFILE
 from sto.core.engine.validate import validate_result
@@ -96,11 +96,19 @@ def _keyset_sha(keys: set[tuple[str, str]]) -> str:
     return _sha256(payload)
 
 
+def verify_current_production_basis() -> dict[str, object]:
+    return verify_production_basis(
+        repository_root=ROOT,
+        declared_commit=PRODUCTION_COMMIT,
+        production_paths=PRODUCTION_BASIS_PATHS,
+        expected_path_tree_sha256=EXPECTED_PATH_TREE_SHA256,
+    )
+
+
 def build_record(baseline_path: Path) -> dict[str, object]:
-    if REPOSITORY_BASE != PRODUCTION_COMMIT:
-        raise ProductionVerificationError("P1-G2 execution worker is not pinned to the correction commit")
-    if PRODUCTION_BASIS_PATH_TREE_SHA256 != EXPECTED_PATH_TREE_SHA256:
-        raise ProductionVerificationError("P1-G2 execution path-tree identity is not the correction basis")
+    basis = verify_current_production_basis()
+    if basis["path_tree_sha256"] != EXPECTED_PATH_TREE_SHA256:
+        raise ProductionVerificationError("verified production path-tree differs from the correction basis")
     if prior_cf.production_source_digest() != PRODUCTION_SOURCE_DIGEST:
         raise ProductionVerificationError("production source digest changed after the bounded correction")
     counterfactual = _read_counterfactual()
@@ -197,6 +205,7 @@ def build_record(baseline_path: Path) -> dict[str, object]:
             "production_correction_commit": PRODUCTION_COMMIT,
             "production_source_digest": PRODUCTION_SOURCE_DIGEST,
             "production_path_tree_sha256": EXPECTED_PATH_TREE_SHA256,
+            "production_basis_verified": basis["verified_against_worktree"],
             "baseline": dict(fixture.identity),
             "fixed_inventory": {
                 "bytes": prior_cf.INVENTORY_BYTES,
