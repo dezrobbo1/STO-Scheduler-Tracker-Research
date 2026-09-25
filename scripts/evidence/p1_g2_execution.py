@@ -41,7 +41,7 @@ PRODUCTION_BASIS_PATHS = (
     "src/sto/core", "src/sto/legacy", "tests/controlled_native_progress_evidence.py",
 )
 PRODUCTION_BASIS_PATH_TREE_SHA256 = (
-    "f7ca47d7e71f9c1e92fd13eaf2b02f351ffb8ca5a8fbb707c51aacb8b8a2ef11"
+    "a0ad82dfd2777c2acef2f5346e37e034f295e08c1992e6cd122bfc816a17b715"
 )
 EXECUTION_PATH = "scripts/evidence/p1_g2_execution.py"
 TOOL_PATH = "scripts/evidence/p1_g2_baseline_diagnostics.py"
@@ -151,7 +151,8 @@ def verify_production_basis(
             expected_path_tree_sha256 = declared_tree_sha256
         elif declared_tree_sha256 != expected_path_tree_sha256:
             raise DiagnosticError(
-                "declared production basis does not match its pinned path-tree digest"
+                "declared production basis does not match its pinned path-tree digest: "
+                f"actual={declared_tree_sha256} expected={expected_path_tree_sha256}"
             )
     elif expected_path_tree_sha256 is None:
         raise DiagnosticError(

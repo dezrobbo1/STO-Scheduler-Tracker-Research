@@ -478,7 +478,8 @@ class WhatElseDecidedTheseDatesTests(unittest.TestCase):
                 _relationship(2, 2, 3),
             ],
         )
-        schedule, plan, result = _projected_document(document)
+        schedule, _, _ = migrate(document)
+        plan, result = _projected_schedule(schedule)
         derived = [
             row
             for row in result.relationships
@@ -884,7 +885,7 @@ class TheProjectionAnswersForEveryRowTests(unittest.TestCase):
         schedule, result = _projected(FIXTURE)
         provenance = result.provenance
         self.assertEqual(provenance.canonical_hash, canonical_sha256(encode_schedule(schedule)))
-        self.assertEqual(provenance.result_profile, "sto-result-v2")
+        self.assertEqual(provenance.result_profile, "sto-result-v3")
         self.assertTrue(provenance.forward_profile.startswith("sto-forward-pass-"))
         self.assertLess(provenance.horizon_start, provenance.horizon_finish)
 
