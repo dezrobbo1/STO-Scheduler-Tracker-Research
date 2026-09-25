@@ -997,7 +997,8 @@ def build_plan(
             or relationship.successor_uid not in scheduled
         ):
             excluded.append(
-                Excluded(                    relationship.uid,
+                Excluded(
+                    relationship.uid,
                     "relationship",
                     "RELATIONSHIP_ENDPOINT_NOT_SCHEDULED",
                 )
