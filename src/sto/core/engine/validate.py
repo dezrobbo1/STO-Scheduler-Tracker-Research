@@ -47,7 +47,7 @@ from .progress import ProgressState, relationship_binds, state_of
 __all__ = ["VALIDATOR_PROFILE", "Violation", "validate_result"]
 
 #: Named on a report so a stored one says which rules were applied.
-VALIDATOR_PROFILE = "sto-validator-v3"
+VALIDATOR_PROFILE = "sto-validator-v4"
 
 
 @dataclass(frozen=True, slots=True)
@@ -546,6 +546,29 @@ def validate_result(
                     )
                 )
             continue
+        inactive_boundary_edges = tuple(
+            edge for edge in edges if edge.inactive_boundary_uid is not None
+        )
+        if inactive_boundary_edges:
+            # Native RC02 evidence establishes a reporting boundary that the
+            # ordinary mobility theorem does not describe: a zero-lag FS
+            # relationship retained through an inactive row can report zero
+            # Free Slack even when the derived active successor would tolerate
+            # additional movement.  Production represents that measured shape
+            # with an inactive-boundary edge, and the float reports the original
+            # inactive-edge zero boundary rather than the active-successor gap.
+            # Network.validate() already limits these markers to the measured
+            # zero-lag FS shape, so zero is the complete bounded contract here.
+            if reported != 0:
+                violations.append(
+                    Violation(
+                        "FREE_FLOAT_INACTIVE_BOUNDARY_MISMATCH",
+                        uid,
+                        f"reported {reported}, measured inactive-edge boundary is 0",
+                    )
+                )
+            continue
+
         # The two halves are asked separately, and each on its own terms. A
         # reported float that is negative slips *backwards*, which can run off
         # the start of the calendar and leave the first question unanswerable;

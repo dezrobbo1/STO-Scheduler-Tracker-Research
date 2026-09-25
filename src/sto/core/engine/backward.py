@@ -131,8 +131,10 @@ FROM_ACTUALS = "actuals"
 #: finite lag calendar against the network horizon. Version six binds the
 #: milestone-snap policy inherited from the forward pass; version seven keeps
 #: an in-progress activity's actual LateStart separate from its movable late
-#: remaining span.
-BACKWARD_PASS_PROFILE = "sto-backward-pass-v7"
+#: remaining span. Version eight applies the measured inactive-boundary fan-out
+#: rule: all derived edges bind forward, while only the unique latest successor
+#: in one inactive boundary binds its active predecessor backward.
+BACKWARD_PASS_PROFILE = "sto-backward-pass-v8"
 
 
 @dataclass(frozen=True, slots=True)
@@ -231,9 +233,45 @@ def _bounds(
     start_driver: UUID | None = None
     finish_driver: UUID | None = None
 
+    ordinary: list[PlannedRelationship] = []
+    boundary_groups: dict[UUID, list[PlannedRelationship]] = {}
     for relationship in outgoing:
         if relationship.uid in released:
             continue
+        if relationship.inactive_boundary_uid is None:
+            ordinary.append(relationship)
+        else:
+            boundary_groups.setdefault(relationship.inactive_boundary_uid, []).append(
+                relationship
+            )
+
+    selected = list(ordinary)
+    for boundary_uid, relationships in boundary_groups.items():
+        if len(relationships) == 1:
+            selected.append(relationships[0])
+            continue
+        candidates: list[tuple[int, PlannedRelationship]] = []
+        for relationship in relationships:
+            successor = placed[relationship.successor_uid]
+            anchor = (
+                successor.late_start
+                if relationship.bounds_successor_start
+                else successor.late_finish
+            )
+            if relationship.bounds_successor_start and successor.remaining_start is not None:
+                anchor = successor.remaining_start
+            candidates.append((anchor, relationship))
+        latest = max(anchor for anchor, _ in candidates)
+        winners = [relationship for anchor, relationship in candidates if anchor == latest]
+        if len(winners) != 1:
+            raise BackwardPassError(
+                "SCHEDULE_INACTIVE_BOUNDARY_LATE_TIE",
+                boundary_uid,
+                "native evidence covers a distinct latest successor, not a tied fan-out",
+            )
+        selected.append(winners[0])
+
+    for relationship in selected:
         successor = placed[relationship.successor_uid]
         calendar = lag_calendar_for(relationship, calendars[relationship.successor_uid])
         anchor = (

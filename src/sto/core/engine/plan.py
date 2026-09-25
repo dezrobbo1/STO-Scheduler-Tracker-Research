@@ -62,7 +62,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from uuid import UUID
+from uuid import NAMESPACE_URL, UUID, uuid5
 
 from sto.core.calendar.arithmetic import CompiledIntervals, intersect_intervals, normalise
 from sto.core.calendar.compile import CompiledCalendar, Horizon, compile_calendars
@@ -112,9 +112,10 @@ SCHEDULED_KINDS = frozenset(
 #: the predecessor was meant to prevent.
 #:
 #: Two exclusions are deliberately not here. ``ACTIVITY_INACTIVE`` has a
-#: measured rule of its own: the edge is dropped and the successor scheduled
-#: and labelled ``ACTIVITY_SUCCESSOR_OF_INACTIVE``, because Microsoft Project
-#: does schedule those rows (ADR-010). ``ACTIVITY_KIND_NOT_SCHEDULED`` is a
+#: measured bounded rule of its own for ordinary zero-lag FS boundaries. The
+#: supported subset is represented by native-evidence-derived bypass edges;
+#: unsupported successors remain labelled ``ACTIVITY_SUCCESSOR_OF_INACTIVE``.
+#: ``ACTIVITY_KIND_NOT_SCHEDULED`` is a
 #: summary, a level of effort or a hammock, whose span comes from its children
 #: rather than from itself; the rollup is S6's, and until then dropping the
 #: edge is what the previous engine did too.
@@ -166,6 +167,22 @@ class Assumed:
     detail: str = ""
 
 
+NATIVE_INACTIVE_BOUNDARY_CODE = "RELATIONSHIP_NATIVE_INACTIVE_BOUNDARY_DERIVED"
+
+
+@dataclass(frozen=True, slots=True)
+class DerivedRelationship:
+    """One native-evidence-derived edge and the source rows that justify it."""
+
+    uid: UUID
+    code: str
+    inactive_boundary_uid: UUID
+    source_predecessor_relationship_uid: UUID
+    source_successor_relationship_uid: UUID
+    predecessor_uid: UUID
+    successor_uid: UUID
+
+
 @dataclass(frozen=True, slots=True)
 class Plan:
     """A network, the calendars behind it, and everything left out of it."""
@@ -176,6 +193,10 @@ class Plan:
     excluded: tuple[Excluded, ...] = ()
     #: Rows scheduled under an assumption rather than a measured rule.
     assumed: tuple[Assumed, ...] = ()
+    #: Native-evidence-derived relationships that exist only in the compiled
+    #: network.  Their source-edge lineage is projected with the calculation so
+    #: a stored driver UUID never becomes an orphan after restart.
+    derived_relationships: tuple[DerivedRelationship, ...] = ()
     snap_milestones: bool = False
     #: The project's critical-float threshold in seconds, carried here so a
     #: caller running the passes never has to reach back into the schedule for
@@ -423,6 +444,74 @@ def _measured_in_progress_native_shape_dynamic_failures(
         failures.append("usable status date moves remaining work beyond Actual Start")
 
     return tuple(failures)
+
+
+def _zero_lag_fs_relationship(relationship) -> bool:
+    lag = relationship.lag
+    return (
+        relationship.type is RelationshipType.FS
+        and not relationship.cross_project
+        and (lag is None or (lag.seconds == 0 and not lag.elapsed))
+    )
+
+
+def _inactive_boundary_endpoint_is_measured(activity: Activity) -> bool:
+    primary = activity.primary_constraint
+    planned = activity.planned_duration
+    remaining = activity.remaining_duration
+    return (
+        activity.active
+        and not activity.manual
+        and activity.actual_start is None
+        and activity.actual_finish is None
+        and activity.suspend is None
+        and activity.resume is None
+        and all(
+            value == 0
+            for value in (
+                activity.percent_complete.duration_permille,
+                activity.percent_complete.work_permille,
+                activity.percent_complete.physical_permille,
+                activity.percent_complete.units_permille,
+            )
+        )
+        and (primary is None or primary.type is ConstraintType.ASAP)
+        and activity.secondary_constraint is None
+        and (planned is None or not planned.elapsed)
+        and (remaining is None or not remaining.elapsed)
+    )
+
+
+def _inactive_middle_is_measured(activity: Activity) -> bool:
+    primary = activity.primary_constraint
+    planned = activity.planned_duration
+    remaining = activity.remaining_duration
+    return (
+        not activity.active
+        and activity.kind is ActivityKind.TASK
+        and not activity.manual
+        and activity.actual_start is None
+        and activity.actual_finish is None
+        and activity.suspend is None
+        and activity.resume is None
+        and all(
+            value == 0
+            for value in (
+                activity.percent_complete.duration_permille,
+                activity.percent_complete.work_permille,
+                activity.percent_complete.physical_permille,
+                activity.percent_complete.units_permille,
+            )
+        )
+        and (primary is None or primary.type is ConstraintType.ASAP)
+        and activity.secondary_constraint is None
+        and planned is not None
+        and not planned.elapsed
+        and (remaining is None or not remaining.elapsed)
+        and activity.source_fields.get("duration_unsupported_source") is None
+        and activity.source_fields.get("duration_format_unsupported_source") is None
+        and activity.source_fields.get("is_null_source") != "1"
+    )
 
 
 def build_plan(
@@ -838,7 +927,101 @@ def build_plan(
         return (None if compiled is None else compiled.intervals), own is None
 
     relationships: list[PlannedRelationship] = []
+    derived_relationships: list[DerivedRelationship] = []
     inactive = {row.uid for row in excluded if row.code == "ACTIVITY_INACTIVE"}
+
+    raw_incoming: dict[UUID, list] = {}
+    raw_outgoing: dict[UUID, list] = {}
+    for relationship in schedule.relationships:
+        raw_incoming.setdefault(relationship.successor_uid, []).append(relationship)
+        raw_outgoing.setdefault(relationship.predecessor_uid, []).append(relationship)
+
+    # Count active-predecessor participation before any per-boundary
+    # eligibility filtering.  If one predecessor reaches several inactive rows,
+    # the combined graph is outside the native matrix even when only one of
+    # those rows would otherwise satisfy the measured subset.
+    raw_boundaries_by_predecessor: dict[UUID, set[UUID]] = {}
+    for inactive_uid in sorted(inactive, key=str):
+        if not any(
+            row.successor_uid in scheduled
+            for row in raw_outgoing.get(inactive_uid, ())
+        ):
+            continue
+        for incoming in raw_incoming.get(inactive_uid, ()):
+            if incoming.predecessor_uid in scheduled:
+                raw_boundaries_by_predecessor.setdefault(
+                    incoming.predecessor_uid, set()
+                ).add(inactive_uid)
+    unsupported_boundary_predecessors = {
+        predecessor_uid
+        for predecessor_uid, boundary_uids in raw_boundaries_by_predecessor.items()
+        if len(boundary_uids) > 1
+    }
+
+    boundary_candidates: dict[UUID, tuple[object, tuple[object, ...]]] = {}
+    for inactive_uid in sorted(inactive, key=str):
+        middle = activities_by_uid[inactive_uid]
+        if not _inactive_middle_is_measured(middle):
+            continue
+        incoming_scheduled = [
+            row
+            for row in raw_incoming.get(inactive_uid, ())
+            if row.predecessor_uid in scheduled
+        ]
+        outgoing_scheduled = [
+            row
+            for row in raw_outgoing.get(inactive_uid, ())
+            if row.successor_uid in scheduled
+        ]
+        if len(incoming_scheduled) != 1 or len(outgoing_scheduled) not in (1, 2):
+            continue
+        incoming_edge = incoming_scheduled[0]
+        if incoming_edge.predecessor_uid in unsupported_boundary_predecessors:
+            continue
+        if not _zero_lag_fs_relationship(incoming_edge):
+            continue
+        if any(not _zero_lag_fs_relationship(row) for row in outgoing_scheduled):
+            continue
+        predecessor = activities_by_uid[incoming_edge.predecessor_uid]
+        successors = [activities_by_uid[row.successor_uid] for row in outgoing_scheduled]
+        if not _inactive_boundary_endpoint_is_measured(predecessor):
+            continue
+        if any(not _inactive_boundary_endpoint_is_measured(row) for row in successors):
+            continue
+
+        successor_uids = {row.successor_uid for row in outgoing_scheduled}
+        # The native matrices did not contain a parallel direct relationship
+        # from this same active predecessor to one of the active successors.
+        # Such a graph can make forward/backward/free-slack interactions
+        # redundant in ways the bounded experiment did not distinguish. Keep
+        # it on the labelled path instead of widening the measured rule.
+        if any(
+            row.successor_uid in successor_uids
+            for row in raw_outgoing.get(incoming_edge.predecessor_uid, ())
+            if row.successor_uid in scheduled
+        ):
+            continue
+
+        # A successor reached from several inactive rows is a different fan-in
+        # shape from the native matrix; leave it on the historical labelled path.
+        if any(
+            sum(
+                1
+                for incoming in raw_incoming.get(row.successor_uid, ())
+                if incoming.predecessor_uid in inactive
+            )
+            != 1
+            for row in outgoing_scheduled
+        ):
+            continue
+        boundary_candidates[inactive_uid] = (incoming_edge, tuple(outgoing_scheduled))
+
+    supported_inactive_successor_relationships = {
+        row.uid
+        for _, outgoing_rows in boundary_candidates.values()
+        for row in outgoing_rows
+    }
+
     # ``Plan.assumed`` counts rows, so a successor with several inactive
     # predecessors is labelled once, not once per edge.
     labelled_successors: set[UUID] = set()
@@ -848,27 +1031,25 @@ def build_plan(
             or relationship.successor_uid not in scheduled
         ):
             excluded.append(
-                Excluded(relationship.uid, "relationship", "RELATIONSHIP_ENDPOINT_NOT_SCHEDULED")
+                Excluded(
+                    relationship.uid,
+                    "relationship",
+                    "RELATIONSHIP_ENDPOINT_NOT_SCHEDULED",
+                )
             )
             if (
                 relationship.predecessor_uid in inactive
                 and relationship.successor_uid in scheduled
+                and relationship.uid not in supported_inactive_successor_relationships
                 and relationship.successor_uid not in labelled_successors
             ):
                 labelled_successors.add(relationship.successor_uid)
-                # What Microsoft Project does with the successor of an
-                # inactive task is not one rule on the files here: of the
-                # successors measured across the BOILER family and KILN, some
-                # sit where the inactive task's own predecessors put them, some
-                # where their other predecessors do, and some where nothing
-                # measured puts them. The edge is dropped and the successor is
-                # labelled, so a claim about the schedule can name these rows.
                 assumed.append(
                     Assumed(
                         relationship.successor_uid,
                         "activity",
                         "ACTIVITY_SUCCESSOR_OF_INACTIVE",
-                        "scheduled as if the edge from the inactive task did not exist",
+                        "inactive-boundary shape is outside the measured production rule",
                     )
                 )
             continue
@@ -876,12 +1057,6 @@ def build_plan(
         lag = relationship.lag
         lag_seconds = 0 if lag is None else lag.seconds
         policy = relationship.lag_calendar
-        # The Microsoft rule -- task calendar, else project calendar, never a
-        # resource's -- was measured on files whose relationships all inherit
-        # the project's policy, and it is applied to exactly those. A canonical
-        # relationship that names the successor's calendar itself means the
-        # calendar the successor is scheduled on, which is what the enum says
-        # and what a Primavera file would mean by it.
         inherited = policy is LagCalendar.INHERIT_PROJECT_POLICY
         if inherited:
             policy = project.lag_calendar_policy
@@ -890,8 +1065,6 @@ def build_plan(
 
         lag_calendar: CompiledIntervals | None
         if lag_seconds == 0:
-            # Zero lag never touches a calendar, so an unresolvable policy is
-            # not a reason to drop the edge.
             lag_calendar = None
         elif policy is LagCalendar.ELAPSED_24H:
             lag_calendar = continuous
@@ -910,11 +1083,6 @@ def build_plan(
                 )
                 continue
             if on_project_calendar:
-                # Every measured lag is explained by the successor's task
-                # calendar or the project's, but every project calendar in the
-                # estate runs twenty-four hours, so "project calendar" and
-                # "elapsed" have never been told apart. The choice is labelled
-                # rather than presented as measured.
                 assumed.append(
                     Assumed(
                         relationship.uid,
@@ -961,6 +1129,39 @@ def build_plan(
                 lag_calendar=lag_calendar,
             )
         )
+
+    for inactive_uid, (incoming_edge, outgoing_rows) in sorted(
+        boundary_candidates.items(), key=lambda row: str(row[0])
+    ):
+        for outgoing_edge in outgoing_rows:
+            derived_uid = uuid5(
+                NAMESPACE_URL,
+                "sto:native-inactive-boundary:"
+                f"{incoming_edge.predecessor_uid}:{inactive_uid}:"
+                f"{outgoing_edge.successor_uid}",
+            )
+            relationships.append(
+                PlannedRelationship(
+                    uid=derived_uid,
+                    predecessor_uid=incoming_edge.predecessor_uid,
+                    successor_uid=outgoing_edge.successor_uid,
+                    type=RelationshipType.FS,
+                    lag=0,
+                    lag_calendar=None,
+                    inactive_boundary_uid=inactive_uid,
+                )
+            )
+            derived_relationships.append(
+                DerivedRelationship(
+                    uid=derived_uid,
+                    code=NATIVE_INACTIVE_BOUNDARY_CODE,
+                    inactive_boundary_uid=inactive_uid,
+                    source_predecessor_relationship_uid=incoming_edge.uid,
+                    source_successor_relationship_uid=outgoing_edge.uid,
+                    predecessor_uid=incoming_edge.predecessor_uid,
+                    successor_uid=outgoing_edge.successor_uid,
+                )
+            )
 
     # Evidence labels describe the network the passes actually evaluate, not
     # the raw source graph. An edge whose other endpoint was excluded above is
@@ -1089,6 +1290,7 @@ def build_plan(
         calendars=calendars,
         excluded=tuple(excluded),
         assumed=tuple(assumed),
+        derived_relationships=tuple(derived_relationships),
         snap_milestones=project.milestone_snap_policy is MilestoneSnapPolicy.NEXT_WORKING,
         critical_float_threshold=project.critical_float_threshold_seconds,
         progress_policy=project.progress_policy,

@@ -320,7 +320,7 @@ class FloatRuleTests(unittest.TestCase):
 
     def test_our_free_float_rule_reproduces_the_stored_free_slack(self):
         expected = {
-            "boiler_before": (448, 451),
+            "boiler_before": (450, 451),
             "kiln": (408, 416),
             "calciner": (1732, 1763),
         }
@@ -425,7 +425,7 @@ class NotClaimedTests(unittest.TestCase):
                 exact += 1
         self.assertEqual(
             (compared, late_start, late_finish, exact),
-            (451, 409, 418, 409),
+            (451, 436, 445, 436),
             "the forward pass's remaining difference has moved",
         )
 
@@ -451,8 +451,8 @@ class NotClaimedTests(unittest.TestCase):
             free += ours[uid].free_float == row.free_float_seconds
             critical += ours[uid].critical == row.critical
         self.assertEqual(compared, 451)
-        self.assertEqual(total, 380)
-        self.assertEqual(free, 435)
+        self.assertEqual(total, 430)
+        self.assertEqual(free, 444)
         self.assertEqual(critical, 449)
 
     def test_the_other_two_files_are_pinned_at_what_they_are(self):

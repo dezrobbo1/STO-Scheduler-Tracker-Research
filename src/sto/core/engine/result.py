@@ -25,6 +25,7 @@ place that says what an activity's answer is.
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+import json
 from datetime import datetime, timedelta
 from uuid import UUID
 
@@ -33,7 +34,7 @@ from sto.core.hashing import canonical_sha256
 from .backward import BACKWARD_PASS_PROFILE, BackwardPass
 from .criticality import CRITICALITY_PROFILE, FloatAnalysis
 from .forward import FORWARD_PASS_PROFILE, ForwardPass
-from .plan import Plan
+from .plan import NATIVE_INACTIVE_BOUNDARY_CODE, Plan
 from .progress import PROGRESS_PROFILE, ProgressState
 from .rollup import ROLLUP_PROFILE, Rollup
 
@@ -50,7 +51,10 @@ __all__ = [
 ]
 
 #: Named on the hash, so a stored result says which assembly produced it.
-RESULT_PROFILE = "sto-result-v2"
+#: Version three makes native-evidence-derived inactive-boundary relationships
+#: durable result provenance, so any published synthetic driver UUID resolves
+#: after persistence/restart instead of becoming an orphan.
+RESULT_PROFILE = "sto-result-v3"
 
 #: A row the plan scheduled and the passes placed.
 SCHEDULED = "scheduled"
@@ -268,6 +272,30 @@ def project_result(
             assumptions.setdefault(row.uid, []).append(row.code)
         elif row.uid not in released:
             edges.append(RelationshipResult(row.uid, SCHEDULED, row.code, row.detail))
+    for derived in plan.derived_relationships:
+        detail = json.dumps(
+            {
+                "active_predecessor_uid": str(derived.predecessor_uid),
+                "active_successor_uid": str(derived.successor_uid),
+                "inactive_boundary_uid": str(derived.inactive_boundary_uid),
+                "source_predecessor_relationship_uid": str(
+                    derived.source_predecessor_relationship_uid
+                ),
+                "source_successor_relationship_uid": str(
+                    derived.source_successor_relationship_uid
+                ),
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        edges.append(
+            RelationshipResult(
+                derived.uid,
+                SCHEDULED,
+                NATIVE_INACTIVE_BOUNDARY_CODE,
+                detail,
+            )
+        )
     for dropped in plan.excluded:
         if dropped.kind != "activity":
             edges.append(RelationshipResult(dropped.uid, EXCLUDED, dropped.code, dropped.detail))

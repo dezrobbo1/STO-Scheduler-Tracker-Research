@@ -272,18 +272,18 @@ class StoredDateAgreementTests(unittest.TestCase):
             {k: counts[k] for k in ("compared", "early_start", "early_finish", "exact", "first", "inherited")},
             {
                 "compared": 451,
-                "early_start": 389,
-                "early_finish": 384,
-                "exact": 384,
-                "first": 8,
-                "inherited": 59,
+                "early_start": 430,
+                "early_finish": 424,
+                "exact": 424,
+                "first": 6,
+                "inherited": 21,
             },
         )
         self.assertEqual(
             counts["assumed"],
             {
                 "ACTIVITY_RESOURCE_CALENDARS_UNITED": 11,
-                "ACTIVITY_SUCCESSOR_OF_INACTIVE": 5,
+                "ACTIVITY_SUCCESSOR_OF_INACTIVE": 2,
                 # The file's two elapsed tasks, which were scheduled as
                 # working time until C1 read the DurationFormat that says
                 # otherwise. Neither agrees with Project's stored dates
@@ -321,7 +321,7 @@ class StoredDateAgreementTests(unittest.TestCase):
             counts["assumed"],
             {
                 "ACTIVITY_RESOURCE_CALENDARS_UNITED": 133,
-                "ACTIVITY_SUCCESSOR_OF_INACTIVE": 6,
+                "ACTIVITY_SUCCESSOR_OF_INACTIVE": 5,
                 "RELATIONSHIP_LAG_ON_PROJECT_CALENDAR": 14,
             },
         )
@@ -400,7 +400,7 @@ class StoredDateAgreementTests(unittest.TestCase):
                 == activities[uid].source_observations.early_finish
             )
         self.assertLess(exact[False], 60)
-        self.assertEqual(exact[True], 384)
+        self.assertEqual(exact[True], 424)
 
 
 if __name__ == "__main__":

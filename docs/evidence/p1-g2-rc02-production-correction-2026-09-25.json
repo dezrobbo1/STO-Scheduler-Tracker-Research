@@ -1,0 +1,1143 @@
+{
+  "schema": "sto-p1-g2-rc02-production-verification-v1",
+  "evidence_date": "2026-09-25",
+  "basis": {
+    "fresh_main_before_correction": "26dc06b6352fd882fa32f6b60a03eddd9b2b3f68",
+    "production_correction_commit": "1982789f1c0aab83892dbac2f2d7b690ec9a85d6",
+    "production_path_tree_sha256": "a0ad82dfd2777c2acef2f5346e37e034f295e08c1992e6cd122bfc816a17b715",
+    "production_basis_verified": true,
+    "baseline": {
+      "bytes": 3361935,
+      "sha256": "e9b9b7994cc5cc50479807b82c452da742a91de9f7de52b172a6be6f4f399c70"
+    },
+    "fixed_inventory": {
+      "bytes": 376346,
+      "sha256": "2408fc99f282e9c600d3821b3c926f7deafa8c05044c7fec9a5f08b2b656bf63",
+      "schema": "sto-p1-g2-baseline-root-causes-v3"
+    },
+    "supported_counterfactual": {
+      "bytes": 10610,
+      "sha256": "439e8ef6a4e7f90b9866e76fa2a5f4a8bc4060e82b7ef7d7c144b19d0b24dc9c",
+      "classification": "RC02_LATEST_SUCCESSOR_COUNTERFACTUAL_SUPPORTED",
+      "expected_inventory_summary": {
+        "slots": 147,
+        "leaves": 39,
+        "by_field": {
+          "critical": 2,
+          "early_finish": 27,
+          "early_start": 21,
+          "finish": 27,
+          "free_float": 7,
+          "late_finish": 6,
+          "late_start": 15,
+          "start": 21,
+          "total_float": 21
+        },
+        "by_group": {
+          "G2-RC01": 143,
+          "G2-RC03": 3,
+          "G2-RC04": 1
+        }
+      },
+      "expected_movement_by_original_group": {
+        "G2-RC01": {
+          "closed": 17,
+          "improved": 11,
+          "unchanged": 132
+        },
+        "G2-RC02": {
+          "closed": 258
+        },
+        "G2-RC03": {
+          "unchanged": 3
+        },
+        "G2-RC04": {
+          "improved": 1
+        }
+      }
+    }
+  },
+  "production_semantics": {
+    "backward_profile": "sto-backward-pass-v8",
+    "criticality_profile": "sto-criticality-v7",
+    "validator_profile": "sto-validator-v4",
+    "result_profile": "sto-result-v3",
+    "inactive_boundary_relationships": [
+      {
+        "active_predecessor_leaf_id": "L0055",
+        "inactive_leaf_id": "L0052",
+        "active_successor_leaf_id": "L0056"
+      },
+      {
+        "active_predecessor_leaf_id": "L0055",
+        "inactive_leaf_id": "L0052",
+        "active_successor_leaf_id": "L0060"
+      },
+      {
+        "active_predecessor_leaf_id": "L0400",
+        "inactive_leaf_id": "L0388",
+        "active_successor_leaf_id": "L0389"
+      }
+    ],
+    "unsupported_successor_assumption_count": 2
+  },
+  "verification": {
+    "calculation_validator_clean": true,
+    "production_projection_sha256": "e638c48a40fa572a1f98333b7628c15a1f9562203efc8c03c2a441f1d3ec0a73",
+    "production_remaining_keyset_sha256": "bfb1b5113ac3f4adf8656a731935dee7387fcce95efb08ff601ce77fb38ed9ec",
+    "inventory_summary_matches_supported_counterfactual": true,
+    "movement_contract_matches_supported_counterfactual": true,
+    "new_mismatch_slots": 0
+  },
+  "inventory": {
+    "before_slots": 422,
+    "after_slots": 147,
+    "after_leaves": 39,
+    "closed_slots": 275,
+    "by_group": {
+      "G2-RC01": 143,
+      "G2-RC03": 3,
+      "G2-RC04": 1
+    },
+    "rc02_slots_after": 0,
+    "remaining_mismatches": [
+      {
+        "leaf_id": "L0070",
+        "field": "early_finish",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "FIRST_DIVERGENCE",
+        "sto_minus_source_seconds": -10800
+      },
+      {
+        "leaf_id": "L0070",
+        "field": "finish",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "FIRST_DIVERGENCE",
+        "sto_minus_source_seconds": -10800
+      },
+      {
+        "leaf_id": "L0070",
+        "field": "late_start",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "FIRST_DIVERGENCE",
+        "sto_minus_source_seconds": 43200
+      },
+      {
+        "leaf_id": "L0070",
+        "field": "total_float",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": 5400
+      },
+      {
+        "leaf_id": "L0071",
+        "field": "early_finish",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -61200
+      },
+      {
+        "leaf_id": "L0071",
+        "field": "early_start",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -7200
+      },
+      {
+        "leaf_id": "L0071",
+        "field": "finish",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -61200
+      },
+      {
+        "leaf_id": "L0071",
+        "field": "start",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -7200
+      },
+      {
+        "leaf_id": "L0071",
+        "field": "total_float",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": 5400
+      },
+      {
+        "leaf_id": "L0072",
+        "field": "early_finish",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -61200
+      },
+      {
+        "leaf_id": "L0072",
+        "field": "early_start",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -61200
+      },
+      {
+        "leaf_id": "L0072",
+        "field": "finish",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -61200
+      },
+      {
+        "leaf_id": "L0072",
+        "field": "free_float",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": 9000
+      },
+      {
+        "leaf_id": "L0072",
+        "field": "start",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -61200
+      },
+      {
+        "leaf_id": "L0072",
+        "field": "total_float",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": 9000
+      },
+      {
+        "leaf_id": "L0075",
+        "field": "early_finish",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "FIRST_DIVERGENCE",
+        "sto_minus_source_seconds": -3600
+      },
+      {
+        "leaf_id": "L0075",
+        "field": "finish",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "FIRST_DIVERGENCE",
+        "sto_minus_source_seconds": -3600
+      },
+      {
+        "leaf_id": "L0075",
+        "field": "late_start",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "FIRST_DIVERGENCE",
+        "sto_minus_source_seconds": -7200
+      },
+      {
+        "leaf_id": "L0075",
+        "field": "total_float",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -5400
+      },
+      {
+        "leaf_id": "L0076",
+        "field": "early_finish",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -3600
+      },
+      {
+        "leaf_id": "L0076",
+        "field": "early_start",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -3600
+      },
+      {
+        "leaf_id": "L0076",
+        "field": "finish",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -3600
+      },
+      {
+        "leaf_id": "L0076",
+        "field": "start",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -3600
+      },
+      {
+        "leaf_id": "L0076",
+        "field": "total_float",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": 3600
+      },
+      {
+        "leaf_id": "L0077",
+        "field": "early_finish",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -3600
+      },
+      {
+        "leaf_id": "L0077",
+        "field": "early_start",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -3600
+      },
+      {
+        "leaf_id": "L0077",
+        "field": "finish",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -3600
+      },
+      {
+        "leaf_id": "L0077",
+        "field": "start",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -3600
+      },
+      {
+        "leaf_id": "L0077",
+        "field": "total_float",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": 3600
+      },
+      {
+        "leaf_id": "L0078",
+        "field": "early_finish",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -3600
+      },
+      {
+        "leaf_id": "L0078",
+        "field": "early_start",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -3600
+      },
+      {
+        "leaf_id": "L0078",
+        "field": "finish",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -3600
+      },
+      {
+        "leaf_id": "L0078",
+        "field": "free_float",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": 3600
+      },
+      {
+        "leaf_id": "L0078",
+        "field": "start",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -3600
+      },
+      {
+        "leaf_id": "L0078",
+        "field": "total_float",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": 3600
+      },
+      {
+        "leaf_id": "L0080",
+        "field": "early_finish",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -1800
+      },
+      {
+        "leaf_id": "L0080",
+        "field": "early_start",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -1800
+      },
+      {
+        "leaf_id": "L0080",
+        "field": "finish",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -1800
+      },
+      {
+        "leaf_id": "L0080",
+        "field": "late_start",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "FIRST_DIVERGENCE",
+        "sto_minus_source_seconds": 32400
+      },
+      {
+        "leaf_id": "L0080",
+        "field": "start",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -1800
+      },
+      {
+        "leaf_id": "L0080",
+        "field": "total_float",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": 1800
+      },
+      {
+        "leaf_id": "L0083",
+        "field": "early_finish",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "FIRST_DIVERGENCE",
+        "sto_minus_source_seconds": -7200
+      },
+      {
+        "leaf_id": "L0083",
+        "field": "finish",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "FIRST_DIVERGENCE",
+        "sto_minus_source_seconds": -7200
+      },
+      {
+        "leaf_id": "L0083",
+        "field": "late_start",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "FIRST_DIVERGENCE",
+        "sto_minus_source_seconds": 43200
+      },
+      {
+        "leaf_id": "L0084",
+        "field": "early_finish",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "FIRST_DIVERGENCE",
+        "sto_minus_source_seconds": -1800
+      },
+      {
+        "leaf_id": "L0084",
+        "field": "finish",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "FIRST_DIVERGENCE",
+        "sto_minus_source_seconds": -1800
+      },
+      {
+        "leaf_id": "L0084",
+        "field": "late_finish",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": 32400
+      },
+      {
+        "leaf_id": "L0084",
+        "field": "late_start",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "FIRST_DIVERGENCE",
+        "sto_minus_source_seconds": 18000
+      },
+      {
+        "leaf_id": "L0084",
+        "field": "total_float",
+        "diagnostic_group": "G2-RC04",
+        "dependency_role": "COMPOUND",
+        "sto_minus_source_seconds": 12600
+      },
+      {
+        "leaf_id": "L0085",
+        "field": "early_finish",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -1800
+      },
+      {
+        "leaf_id": "L0085",
+        "field": "early_start",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -1800
+      },
+      {
+        "leaf_id": "L0085",
+        "field": "finish",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -1800
+      },
+      {
+        "leaf_id": "L0085",
+        "field": "start",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -1800
+      },
+      {
+        "leaf_id": "L0087",
+        "field": "early_finish",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -7200
+      },
+      {
+        "leaf_id": "L0087",
+        "field": "early_start",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -7200
+      },
+      {
+        "leaf_id": "L0087",
+        "field": "finish",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -7200
+      },
+      {
+        "leaf_id": "L0087",
+        "field": "start",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -7200
+      },
+      {
+        "leaf_id": "L0089",
+        "field": "early_finish",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -57600
+      },
+      {
+        "leaf_id": "L0089",
+        "field": "early_start",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -7200
+      },
+      {
+        "leaf_id": "L0089",
+        "field": "finish",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -57600
+      },
+      {
+        "leaf_id": "L0089",
+        "field": "start",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -7200
+      },
+      {
+        "leaf_id": "L0091",
+        "field": "early_finish",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -57600
+      },
+      {
+        "leaf_id": "L0091",
+        "field": "early_start",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -57600
+      },
+      {
+        "leaf_id": "L0091",
+        "field": "finish",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -57600
+      },
+      {
+        "leaf_id": "L0091",
+        "field": "start",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -57600
+      },
+      {
+        "leaf_id": "L0111",
+        "field": "free_float",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -14400
+      },
+      {
+        "leaf_id": "L0112",
+        "field": "late_finish",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -7200
+      },
+      {
+        "leaf_id": "L0112",
+        "field": "late_start",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -7200
+      },
+      {
+        "leaf_id": "L0113",
+        "field": "late_finish",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -7200
+      },
+      {
+        "leaf_id": "L0113",
+        "field": "late_start",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -7200
+      },
+      {
+        "leaf_id": "L0114",
+        "field": "critical",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DERIVED",
+        "sto_minus_source_seconds": 1
+      },
+      {
+        "leaf_id": "L0114",
+        "field": "early_finish",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "FIRST_DIVERGENCE",
+        "sto_minus_source_seconds": -14400
+      },
+      {
+        "leaf_id": "L0114",
+        "field": "finish",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "FIRST_DIVERGENCE",
+        "sto_minus_source_seconds": -14400
+      },
+      {
+        "leaf_id": "L0114",
+        "field": "late_start",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "FIRST_DIVERGENCE",
+        "sto_minus_source_seconds": -14400
+      },
+      {
+        "leaf_id": "L0114",
+        "field": "total_float",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -1800
+      },
+      {
+        "leaf_id": "L0115",
+        "field": "early_finish",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -154800
+      },
+      {
+        "leaf_id": "L0115",
+        "field": "early_start",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -14400
+      },
+      {
+        "leaf_id": "L0115",
+        "field": "finish",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -154800
+      },
+      {
+        "leaf_id": "L0115",
+        "field": "start",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -14400
+      },
+      {
+        "leaf_id": "L0116",
+        "field": "early_finish",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -154800
+      },
+      {
+        "leaf_id": "L0116",
+        "field": "early_start",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -154800
+      },
+      {
+        "leaf_id": "L0116",
+        "field": "finish",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -154800
+      },
+      {
+        "leaf_id": "L0116",
+        "field": "start",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -154800
+      },
+      {
+        "leaf_id": "L0116",
+        "field": "total_float",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": 9000
+      },
+      {
+        "leaf_id": "L0117",
+        "field": "early_finish",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -154800
+      },
+      {
+        "leaf_id": "L0117",
+        "field": "early_start",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -154800
+      },
+      {
+        "leaf_id": "L0117",
+        "field": "finish",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -154800
+      },
+      {
+        "leaf_id": "L0117",
+        "field": "start",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -154800
+      },
+      {
+        "leaf_id": "L0117",
+        "field": "total_float",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": 14400
+      },
+      {
+        "leaf_id": "L0118",
+        "field": "early_finish",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -154800
+      },
+      {
+        "leaf_id": "L0118",
+        "field": "early_start",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -154800
+      },
+      {
+        "leaf_id": "L0118",
+        "field": "finish",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -154800
+      },
+      {
+        "leaf_id": "L0118",
+        "field": "start",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -154800
+      },
+      {
+        "leaf_id": "L0118",
+        "field": "total_float",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": 14400
+      },
+      {
+        "leaf_id": "L0122",
+        "field": "free_float",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -28800
+      },
+      {
+        "leaf_id": "L0123",
+        "field": "early_finish",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -154800
+      },
+      {
+        "leaf_id": "L0123",
+        "field": "early_start",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -154800
+      },
+      {
+        "leaf_id": "L0123",
+        "field": "finish",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -154800
+      },
+      {
+        "leaf_id": "L0123",
+        "field": "free_float",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": 28800
+      },
+      {
+        "leaf_id": "L0123",
+        "field": "start",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -154800
+      },
+      {
+        "leaf_id": "L0123",
+        "field": "total_float",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": 28800
+      },
+      {
+        "leaf_id": "L0127",
+        "field": "late_start",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "FIRST_DIVERGENCE",
+        "sto_minus_source_seconds": -14400
+      },
+      {
+        "leaf_id": "L0127",
+        "field": "total_float",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -14400
+      },
+      {
+        "leaf_id": "L0148",
+        "field": "critical",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DERIVED",
+        "sto_minus_source_seconds": 1
+      },
+      {
+        "leaf_id": "L0148",
+        "field": "late_start",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "FIRST_DIVERGENCE",
+        "sto_minus_source_seconds": -14400
+      },
+      {
+        "leaf_id": "L0148",
+        "field": "total_float",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -12600
+      },
+      {
+        "leaf_id": "L0155",
+        "field": "late_finish",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -7200
+      },
+      {
+        "leaf_id": "L0155",
+        "field": "late_start",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -7200
+      },
+      {
+        "leaf_id": "L0156",
+        "field": "late_finish",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -7200
+      },
+      {
+        "leaf_id": "L0156",
+        "field": "late_start",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -7200
+      },
+      {
+        "leaf_id": "L0157",
+        "field": "late_start",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "FIRST_DIVERGENCE",
+        "sto_minus_source_seconds": -3600
+      },
+      {
+        "leaf_id": "L0189",
+        "field": "late_finish",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -16200
+      },
+      {
+        "leaf_id": "L0189",
+        "field": "late_start",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -16200
+      },
+      {
+        "leaf_id": "L0190",
+        "field": "early_finish",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "FIRST_DIVERGENCE",
+        "sto_minus_source_seconds": -7200
+      },
+      {
+        "leaf_id": "L0190",
+        "field": "finish",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "FIRST_DIVERGENCE",
+        "sto_minus_source_seconds": -7200
+      },
+      {
+        "leaf_id": "L0190",
+        "field": "late_start",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "FIRST_DIVERGENCE",
+        "sto_minus_source_seconds": -21600
+      },
+      {
+        "leaf_id": "L0191",
+        "field": "early_finish",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -7200
+      },
+      {
+        "leaf_id": "L0191",
+        "field": "early_start",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -7200
+      },
+      {
+        "leaf_id": "L0191",
+        "field": "finish",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -7200
+      },
+      {
+        "leaf_id": "L0191",
+        "field": "start",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -7200
+      },
+      {
+        "leaf_id": "L0191",
+        "field": "total_float",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": 7200
+      },
+      {
+        "leaf_id": "L0192",
+        "field": "early_finish",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -7200
+      },
+      {
+        "leaf_id": "L0192",
+        "field": "early_start",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -7200
+      },
+      {
+        "leaf_id": "L0192",
+        "field": "finish",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -7200
+      },
+      {
+        "leaf_id": "L0192",
+        "field": "start",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -7200
+      },
+      {
+        "leaf_id": "L0192",
+        "field": "total_float",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": 7200
+      },
+      {
+        "leaf_id": "L0193",
+        "field": "early_finish",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -57600
+      },
+      {
+        "leaf_id": "L0193",
+        "field": "early_start",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -7200
+      },
+      {
+        "leaf_id": "L0193",
+        "field": "finish",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -57600
+      },
+      {
+        "leaf_id": "L0193",
+        "field": "start",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -7200
+      },
+      {
+        "leaf_id": "L0202",
+        "field": "early_finish",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -57600
+      },
+      {
+        "leaf_id": "L0202",
+        "field": "early_start",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -57600
+      },
+      {
+        "leaf_id": "L0202",
+        "field": "finish",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -57600
+      },
+      {
+        "leaf_id": "L0202",
+        "field": "start",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -57600
+      },
+      {
+        "leaf_id": "L0203",
+        "field": "early_finish",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -57600
+      },
+      {
+        "leaf_id": "L0203",
+        "field": "early_start",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -57600
+      },
+      {
+        "leaf_id": "L0203",
+        "field": "finish",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -57600
+      },
+      {
+        "leaf_id": "L0203",
+        "field": "free_float",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": 1800
+      },
+      {
+        "leaf_id": "L0203",
+        "field": "start",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -57600
+      },
+      {
+        "leaf_id": "L0203",
+        "field": "total_float",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": 1800
+      },
+      {
+        "leaf_id": "L0371",
+        "field": "early_finish",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -57600
+      },
+      {
+        "leaf_id": "L0371",
+        "field": "early_start",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -57600
+      },
+      {
+        "leaf_id": "L0371",
+        "field": "finish",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -57600
+      },
+      {
+        "leaf_id": "L0371",
+        "field": "start",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -57600
+      },
+      {
+        "leaf_id": "L0407",
+        "field": "free_float",
+        "diagnostic_group": "G2-RC03",
+        "dependency_role": "FIRST_DIVERGENCE",
+        "sto_minus_source_seconds": -7200
+      },
+      {
+        "leaf_id": "L0407",
+        "field": "total_float",
+        "diagnostic_group": "G2-RC03",
+        "dependency_role": "FIRST_DIVERGENCE",
+        "sto_minus_source_seconds": -300600
+      },
+      {
+        "leaf_id": "L0411",
+        "field": "total_float",
+        "diagnostic_group": "G2-RC03",
+        "dependency_role": "FIRST_DIVERGENCE",
+        "sto_minus_source_seconds": -291600
+      }
+    ]
+  },
+  "decision": {
+    "classification": "RC02_PRODUCTION_CORRECTION_VERIFIED",
+    "rc02_closed_in_production": true,
+    "p1_g2_closed": false,
+    "p1_gate": "4/5 IN PROGRESS",
+    "p2_started": false,
+    "next_step": "review the post-correction 147-slot inventory; G2-RC01 now owns 143 slots, G2-RC03 owns 3 and G2-RC04 owns 1 before any next production correction"
+  }
+}
