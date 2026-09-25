@@ -3,9 +3,9 @@
   "evidence_date": "2026-09-25",
   "basis": {
     "fresh_main_before_correction": "26dc06b6352fd882fa32f6b60a03eddd9b2b3f68",
-    "production_correction_commit": "31b381716264205e6aaf1341af24f4dc2e7b0192",
-    "production_source_digest": "e214fc220d6a99d632eef51c8da89f1e09ae92dc95f81ecb88e240ab0a921267",
-    "production_path_tree_sha256": "3fbb0bc48b1b325065741612f16e040161a6fe21a36218696601b51b07cb92fa",
+    "production_correction_commit": "55a27c99d0ca031890221c66ec4e0d8ede059690",
+    "production_source_digest": "3f80c59c7ff807d7d08803cb6f6697ce95f657da9aa15ee3c41586a70f4224d3",
+    "production_path_tree_sha256": "f7ca47d7e71f9c1e92fd13eaf2b02f351ffb8ca5a8fbb707c51aacb8b8a2ef11",
     "baseline": {
       "bytes": 3361935,
       "sha256": "e9b9b7994cc5cc50479807b82c452da742a91de9f7de52b172a6be6f4f399c70"
@@ -998,3 +998,111 @@
         "sto_minus_source_seconds": -57600
       },
       {
+        "leaf_id": "L0202",
+        "field": "start",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -57600
+      },
+      {
+        "leaf_id": "L0203",
+        "field": "early_finish",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -57600
+      },
+      {
+        "leaf_id": "L0203",
+        "field": "early_start",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -57600
+      },
+      {
+        "leaf_id": "L0203",
+        "field": "finish",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -57600
+      },
+      {
+        "leaf_id": "L0203",
+        "field": "free_float",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": 1800
+      },
+      {
+        "leaf_id": "L0203",
+        "field": "start",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -57600
+      },
+      {
+        "leaf_id": "L0203",
+        "field": "total_float",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": 1800
+      },
+      {
+        "leaf_id": "L0371",
+        "field": "early_finish",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -57600
+      },
+      {
+        "leaf_id": "L0371",
+        "field": "early_start",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -57600
+      },
+      {
+        "leaf_id": "L0371",
+        "field": "finish",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -57600
+      },
+      {
+        "leaf_id": "L0371",
+        "field": "start",
+        "diagnostic_group": "G2-RC01",
+        "dependency_role": "DEPENDENT",
+        "sto_minus_source_seconds": -57600
+      },
+      {
+        "leaf_id": "L0407",
+        "field": "free_float",
+        "diagnostic_group": "G2-RC03",
+        "dependency_role": "FIRST_DIVERGENCE",
+        "sto_minus_source_seconds": -7200
+      },
+      {
+        "leaf_id": "L0407",
+        "field": "total_float",
+        "diagnostic_group": "G2-RC03",
+        "dependency_role": "FIRST_DIVERGENCE",
+        "sto_minus_source_seconds": -300600
+      },
+      {
+        "leaf_id": "L0411",
+        "field": "total_float",
+        "diagnostic_group": "G2-RC03",
+        "dependency_role": "FIRST_DIVERGENCE",
+        "sto_minus_source_seconds": -291600
+      }
+    ]
+  },
+  "decision": {
+    "classification": "RC02_PRODUCTION_CORRECTION_VERIFIED",
+    "rc02_closed_in_production": true,
+    "p1_g2_closed": false,
+    "p1_gate": "4/5 IN PROGRESS",
+    "p2_started": false,
+    "next_step": "review the post-correction 147-slot inventory; G2-RC01 now owns 143 slots, G2-RC03 owns 3 and G2-RC04 owns 1 before any next production correction"
+  }
+}

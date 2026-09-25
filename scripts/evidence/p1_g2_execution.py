@@ -36,12 +36,12 @@ if sys._getframe().f_code != compile(
     raise RuntimeError("execution helper bytecode differs from source")
 
 ROOT = Path(__file__).resolve().parents[2]
-REPOSITORY_BASE = "31b381716264205e6aaf1341af24f4dc2e7b0192"
+REPOSITORY_BASE = "55a27c99d0ca031890221c66ec4e0d8ede059690"
 PRODUCTION_BASIS_PATHS = (
     "src/sto/core", "src/sto/legacy", "tests/controlled_native_progress_evidence.py",
 )
 PRODUCTION_BASIS_PATH_TREE_SHA256 = (
-    "3fbb0bc48b1b325065741612f16e040161a6fe21a36218696601b51b07cb92fa"
+    "f7ca47d7e71f9c1e92fd13eaf2b02f351ffb8ca5a8fbb707c51aacb8b8a2ef11"
 )
 EXECUTION_PATH = "scripts/evidence/p1_g2_execution.py"
 TOOL_PATH = "scripts/evidence/p1_g2_baseline_diagnostics.py"

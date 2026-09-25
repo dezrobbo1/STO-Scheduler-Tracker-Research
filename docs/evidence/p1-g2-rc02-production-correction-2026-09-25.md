@@ -20,12 +20,12 @@ Fresh main before the correction:
 
 Final production-source commit for this correction:
 
-`31b381716264205e6aaf1341af24f4dc2e7b0192`
+`55a27c99d0ca031890221c66ec4e0d8ede059690`
 
 Production source identity:
 
-- source digest: `e214fc220d6a99d632eef51c8da89f1e09ae92dc95f81ecb88e240ab0a921267`;
-- pinned production path-tree SHA-256: `3fbb0bc48b1b325065741612f16e040161a6fe21a36218696601b51b07cb92fa`;
+- source digest: `3f80c59c7ff807d7d08803cb6f6697ce95f657da9aa15ee3c41586a70f4224d3`;
+- pinned production path-tree SHA-256: `f7ca47d7e71f9c1e92fd13eaf2b02f351ffb8ca5a8fbb707c51aacb8b8a2ef11`;
 - `BACKWARD_PASS_PROFILE`: `sto-backward-pass-v8`;
 - `CRITICALITY_PROFILE`: `sto-criticality-v7`;
 - `VALIDATOR_PROFILE`: `sto-validator-v4`.
@@ -155,8 +155,11 @@ The source-coordinate Free-Slack rule explains **450 / 451** BOILER rows.
 
 ### KILN
 
-The bounded rule removes one stale inactive-successor assumption but leaves the
-pinned date/late/float agreement counts unchanged. The full validator is clean.
+The measured RC02 rule does not activate on KILN: its apparent candidate also
+has a parallel direct relationship from the same active predecessor to the same
+active successor, a shape not present in the native experiments. It therefore
+remains explicitly labelled. The pinned date/late/float agreement counts remain
+unchanged and the full validator is clean.
 
 ### CALCINER
 
