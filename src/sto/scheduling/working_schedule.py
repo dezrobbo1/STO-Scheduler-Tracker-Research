@@ -20,6 +20,7 @@ Two rules that the persistence gate rests on:
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import uuid
 from collections.abc import Callable, Iterable
@@ -39,6 +40,7 @@ from sto.core.engine import (
     forward_pass,
     roll_up,
 )
+from sto.core.engine.plan import NATIVE_INACTIVE_BOUNDARY_CODE
 from sto.core.engine.result import (
     EXCLUDED,
     SCHEDULED,
@@ -120,26 +122,66 @@ def _projected_context(row: dict[str, Any]) -> tuple[Any, ...]:
 
 def _relationship_context_codes(
     schedule: Schedule,
-    edges: Iterable[tuple[uuid.UUID, str]],
+    edges: Iterable[tuple[uuid.UUID, str, str]],
 ) -> dict[uuid.UUID, tuple[str, ...]]:
-    """Map every exceptional relationship result back to both endpoint rows.
+    """Map exceptional source edges back to endpoint rows and verify derived lineage.
 
-    ``ScheduleResult.relationships`` contains exactly the edges that were not
-    ordinary measured precedence: assumed, excluded, or released by progress.
-    PL14 changes a duration and then interprets both the edited row and the
-    downstream movement, so an exceptional edge incident to the selected row is
-    part of that scenario's scheduling context even when the activity row itself
-    carries no activity-level assumption.
+    Native inactive-boundary edges are compiled relationships rather than
+    canonical source relationships. Their durable result row carries the two
+    source relationship identifiers and endpoint identities needed to verify
+    the lineage after a restart. They are measured production semantics, not an
+    activity-level assumption, so they are verified here but are not added to
+    the planner's assumption context.
     """
 
     relationships = {row.uid: row for row in schedule.relationships}
+    activities = {row.uid: row for row in schedule.activities}
     by_activity: dict[uuid.UUID, set[str]] = {}
-    for relationship_uid, code in edges:
+    for relationship_uid, code, detail in edges:
         relationship = relationships.get(relationship_uid)
         if relationship is None:
-            raise IntegrityError(
-                f"calculation relationship {relationship_uid} is not present in its schedule"
-            )
+            if code != NATIVE_INACTIVE_BOUNDARY_CODE:
+                raise IntegrityError(
+                    f"calculation relationship {relationship_uid} is not present in its schedule"
+                )
+            try:
+                lineage = json.loads(detail)
+                predecessor_uid = uuid.UUID(lineage["active_predecessor_uid"])
+                successor_uid = uuid.UUID(lineage["active_successor_uid"])
+                inactive_uid = uuid.UUID(lineage["inactive_boundary_uid"])
+                source_predecessor_uid = uuid.UUID(
+                    lineage["source_predecessor_relationship_uid"]
+                )
+                source_successor_uid = uuid.UUID(
+                    lineage["source_successor_relationship_uid"]
+                )
+            except (KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
+                raise IntegrityError(
+                    f"derived calculation relationship {relationship_uid} has invalid lineage"
+                ) from error
+
+            incoming = relationships.get(source_predecessor_uid)
+            outgoing = relationships.get(source_successor_uid)
+            inactive = activities.get(inactive_uid)
+            if (
+                incoming is None
+                or outgoing is None
+                or inactive is None
+                or inactive.active
+                or incoming.predecessor_uid != predecessor_uid
+                or incoming.successor_uid != inactive_uid
+                or outgoing.predecessor_uid != inactive_uid
+                or outgoing.successor_uid != successor_uid
+            ):
+                raise IntegrityError(
+                    f"derived calculation relationship {relationship_uid} does not match its source lineage"
+                )
+            # The native-evidence-derived edge is already visible in the
+            # relationship result itself. Do not turn measured semantics into an
+            # activity assumption or make an otherwise supported scenario
+            # ineligible merely because this rule participated.
+            continue
+
         for activity_uid in (
             relationship.predecessor_uid,
             relationship.successor_uid,
@@ -162,7 +204,7 @@ def _with_relationship_context(
     context = _relationship_context_codes(
         schedule,
         (
-            (edge["relationship_uid"], edge["code"])
+            (edge["relationship_uid"], edge["code"], edge["detail"])
             for edge in projected["relationships"]
         ),
     )
@@ -680,7 +722,7 @@ class Workspace:
         relationship_context = _relationship_context_codes(
             baseline.schedule,
             (
-                (edge.uid, edge.code)
+                (edge.uid, edge.code, edge.detail)
                 for edge in baseline_calculation.result.relationships
             ),
         )
