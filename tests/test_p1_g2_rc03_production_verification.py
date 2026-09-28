@@ -239,6 +239,8 @@ class Rc03ProductionEvidenceTests(unittest.TestCase):
             ("unreadable actual work", "Tasks", "Task", task_code, "ActualWork", "P1M"),
             ("unreadable actual duration", "Tasks", "Task", task_code, "ActualDuration", "P1M"),
             ("unreadable remaining work", "Tasks", "Task", task_code, "RemainingWork", "P1M"),
+            ("changed remaining work", "Tasks", "Task", task_code,
+             "RemainingWork", "PT1H0M0S"),
             ("rounded source units", "Assignments", "Assignment", assignment_code,
              "Units", "1.00000000000000000000000000001"),
             ("changed timephased work", "Assignments", "Assignment",
@@ -251,6 +253,37 @@ class Rc03ProductionEvidenceTests(unittest.TestCase):
                                             for part in field.split("/")))
                 self.assertIsNotNone(target)
                 target.text = value
+                changed = baseline._load(ET.tostring(tree, encoding="utf-8"))
+                task = next(row for row in changed.activities
+                            if baseline._source_uid(row) == task_code)
+                start = changed.project.start
+                plan = build_plan(changed, (start - timedelta(days=90),
+                                            start + timedelta(days=365)))
+                planned = plan.network.activity_by_uid().get(task.uid)
+                self.assertEqual(planned.float_basis if planned else "excluded",
+                                 "working")
+        for label, group, kind, code, field, value in (
+            ("duplicate actual work", "Tasks", "Task", task_code,
+             "ActualWork", "PT1H0M0S"),
+            ("duplicate actual duration", "Tasks", "Task", task_code,
+             "ActualDuration", "PT1H0M0S"),
+            ("duplicate remaining duration", "Tasks", "Task", task_code,
+             "RemainingDuration", "PT1H0M0S"),
+            ("duplicate remaining work", "Tasks", "Task", task_code,
+             "RemainingWork", "PT1H0M0S"),
+            ("duplicate task progress", "Tasks", "Task", task_code,
+             "PercentComplete", "100"),
+            ("duplicate generic resource", "Resources", "Resource", resource_code,
+             "IsGeneric", "1"),
+        ):
+            with self.subTest(source=label):
+                tree = ET.fromstring(original)
+                node = source_node(tree, group, kind, code)
+                item = node.find(f"{ns}{field}")
+                self.assertIsNotNone(item)
+                duplicate = ET.fromstring(ET.tostring(item))
+                duplicate.text = value
+                node.append(duplicate)
                 changed = baseline._load(ET.tostring(tree, encoding="utf-8"))
                 task = next(row for row in changed.activities
                             if baseline._source_uid(row) == task_code)

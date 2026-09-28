@@ -786,6 +786,11 @@ def migrate(
             fields.update(_unsupported_fields(name, _duration(row.get(key))))
         if row.get("work_ambiguous_source"):
             fields["work_ambiguous_source"] = "1"
+        if row.get("rc03_eligibility_ambiguous_source"):
+            fields["rc03_eligibility_ambiguous_source"] = "1"
+        raw_remaining_work = row.get("remaining_work_source")
+        if isinstance(raw_remaining_work, dict) and raw_remaining_work.get("raw") is not None:
+            fields["remaining_work_source_lexeme"] = str(raw_remaining_work["raw"])
         # These MSPDI task fields are preserved as vendor extensions, rather
         # than populated in Activity.effort_driven / levelling_delay_seconds.
         # Keep the source values available for the bounded elapsed-float rule.
@@ -941,6 +946,8 @@ def migrate(
                     **_unresolved_calendar_fields(calendar_ref),
                     **({"generic_resource_source": "1" if row["generic_source"] else "0"}
                        if row.get("generic_source") is not None else {}),
+                    **({"rc03_resource_ambiguous_source": "1"}
+                       if row.get("rc03_resource_ambiguous_source") else {}),
                 },
                 name=row.get("name") or "",
                 code=row.get("initials"),

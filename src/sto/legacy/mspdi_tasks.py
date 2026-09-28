@@ -46,6 +46,20 @@ def _task_common(element: ET.Element, ref: str, source_order: int) -> dict[str, 
         "duration": duration_value(_text(element, "Duration")),
         "work": duration_value(_text(element, "Work")),
         "work_ambiguous_source": len(element.findall(_q("Work"))) > 1,
+        # The bounded elapsed-float rule must not read first-of-two values
+        # as proof of an unstarted, unconstrained task. Preserve ambiguity at
+        # the import boundary while keeping the ordinary reader unchanged.
+        "rc03_eligibility_ambiguous_source": any(
+            len(element.findall(_q(name))) > 1 for name in (
+                "Active", "Manual", "Type", "IsNull", "Milestone", "Duration",
+                "DurationFormat", "RemainingDuration", "Work", "RemainingWork",
+                "ActualDuration", "ActualWork", "PercentComplete",
+                "PercentWorkComplete", "PhysicalPercentComplete", "ActualStart",
+                "ActualFinish", "Stop", "Resume", "CalendarUID", "ConstraintType",
+                "ConstraintDate", "Deadline", "EffortDriven", "LevelingDelay",
+                "IgnoreResourceCalendar",
+            )
+        ),
         "calendar_ref": _calendar_ref(calendar_uid),
         "estimated": _boolean(element, "Estimated"),
         "milestone_source": bool(_boolean(element, "Milestone", False)),

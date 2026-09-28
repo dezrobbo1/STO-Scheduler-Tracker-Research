@@ -782,7 +782,13 @@ class P1G2DiagnosticToolTests(unittest.TestCase):
         before = EVIDENCE.read_bytes()
         self.assertEqual(hashlib.sha256(before).hexdigest(),
                          "2408fc99f282e9c600d3821b3c926f7deafa8c05044c7fec9a5f08b2b656bf63")
-        with self.assertRaisesRegex(DiagnosticError, "production basis worktree bytes differ"):
+        # A correction may be an uncommitted worktree change or already in
+        # HEAD; both must refuse the frozen diagnostic's declared basis.
+        with self.assertRaisesRegex(
+            DiagnosticError,
+            r"production basis (?:worktree bytes differ from the declared evidence commit|"
+            r"differs from the declared evidence commit).*refusing stale lineage",
+        ):
             build_record(BASELINE, REPEAT)
         self.assertEqual(EVIDENCE.read_bytes(), before)
 

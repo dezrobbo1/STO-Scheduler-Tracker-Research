@@ -68,6 +68,11 @@ def _parse_resources(container: ET.Element | None, add_extension):
             "booking_type_source": _integer(element, "BookingType"),
             "created_at": _text(element, "CreationDate"),
             "generic_source": _boolean(element, "IsGeneric"),
+            "rc03_resource_ambiguous_source": any(
+                len(element.findall(_q(name))) > 1 for name in (
+                    "IsGeneric", "IsInactive", "CalendarUID", "Type", "IsNull",
+                )
+            ),
             "inactive_source": _boolean(element, "IsInactive"),
             "enterprise_source": _boolean(element, "IsEnterprise"),
             "cost_resource_source": _boolean(element, "IsCostResource"),

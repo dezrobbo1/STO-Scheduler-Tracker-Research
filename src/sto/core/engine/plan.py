@@ -1396,6 +1396,8 @@ def build_plan(
                 or activity.suspend is not None or activity.resume is not None
                 or activity.source_fields.get("work_unsupported_source") is not None
                 or activity.source_fields.get("work_ambiguous_source") is not None
+                or activity.source_fields.get("rc03_eligibility_ambiguous_source") is not None
+                or activity.source_fields.get("remaining_work_source_lexeme") != "PT96H0M0S"
                 or any(activity.source_fields.get(field) is not None for field in (
                     "actual_work_unsupported_source", "actual_duration_unsupported_source",
                     "remaining_work_unsupported_source",
@@ -1421,6 +1423,8 @@ def build_plan(
                 or resources[assignment.resource_uid].is_role
                 or resources[assignment.resource_uid].source_fields.get(
                     "generic_resource_source") != "0"
+                or resources[assignment.resource_uid].source_fields.get(
+                    "rc03_resource_ambiguous_source") is not None
                 or resources[assignment.resource_uid].calendar_uid not in calendars
                 or calendars[resources[assignment.resource_uid].calendar_uid].intervals.intervals
                    != (window,)

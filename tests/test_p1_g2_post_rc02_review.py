@@ -169,8 +169,13 @@ class PostRc02ReviewTests(unittest.TestCase):
         evidence = EVIDENCE.read_bytes()
         self.assertEqual(hashlib.sha256(evidence).hexdigest(),
                          "9a3ef68637b6e213188400f05fdca9bd216eebfbafa100f10f817623f5b8f3d3")
-        with self.assertRaisesRegex(ExecutionDiagnosticError,
-                                    "production basis worktree bytes differ"):
+        # Reject both an uncommitted worktree change and a committed change
+        # to the frozen production basis.
+        with self.assertRaisesRegex(
+            ExecutionDiagnosticError,
+            r"production basis (?:worktree bytes differ from the declared evidence commit|"
+            r"differs from the declared evidence commit).*refusing stale lineage",
+        ):
             review.build_record(source)
         self.assertEqual(EVIDENCE.read_bytes(), evidence)
         self.assertEqual(source.read_bytes(), before)
