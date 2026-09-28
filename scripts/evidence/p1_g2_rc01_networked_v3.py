@@ -78,6 +78,12 @@ def _date(row: ET.Element, field: str, label: str) -> datetime:
     return v2._datetime(_text(row, field), f"{label}.{field}")
 
 
+def _working_duration(start: datetime, finish: datetime) -> str:
+    minutes = oracle.signed_project_minutes(start, finish)
+    _require(minutes >= 0, "negative task working duration")
+    return f"PT{minutes // 60}H{minutes % 60}M0S"
+
+
 def _expected_calendar(row: ET.Element, calendar_uid: int) -> bool:
     observed = v2._calendar_signature(row)
     expected = tuple((day, calendar_uid != 1 or 2 <= day <= 6,
@@ -324,11 +330,9 @@ def analyze(payload: bytes) -> dict:
         checks[f"{name}.TotalSlack"] = actual["TotalSlack"] == predicted["total_slack_minutes"] * 10
         checks[f"{name}.FreeSlack"] = actual["FreeSlack"] == predicted["free_slack_minutes"] * 10
         checks[f"{name}.Critical"] = actual["Critical"] == predicted["critical"]
-        # Duration is a recalculated output. Candidate resource calendars
-        # include continuous 24h work, so this candidate predicts its elapsed
-        # envelope as productive duration even across project nonwork.
-        duration_hours = (predicted["early_finish"] - predicted["early_start"]).total_seconds() / 3600
-        exact = matrix.duration(int(duration_hours)) if duration_hours.is_integer() else None
+        # Duration is a recalculated task output measured by the PROJECT
+        # calendar, not by elapsed time or any one assignment calendar.
+        exact = _working_duration(predicted["early_start"], predicted["early_finish"])
         checks[f"{name}.Duration"] = actual["Duration"] == exact and actual["RemainingDuration"] == exact
     for uid, spec in assignment_specs.items():
         expected_span = expected[spec["task"]]["assignments"][uid]
@@ -375,8 +379,7 @@ def analyze(payload: bytes) -> dict:
         dates = (("Start", "early_start"), ("Finish", "early_finish"),
                  ("EarlyStart", "early_start"), ("EarlyFinish", "early_finish"),
                  ("LateStart", "late_start"), ("LateFinish", "late_finish"))
-        productive_hours = (predicted["early_finish"] - predicted["early_start"]).total_seconds() / 3600
-        expected_duration = matrix.duration(int(productive_hours)) if productive_hours.is_integer() else None
+        expected_duration = _working_duration(predicted["early_start"], predicted["early_finish"])
         return (all(row[field] == predicted[key] for field, key in dates)
                 and row["Duration"] == expected_duration
                 and row["RemainingDuration"] == expected_duration

@@ -50,9 +50,9 @@ def synthetic_oracle_save(*, padded: bool = False) -> bytes:
                            ("EarlyStart", "early_start"), ("EarlyFinish", "early_finish"),
                            ("LateStart", "late_start"), ("LateFinish", "late_finish")):
             set_field(row, field, expected[key].isoformat())
-        hours = int((expected["early_finish"] - expected["early_start"]).total_seconds() / 3600)
+        minutes = oracle.signed_project_minutes(expected["early_start"], expected["early_finish"])
         for field in ("Duration", "RemainingDuration"):
-            set_field(row, field, matrix.duration(hours))
+            set_field(row, field, f"PT{minutes // 60}H{minutes % 60}M0S")
         for field, key in (("TotalSlack", "total_slack_minutes"),
                            ("FreeSlack", "free_slack_minutes")):
             set_field(row, field, str(expected[key] * 10))
@@ -174,6 +174,28 @@ class NetworkedV3Tests(unittest.TestCase):
         self.assertEqual(sample["decision"]["native_provenance"],
                          "UNVERIFIED_OPERATOR_ATTESTATION_REQUIRED")
         self.assertEqual(sample["root_to_native_case"], matrix.root_mapping(ROOT / matrix.AUDIT))
+
+    def test_project_calendar_duration_predicates_for_off_hours(self):
+        prereg = json.loads((ROOT / "docs/evidence/p1-g2-rc01-networked-native-v3-r3-predeclared-2026-09-28.json").read_text())
+        self.assertEqual(prereg["preregistration_id"], matrix.PREREGISTRATION_ID)
+        self.assertEqual(prereg["input"]["sha256"], matrix.INPUT_SHA256)
+        self.assertEqual(prereg["input"]["bytes"], matrix.INPUT_BYTES)
+        self.assertEqual(prereg["supersedes_unrun_r2_preregistration"]["json_sha256"],
+                         hashlib.sha256((ROOT / "docs/evidence/p1-g2-rc01-networked-native-v3-r2-predeclared-2026-09-28.json").read_bytes()).hexdigest())
+        self.assertEqual(prereg["supersedes_unrun_r2_preregistration"]["md_sha256"],
+                         hashlib.sha256((ROOT / "docs/evidence/p1-g2-rc01-networked-native-v3-r2-predeclared-2026-09-28.md").read_bytes()).hexdigest())
+        root = ET.fromstring(synthetic_oracle_save())
+        tasks = matrix.graph()[0]
+        gap = find(root, "Tasks", tasks["GAP"]["uid"])
+        driver = find(root, "Tasks", tasks["FINISH-DRIVER"]["uid"])
+        self.assertEqual(gap.findtext("p:Duration", namespaces=NS), "PT0H30M0S")
+        self.assertEqual(driver.findtext("p:Duration", namespaces=NS), "PT24H0M0S")
+        self.assertEqual(native.analyze(encoded(root))["classification"]["verdict"],
+                         "V3_NETWORKED_ASSIGNMENT_ENVELOPE_SUPPORTED")
+        padded = native.analyze(synthetic_oracle_save(padded=True))
+        self.assertEqual(padded["classification"]["verdict"],
+                         "V3_NETWORKED_ASSIGNMENT_ENVELOPE_REJECTED")
+        self.assertFalse(padded["decision"]["production_rc01_correction_authorized"])
 
     def test_input_mutations_fail_before_classification(self):
         tasks, _, assignments = matrix.graph()

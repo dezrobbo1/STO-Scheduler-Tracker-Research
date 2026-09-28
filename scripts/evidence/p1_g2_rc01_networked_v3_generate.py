@@ -20,7 +20,7 @@ URI = base.URI
 q = base.q
 add = base.add
 EXPERIMENT_ID = "P1-G2-RC01-NETWORKED-ASSIGNMENT-ENVELOPE-NATIVE-MATRIX-V3"
-PREREGISTRATION_ID = EXPERIMENT_ID + "-R2-PROJECT-CALENDAR"
+PREREGISTRATION_ID = EXPERIMENT_ID + "-R3-WORKING-DURATION"
 PROJECT_NAME = EXPERIMENT_ID + ".xml"
 # The valid V2 save kept Project.Name only when its basename was unchanged.
 # Save V3 into a *different directory* using this same basename.
