@@ -1,0 +1,47 @@
+{
+  "schema": "sto-p1-g2-rc01-networked-native-v3-r2-predeclared",
+  "status": "NOT_RUN_MICROSOFT_PROJECT_REQUIRED",
+  "experiment_id": "P1-G2-RC01-NETWORKED-ASSIGNMENT-ENVELOPE-NATIVE-MATRIX-V3",
+  "preregistration_id": "P1-G2-RC01-NETWORKED-ASSIGNMENT-ENVELOPE-NATIVE-MATRIX-V3-R2-PROJECT-CALENDAR",
+  "supersedes_unrun_v3_preregistration": {
+    "json_sha256": "7cc6d9962143185d556a2407101d9ff851834c56710250d237ea740615615f11",
+    "md_sha256": "2f3552a355148cad22b4dd78b999a29262321198c7e7f09523c9fbb97a1c551e",
+    "obsolete_fixture_bytes": 112797,
+    "obsolete_fixture_sha256": "33c9dd6253930fcb2b538cf51256749f4ea71a026719e8828e3b4fb8635c8eaa",
+    "native_run": "NEVER_EXECUTED"
+  },
+  "current_input": {
+    "path": "tests/fixtures/P1-G2-RC01-NETWORKED-ASSIGNMENT-ENVELOPE-NATIVE-MATRIX-V3.xml",
+    "bytes": 122492,
+    "sha256": "c9c1ef3b6c850bfed1a0ecd41e6ad0fb69e4aac367ef578548c90986529df4e9",
+    "project_calendar": "Monday-Friday 07:30-15:30; weekends off",
+    "resource_24h_calendar": "00:00-00:00 seven days",
+    "resource_10h_calendars": "07:00-17:00 seven days; two distinct identities",
+    "task_count": 35,
+    "assignment_count": 46,
+    "project_start": "2026-10-12T08:00:00",
+    "cases": ["A", "A-ORDER-TWIN", "B", "C", "C-CALENDAR-IDENTITY-TWIN", "D", "E", "F", "ADJACENT-RC01", "GAP"],
+    "returned_filename": "P1-G2-RC01-NETWORKED-ASSIGNMENT-ENVELOPE-NATIVE-MATRIX-V3.xml"
+  },
+  "oracle_sha256": "e4c9182660a825f68c9ec79f1ec8a02738c92c628329567e0cbc1cc4c843c1dc",
+  "root_mapping_source_sha256": "4a7b32e7050b8eb61860d08cc26e544e01e924f4096576ea67009c04c318b248",
+  "root_to_case": {
+    "L0070": "A", "L0075": "A", "L0080": "B + ADJACENT-RC01",
+    "L0083": "A", "L0084": "C-CALENDAR-IDENTITY-TWIN + ADJACENT-RC01",
+    "L0114": "C", "L0127": "D", "L0148": "C", "L0157": "E", "L0190": "F"
+  },
+  "model": {
+    "support": "All 35 tasks, 46 assignment spans, order and identity twins, GAP, fan-out and adjacent chain match independent own-calendar early/late envelope and project-calendar slack predictions",
+    "rejection": "Every task and assignment matches independently calculated coherent fixed-duration end-padding rule, with all assignments contained within each task span, and all controls pass",
+    "inconclusive": "mixed early/late behavior, failed control, unrecognized save normalization, missing native build or unrecalculated input",
+    "input_violation": "Any experiment-defining semantic or identity drift",
+    "observed_task_fields": ["Start", "Finish", "Duration", "RemainingDuration", "EarlyStart", "EarlyFinish", "LateStart", "LateFinish", "TotalSlack", "FreeSlack", "Critical"],
+    "observed_assignment_fields": ["Start", "Finish"],
+    "observed_project_fields": ["FinishDate", "BuildNumber"]
+  },
+  "genuine_native_provenance": "MUST_BE_INDEPENDENTLY_ATTESTED_BY_PROJECT_DESKTOP_OPERATOR; XML BuildNumber and output fields are insufficient",
+  "native_result": null,
+  "native_v3_supported": false,
+  "production_rc01_correction_authorized": false,
+  "p1_g2_met": false
+}

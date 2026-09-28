@@ -1,0 +1,24 @@
+{
+  "classification": {
+    "reason": "semantic input changed: calendar 1.GUID",
+    "verdict": "V3_INPUT_CONTRACT_VIOLATED"
+  },
+  "decision": {
+    "machine_predicates_match_candidate": false,
+    "native_v3_supported": false,
+    "p1_g2_met": false,
+    "production_rc01_correction_authorized": false
+  },
+  "experiment_id": "P1-G2-RC01-NETWORKED-ASSIGNMENT-ENVELOPE-NATIVE-MATRIX-V3",
+  "input_identity": {
+    "bytes": 122492,
+    "path": "tests/fixtures/P1-G2-RC01-NETWORKED-ASSIGNMENT-ENVELOPE-NATIVE-MATRIX-V3.xml",
+    "sha256": "c9c1ef3b6c850bfed1a0ecd41e6ad0fb69e4aac367ef578548c90986529df4e9"
+  },
+  "native_return": {
+    "bytes": 1722330,
+    "sha256": "8ff29979fad5776af5909ca26f17715017793cf85a99b8308ab0a4adcd4baa33"
+  },
+  "preregistration_id": "P1-G2-RC01-NETWORKED-ASSIGNMENT-ENVELOPE-NATIVE-MATRIX-V3-R4-DURATION-DISCRIMINATOR",
+  "schema": "sto-p1-g2-rc01-networked-assignment-envelope-native-v3"
+}

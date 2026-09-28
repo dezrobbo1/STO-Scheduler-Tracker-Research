@@ -1,0 +1,19 @@
+# V3-R4 duration-discriminator preregistration — **not run**
+
+This append-only record supersedes the **unrun** R3 analyzer contract before any desktop Project execution. Earlier V3, R2 and R3 records remain unchanged. The experiment and input are unchanged: the deterministic generator still yields [the same V3 XML](../../tests/fixtures/P1-G2-RC01-NETWORKED-ASSIGNMENT-ENVELOPE-NATIVE-MATRIX-V3.xml), exactly **122,492 bytes**, SHA-256 `c9c1ef3b6c850bfed1a0ecd41e6ad0fb69e4aac367ef578548c90986529df4e9`. No earlier native return has been observed. Governing preregistration: `P1-G2-RC01-NETWORKED-ASSIGNMENT-ENVELOPE-NATIVE-MATRIX-V3-R4-DURATION-DISCRIMINATOR`.
+
+The third Codex review found a further material **FIX NOW**: V2's project and assignment calendar hours coincided, so its native Duration result did **not** distinguish the two models. R3 asserted the project-calendar model alone and predicted zero Duration for positive-work, non-milestone controls such as D-POST 16:00→17:00. Neither formula may be treated as established without discriminating native evidence. R4 freezes **two** explicit possibilities before the return: `PROJECT` measures each predicted task early Start→Finish on the fixed weekday 07:30–15:30 project calendar; `RESOURCE_UNION` measures on the union of assigned resource calendars. Because every V3 task has a continuous 24-hour resource, the latter equals elapsed time. Both `Duration` and `RemainingDuration` must match **one and the same** selected model for **all 35 tasks**, controls included, within the envelope candidate or the coherent end-padding rejection model. No task-by-task exceptions or post-return formula changes are allowed. The analyzer records the selected mode. Mixed, neither or ambiguous behavior is **INCONCLUSIVE** and cannot authorize work. This retains Duration as a required support predicate while letting V3 distinguish the presently unknown meaning.
+
+Predeclared contrasting values: GAP Monday 16:00→Tuesday 08:00 is PROJECT `PT0H30M0S` versus RESOURCE_UNION `PT16H0M0S`; FINISH-DRIVER Monday 08:00→Thursday 08:00 is `PT24H0M0S` versus `PT72H0M0S`; D-POST 16:00→17:00 is `PT0H0M0S` versus `PT1H0M0S`. These controls make the two models mechanically distinguishable on this **same** XML. A test-first synthetic reproduction showed the coherent RESOURCE_UNION candidate failed the single-model R3 predicate; R4 tests both candidate and rejection under both global modes, plus a mixed-mode result that remains inconclusive. Synthetic saves are tests only, not native output.
+
+All other exact input fields, 35-task/46-assignment topology, A–F/twin/fan-out/adjacent/GAP cases, ten-root mapping, native input validation, backward/float/criticality predictions and independent oracle SHA-256 `e4c9182660a825f68c9ec79f1ec8a02738c92c628329567e0cbc1cc4c843c1dc` are unchanged. The merged immutable BOILER 147→3 counterfactual is diagnostic only; no production scheduler or phase gate changes. Even if the machine predicates match, `native_v3_supported=false` and `production_rc01_correction_authorized=false` until a later independent desktop operator attestation ties a genuine Project-saved return to this input.
+
+Open only this exact XML in Microsoft Project desktop; make no edits and do not level resources; recalculate the entire project (F9); save as MSPDI XML into a **different folder with the identical basename** `P1-G2-RC01-NETWORKED-ASSIGNMENT-ENVELOPE-NATIVE-MATRIX-V3.xml`; return the unedited Project-saved XML and confirm personally that the same verified input was opened and recalculated. Analyzer command once returned:
+
+```bash
+python3 scripts/evidence/p1_g2_rc01_networked_v3.py \
+  /path/to/returned/P1-G2-RC01-NETWORKED-ASSIGNMENT-ENVELOPE-NATIVE-MATRIX-V3.xml \
+  --output /separate/path/p1-g2-rc01-networked-v3-r4-result.json
+```
+
+Native result remains **NOT RUN / REQUIRED**. P1-G2 remains OPEN; P1 4/5 IN PROGRESS; P2 NOT STARTED. No production RC01 correction is in this PR.

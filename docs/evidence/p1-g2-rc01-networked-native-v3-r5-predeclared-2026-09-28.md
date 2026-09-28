@@ -1,0 +1,26 @@
+# V3-R5 coherent-input native preregistration — **not run**
+
+R4 received an uploaded file, **1,722,330 bytes**, SHA-256 `8ff29979fad5776af5909ca26f17715017793cf85a99b8308ab0a4adcd4baa33`. The exact R4 analyzer returned `V3_INPUT_CONTRACT_VIOLATED` at a calendar GUID representation change. Read [the immutable R4 invalid-return receipt](p1-g2-rc01-networked-native-v3-r4-invalid-return-2026-09-28.md). Independently inspected output also compressed a 72-hour finish-driver assignment into four hours, so it did not establish the requested networked semantic. The operator has not yet independently attested the saved file. The R4 return remains invalid; **no normalization or modified copy is accepted as R4 native evidence**. The earlier R4 preregistration, original generated XML, and uploaded return are unchanged.
+
+This **new input and new preregistration**, fixed before any new desktop execution, repair the synthetic experiment's import boundary. The earlier fixture remains committed at its original path and hash. The new [V3-R5 XML](../../tests/fixtures/P1-G2-RC01-NETWORKED-ASSIGNMENT-ENVELOPE-NATIVE-MATRIX-V3-R5.xml) is **122,130 bytes**, SHA-256 `053cbd7b569cc34c53cbfce11ec6b0370c78ef0483e4eb358ce58d4da54d516a`. Governing ID: `P1-G2-RC01-NETWORKED-ASSIGNMENT-ENVELOPE-NATIVE-MATRIX-V3-R5-COHERENT-INPUT`. The fixed Project.Name and required return basename both end `-V3-R5.xml`.
+
+The R4 source seeded **every** task and assignment to 08:00→12:00, even the one-hour predecessors, eight-hour GAP predecessor, 32/36-hour independent holds and 72-hour finish driver. The returned save mostly retained four-hour spans despite differing Work. This mismatch is a plausible import cause, **not a proven diagnosis**. R5 gives every task a seed Finish/EarlyFinish/LateFinish equal to project start plus its own declared duration, and every assignment a seed Finish equal to project start plus its exact Work/Units effective hours. These seeds fix input coherence; the network predecessor/successor bounds must still be calculated by Project. Unrecalculated XML still fails the exact-source-byte/build guard. The source no longer relies on empty, contradictory scheduling coordinates to initialize a networked task.
+
+The R4 source also used sparse resource UIDs above 1000; the return had 990 extra null/inert resource rows. R5 gives the 46 real resources dense deterministic UIDs 1–46, retaining exact separate assignment UIDs, declaration order, Work/Units and task/resource links. Project wrote fixed calendar/task/assignment GUID hexadecimal letters in uppercase with UUID values preserved; R5 emits the deterministic fixed GUIDs uppercase in the **new input**, then checks exact identity. A regenerated project GUID still follows the earlier bounded normalization. Project reformatted calendar XML without changing any working interval; the R5 validator compares each exact semantic weekday/working-interval signature, zero exceptions, calendar UID/linkage and all other pinned calendar fields. For network links, it accepts only formatting and Project's added `CrossProject=0`; predecessor UID/type/zero lag/format/order/topology stay exact. It does **not** grant a blanket allowance for other native save mutations, absent provenance or incoherent scheduling.
+
+The same 35 tasks, 46 assignments, A–F/ordering/calendar-twin/fan-out/adjacent/GAP topology and ten mechanically mapped BOILER RC01 roots remain. The independent candidate forward/backward/float oracle fingerprint remains `e4c9182660a825f68c9ec79f1ec8a02738c92c628329567e0cbc1cc4c843c1dc`; the coherent end-padding rejection and R4's two globally consistent Duration models are unchanged. A genuine native return must still pass *all* input checks and controls, date/assignment/slack/criticality predictions and one exact duration model to be machine-classified SUPPORT. Mixed behavior is INCONCLUSIVE; a coherent incompatible whole-network model is REJECTED. Machine classification never proves Project provenance or authorizes production. There is **no native R5 result yet**, no RC01 production correction, no P1-G2 pass and no P2 start.
+
+## Desktop procedure — **new** R5 file only
+
+1. Verify the 122,130-byte XML and SHA-256 `053cbd7b569cc34c53cbfce11ec6b0370c78ef0483e4eb358ce58d4da54d516a`; do **not** reopen or resave the R4 input as an R5 result.
+2. Open the R5 XML in Microsoft Project desktop. Make no edits, do not invoke Resource Leveling, and calculate the entire project (F9).
+3. Save as MSPDI XML in a different folder with the **same exact basename** `P1-G2-RC01-NETWORKED-ASSIGNMENT-ENVELOPE-NATIVE-MATRIX-V3-R5.xml` (Project.Name is pinned). Do not edit the saved XML.
+4. Return that new Project-saved file and personally confirm that this exact input was opened, fully recalculated and saved without edits or levelling. Record its byte size/hash upon return. Only then run:
+
+```bash
+python3 scripts/evidence/p1_g2_rc01_networked_v3.py \
+  /path/to/returned/P1-G2-RC01-NETWORKED-ASSIGNMENT-ENVELOPE-NATIVE-MATRIX-V3-R5.xml \
+  --output /separate/path/p1-g2-rc01-networked-v3-r5-result.json
+```
+
+The R4 invalid file remains an append-only observation outside the native acceptance boundary. P1-G2 remains OPEN; P1 4/5 IN PROGRESS; P2 NOT STARTED.

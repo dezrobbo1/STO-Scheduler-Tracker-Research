@@ -1,0 +1,34 @@
+{
+  "schema": "sto-p1-g2-rc01-networked-native-v3-r6-predeclared",
+  "status": "NOT_RUN_MICROSOFT_PROJECT_REQUIRED",
+  "experiment_id": "P1-G2-RC01-NETWORKED-ASSIGNMENT-ENVELOPE-NATIVE-MATRIX-V3",
+  "preregistration_id": "P1-G2-RC01-NETWORKED-ASSIGNMENT-ENVELOPE-NATIVE-MATRIX-V3-R6-PROJECT-SEED-TOOL-IDENTITY",
+  "supersedes_unrun_r5": {
+    "r5_json_sha256": "a8ea400cebc001d7a894382f50968ec8518dccb802b78b6962c5edac9eef8981",
+    "r5_md_sha256": "697e9fba6a71cdbc2836849d3026cf8123f12daba5cfbe3be17cfb4743e2b2ed",
+    "r5_fixture_bytes": 122130,
+    "r5_fixture_sha256": "053cbd7b569cc34c53cbfce11ec6b0370c78ef0483e4eb358ce58d4da54d516a",
+    "native_run": "NEVER_EXECUTED"
+  },
+  "r4_invalid_return_sha256": "8ff29979fad5776af5909ca26f17715017793cf85a99b8308ab0a4adcd4baa33",
+  "input": {
+    "path": "tests/fixtures/P1-G2-RC01-NETWORKED-ASSIGNMENT-ENVELOPE-NATIVE-MATRIX-V3-R6.xml",
+    "bytes": 122130,
+    "sha256": "414b78b7eef5ed41392ca387d89e60dc59488e74ba4dec6fdc2784a54a88a2d6",
+    "returned_filename": "P1-G2-RC01-NETWORKED-ASSIGNMENT-ENVELOPE-NATIVE-MATRIX-V3-R6.xml"
+  },
+  "tool_manifest_path": "docs/evidence/p1-g2-rc01-networked-native-v3-r6-tool-identity-2026-09-28.json",
+  "input_change": "Initial task Finish/EarlyFinish/LateFinish now consume declared Duration on the fixed weekday 07:30-15:30 project calendar, while assignment seed spans still consume Work/Units on their own resource calendar. Initial Project.FinishDate equals the latest seeded task finish. This removes the inconsistency under the PROJECT import model without asserting which output Duration model Project uses.",
+  "examples": {
+    "one_hour_predecessor_seed": "2026-10-12T08:00:00/2026-10-12T09:00:00",
+    "eight_hour_gap_predecessor_seed": "2026-10-12T08:00:00/2026-10-13T08:00:00",
+    "seventy_two_hour_finish_driver_seed": "2026-10-12T08:00:00/2026-10-23T08:00:00"
+  },
+  "oracle_sha256": "e4c9182660a825f68c9ec79f1ec8a02738c92c628329567e0cbc1cc4c843c1dc",
+  "duration_discriminator": "One global PROJECT or RESOURCE_UNION output mode must match both duration fields for all 35 tasks; mixed/neither is inconclusive",
+  "acceptance": "All prior exact semantic inputs, 46 assignment spans, 35 task early/late/float/criticality fields, network controls, candidate or coherent rejection predictions and ten-root mapping; verified tool manifest and preregistration identities required before parsing observations",
+  "native_result": null,
+  "native_v3_supported": false,
+  "production_rc01_correction_authorized": false,
+  "p1_g2_met": false
+}

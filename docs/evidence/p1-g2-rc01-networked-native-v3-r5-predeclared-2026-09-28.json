@@ -1,0 +1,45 @@
+{
+  "schema": "sto-p1-g2-rc01-networked-native-v3-r5-predeclared",
+  "status": "NOT_RUN_MICROSOFT_PROJECT_REQUIRED",
+  "experiment_id": "P1-G2-RC01-NETWORKED-ASSIGNMENT-ENVELOPE-NATIVE-MATRIX-V3",
+  "preregistration_id": "P1-G2-RC01-NETWORKED-ASSIGNMENT-ENVELOPE-NATIVE-MATRIX-V3-R5-COHERENT-INPUT",
+  "supersedes_r4_after_invalid_return": {
+    "r4_prereg_json_sha256": "0de9271eb8d8a890d613fb7b8213b31757276544e807e69fc6de6bae467b1d51",
+    "r4_prereg_md_sha256": "e29196ad22ad37ff335ae2f6154609f9178f9efe18ee24e40be2e4f45d81e12a",
+    "r4_invalid_receipt_json_sha256": "ef9c1f5ee205ee85afc61308d8562b782c1b0de2744803b79623dd765a28c955",
+    "r4_invalid_receipt_md_sha256": "0c6707025512a1517747328b067071235c935527a3caf258cc52482e1603d4c7",
+    "r4_input_bytes": 122492,
+    "r4_input_sha256": "c9c1ef3b6c850bfed1a0ecd41e6ad0fb69e4aac367ef578548c90986529df4e9",
+    "r4_return_bytes": 1722330,
+    "r4_return_sha256": "8ff29979fad5776af5909ca26f17715017793cf85a99b8308ab0a4adcd4baa33",
+    "r4_verdict": "V3_INPUT_CONTRACT_VIOLATED",
+    "r4_return_reused_as_r5_native_evidence": false
+  },
+  "input": {
+    "path": "tests/fixtures/P1-G2-RC01-NETWORKED-ASSIGNMENT-ENVELOPE-NATIVE-MATRIX-V3-R5.xml",
+    "bytes": 122130,
+    "sha256": "053cbd7b569cc34c53cbfce11ec6b0370c78ef0483e4eb358ce58d4da54d516a",
+    "project_name_and_returned_filename": "P1-G2-RC01-NETWORKED-ASSIGNMENT-ENVELOPE-NATIVE-MATRIX-V3-R5.xml",
+    "project_start": "2026-10-12T08:00:00",
+    "calendar_classes": ["weekday 07:30-15:30 project", "seven-day 24h resource", "seven-day 07:00-17:00 resource", "distinct equivalent 10h resource"],
+    "tasks": 35,
+    "assignments": 46,
+    "resources": 46,
+    "cases": ["A", "A-ORDER-TWIN", "B", "C", "C-CALENDAR-IDENTITY-TWIN", "D", "E", "F", "ADJACENT-RC01", "GAP"]
+  },
+  "changes_frozen_before_new_native_run": {
+    "task_seed": "Each task starts at project start and has initial Finish/EarlyFinish/LateFinish at start plus its declared task-duration hours, including 1h predecessor, 8h gap predecessor, 32h/36h holds and 72h finish driver",
+    "assignment_seed": "Each assignment starts at project start and has initial Finish at start plus exactly Work/Units working hours; effective durations are within each assigned resource's 08:00 starting interval or the continuous 24h resource",
+    "resource_uids": "Dense deterministic 1..46; assignment UIDs and order stay as separately pinned, with exact task/resource linkage",
+    "guid_presentation": "Uppercase hexadecimal for fixed calendar/task/resource/assignment GUIDs; exact UUID value remains deterministic; no arbitrary identity change accepted",
+    "calendar_weekdays": "Allow Project formatting/whitespace changes only when all seven explicit project/resource working-interval signatures, exceptions and calendar links remain exact",
+    "network_link_serialization": "Allow solely an absent or zero CrossProject field and XML whitespace changes; predecessor UID, zero-lag FS Type, LinkLag, LagFormat, order and topology remain exact"
+  },
+  "unchanged_candidate_oracle_sha256": "e4c9182660a825f68c9ec79f1ec8a02738c92c628329567e0cbc1cc4c843c1dc",
+  "unchanged_r4_duration_discriminator": "One global PROJECT or RESOURCE_UNION mode must fit both Duration fields of all tasks; mixed/neither is INCONCLUSIVE",
+  "unchanged_root_mapping_source_sha256": "4a7b32e7050b8eb61860d08cc26e544e01e924f4096576ea67009c04c318b248",
+  "native_result": null,
+  "native_v3_supported": false,
+  "production_rc01_correction_authorized": false,
+  "p1_g2_met": false
+}

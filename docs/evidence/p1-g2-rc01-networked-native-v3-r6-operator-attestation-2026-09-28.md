@@ -1,0 +1,9 @@
+# V3-R6 operator attestation — result remains inconclusive
+
+On 2026-09-28 the user supplied the following desktop-operation confirmation after uploading the R6 return and receiving its [unchanged analyzer result](p1-g2-rc01-networked-native-v3-r6-inconclusive-return-2026-09-28.md):
+
+> I confirm that I opened the exact R6 input in Microsoft Project, made no edits, did not invoke Resource Leveling, pressed F9 to recalculate the entire project, and saved the result as XML in a different folder using the exact filename `P1-G2-RC01-NETWORKED-ASSIGNMENT-ENVELOPE-NATIVE-MATRIX-V3-R6.xml`.
+
+The immediately preceding uploaded return with that basename was 306,865 bytes, SHA-256 `729fc214b800fae3dc3ee2c31877076ce2de8b09ea4cce824ff6d40a404ee42a`; its pinned input was 122,130 bytes, SHA-256 `414b78b7eef5ed41392ca387d89e60dc59488e74ba4dec6fdc2784a54a88a2d6`. The user did not name a SHA-256 in the attestation; the link to these return bytes is the adjacent upload and response in the same conversation. This records the operator's account of the procedure, not independently observed desktop actions or cryptographic proof of the session. The XML remains outside the repository and unchanged.
+
+This **append-only** attestation supersedes the earlier record's statement that operator attestation had not yet been supplied. It does **not** rewrite that historically accurate at-upload statement or the preregistered analyzer output (`native_provenance: UNVERIFIED_OPERATOR_ATTESTATION_REQUIRED`). The frozen machine classification remains `V3_NETWORKED_ASSIGNMENT_ENVELOPE_INCONCLUSIVE`: 38 of 405 predicates fail, including the global task Duration model and three FreeSlack checks. Therefore `native_v3_supported` and `production_rc01_correction_authorized` remain false, no BOILER root enters a proven V3 native boundary, P1-G2 remains OPEN, P1 remains 4/5 IN PROGRESS, and P2 has NOT STARTED. No production scheduling change follows from this attestation.
