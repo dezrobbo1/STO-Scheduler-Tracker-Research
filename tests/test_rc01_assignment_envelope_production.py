@@ -117,6 +117,43 @@ class Rc01AssignmentEnvelopeProductionTests(unittest.TestCase):
         plan, _, _ = calculate(changed)
         self.assertIsNone(plan.network.activity_by_uid()[task.uid].assignment_envelope)
 
+    def test_unreadable_or_inconsistent_task_work_falls_back(self):
+        source = schedule()
+        task = by_name(source, "C")
+        uri = "{http://schemas.microsoft.com/project}"
+        for value in ("garbage", "PT13H0M0S", "duplicate"):
+            with self.subTest(work=value):
+                document = ET.fromstring(FIXTURE.read_bytes())
+                row = next(row for row in document.findall(f"./{uri}Tasks/{uri}Task")
+                           if row.findtext(f"{uri}Name") == "V3-C")
+                if value == "duplicate":
+                    ET.SubElement(row, f"{uri}Work").text = "PT13H0M0S"
+                else:
+                    row.find(f"{uri}Work").text = value
+                changed = _load(ET.tostring(document))
+                plan, _, _ = calculate(changed)
+                self.assertTrue(plan.network.activity_by_uid()[task.uid].assignment_envelope is None)
+                self.assertIn("ACTIVITY_RESOURCE_CALENDARS_UNITED",
+                              [a.code for a in plan.assumed if a.uid == task.uid])
+
+    def test_duplicate_gated_assignment_inputs_fail_closed(self):
+        source = schedule()
+        task = by_name(source, "C")
+        assigned = next(row for row in source.assignments if row.activity_uid == task.uid)
+        uri = "{http://schemas.microsoft.com/project}"
+        for field, second in (("ActualWork", "PT1H0M0S"),
+                              ("PercentWorkComplete", "50"), ("WorkContour", "1"),
+                              ("Work", "PT1H0M0S"), ("RemainingWork", "PT1H0M0S"),
+                              ("Units", "3")):
+            with self.subTest(field=field):
+                document = ET.fromstring(FIXTURE.read_bytes())
+                row = next(row for row in document.findall(f"./{uri}Assignments/{uri}Assignment")
+                           if row.findtext(f"{uri}UID") == assigned.external_refs[0].uid)
+                ET.SubElement(row, f"{uri}{field}").text = second
+                changed = _load(ET.tostring(document))
+                plan, _, _ = calculate(changed)
+                self.assertTrue(plan.network.activity_by_uid()[task.uid].assignment_envelope is None)
+
     def test_network_fingerprint_commits_to_assignment_work_and_calendar(self):
         source = schedule()
         original, _, _ = calculate(source)

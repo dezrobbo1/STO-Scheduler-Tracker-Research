@@ -1272,6 +1272,9 @@ def build_plan(
             or activity.primary_constraint is not None or activity.secondary_constraint is not None
             or activity.levelling_delay_seconds != 0
             or activity.planned_duration is None or activity.planned_duration.elapsed
+            or activity.planned_work is None
+            or activity.source_fields.get("work_unsupported_source") is not None
+            or activity.source_fields.get("work_ambiguous_source") is not None
             or activity.remaining_duration not in (None, activity.planned_duration)
             or any(value != 0 for value in
                    (activity.percent_complete.duration_permille,
@@ -1292,7 +1295,8 @@ def build_plan(
                    r.lag_calendar is LagCalendar.ELAPSED_24H for r in raw_incident)):
             continue
         rows = assignment_rows_by_activity.get(activity.uid, [])
-        if len(rows) != 2:
+        if (len(rows) != 2 or activity.planned_work.seconds !=
+            sum(row.work.budgeted_seconds for row in rows)):
             continue
         placements: list[AssignmentPlacement] = []
         signature: list[tuple[str, int, int]] = []
@@ -1313,6 +1317,9 @@ def build_plan(
                 or fields.get("units_ambiguous_source") is not None
                 or fields.get("work_ambiguous_source") is not None
                 or fields.get("remaining_work_ambiguous_source") is not None
+                or fields.get("actual_work_ambiguous_source") is not None
+                or fields.get("percent_work_complete_ambiguous_source") is not None
+                or fields.get("work_contour_ambiguous_source") is not None
                 or fields.get("actual_work_source_present") != "1"
                 or row.work.actual_seconds != 0 or row.percent_work_complete_permille != 0
                 or row.work.budgeted_seconds <= 0

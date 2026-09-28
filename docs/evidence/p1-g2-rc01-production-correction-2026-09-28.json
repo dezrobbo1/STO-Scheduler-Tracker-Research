@@ -205,7 +205,8 @@
     "src/sto/core/engine/result.py",
     "src/sto/core/engine/validate.py",
     "src/sto/core/model/migrate/sto_v011.py",
-    "src/sto/legacy/mspdi_resources.py"
+    "src/sto/legacy/mspdi_resources.py",
+    "src/sto/legacy/mspdi_tasks.py"
   ],
   "production_projection_sha256": "42cda393e5bf60c1e39a9ace26f54c00c51824412bdb9de2b1361e354ffbadc0",
   "profiles": {

@@ -784,6 +784,8 @@ def migrate(
             ("remaining_work", "remaining_work_source"),
         ):
             fields.update(_unsupported_fields(name, _duration(row.get(key))))
+        if row.get("work_ambiguous_source"):
+            fields["work_ambiguous_source"] = "1"
         if row.get("is_null_source"):
             # A null placeholder row is a gap Project keeps in its task list,
             # not work. Dropping the flag made it look like an ordinary task.
@@ -969,7 +971,8 @@ def migrate(
             assignment_fields["units_lexeme_source"] = str(row["units_lexeme_source"])
         for key in ("delay_ambiguous_source", "leveling_delay_ambiguous_source",
                     "units_ambiguous_source", "work_ambiguous_source",
-                    "remaining_work_ambiguous_source"):
+                    "remaining_work_ambiguous_source", "actual_work_ambiguous_source",
+                    "percent_work_complete_ambiguous_source", "work_contour_ambiguous_source"):
             if row.get(key):
                 assignment_fields[key] = "1"
         if actual_work is not None:

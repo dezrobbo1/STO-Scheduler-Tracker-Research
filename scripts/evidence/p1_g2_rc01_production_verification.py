@@ -154,6 +154,7 @@ def build_record(source: Path) -> dict:
             "src/sto/core/engine/network.py", "src/sto/core/engine/plan.py",
             "src/sto/core/engine/result.py", "src/sto/core/engine/validate.py",
             "src/sto/core/model/migrate/sto_v011.py", "src/sto/legacy/mspdi_resources.py",
+            "src/sto/legacy/mspdi_tasks.py",
         ],
         "boiler": {"bytes": len(payload), "sha256": BOILER_SHA},
         "historical_evidence": {
