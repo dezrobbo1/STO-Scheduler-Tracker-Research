@@ -1,0 +1,13 @@
+# RC01 BOILER diagnostic: reviewed V3 pre-result correction
+
+Status: **V3 NOT RUN — await new tool commit and identity registration**. The V2 diagnostic result already exists and remains immutable: its raw result SHA-256 is `30be4ebaac5aa6a6e43aa8d4fa08a90fd531bc506d6b068463a3bbcf4052675e`. A later Codex review of the pre-result tool reported four material false-success/source-safety paths. This record declares the V3 change **before a V3 BOILER run**. It does not erase or relabel the earlier V2 measurement.
+
+The candidate scheduling transform, source/oracle separation, 147-slot starting inventory, ten current root IDs, V2 native applicability boundary, strict stopping rule and production-authorization predicate remain as predeclared in `p1-g2-rc01-boiler-counterfactual-predeclared-2026-09-28.{json,md}`. No production behavior is changed. The V3 tool rejects any old or tampered tool revision by comparing its committed path bytes and most recent tool commit with the newly published V3 pre-result manifest's exact commit, byte count and SHA-256. That manifest must be added **after the corrected tool commit and before the next BOILER execution**.
+
+Additional source acceptance checks:
+
+- Parse the pinned original MSPDI's assignment UID, `Delay` and `LevelingDelay` for every assignment on the ten current roots. Require exactly one row per UID and both source fields explicitly `0`; reject missing, nonzero or duplicate values. Canonical migration drops these values, so the raw source must be checked before diagnostic scheduling. Retain both zero values in each applicability audit row.
+- Require an explicit `--output` before reading BOILER. A separate output path still goes through the existing normalized/symlink/hard-link refusal and atomic publication. Shell redirection happens before a process starts, so a supported CLI invocation publishes only through the protected output argument.
+- Protect every existing append-only `docs/evidence/` file, the frozen input, BOILER and the production source files transitively read by the current-root recomputation. A new output file remains permissible; an existing evidence path is never an output candidate.
+
+The initial V2 BOILER measurement showed zero `Delay` and zero `LevelingDelay` on all 20 root assignments when independently read directly from the pinned XML. V3 will check that in executable code and rerun the complete calculation anyway; **the V3 result is not anticipated as evidence**. If the measured fields, keys or classification differ, append the actual V3 result and explain the difference. No RC01 production correction, RC03 work, P1-G2 closure or P2 start is authorized by this preregistration.

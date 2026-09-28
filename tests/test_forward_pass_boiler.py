@@ -321,7 +321,9 @@ class StoredDateAgreementTests(unittest.TestCase):
             counts["assumed"],
             {
                 "ACTIVITY_RESOURCE_CALENDARS_UNITED": 133,
-                "ACTIVITY_SUCCESSOR_OF_INACTIVE": 5,
+                # Current RC02 bounded policy leaves the parallel-path KILN
+                # shape explicitly assumed (six, not the older five).
+                "ACTIVITY_SUCCESSOR_OF_INACTIVE": 6,
                 "RELATIONSHIP_LAG_ON_PROJECT_CALENDAR": 14,
             },
         )

@@ -17,6 +17,7 @@ import json
 from pathlib import Path
 import subprocess
 import sys
+import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[2]
 for root in (ROOT, ROOT / "src"):
@@ -45,6 +46,7 @@ CURRENT_PATH = ROOT / "docs/evidence/p1-g2-post-rc02-review-2026-09-25.json"
 CURRENT_SHA = "9a3ef68637b6e213188400f05fdca9bd216eebfbafa100f10f817623f5b8f3d3"
 NATIVE_PATH = ROOT / "docs/evidence/p1-g2-rc01-native-v2-valid-return-2026-09-28.json"
 NATIVE_SHA = "71702adb09f08014c8ce14bed7651162bff65787f8d4d4945bb2383710ca6a6c"
+IDENTITY_PATH = ROOT / "docs/evidence/p1-g2-rc01-boiler-counterfactual-pre-result-identity-v3-2026-09-28.json"
 ROOTS = frozenset(("L0070", "L0075", "L0080", "L0083", "L0084", "L0114",
                    "L0127", "L0148", "L0157", "L0190"))
 FIELDS = tuple(baseline.RESULT_FIELDS)
@@ -94,6 +96,29 @@ def source_id(entity) -> str:
     if len(ids) != 1:
         raise CounterfactualError("missing or ambiguous Microsoft Project UID")
     return ids[0]
+
+
+def verify_assignment_delays(raw: bytes, assignment_uids: set[str]) -> dict[str, dict[str, int]]:
+    """Refuse source assignment inputs lost by canonical migration."""
+    document = ET.fromstring(raw)
+    if not document.tag.startswith("{http://schemas.microsoft.com/project}"):
+        raise CounterfactualError("assignment delay namespace is not MSPDI")
+    ns = "{http://schemas.microsoft.com/project}"
+    found = {}
+    for row in document.findall(f"./{ns}Assignments/{ns}Assignment"):
+        uid = row.findtext(f"{ns}UID")
+        if uid not in assignment_uids:
+            continue
+        if uid in found:
+            raise CounterfactualError("assignment delay UID is duplicated")
+        delay = row.findtext(f"{ns}Delay")
+        leveling = row.findtext(f"{ns}LevelingDelay")
+        if delay != "0" or leveling != "0":
+            raise CounterfactualError("assignment delay must explicitly be zero")
+        found[uid] = {"delay_tenths_minutes": 0, "leveling_delay_tenths_minutes": 0}
+    if set(found) != assignment_uids:
+        raise CounterfactualError("assignment delay input is missing or ambiguous")
+    return found
 
 
 def _assignment_spec(schedule, plan, activity):
@@ -307,15 +332,22 @@ def validate_diagnostic(schedule, plan, early, late, floats, audit) -> list[str]
 
 def pre_result_identity() -> dict[str, str | int]:
     path = Path(__file__).relative_to(ROOT).as_posix()
+    manifest = json.loads(IDENTITY_PATH.read_bytes())
+    if (manifest.get("schema") != "sto-p1-g2-rc01-boiler-counterfactual-pre-result-identity-v3"
+        or manifest.get("supersedes_pre_result_commit") != "236d8988da0f8cd8ed27407ddc31f39eb04dfb7e"
+        or manifest.get("tool_path") != path
+        or manifest.get("status") != "PREDECLARED_NOT_RUN_EXACT_BOILER_REQUIRED"):
+        raise CounterfactualError("pre-result identity manifest differs")
     commit = subprocess.check_output(
         ["git", "log", "-1", "--format=%H", "--", path], cwd=ROOT, text=True,
     ).strip()
-    if len(commit) != 40:
-        raise CounterfactualError("no committed pre-result tool")
+    if len(commit) != 40 or commit != manifest.get("pre_result_commit"):
+        raise CounterfactualError("tool is not the registered pre-result commit")
     committed = subprocess.check_output(["git", "show", f"{commit}:{path}"], cwd=ROOT)
     current_bytes = Path(__file__).read_bytes()
-    if committed != current_bytes:
-        raise CounterfactualError("tool differs from pre-result commit")
+    if (committed != current_bytes or len(committed) != manifest.get("tool_bytes")
+        or digest(committed) != manifest.get("tool_sha256")):
+        raise CounterfactualError("tool differs from registered pre-result identity")
     return {"commit": commit, "tool_path": path,
             "tool_bytes": len(committed), "tool_sha256": digest(committed)}
 
@@ -331,7 +363,19 @@ def build_record(source: Path) -> dict:
     if current.serialize(verified).encode() != CURRENT_PATH.read_bytes():
         raise CounterfactualError("current production does not reproduce pinned 147-slot record")
     schedule = baseline._load(raw)
+    start = schedule.project.start
+    if start is None:
+        raise CounterfactualError("project start is absent")
+    preplan = build_plan(schedule, (start - timedelta(days=90), start + timedelta(days=365)))
+    _, initial_audit = applicability(schedule, preplan)
+    source_delays = verify_assignment_delays(
+        raw, {assignment["assignment_uid"] for row in initial_audit
+              for assignment in row["assignments"]},
+    )
     plan, early, late, floats, result, audit = calculate(schedule, include=ROOTS)
+    for row in audit:
+        for assignment in row["assignments"]:
+            assignment.update(source_delays[assignment["assignment_uid"]])
     source_by_uid = {row.uid: baseline._source_uid(row) for row in schedule.activities}
     candidate = {source_by_uid[uid]: value for uid, value in result.items()}
     observed = baseline._observed(baseline._activities(schedule))
@@ -405,35 +449,33 @@ def build_record(source: Path) -> dict:
 def protected_sources(boiler: Path) -> dict[str, Path]:
     """Every immutable input read by this tool or cited as its preregistration."""
     evidence = ROOT / "docs/evidence"
-    return {
+    protected = {
         "BOILER baseline": boiler,
         "diagnostic tool": Path(__file__),
         "current root evidence": CURRENT_PATH,
         "V2 native evidence": NATIVE_PATH,
         "frozen V2 input": ROOT / "tests/fixtures/P1-G2-RC01-ASSIGNMENT-ENVELOPE-NATIVE-MATRIX-V2.xml",
-        "V2 contract": evidence / "p1-g2-rc01-native-v2-contract-2026-09-28.md",
-        "V2 return receipt": evidence / "p1-g2-rc01-native-v2-return-2026-09-28.md",
-        "predeclared contract": evidence / "p1-g2-rc01-boiler-counterfactual-predeclared-2026-09-28.json",
-        "predeclared explanation": evidence / "p1-g2-rc01-boiler-counterfactual-predeclared-2026-09-28.md",
-        "first pre-result identity": evidence / "p1-g2-rc01-boiler-counterfactual-pre-result-identity-2026-09-28.json",
-        "current pre-result identity": evidence / "p1-g2-rc01-boiler-counterfactual-pre-result-identity-v2-2026-09-28.json",
     }
+    # This command publishes a new candidate, never replaces an existing
+    # append-only record. Includes the transitive historical/RC02 inputs read
+    # by current.build_record and any other evidence already on disk.
+    protected.update({f"evidence:{path.name}": path for path in evidence.iterdir()
+                      if path.is_file()})
+    protected.update({f"production:{path}": ROOT / path
+                      for path in production.PRODUCTION_BASIS_PATHS})
+    return protected
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("boiler", type=Path)
-    parser.add_argument("--output", type=Path)
+    parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     sources = protected_sources(args.boiler)
-    if args.output is not None:
-        current.refuse_output_alias(args.output, sources)
+    current.refuse_output_alias(args.output, sources)
     record = build_record(args.boiler)
     data = json.dumps(record, sort_keys=True, indent=2) + "\n"
-    if args.output is None:
-        print(data, end="")
-    else:
-        current.write_output_safely(args.output, data, sources)
+    current.write_output_safely(args.output, data, sources)
     return 0
 
 

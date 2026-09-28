@@ -32,7 +32,10 @@ class Rc01BoilerPreResultTests(unittest.TestCase):
         self.assertEqual(impact["measured_result"]["sha256"],
                          hashlib.sha256(result_bytes).hexdigest())
         self.assertEqual(impact["measured_result"]["bytes"], len(result_bytes))
-        self.assertEqual(record["pre_result_tool"], cf.pre_result_identity())
+        older = json.loads((ROOT / "docs/evidence/p1-g2-rc01-boiler-counterfactual-pre-result-identity-v2-2026-09-28.json").read_bytes())
+        self.assertEqual(record["pre_result_tool"],
+                         {"commit": older["pre_result_commit"], "tool_path": older["tool_path"],
+                          "tool_bytes": older["tool_bytes"], "tool_sha256": older["tool_sha256"]})
         self.assertEqual(record["source"], {"bytes": cf.BASE_BYTES, "sha256": cf.BASE_SHA})
         before = {tuple(key) for key in record["before"]["keys"]}
         after = {tuple(key) for key in record["after"]["keys"]}
@@ -61,6 +64,50 @@ class Rc01BoilerPreResultTests(unittest.TestCase):
             path.write_bytes(FIXTURE.read_bytes())
             with self.assertRaisesRegex(cf.CounterfactualError, "pinned evidence identity"):
                 cf.pinned(path, cf.BASE_BYTES, cf.BASE_SHA)
+
+    def test_tool_identity_rejects_later_unregistered_commit(self):
+        def forged_git(command, **kwargs):
+            if command[1] == "log":
+                return "0" * 40
+            return Path(cf.__file__).read_bytes()
+        with patch.object(cf.subprocess, "check_output", side_effect=forged_git):
+            with self.assertRaisesRegex(cf.CounterfactualError, "pre-result"):
+                cf.pre_result_identity()
+
+    def test_source_assignment_delays_must_be_explicitly_zero(self):
+        payload = FIXTURE.read_bytes()
+        prefix, assignments = payload.split(b"<Assignments>", 1)
+        def changed(old, new):
+            return prefix + b"<Assignments>" + assignments.replace(old, new, 1)
+        self.assertEqual(len(cf.verify_assignment_delays(payload, {"101"})), 1)
+        with self.assertRaisesRegex(cf.CounterfactualError, "assignment delay"):
+            cf.verify_assignment_delays(changed(b"<Delay>0</Delay>", b"<Delay>10</Delay>"), {"101"})
+        with self.assertRaisesRegex(cf.CounterfactualError, "assignment delay"):
+            cf.verify_assignment_delays(changed(b"<LevelingDelay>0</LevelingDelay>",
+                                                b"<LevelingDelay>10</LevelingDelay>"), {"101"})
+        with self.assertRaisesRegex(cf.CounterfactualError, "assignment delay"):
+            cf.verify_assignment_delays(changed(b"<Delay>0</Delay>", b""), {"101"})
+
+    def test_cli_requires_output_before_reading_any_source(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "immutable.xml"
+            source.write_bytes(b"source")
+            with patch("sys.argv", ["p1_g2_rc01_boiler_counterfactual.py", str(source)]):
+                with self.assertRaises(SystemExit):
+                    cf.main()
+            self.assertEqual(source.read_bytes(), b"source")
+
+    def test_transitive_pinned_sources_are_protected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "boiler.xml"
+            source.write_bytes(b"immutable")
+            for path in (cf.current.HISTORICAL_PATH, cf.current.POST_RC02_PATH,
+                         cf.production.COUNTERFACTUAL_RESULT):
+                before = path.read_bytes()
+                with self.subTest(source=path.name):
+                    with self.assertRaisesRegex(ValueError, "aliases"):
+                        cf.current.refuse_output_alias(path, cf.protected_sources(source))
+                    self.assertEqual(path.read_bytes(), before)
 
     def test_v2_assignment_envelopes_controls_and_backward_inverse(self):
         schedule = fixture()
