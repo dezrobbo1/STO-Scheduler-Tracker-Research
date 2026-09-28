@@ -10,6 +10,7 @@ from pathlib import Path
 import tempfile
 import unittest
 from unittest import mock
+from xml.etree import ElementTree as ET
 
 from scripts.evidence import p1_g2_post_rc02_review as safe
 from scripts.evidence import p1_g2_rc03_production_verification as verification
@@ -18,6 +19,7 @@ from scripts.evidence import p1_g2_rc02_boiler_counterfactual as keys
 from sto.core.engine.plan import build_plan
 from sto.core.model.entities import Duration
 from sto.core.model.enums import RelationshipType
+from sto.legacy import MSPDI_NAMESPACE
 
 
 RESULT = (Path(__file__).resolve().parents[1] / "docs/evidence" /
@@ -156,6 +158,8 @@ class Rc03ProductionEvidenceTests(unittest.TestCase):
             replace(assignment, source_fields={**assignment.source_fields,
                                                "units_lexeme_source": "1.00001"}),
             replace(assignment, source_fields={**assignment.source_fields,
+                "units_lexeme_source": "1.00000000000000000000000000001"}),
+            replace(assignment, source_fields={**assignment.source_fields,
                                                "work_contour_source": "1"}),
             replace(assignment, source_fields={**assignment.source_fields,
                                                "percent_work_complete_source": "1"}),
@@ -178,6 +182,7 @@ class Rc03ProductionEvidenceTests(unittest.TestCase):
                     changed if row.uid == assignment.uid else row
                     for row in schedule.assignments))
                 self.assertEqual(basis(amended), "working")
+
         for marker in (
             "delay_ambiguous_source", "leveling_delay_ambiguous_source",
             "units_ambiguous_source", "work_ambiguous_source",
@@ -203,6 +208,59 @@ class Rc03ProductionEvidenceTests(unittest.TestCase):
                     for row in schedule.relationships))
                 self.assertEqual(basis(amended), "working")
 
+
+    def test_xml_import_does_not_promote_unmeasured_source_fields(self):
+        path = os.environ.get("STO_RC03_PRODUCTION_BOILER")
+        if not path:
+            if os.environ.get("STO_REQUIRE_RC03_PRODUCTION") == "1":
+                self.fail("STO_RC03_PRODUCTION_BOILER required for source guard test")
+            self.skipTest("external BOILER baseline not supplied")
+        original = Path(path).read_bytes()
+        schedule = baseline._load(original)
+        root_uid = keys._leaf_maps(schedule)[1]["L0407"]
+        root_task = next(row for row in schedule.activities if row.uid == root_uid)
+        assignment = next(row for row in schedule.assignments
+                          if row.activity_uid == root_uid)
+        resource = next(row for row in schedule.resources
+                        if row.uid == assignment.resource_uid)
+        task_code = baseline._source_uid(root_task)
+        assignment_code = baseline._source_uid(assignment)
+        resource_code = baseline._source_uid(resource)
+        ns = f"{{{MSPDI_NAMESPACE}}}"
+
+        def source_node(tree, group, kind, code):
+            return next(row for row in tree.findall(f"{ns}{group}/{ns}{kind}")
+                        if row.findtext(f"{ns}UID") == code)
+
+        for label, group, kind, code, field, value in (
+            ("effort driven", "Tasks", "Task", task_code, "EffortDriven", "1"),
+            ("task leveling", "Tasks", "Task", task_code, "LevelingDelay", "60"),
+            ("generic resource", "Resources", "Resource", resource_code, "IsGeneric", "1"),
+            ("unreadable actual work", "Tasks", "Task", task_code, "ActualWork", "P1M"),
+            ("unreadable actual duration", "Tasks", "Task", task_code, "ActualDuration", "P1M"),
+            ("unreadable remaining work", "Tasks", "Task", task_code, "RemainingWork", "P1M"),
+            ("rounded source units", "Assignments", "Assignment", assignment_code,
+             "Units", "1.00000000000000000000000000001"),
+            ("changed timephased work", "Assignments", "Assignment",
+             assignment_code, "TimephasedData/Value", "PT23H0M0S"),
+        ):
+            with self.subTest(source=label):
+                tree = ET.fromstring(original)
+                node = source_node(tree, group, kind, code)
+                target = node.find("/".join(f"{ns}{part}"
+                                            for part in field.split("/")))
+                self.assertIsNotNone(target)
+                target.text = value
+                changed = baseline._load(ET.tostring(tree, encoding="utf-8"))
+                task = next(row for row in changed.activities
+                            if baseline._source_uid(row) == task_code)
+                start = changed.project.start
+                plan = build_plan(changed, (start - timedelta(days=90),
+                                            start + timedelta(days=365)))
+                planned = plan.network.activity_by_uid().get(task.uid)
+                self.assertEqual(planned.float_basis if planned else "excluded",
+                                 "working")
+        self.assertEqual(Path(path).read_bytes(), original)
 
 if __name__ == "__main__":
     unittest.main()

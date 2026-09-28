@@ -14,7 +14,7 @@ than a guess.
 
 from __future__ import annotations
 
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 from math import isfinite
 from typing import Any
 from uuid import UUID
@@ -786,6 +786,17 @@ def migrate(
             fields.update(_unsupported_fields(name, _duration(row.get(key))))
         if row.get("work_ambiguous_source"):
             fields["work_ambiguous_source"] = "1"
+        # These MSPDI task fields are preserved as vendor extensions, rather
+        # than populated in Activity.effort_driven / levelling_delay_seconds.
+        # Keep the source values available for the bounded elapsed-float rule.
+        for name, key in (("EffortDriven", "effort_driven_source"),
+                          ("LevelingDelay", "task_leveling_delay_source")):
+            values = [extension_by_id[ref].get("payload", {}).get("text")
+                      for ref in row.get("extension_refs", ())
+                      if ref in extension_by_id
+                      and extension_by_id[ref].get("payload", {}).get("name") == name]
+            if len(values) == 1 and values[0] is not None:
+                fields[key] = str(values[0]).strip()
         if row.get("is_null_source"):
             # A null placeholder row is a gap Project keeps in its task list,
             # not work. Dropping the flag made it look like an ordinary task.
@@ -926,7 +937,11 @@ def migrate(
         resources.append(
             Resource(
                 uid=uid,
-                source_fields=_unresolved_calendar_fields(calendar_ref),
+                source_fields={
+                    **_unresolved_calendar_fields(calendar_ref),
+                    **({"generic_resource_source": "1" if row["generic_source"] else "0"}
+                       if row.get("generic_source") is not None else {}),
+                },
                 name=row.get("name") or "",
                 code=row.get("initials"),
                 type=resource_type,
@@ -942,6 +957,40 @@ def migrate(
         )
 
     assignments: list[Assignment] = []
+
+    def _measured_timephased_work(row: dict[str, Any]) -> bool:
+        """Recognize only the four consecutive 24-hour work rows of the RC03 roots.
+
+        A bare TimephasedData presence flag would exclude the measured roots,
+        which themselves carry four work rows. Unknown shapes get no marker.
+        """
+
+        phases = [extension_by_id[ref].get("payload", {})
+                  for ref in row.get("extension_refs", ())
+                  if ref in extension_by_id
+                  and extension_by_id[ref].get("payload", {}).get("name") == "TimephasedData"]
+        if len(phases) != 4:
+            return False
+        spans: list[tuple[datetime, datetime]] = []
+        for phase in phases:
+            children = phase.get("children", ())
+            values = {child.get("name"): child.get("text") for child in children}
+            if (len(children) != 6 or len(values) != 6
+                or set(values) != {"UID", "Type", "Start", "Finish", "Unit", "Value"}
+                or values["Type"] != "1" or values["Unit"] != "1"
+                or values["Value"] != "PT24H0M0S"):
+                return False
+            try:
+                begin, end = _dt(values["Start"]), _dt(values["Finish"])
+            except MigrationError:
+                return False
+            if begin is None or end is None or end - begin != timedelta(hours=24):
+                return False
+            spans.append((begin, end))
+        return (all(left[1] == right[0] for left, right in zip(spans, spans[1:]))
+                and spans[0][0] == _dt(row.get("start_source"))
+                and spans[-1][1] == _dt(row.get("finish_source")))
+
     for row in document.get("assignments", []):
         uid = uid_for(EntityKind.ASSIGNMENT, row)
         task_ref = row.get("task_ref")
@@ -980,6 +1029,8 @@ def migrate(
             # itself distinguish an explicit source zero from an absent value.
             # The native late-date evidence boundary needs that distinction.
             assignment_fields["actual_work_source_present"] = "1"
+        if _measured_timephased_work(row):
+            assignment_fields["timephased_work_shape_source"] = "four-contiguous-24h"
         assignments.append(
             Assignment(
                 uid=uid,

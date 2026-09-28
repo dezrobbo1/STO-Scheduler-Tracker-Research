@@ -1379,7 +1379,7 @@ def build_plan(
             lexeme = (assignment.source_fields.get("units_lexeme_source")
                       if assignment is not None else None)
             try:
-                exact_units = Decimal(lexeme) * 1000 if lexeme is not None else None
+                exact_units = Decimal(lexeme) if lexeme is not None else None
             except InvalidOperation:
                 exact_units = None
             incoming = raw_incoming.get(activity.uid, ())
@@ -1396,6 +1396,14 @@ def build_plan(
                 or activity.suspend is not None or activity.resume is not None
                 or activity.source_fields.get("work_unsupported_source") is not None
                 or activity.source_fields.get("work_ambiguous_source") is not None
+                or any(activity.source_fields.get(field) is not None for field in (
+                    "actual_work_unsupported_source", "actual_duration_unsupported_source",
+                    "remaining_work_unsupported_source",
+                ))
+                or (activity.actual_duration is not None
+                    and activity.actual_duration.seconds != 0)
+                or activity.source_fields.get("effort_driven_source") != "0"
+                or activity.source_fields.get("task_leveling_delay_source") != "0"
                 or activity.primary_constraint is not None or activity.secondary_constraint is not None
                 or activity.levelling_delay_seconds != 0
                 or activity.source_fields.get("ignore_resource_calendar_source") not in (None, "0")
@@ -1411,16 +1419,20 @@ def build_plan(
                 or assignment.timephased_ref is not None
                 or resources[assignment.resource_uid].inactive
                 or resources[assignment.resource_uid].is_role
+                or resources[assignment.resource_uid].source_fields.get(
+                    "generic_resource_source") != "0"
                 or resources[assignment.resource_uid].calendar_uid not in calendars
                 or calendars[resources[assignment.resource_uid].calendar_uid].intervals.intervals
                    != (window,)
                 or assignment.units.budgeted_permille != 1000
                 or exact_units is None or not exact_units.is_finite()
-                or exact_units != assignment.units.budgeted_permille
+                or exact_units != 1
                 or assignment.work.budgeted_seconds != planned.seconds
                 or assignment.work.remaining_seconds != planned.seconds
                 or assignment.work.actual_seconds != 0
                 or assignment.source_fields.get("actual_work_source_present") != "1"
+                or assignment.source_fields.get("timephased_work_shape_source")
+                   != "four-contiguous-24h"
                 or any(assignment.source_fields.get(field) is not None for field in (
                     "delay_ambiguous_source", "leveling_delay_ambiguous_source",
                     "units_ambiguous_source", "work_ambiguous_source",
