@@ -1,7 +1,7 @@
 {
   "schema_version": "sto-roadmap-1",
   "note": "Time-varying truth: phases, slices, gate criteria and the rule registry. AGENTS.md holds the durable rules; docs/roadmap/CONSOLIDATION-PLAN.md is the frozen design record and does not describe current status. The generated regions of docs/goals/ACTIVE.md come from here - run `sto roadmap render` after editing. Slice days are a positive planning estimate, or null with an effort_note explaining why and when to estimate; null never means zero effort.",
-  "current_phase": "P1",
+  "current_phase": "P2",
   "foreign_prefixes": [
     "dezrobbo1/",
     "~/"
@@ -174,8 +174,8 @@
           "met": true,
           "evidence": "docs/evidence/p1-g2-rc03-elapsed-float-production-2026-09-28.md",
           "evidence_conditional": {
-            "env": "STO_REQUIRE_CONTROLLED_NATIVE_REPEAT",
-            "why": "the exact controlled BOILER baseline and UID227 Microsoft Project return live outside the repository; the required-mode 4,140-field classifier measures zero unresolved fields, with 43 native-changed fields reconciled and a clean validator"
+            "env": "STO_REQUIRE_RC03_PRODUCTION",
+            "why": "the exact controlled BOILER baseline and UID227 Microsoft Project return live outside the repository; STO_REQUIRE_RC03_PRODUCTION=1 with STO_RC03_PRODUCTION_BOILER and STO_RC03_CONTROLLED_NATIVE makes G2's verifier mandatory, while G3 separately requires STO_REQUIRE_CONTROLLED_NATIVE_REPEAT=1; the required-mode 4,140-field classifier measures zero unresolved fields, with 43 native-changed fields reconciled and a clean validator"
           }
         },
         {

@@ -1376,10 +1376,9 @@ def build_plan(
             planned, remaining = activity.planned_duration, activity.remaining_duration
             rows = assignment_rows_by_activity.get(activity.uid, [])
             assignment = rows[0] if len(rows) == 1 else None
-            raw_edges = [row for row in schedule.relationships if activity.uid in
-                         (row.predecessor_uid, row.successor_uid)]
-            incoming = [row for row in raw_edges if row.successor_uid == activity.uid]
-            outgoing = [row for row in raw_edges if row.predecessor_uid == activity.uid]
+            incoming = raw_incoming.get(activity.uid, ())
+            outgoing = raw_outgoing.get(activity.uid, ())
+            raw_edges = [*incoming, *outgoing]
             if (activity.kind is not ActivityKind.TASK or not activity.active or activity.manual
                 or planned is None or remaining is None
                 or not planned.elapsed or not remaining.elapsed
@@ -1405,6 +1404,15 @@ def build_plan(
                 or assignment.work.budgeted_seconds != planned.seconds
                 or assignment.work.remaining_seconds != planned.seconds
                 or assignment.work.actual_seconds != 0
+                or assignment.source_fields.get("actual_work_source_present") != "1"
+                or any(assignment.source_fields.get(field) is not None for field in (
+                    "delay_ambiguous_source", "leveling_delay_ambiguous_source",
+                    "units_ambiguous_source", "work_ambiguous_source",
+                    "remaining_work_ambiguous_source", "actual_work_ambiguous_source",
+                    "percent_work_complete_ambiguous_source", "work_contour_ambiguous_source",
+                    "work_unsupported_source", "remaining_work_unsupported_source",
+                    "actual_work_unsupported_source",
+                ))
                 or assignment.percent_work_complete_permille != 0
                 or assignment.source_fields.get("delay_tenths_minutes_source") != "0"
                 or assignment.source_fields.get("leveling_delay_tenths_minutes_source") != "0"

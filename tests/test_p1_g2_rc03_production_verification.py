@@ -153,6 +153,9 @@ class Rc03ProductionEvidenceTests(unittest.TestCase):
                 self.assertNotEqual(basis(amended), "elapsed")
         for changed in (
             replace(assignment, units=replace(assignment.units, budgeted_permille=2000)),
+            replace(assignment, source_fields={key: value
+                for key, value in assignment.source_fields.items()
+                if key != "actual_work_source_present"}),
             replace(assignment, source_fields={**assignment.source_fields,
                                                "delay_tenths_minutes_source": "10"}),
             replace(assignment, source_fields={**assignment.source_fields,
@@ -160,6 +163,21 @@ class Rc03ProductionEvidenceTests(unittest.TestCase):
         ):
             with self.subTest(assignment_units=changed.units.budgeted_permille,
                               source_fields=changed.source_fields):
+                amended = replace(schedule, assignments=tuple(
+                    changed if row.uid == assignment.uid else row
+                    for row in schedule.assignments))
+                self.assertEqual(basis(amended), "working")
+        for marker in (
+            "delay_ambiguous_source", "leveling_delay_ambiguous_source",
+            "units_ambiguous_source", "work_ambiguous_source",
+            "remaining_work_ambiguous_source", "actual_work_ambiguous_source",
+            "percent_work_complete_ambiguous_source", "work_contour_ambiguous_source",
+            "work_unsupported_source", "remaining_work_unsupported_source",
+            "actual_work_unsupported_source",
+        ):
+            with self.subTest(marker=marker):
+                changed = replace(assignment, source_fields={
+                    **assignment.source_fields, marker: "1"})
                 amended = replace(schedule, assignments=tuple(
                     changed if row.uid == assignment.uid else row
                     for row in schedule.assignments))
