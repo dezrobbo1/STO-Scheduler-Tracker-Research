@@ -1,0 +1,253 @@
+"""Synthetic pre-result checks for the RC01 diagnostic; no BOILER oracle."""
+from __future__ import annotations
+
+from dataclasses import replace
+from datetime import datetime
+from pathlib import Path
+import hashlib
+import json
+import os
+import tempfile
+import unittest
+from unittest.mock import patch
+
+from scripts.evidence import p1_g2_baseline_diagnostics as baseline
+from scripts.evidence import p1_g2_rc01_boiler_counterfactual as cf
+
+ROOT = Path(__file__).resolve().parents[1]
+FIXTURE = ROOT / "tests/fixtures/P1-G2-RC01-ASSIGNMENT-ENVELOPE-NATIVE-MATRIX-V2.xml"
+
+
+def fixture():
+    return baseline._load(FIXTURE.read_bytes())
+
+
+class Rc01BoilerPreResultTests(unittest.TestCase):
+    def test_published_boiler_result_obeys_predeclared_native_boundary(self):
+        result_path = ROOT / "docs/evidence/p1-g2-rc01-boiler-counterfactual-2026-09-28.json"
+        impact_path = ROOT / "docs/evidence/p1-g2-rc01-boiler-counterfactual-impact-2026-09-28.json"
+        result_bytes = result_path.read_bytes()
+        record = json.loads(result_bytes)
+        impact = json.loads(impact_path.read_bytes())
+        self.assertEqual(impact["measured_result"]["sha256"],
+                         hashlib.sha256(result_bytes).hexdigest())
+        self.assertEqual(impact["measured_result"]["bytes"], len(result_bytes))
+        older = json.loads((ROOT / "docs/evidence/p1-g2-rc01-boiler-counterfactual-pre-result-identity-v2-2026-09-28.json").read_bytes())
+        self.assertEqual(record["pre_result_tool"],
+                         {"commit": older["pre_result_commit"], "tool_path": older["tool_path"],
+                          "tool_bytes": older["tool_bytes"], "tool_sha256": older["tool_sha256"]})
+        self.assertEqual(record["source"], {"bytes": cf.BASE_BYTES, "sha256": cf.BASE_SHA})
+        before = {tuple(key) for key in record["before"]["keys"]}
+        after = {tuple(key) for key in record["after"]["keys"]}
+        self.assertEqual(len(before), 147)
+        self.assertEqual(len(after), 3)
+        self.assertEqual(impact["by_current_group"]["G2-RC01"]["closed"], 144)
+        self.assertEqual(impact["by_current_group"]["G2-RC03"]["after"], 3)
+        self.assertEqual(len(after - before), 0)
+        self.assertEqual(sum(row["closed"] for row in impact["by_field"].values()),
+                         len(before - after))
+        self.assertEqual({row["leaf_id"] for row in record["applicability"]}, cf.ROOTS)
+        self.assertTrue(all(row["diagnostic_eligible"] for row in record["applicability"]))
+        self.assertTrue(all(row["classification"] == "DIAGNOSTIC_EXTRAPOLATION_REQUIRED"
+                            for row in record["applicability"]))
+        self.assertEqual(record["decision"]["classification"],
+                         "RC01_ASSIGNMENT_ENVELOPE_BOILER_COUNTERFACTUAL_OUTSIDE_NATIVE_BOUNDARY")
+        self.assertFalse(record["decision"]["production_rc01_correction_authorized"])
+
+    def test_reviewed_v3_is_append_only_and_does_not_authorize_production(self):
+        old = json.loads((ROOT / "docs/evidence/p1-g2-rc01-boiler-counterfactual-2026-09-28.json").read_bytes())
+        path = ROOT / "docs/evidence/p1-g2-rc01-boiler-counterfactual-reviewed-v3-2026-09-28.json"
+        raw = path.read_bytes()
+        self.assertEqual(hashlib.sha256(raw).hexdigest(),
+                         "4a7b32e7050b8eb61860d08cc26e544e01e924f4096576ea67009c04c318b248")
+        current = json.loads(raw)
+        registered = json.loads((ROOT / "docs/evidence/p1-g2-rc01-boiler-counterfactual-pre-result-identity-v3-2026-09-28.json").read_bytes())
+        self.assertEqual(current["pre_result_tool"],
+                         {"commit": registered["pre_result_commit"],
+                          "tool_path": registered["tool_path"],
+                          "tool_bytes": registered["tool_bytes"],
+                          "tool_sha256": registered["tool_sha256"]})
+        tool_bytes = Path(cf.__file__).read_bytes()
+        self.assertEqual(len(tool_bytes), registered["tool_bytes"])
+        self.assertEqual(hashlib.sha256(tool_bytes).hexdigest(), registered["tool_sha256"])
+        self.assertEqual(current["source"], old["source"])
+        for field in ("before", "after", "movement", "decision", "validator"):
+            self.assertEqual(current[field], old[field])
+        self.assertEqual(len(current["applicability"]), 10)
+        self.assertEqual(sum(len(row["assignments"]) for row in current["applicability"]), 20)
+        for row in current["applicability"]:
+            self.assertEqual(row["classification"], "DIAGNOSTIC_EXTRAPOLATION_REQUIRED")
+            for assignment in row["assignments"]:
+                self.assertEqual(assignment["delay_tenths_minutes"], 0)
+                self.assertEqual(assignment["leveling_delay_tenths_minutes"], 0)
+        self.assertFalse(current["decision"]["production_rc01_correction_authorized"])
+
+    def test_predeclared_evidence_identities_and_exact_baseline_refusal(self):
+        inventory, v2 = cf.load_contract()
+        self.assertEqual(len(inventory["current_recomputation"]["mismatches"]), 147)
+        self.assertEqual(v2["classification"]["verdict"],
+                         "V2_ASSIGNMENT_ENVELOPE_SUPPORTED")
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "wrong-boiler.xml"
+            path.write_bytes(FIXTURE.read_bytes())
+            with self.assertRaisesRegex(cf.CounterfactualError, "pinned evidence identity"):
+                cf.pinned(path, cf.BASE_BYTES, cf.BASE_SHA)
+
+    def test_tool_identity_rejects_later_unregistered_commit(self):
+        def forged_git(command, **kwargs):
+            if command[1] == "log":
+                return "0" * 40
+            return Path(cf.__file__).read_bytes()
+        with patch.object(cf.subprocess, "check_output", side_effect=forged_git):
+            with self.assertRaisesRegex(cf.CounterfactualError, "pre-result"):
+                cf.pre_result_identity()
+
+    def test_source_assignment_delays_must_be_explicitly_zero(self):
+        payload = FIXTURE.read_bytes()
+        prefix, assignments = payload.split(b"<Assignments>", 1)
+        def changed(old, new):
+            return prefix + b"<Assignments>" + assignments.replace(old, new, 1)
+        self.assertEqual(len(cf.verify_assignment_delays(payload, {"101"})), 1)
+        with self.assertRaisesRegex(cf.CounterfactualError, "assignment delay"):
+            cf.verify_assignment_delays(changed(b"<Delay>0</Delay>", b"<Delay>10</Delay>"), {"101"})
+        with self.assertRaisesRegex(cf.CounterfactualError, "assignment delay"):
+            cf.verify_assignment_delays(changed(b"<LevelingDelay>0</LevelingDelay>",
+                                                b"<LevelingDelay>10</LevelingDelay>"), {"101"})
+        with self.assertRaisesRegex(cf.CounterfactualError, "assignment delay"):
+            cf.verify_assignment_delays(changed(b"<Delay>0</Delay>", b""), {"101"})
+
+    def test_cli_requires_output_before_reading_any_source(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "immutable.xml"
+            source.write_bytes(b"source")
+            with patch("sys.argv", ["p1_g2_rc01_boiler_counterfactual.py", str(source)]):
+                with self.assertRaises(SystemExit):
+                    cf.main()
+            self.assertEqual(source.read_bytes(), b"source")
+
+    def test_transitive_pinned_sources_are_protected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "boiler.xml"
+            source.write_bytes(b"immutable")
+            for path in (cf.current.HISTORICAL_PATH, cf.current.POST_RC02_PATH,
+                         cf.production.COUNTERFACTUAL_RESULT):
+                before = path.read_bytes()
+                with self.subTest(source=path.name):
+                    with self.assertRaisesRegex(ValueError, "aliases"):
+                        cf.current.refuse_output_alias(path, cf.protected_sources(source))
+                    self.assertEqual(path.read_bytes(), before)
+
+    def test_v2_assignment_envelopes_controls_and_backward_inverse(self):
+        schedule = fixture()
+        plan, early, late, floats, rows, audit = cf.calculate(schedule)
+        expected = {
+            "RC01-CASE-A": (8, 17), "RC01-CASE-B": (8, 17),
+            "RC01-CASE-C": (8, 12), "RC01-CASE-D": (8, 12),
+        }
+        for activity in schedule.activities:
+            with self.subTest(case=activity.name):
+                start, finish, _, _, late_start, late_finish, *_ = rows[activity.uid]
+                self.assertEqual((start.hour, finish.hour), expected[activity.name])
+                self.assertEqual((late_start.hour, late_finish.hour), expected[activity.name])
+        self.assertEqual(cf.validate_diagnostic(schedule, plan, early, late, floats, audit), [])
+        self.assertEqual([a["classification"] for a in audit],
+                         ["WITHIN_V2_COUNTERFACTUAL_BOUNDARY"] * 4)
+        self.assertFalse(audit[-1]["diagnostic_eligible"])
+
+    def test_reversed_declaration_order_does_not_move_envelope(self):
+        schedule = fixture()
+        initial = cf.calculate(schedule)[4]
+        swapped = replace(schedule, assignments=tuple(reversed(schedule.assignments)))
+        changed = cf.calculate(swapped)[4]
+        self.assertEqual(initial, changed)
+
+    def test_oracle_task_and_assignment_dates_are_not_candidate_inputs(self):
+        schedule = fixture()
+        initial = cf.calculate(schedule)[4]
+        future = datetime(2035, 1, 1, 7)
+        activities = tuple(replace(a, source_observations=replace(
+            a.source_observations, early_start=future, late_finish=future,
+            start=future, finish=future)) for a in schedule.activities)
+        assignments = tuple(replace(a, start=future, finish=None)
+                            for a in schedule.assignments)
+        changed = cf.calculate(replace(schedule, activities=activities,
+                                       assignments=assignments))[4]
+        self.assertEqual(initial, changed)
+
+    def test_no_eligible_multiresource_is_coordinate_equivalent_to_production(self):
+        schedule = fixture()
+        d = next(a for a in schedule.activities if a.name == "RC01-CASE-D")
+        only = replace(schedule, activities=(d,),
+                       assignments=tuple(a for a in schedule.assignments if a.activity_uid == d.uid))
+        production = baseline._calculate(only)
+        candidate = cf.calculate(only)
+        self.assertEqual(candidate[4], production.result)
+        self.assertEqual(candidate[1].fingerprint, production.forward.fingerprint)
+        self.assertEqual(candidate[2].fingerprint, production.backward.fingerprint)
+
+    def test_unsupported_work_units_and_task_type_fail_closed(self):
+        schedule = fixture()
+        first = schedule.assignments[0]
+        for changed in (
+            replace(first, units=replace(first.units, budgeted_permille=0)),
+            replace(first, work=replace(first.work, budgeted_seconds=1,
+                                        remaining_seconds=1),
+                    units=replace(first.units, budgeted_permille=300)),
+        ):
+            with self.subTest(assignment=changed):
+                altered = replace(schedule, assignments=(changed,) + schedule.assignments[1:])
+                _, _, _, _, _, audit = cf.calculate(altered)
+                self.assertFalse(audit[0]["diagnostic_eligible"])
+                self.assertEqual(audit[0]["classification"],
+                                 "DIAGNOSTIC_EXTRAPOLATION_REQUIRED")
+        from sto.core.model.enums import DurationType
+        changed_task = replace(schedule.activities[0], duration_type=DurationType.FIXED_DURATION)
+        altered = replace(schedule, activities=(changed_task,) + schedule.activities[1:])
+        self.assertFalse(cf.calculate(altered)[5][0]["diagnostic_eligible"])
+
+    def test_wrapper_restores_production_passes_even_when_it_refuses(self):
+        original_forward, original_backward = cf.forward._place, cf.backward._place
+        with self.assertRaisesRegex(cf.CounterfactualError, "unmeasured envelope rule"):
+            with cf._placement({}):
+                self.assertIsNot(cf.forward._place, original_forward)
+                raise cf.CounterfactualError("unmeasured envelope rule")
+        self.assertIs(cf.forward._place, original_forward)
+        self.assertIs(cf.backward._place, original_backward)
+
+    def test_cli_rejects_source_output_alias_without_writing(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "boiler.xml"
+            source.write_bytes(b"immutable BOILER copy")
+            before = source.read_bytes()
+            symlink = source.with_name("linked.xml")
+            symlink.symlink_to(source)
+            hardlink = source.with_name("hardlinked.xml")
+            os.link(source, hardlink)
+            protected = (cf.CURRENT_PATH, cf.NATIVE_PATH, FIXTURE, Path(cf.__file__),
+                         ROOT / "docs/evidence/p1-g2-rc01-boiler-counterfactual-predeclared-2026-09-28.json")
+            unchanged = {path: path.read_bytes() for path in protected}
+            for output in (source, source.parent / ".." / source.parent.name / source.name,
+                           symlink, hardlink, *protected):
+                with self.subTest(output=output):
+                    with patch("sys.argv", ["p1_g2_rc01_boiler_counterfactual.py",
+                                            str(source), "--output", str(output)]):
+                        with self.assertRaisesRegex(ValueError, "aliases"):
+                            cf.main()
+            self.assertEqual(source.read_bytes(), before)
+            for path, content in unchanged.items():
+                self.assertEqual(path.read_bytes(), content)
+
+    def test_separate_candidate_replaced_atomically_and_source_unchanged(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "source.xml"
+            source.write_bytes(b"immutable")
+            candidate = root / "candidate.json"
+            candidate.write_text("old")
+            cf.current.write_output_safely(candidate, "new\n", {"BOILER baseline": source})
+            self.assertEqual(candidate.read_bytes(), b"new\n")
+            self.assertEqual(source.read_bytes(), b"immutable")
+
+
+if __name__ == "__main__":
+    unittest.main()

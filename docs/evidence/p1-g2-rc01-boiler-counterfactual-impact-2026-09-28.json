@@ -1,0 +1,179 @@
+{
+  "by_current_group": {
+    "G2-RC01": {
+      "after": 0,
+      "before": 144,
+      "closed": 144,
+      "new": 0
+    },
+    "G2-RC03": {
+      "after": 3,
+      "before": 3,
+      "closed": 0,
+      "new": 0
+    }
+  },
+  "by_field": {
+    "critical": {
+      "after": 0,
+      "before": 2,
+      "closed": 2,
+      "new": 0
+    },
+    "early_finish": {
+      "after": 0,
+      "before": 27,
+      "closed": 27,
+      "new": 0
+    },
+    "early_start": {
+      "after": 0,
+      "before": 21,
+      "closed": 21,
+      "new": 0
+    },
+    "finish": {
+      "after": 0,
+      "before": 27,
+      "closed": 27,
+      "new": 0
+    },
+    "free_float": {
+      "after": 1,
+      "before": 7,
+      "closed": 6,
+      "new": 0
+    },
+    "late_finish": {
+      "after": 0,
+      "before": 6,
+      "closed": 6,
+      "new": 0
+    },
+    "late_start": {
+      "after": 0,
+      "before": 15,
+      "closed": 15,
+      "new": 0
+    },
+    "start": {
+      "after": 0,
+      "before": 21,
+      "closed": 21,
+      "new": 0
+    },
+    "total_float": {
+      "after": 2,
+      "before": 21,
+      "closed": 19,
+      "new": 0
+    }
+  },
+  "current_first_divergences_closed": 22,
+  "current_root_movement": {
+    "L0070": {
+      "after_slots": 0,
+      "before_slots": 4,
+      "closed_slots": 4,
+      "first_divergence_closed": 3
+    },
+    "L0075": {
+      "after_slots": 0,
+      "before_slots": 4,
+      "closed_slots": 4,
+      "first_divergence_closed": 3
+    },
+    "L0080": {
+      "after_slots": 0,
+      "before_slots": 6,
+      "closed_slots": 6,
+      "first_divergence_closed": 1
+    },
+    "L0083": {
+      "after_slots": 0,
+      "before_slots": 3,
+      "closed_slots": 3,
+      "first_divergence_closed": 3
+    },
+    "L0084": {
+      "after_slots": 0,
+      "before_slots": 5,
+      "closed_slots": 5,
+      "first_divergence_closed": 3
+    },
+    "L0114": {
+      "after_slots": 0,
+      "before_slots": 5,
+      "closed_slots": 5,
+      "first_divergence_closed": 3
+    },
+    "L0127": {
+      "after_slots": 0,
+      "before_slots": 2,
+      "closed_slots": 2,
+      "first_divergence_closed": 1
+    },
+    "L0148": {
+      "after_slots": 0,
+      "before_slots": 3,
+      "closed_slots": 3,
+      "first_divergence_closed": 1
+    },
+    "L0157": {
+      "after_slots": 0,
+      "before_slots": 1,
+      "closed_slots": 1,
+      "first_divergence_closed": 1
+    },
+    "L0190": {
+      "after_slots": 0,
+      "before_slots": 3,
+      "closed_slots": 3,
+      "first_divergence_closed": 3
+    }
+  },
+  "decision": {
+    "classification": "RC01_ASSIGNMENT_ENVELOPE_BOILER_COUNTERFACTUAL_OUTSIDE_NATIVE_BOUNDARY",
+    "production_rc01_correction_authorized": false
+  },
+  "measured_result": {
+    "bytes": 24210,
+    "path": "docs/evidence/p1-g2-rc01-boiler-counterfactual-2026-09-28.json",
+    "sha256": "30be4ebaac5aa6a6e43aa8d4fa08a90fd531bc506d6b068463a3bbcf4052675e"
+  },
+  "other_fixtures": {
+    "CALCINER": {
+      "counterfactual_status": "FAIL_CLOSED",
+      "multi_resource_diagnostic_eligible": 946,
+      "native_boundary_activation": false,
+      "refusal": "CounterfactualError: finish-side lower bound needs an unmeasured envelope rule",
+      "scheduled_leaf_count": 1763,
+      "source": {
+        "bytes": 14280544,
+        "sha256": "e952764512ae718e2701c0c79435025b07a5b09124fee4d51b385e92367ed18d"
+      },
+      "within_v2_native_boundary": 0
+    },
+    "KILN": {
+      "after_slots": 2046,
+      "before_slots": 2046,
+      "closed": 0,
+      "counterfactual_status": "CALCULATED",
+      "improved": 0,
+      "multi_resource_diagnostic_eligible": 133,
+      "native_boundary_activation": false,
+      "new": 0,
+      "new_keys": [],
+      "scheduled_leaf_count": 416,
+      "source": {
+        "bytes": 3474383,
+        "sha256": "b7c14b631ecc7c15db7731e4a5159ecefe68aaa1c10e76262f84db6b8c37d3ca"
+      },
+      "validator_violations": [],
+      "within_v2_native_boundary": 0,
+      "worsened": 0,
+      "worsened_keys": []
+    }
+  },
+  "schema": "sto-p1-g2-rc01-boiler-counterfactual-impact-v1"
+}

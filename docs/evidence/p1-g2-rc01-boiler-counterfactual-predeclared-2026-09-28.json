@@ -1,0 +1,28 @@
+{
+  "schema": "sto-p1-g2-rc01-boiler-counterfactual-predeclared-v1",
+  "status": "NOT_RUN_EXACT_BOILER_REQUIRED",
+  "profile": "sto-diagnostic-p1-g2-rc01-assignment-envelope-v1",
+  "production_main": "60313811d6867c28e71cb22bccfd3cc0c8f1618d",
+  "input_boiler": {
+    "bytes": 3361935,
+    "sha256": "e9b9b7994cc5cc50479807b82c452da742a91de9f7de52b172a6be6f4f399c70"
+  },
+  "current_root_evidence_sha256": "9a3ef68637b6e213188400f05fdca9bd216eebfbafa100f10f817623f5b8f3d3",
+  "v2_native_evidence_sha256": "71702adb09f08014c8ce14bed7651162bff65787f8d4d4945bb2383710ca6a6c",
+  "v2_native_return_sha256": "674b2a70649991ac6b9624ced1d16ca88a5287fed35da08486a59986360d513e",
+  "tool": "scripts/evidence/p1_g2_rc01_boiler_counterfactual.py",
+  "candidate": "replace eligible multi-resource task placement with independently calculated assignment spans on each resource calendar, forming the task envelope in both forward and backward passes; use unchanged production bounds, topology, progress and float machinery",
+  "applicability_audit": "NOT_RUN_EXACT_BOILER_REQUIRED",
+  "before": {"slots": 147, "leaves": 39, "rc01": 144, "rc03": 3, "rc02": 0, "rc04": 0},
+  "actual_after": null,
+  "classification": "NOT_RUN_EXACT_BOILER_REQUIRED",
+  "production_rc01_correction_authorized": false,
+  "p1_g2_met": false,
+  "stopping_rule": {
+    "supported": "exact current record reproduces; all ten roots accounted for and within V2 native boundary; diagnostic validation clean; all 144 RC01 slots including every first divergence close; no new keys or non-RC01 worsening; remaining keys equal the independently justified RC03 residue; no eligible leaf disappears; immutable BOILER bytes",
+    "partial": "some RC01 keys close or improve without new mismatches, worsening or validator violations, but full support criteria do not hold",
+    "rejected": "root hypothesis does not move RC01 or creates new/worsened keys or invalid calculation",
+    "outside_native_boundary": "any of the ten current root inputs materially exceeds the V2 tested shape",
+    "no_result": "missing exact BOILER fixture, failed starting-inventory check, unsupported placement shape or source/evidence alias"
+  }
+}

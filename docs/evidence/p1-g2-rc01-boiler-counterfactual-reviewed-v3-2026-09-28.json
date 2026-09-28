@@ -1,0 +1,1230 @@
+{
+  "after": {
+    "keys": [
+      [
+        "L0407",
+        "free_float"
+      ],
+      [
+        "L0407",
+        "total_float"
+      ],
+      [
+        "L0411",
+        "total_float"
+      ]
+    ],
+    "rc01_remaining": 0,
+    "rc03_remaining": 3,
+    "slots": 3
+  },
+  "applicability": [
+    {
+      "active": true,
+      "assignment_count": 2,
+      "assignments": [
+        {
+          "assignment_uid": "165",
+          "calendar_uid": "14",
+          "delay_tenths_minutes": 0,
+          "leveling_delay_tenths_minutes": 0,
+          "resource_uid": "12",
+          "units_permille": 1000,
+          "work_seconds": 7200
+        },
+        {
+          "assignment_uid": "618",
+          "calendar_uid": "13",
+          "delay_tenths_minutes": 0,
+          "leveling_delay_tenths_minutes": 0,
+          "resource_uid": "11",
+          "units_permille": 2000,
+          "work_seconds": 14400
+        }
+      ],
+      "assumption_codes": [
+        "ACTIVITY_RESOURCE_CALENDARS_UNITED"
+      ],
+      "classification": "DIAGNOSTIC_EXTRAPOLATION_REQUIRED",
+      "constraint": null,
+      "diagnostic_eligible": true,
+      "distinct_resource_calendar_count": 2,
+      "effort_driven": false,
+      "ignore_resource_calendar": false,
+      "kind": "task",
+      "leaf_id": "L0070",
+      "manual": false,
+      "planned_duration_seconds": 14400,
+      "predecessors": [
+        {
+          "lag_seconds": 0,
+          "leaf_id": "L0069",
+          "type": "FS"
+        }
+      ],
+      "progress_state": "not_started",
+      "reason": "task/assignment Work, duration or topology outside V2 matrix",
+      "remaining_duration_seconds": 14400,
+      "resource_count": 2,
+      "successors": [
+        {
+          "lag_seconds": 0,
+          "leaf_id": "L0071",
+          "type": "FS"
+        }
+      ],
+      "task_calendar_uid": null,
+      "task_type": "fixed_units"
+    },
+    {
+      "active": true,
+      "assignment_count": 2,
+      "assignments": [
+        {
+          "assignment_uid": "170",
+          "calendar_uid": "14",
+          "delay_tenths_minutes": 0,
+          "leveling_delay_tenths_minutes": 0,
+          "resource_uid": "12",
+          "units_permille": 1000,
+          "work_seconds": 7200
+        },
+        {
+          "assignment_uid": "619",
+          "calendar_uid": "13",
+          "delay_tenths_minutes": 0,
+          "leveling_delay_tenths_minutes": 0,
+          "resource_uid": "11",
+          "units_permille": 2000,
+          "work_seconds": 14400
+        }
+      ],
+      "assumption_codes": [
+        "ACTIVITY_RESOURCE_CALENDARS_UNITED"
+      ],
+      "classification": "DIAGNOSTIC_EXTRAPOLATION_REQUIRED",
+      "constraint": null,
+      "diagnostic_eligible": true,
+      "distinct_resource_calendar_count": 2,
+      "effort_driven": false,
+      "ignore_resource_calendar": false,
+      "kind": "task",
+      "leaf_id": "L0075",
+      "manual": false,
+      "planned_duration_seconds": 14400,
+      "predecessors": [
+        {
+          "lag_seconds": 0,
+          "leaf_id": "L0074",
+          "type": "FS"
+        }
+      ],
+      "progress_state": "not_started",
+      "reason": "task/assignment Work, duration or topology outside V2 matrix",
+      "remaining_duration_seconds": 14400,
+      "resource_count": 2,
+      "successors": [
+        {
+          "lag_seconds": 0,
+          "leaf_id": "L0076",
+          "type": "FS"
+        }
+      ],
+      "task_calendar_uid": null,
+      "task_type": "fixed_units"
+    },
+    {
+      "active": true,
+      "assignment_count": 2,
+      "assignments": [
+        {
+          "assignment_uid": "864",
+          "calendar_uid": "13",
+          "delay_tenths_minutes": 0,
+          "leveling_delay_tenths_minutes": 0,
+          "resource_uid": "11",
+          "units_permille": 2000,
+          "work_seconds": 28800
+        },
+        {
+          "assignment_uid": "865",
+          "calendar_uid": "14",
+          "delay_tenths_minutes": 0,
+          "leveling_delay_tenths_minutes": 0,
+          "resource_uid": "12",
+          "units_permille": 1000,
+          "work_seconds": 14400
+        }
+      ],
+      "assumption_codes": [
+        "ACTIVITY_RESOURCE_CALENDARS_UNITED"
+      ],
+      "classification": "DIAGNOSTIC_EXTRAPOLATION_REQUIRED",
+      "constraint": null,
+      "diagnostic_eligible": true,
+      "distinct_resource_calendar_count": 2,
+      "effort_driven": false,
+      "ignore_resource_calendar": false,
+      "kind": "task",
+      "leaf_id": "L0080",
+      "manual": false,
+      "planned_duration_seconds": 14400,
+      "predecessors": [
+        {
+          "lag_seconds": 0,
+          "leaf_id": "L0084",
+          "type": "FS"
+        }
+      ],
+      "progress_state": "not_started",
+      "reason": "task/assignment Work, duration or topology outside V2 matrix",
+      "remaining_duration_seconds": 14400,
+      "resource_count": 2,
+      "successors": [
+        {
+          "lag_seconds": 0,
+          "leaf_id": "L0085",
+          "type": "FS"
+        }
+      ],
+      "task_calendar_uid": null,
+      "task_type": "fixed_units"
+    },
+    {
+      "active": true,
+      "assignment_count": 2,
+      "assignments": [
+        {
+          "assignment_uid": "503",
+          "calendar_uid": "14",
+          "delay_tenths_minutes": 0,
+          "leveling_delay_tenths_minutes": 0,
+          "resource_uid": "12",
+          "units_permille": 1000,
+          "work_seconds": 7200
+        },
+        {
+          "assignment_uid": "504",
+          "calendar_uid": "13",
+          "delay_tenths_minutes": 0,
+          "leveling_delay_tenths_minutes": 0,
+          "resource_uid": "11",
+          "units_permille": 2000,
+          "work_seconds": 14400
+        }
+      ],
+      "assumption_codes": [
+        "ACTIVITY_RESOURCE_CALENDARS_UNITED"
+      ],
+      "classification": "DIAGNOSTIC_EXTRAPOLATION_REQUIRED",
+      "constraint": null,
+      "diagnostic_eligible": true,
+      "distinct_resource_calendar_count": 2,
+      "effort_driven": false,
+      "ignore_resource_calendar": false,
+      "kind": "task",
+      "leaf_id": "L0083",
+      "manual": false,
+      "planned_duration_seconds": 14400,
+      "predecessors": [
+        {
+          "lag_seconds": 0,
+          "leaf_id": "L0082",
+          "type": "FS"
+        }
+      ],
+      "progress_state": "not_started",
+      "reason": "task/assignment Work, duration or topology outside V2 matrix",
+      "remaining_duration_seconds": 14400,
+      "resource_count": 2,
+      "successors": [
+        {
+          "lag_seconds": 0,
+          "leaf_id": "L0087",
+          "type": "FS"
+        }
+      ],
+      "task_calendar_uid": null,
+      "task_type": "fixed_units"
+    },
+    {
+      "active": true,
+      "assignment_count": 2,
+      "assignments": [
+        {
+          "assignment_uid": "492",
+          "calendar_uid": "13",
+          "delay_tenths_minutes": 0,
+          "leveling_delay_tenths_minutes": 0,
+          "resource_uid": "11",
+          "units_permille": 2000,
+          "work_seconds": 28800
+        },
+        {
+          "assignment_uid": "497",
+          "calendar_uid": "45",
+          "delay_tenths_minutes": 0,
+          "leveling_delay_tenths_minutes": 0,
+          "resource_uid": "31",
+          "units_permille": 1000,
+          "work_seconds": 14400
+        }
+      ],
+      "assumption_codes": [
+        "ACTIVITY_RESOURCE_CALENDARS_UNITED"
+      ],
+      "classification": "DIAGNOSTIC_EXTRAPOLATION_REQUIRED",
+      "constraint": null,
+      "diagnostic_eligible": true,
+      "distinct_resource_calendar_count": 2,
+      "effort_driven": false,
+      "ignore_resource_calendar": false,
+      "kind": "task",
+      "leaf_id": "L0084",
+      "manual": false,
+      "planned_duration_seconds": 28800,
+      "predecessors": [
+        {
+          "lag_seconds": 0,
+          "leaf_id": "L0062",
+          "type": "FS"
+        }
+      ],
+      "progress_state": "not_started",
+      "reason": "task/assignment Work, duration or topology outside V2 matrix",
+      "remaining_duration_seconds": 28800,
+      "resource_count": 2,
+      "successors": [
+        {
+          "lag_seconds": 0,
+          "leaf_id": "L0080",
+          "type": "FS"
+        }
+      ],
+      "task_calendar_uid": null,
+      "task_type": "fixed_units"
+    },
+    {
+      "active": true,
+      "assignment_count": 2,
+      "assignments": [
+        {
+          "assignment_uid": "518",
+          "calendar_uid": "14",
+          "delay_tenths_minutes": 0,
+          "leveling_delay_tenths_minutes": 0,
+          "resource_uid": "12",
+          "units_permille": 1000,
+          "work_seconds": 14400
+        },
+        {
+          "assignment_uid": "519",
+          "calendar_uid": "13",
+          "delay_tenths_minutes": 0,
+          "leveling_delay_tenths_minutes": 0,
+          "resource_uid": "11",
+          "units_permille": 2000,
+          "work_seconds": 28800
+        }
+      ],
+      "assumption_codes": [
+        "ACTIVITY_RESOURCE_CALENDARS_UNITED"
+      ],
+      "classification": "DIAGNOSTIC_EXTRAPOLATION_REQUIRED",
+      "constraint": null,
+      "diagnostic_eligible": true,
+      "distinct_resource_calendar_count": 2,
+      "effort_driven": false,
+      "ignore_resource_calendar": false,
+      "kind": "task",
+      "leaf_id": "L0114",
+      "manual": false,
+      "planned_duration_seconds": 28800,
+      "predecessors": [
+        {
+          "lag_seconds": 0,
+          "leaf_id": "L0113",
+          "type": "FS"
+        }
+      ],
+      "progress_state": "not_started",
+      "reason": "task/assignment Work, duration or topology outside V2 matrix",
+      "remaining_duration_seconds": 28800,
+      "resource_count": 2,
+      "successors": [
+        {
+          "lag_seconds": 0,
+          "leaf_id": "L0115",
+          "type": "FS"
+        }
+      ],
+      "task_calendar_uid": null,
+      "task_type": "fixed_units"
+    },
+    {
+      "active": true,
+      "assignment_count": 2,
+      "assignments": [
+        {
+          "assignment_uid": "527",
+          "calendar_uid": "14",
+          "delay_tenths_minutes": 0,
+          "leveling_delay_tenths_minutes": 0,
+          "resource_uid": "12",
+          "units_permille": 1000,
+          "work_seconds": 14400
+        },
+        {
+          "assignment_uid": "528",
+          "calendar_uid": "13",
+          "delay_tenths_minutes": 0,
+          "leveling_delay_tenths_minutes": 0,
+          "resource_uid": "11",
+          "units_permille": 2000,
+          "work_seconds": 28800
+        }
+      ],
+      "assumption_codes": [
+        "ACTIVITY_RESOURCE_CALENDARS_UNITED"
+      ],
+      "classification": "DIAGNOSTIC_EXTRAPOLATION_REQUIRED",
+      "constraint": null,
+      "diagnostic_eligible": true,
+      "distinct_resource_calendar_count": 2,
+      "effort_driven": false,
+      "ignore_resource_calendar": false,
+      "kind": "task",
+      "leaf_id": "L0127",
+      "manual": false,
+      "planned_duration_seconds": 28800,
+      "predecessors": [
+        {
+          "lag_seconds": 0,
+          "leaf_id": "L0126",
+          "type": "FS"
+        }
+      ],
+      "progress_state": "not_started",
+      "reason": "task/assignment Work, duration or topology outside V2 matrix",
+      "remaining_duration_seconds": 28800,
+      "resource_count": 2,
+      "successors": [
+        {
+          "lag_seconds": 0,
+          "leaf_id": "L0128",
+          "type": "FS"
+        },
+        {
+          "lag_seconds": 0,
+          "leaf_id": "L0138",
+          "type": "FS"
+        }
+      ],
+      "task_calendar_uid": null,
+      "task_type": "fixed_units"
+    },
+    {
+      "active": true,
+      "assignment_count": 2,
+      "assignments": [
+        {
+          "assignment_uid": "543",
+          "calendar_uid": "14",
+          "delay_tenths_minutes": 0,
+          "leveling_delay_tenths_minutes": 0,
+          "resource_uid": "12",
+          "units_permille": 1000,
+          "work_seconds": 14400
+        },
+        {
+          "assignment_uid": "544",
+          "calendar_uid": "13",
+          "delay_tenths_minutes": 0,
+          "leveling_delay_tenths_minutes": 0,
+          "resource_uid": "11",
+          "units_permille": 2000,
+          "work_seconds": 28800
+        }
+      ],
+      "assumption_codes": [
+        "ACTIVITY_RESOURCE_CALENDARS_UNITED"
+      ],
+      "classification": "DIAGNOSTIC_EXTRAPOLATION_REQUIRED",
+      "constraint": null,
+      "diagnostic_eligible": true,
+      "distinct_resource_calendar_count": 2,
+      "effort_driven": false,
+      "ignore_resource_calendar": false,
+      "kind": "task",
+      "leaf_id": "L0148",
+      "manual": false,
+      "planned_duration_seconds": 28800,
+      "predecessors": [
+        {
+          "lag_seconds": 0,
+          "leaf_id": "L0147",
+          "type": "FS"
+        }
+      ],
+      "progress_state": "not_started",
+      "reason": "task/assignment Work, duration or topology outside V2 matrix",
+      "remaining_duration_seconds": 28800,
+      "resource_count": 2,
+      "successors": [
+        {
+          "lag_seconds": 0,
+          "leaf_id": "L0145",
+          "type": "FS"
+        }
+      ],
+      "task_calendar_uid": null,
+      "task_type": "fixed_units"
+    },
+    {
+      "active": true,
+      "assignment_count": 2,
+      "assignments": [
+        {
+          "assignment_uid": "555",
+          "calendar_uid": "14",
+          "delay_tenths_minutes": 0,
+          "leveling_delay_tenths_minutes": 0,
+          "resource_uid": "12",
+          "units_permille": 1000,
+          "work_seconds": 10800
+        },
+        {
+          "assignment_uid": "556",
+          "calendar_uid": "13",
+          "delay_tenths_minutes": 0,
+          "leveling_delay_tenths_minutes": 0,
+          "resource_uid": "11",
+          "units_permille": 2000,
+          "work_seconds": 21600
+        }
+      ],
+      "assumption_codes": [
+        "ACTIVITY_RESOURCE_CALENDARS_UNITED"
+      ],
+      "classification": "DIAGNOSTIC_EXTRAPOLATION_REQUIRED",
+      "constraint": null,
+      "diagnostic_eligible": true,
+      "distinct_resource_calendar_count": 2,
+      "effort_driven": false,
+      "ignore_resource_calendar": false,
+      "kind": "task",
+      "leaf_id": "L0157",
+      "manual": false,
+      "planned_duration_seconds": 14400,
+      "predecessors": [
+        {
+          "lag_seconds": 0,
+          "leaf_id": "L0156",
+          "type": "FS"
+        }
+      ],
+      "progress_state": "not_started",
+      "reason": "task/assignment Work, duration or topology outside V2 matrix",
+      "remaining_duration_seconds": 14400,
+      "resource_count": 2,
+      "successors": [
+        {
+          "lag_seconds": 0,
+          "leaf_id": "L0158",
+          "type": "FS"
+        }
+      ],
+      "task_calendar_uid": null,
+      "task_type": "fixed_units"
+    },
+    {
+      "active": true,
+      "assignment_count": 2,
+      "assignments": [
+        {
+          "assignment_uid": "328",
+          "calendar_uid": "14",
+          "delay_tenths_minutes": 0,
+          "leveling_delay_tenths_minutes": 0,
+          "resource_uid": "12",
+          "units_permille": 1000,
+          "work_seconds": 21600
+        },
+        {
+          "assignment_uid": "617",
+          "calendar_uid": "13",
+          "delay_tenths_minutes": 0,
+          "leveling_delay_tenths_minutes": 0,
+          "resource_uid": "11",
+          "units_permille": 2000,
+          "work_seconds": 43200
+        }
+      ],
+      "assumption_codes": [
+        "ACTIVITY_RESOURCE_CALENDARS_UNITED"
+      ],
+      "classification": "DIAGNOSTIC_EXTRAPOLATION_REQUIRED",
+      "constraint": null,
+      "diagnostic_eligible": true,
+      "distinct_resource_calendar_count": 2,
+      "effort_driven": false,
+      "ignore_resource_calendar": false,
+      "kind": "task",
+      "leaf_id": "L0190",
+      "manual": false,
+      "planned_duration_seconds": 43200,
+      "predecessors": [
+        {
+          "lag_seconds": 0,
+          "leaf_id": "L0189",
+          "type": "FS"
+        }
+      ],
+      "progress_state": "not_started",
+      "reason": "task/assignment Work, duration or topology outside V2 matrix",
+      "remaining_duration_seconds": 43200,
+      "resource_count": 2,
+      "successors": [
+        {
+          "lag_seconds": 0,
+          "leaf_id": "L0191",
+          "type": "FS"
+        }
+      ],
+      "task_calendar_uid": null,
+      "task_type": "fixed_units"
+    }
+  ],
+  "before": {
+    "keys": [
+      [
+        "L0070",
+        "early_finish"
+      ],
+      [
+        "L0070",
+        "finish"
+      ],
+      [
+        "L0070",
+        "late_start"
+      ],
+      [
+        "L0070",
+        "total_float"
+      ],
+      [
+        "L0071",
+        "early_finish"
+      ],
+      [
+        "L0071",
+        "early_start"
+      ],
+      [
+        "L0071",
+        "finish"
+      ],
+      [
+        "L0071",
+        "start"
+      ],
+      [
+        "L0071",
+        "total_float"
+      ],
+      [
+        "L0072",
+        "early_finish"
+      ],
+      [
+        "L0072",
+        "early_start"
+      ],
+      [
+        "L0072",
+        "finish"
+      ],
+      [
+        "L0072",
+        "free_float"
+      ],
+      [
+        "L0072",
+        "start"
+      ],
+      [
+        "L0072",
+        "total_float"
+      ],
+      [
+        "L0075",
+        "early_finish"
+      ],
+      [
+        "L0075",
+        "finish"
+      ],
+      [
+        "L0075",
+        "late_start"
+      ],
+      [
+        "L0075",
+        "total_float"
+      ],
+      [
+        "L0076",
+        "early_finish"
+      ],
+      [
+        "L0076",
+        "early_start"
+      ],
+      [
+        "L0076",
+        "finish"
+      ],
+      [
+        "L0076",
+        "start"
+      ],
+      [
+        "L0076",
+        "total_float"
+      ],
+      [
+        "L0077",
+        "early_finish"
+      ],
+      [
+        "L0077",
+        "early_start"
+      ],
+      [
+        "L0077",
+        "finish"
+      ],
+      [
+        "L0077",
+        "start"
+      ],
+      [
+        "L0077",
+        "total_float"
+      ],
+      [
+        "L0078",
+        "early_finish"
+      ],
+      [
+        "L0078",
+        "early_start"
+      ],
+      [
+        "L0078",
+        "finish"
+      ],
+      [
+        "L0078",
+        "free_float"
+      ],
+      [
+        "L0078",
+        "start"
+      ],
+      [
+        "L0078",
+        "total_float"
+      ],
+      [
+        "L0080",
+        "early_finish"
+      ],
+      [
+        "L0080",
+        "early_start"
+      ],
+      [
+        "L0080",
+        "finish"
+      ],
+      [
+        "L0080",
+        "late_start"
+      ],
+      [
+        "L0080",
+        "start"
+      ],
+      [
+        "L0080",
+        "total_float"
+      ],
+      [
+        "L0083",
+        "early_finish"
+      ],
+      [
+        "L0083",
+        "finish"
+      ],
+      [
+        "L0083",
+        "late_start"
+      ],
+      [
+        "L0084",
+        "early_finish"
+      ],
+      [
+        "L0084",
+        "finish"
+      ],
+      [
+        "L0084",
+        "late_finish"
+      ],
+      [
+        "L0084",
+        "late_start"
+      ],
+      [
+        "L0084",
+        "total_float"
+      ],
+      [
+        "L0085",
+        "early_finish"
+      ],
+      [
+        "L0085",
+        "early_start"
+      ],
+      [
+        "L0085",
+        "finish"
+      ],
+      [
+        "L0085",
+        "start"
+      ],
+      [
+        "L0087",
+        "early_finish"
+      ],
+      [
+        "L0087",
+        "early_start"
+      ],
+      [
+        "L0087",
+        "finish"
+      ],
+      [
+        "L0087",
+        "start"
+      ],
+      [
+        "L0089",
+        "early_finish"
+      ],
+      [
+        "L0089",
+        "early_start"
+      ],
+      [
+        "L0089",
+        "finish"
+      ],
+      [
+        "L0089",
+        "start"
+      ],
+      [
+        "L0091",
+        "early_finish"
+      ],
+      [
+        "L0091",
+        "early_start"
+      ],
+      [
+        "L0091",
+        "finish"
+      ],
+      [
+        "L0091",
+        "start"
+      ],
+      [
+        "L0111",
+        "free_float"
+      ],
+      [
+        "L0112",
+        "late_finish"
+      ],
+      [
+        "L0112",
+        "late_start"
+      ],
+      [
+        "L0113",
+        "late_finish"
+      ],
+      [
+        "L0113",
+        "late_start"
+      ],
+      [
+        "L0114",
+        "critical"
+      ],
+      [
+        "L0114",
+        "early_finish"
+      ],
+      [
+        "L0114",
+        "finish"
+      ],
+      [
+        "L0114",
+        "late_start"
+      ],
+      [
+        "L0114",
+        "total_float"
+      ],
+      [
+        "L0115",
+        "early_finish"
+      ],
+      [
+        "L0115",
+        "early_start"
+      ],
+      [
+        "L0115",
+        "finish"
+      ],
+      [
+        "L0115",
+        "start"
+      ],
+      [
+        "L0116",
+        "early_finish"
+      ],
+      [
+        "L0116",
+        "early_start"
+      ],
+      [
+        "L0116",
+        "finish"
+      ],
+      [
+        "L0116",
+        "start"
+      ],
+      [
+        "L0116",
+        "total_float"
+      ],
+      [
+        "L0117",
+        "early_finish"
+      ],
+      [
+        "L0117",
+        "early_start"
+      ],
+      [
+        "L0117",
+        "finish"
+      ],
+      [
+        "L0117",
+        "start"
+      ],
+      [
+        "L0117",
+        "total_float"
+      ],
+      [
+        "L0118",
+        "early_finish"
+      ],
+      [
+        "L0118",
+        "early_start"
+      ],
+      [
+        "L0118",
+        "finish"
+      ],
+      [
+        "L0118",
+        "start"
+      ],
+      [
+        "L0118",
+        "total_float"
+      ],
+      [
+        "L0122",
+        "free_float"
+      ],
+      [
+        "L0123",
+        "early_finish"
+      ],
+      [
+        "L0123",
+        "early_start"
+      ],
+      [
+        "L0123",
+        "finish"
+      ],
+      [
+        "L0123",
+        "free_float"
+      ],
+      [
+        "L0123",
+        "start"
+      ],
+      [
+        "L0123",
+        "total_float"
+      ],
+      [
+        "L0127",
+        "late_start"
+      ],
+      [
+        "L0127",
+        "total_float"
+      ],
+      [
+        "L0148",
+        "critical"
+      ],
+      [
+        "L0148",
+        "late_start"
+      ],
+      [
+        "L0148",
+        "total_float"
+      ],
+      [
+        "L0155",
+        "late_finish"
+      ],
+      [
+        "L0155",
+        "late_start"
+      ],
+      [
+        "L0156",
+        "late_finish"
+      ],
+      [
+        "L0156",
+        "late_start"
+      ],
+      [
+        "L0157",
+        "late_start"
+      ],
+      [
+        "L0189",
+        "late_finish"
+      ],
+      [
+        "L0189",
+        "late_start"
+      ],
+      [
+        "L0190",
+        "early_finish"
+      ],
+      [
+        "L0190",
+        "finish"
+      ],
+      [
+        "L0190",
+        "late_start"
+      ],
+      [
+        "L0191",
+        "early_finish"
+      ],
+      [
+        "L0191",
+        "early_start"
+      ],
+      [
+        "L0191",
+        "finish"
+      ],
+      [
+        "L0191",
+        "start"
+      ],
+      [
+        "L0191",
+        "total_float"
+      ],
+      [
+        "L0192",
+        "early_finish"
+      ],
+      [
+        "L0192",
+        "early_start"
+      ],
+      [
+        "L0192",
+        "finish"
+      ],
+      [
+        "L0192",
+        "start"
+      ],
+      [
+        "L0192",
+        "total_float"
+      ],
+      [
+        "L0193",
+        "early_finish"
+      ],
+      [
+        "L0193",
+        "early_start"
+      ],
+      [
+        "L0193",
+        "finish"
+      ],
+      [
+        "L0193",
+        "start"
+      ],
+      [
+        "L0202",
+        "early_finish"
+      ],
+      [
+        "L0202",
+        "early_start"
+      ],
+      [
+        "L0202",
+        "finish"
+      ],
+      [
+        "L0202",
+        "start"
+      ],
+      [
+        "L0203",
+        "early_finish"
+      ],
+      [
+        "L0203",
+        "early_start"
+      ],
+      [
+        "L0203",
+        "finish"
+      ],
+      [
+        "L0203",
+        "free_float"
+      ],
+      [
+        "L0203",
+        "start"
+      ],
+      [
+        "L0203",
+        "total_float"
+      ],
+      [
+        "L0371",
+        "early_finish"
+      ],
+      [
+        "L0371",
+        "early_start"
+      ],
+      [
+        "L0371",
+        "finish"
+      ],
+      [
+        "L0371",
+        "start"
+      ],
+      [
+        "L0407",
+        "free_float"
+      ],
+      [
+        "L0407",
+        "total_float"
+      ],
+      [
+        "L0411",
+        "total_float"
+      ]
+    ],
+    "rc01": 144,
+    "rc03": 3,
+    "slots": 147
+  },
+  "decision": {
+    "classification": "RC01_ASSIGNMENT_ENVELOPE_BOILER_COUNTERFACTUAL_OUTSIDE_NATIVE_BOUNDARY",
+    "production_rc01_correction_authorized": false
+  },
+  "diagnostic_fingerprint_sha256": "492fd46892f03abb4e35e61171a3c679f3eb21a25ab3a703baf8743e76ce91c1",
+  "movement": {
+    "new_keys": [],
+    "other_worsened": 0,
+    "rc01_closed": 144,
+    "rc01_improved": 0,
+    "rc01_unchanged": 0,
+    "rc01_worsened": 0
+  },
+  "pre_result_tool": {
+    "commit": "41dbe02f032085eede56c089ce2602aada6fdeb4",
+    "tool_bytes": 26812,
+    "tool_path": "scripts/evidence/p1_g2_rc01_boiler_counterfactual.py",
+    "tool_sha256": "a44595d1f7ca4fc78d913737ed4d4a602d3a64ee2771519eb802c0db2aa330bf"
+  },
+  "production_main": "60313811d6867c28e71cb22bccfd3cc0c8f1618d",
+  "production_projection_sha256": "e638c48a40fa572a1f98333b7628c15a1f9562203efc8c03c2a441f1d3ec0a73",
+  "profile": "sto-diagnostic-p1-g2-rc01-assignment-envelope-v1",
+  "schema": "sto-p1-g2-rc01-boiler-counterfactual-predeclared-v1",
+  "source": {
+    "bytes": 3361935,
+    "sha256": "e9b9b7994cc5cc50479807b82c452da742a91de9f7de52b172a6be6f4f399c70"
+  },
+  "starting_inventory_sha256": "9a3ef68637b6e213188400f05fdca9bd216eebfbafa100f10f817623f5b8f3d3",
+  "v2_evidence_sha256": "71702adb09f08014c8ce14bed7651162bff65787f8d4d4945bb2383710ca6a6c",
+  "v2_native_return": {
+    "bytes": 54152,
+    "sha256": "674b2a70649991ac6b9624ced1d16ca88a5287fed35da08486a59986360d513e"
+  },
+  "validator": {
+    "profile": "sto-diagnostic-p1-g2-rc01-assignment-envelope-v1",
+    "violations": []
+  }
+}

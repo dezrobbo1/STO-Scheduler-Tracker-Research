@@ -1,0 +1,17 @@
+{
+  "current_root_evidence_sha256": "9a3ef68637b6e213188400f05fdca9bd216eebfbafa100f10f817623f5b8f3d3",
+  "pre_result_commit": "41dbe02f032085eede56c089ce2602aada6fdeb4",
+  "previous_v2_measured_sha256": "30be4ebaac5aa6a6e43aa8d4fa08a90fd531bc506d6b068463a3bbcf4052675e",
+  "production_main": "60313811d6867c28e71cb22bccfd3cc0c8f1618d",
+  "production_rc01_correction_authorized": false,
+  "required_boiler_bytes": 3361935,
+  "required_boiler_sha256": "e9b9b7994cc5cc50479807b82c452da742a91de9f7de52b172a6be6f4f399c70",
+  "schema": "sto-p1-g2-rc01-boiler-counterfactual-pre-result-identity-v3",
+  "status": "PREDECLARED_NOT_RUN_EXACT_BOILER_REQUIRED",
+  "supersedes_pre_result_commit": "236d8988da0f8cd8ed27407ddc31f39eb04dfb7e",
+  "tool_bytes": 26812,
+  "tool_path": "scripts/evidence/p1_g2_rc01_boiler_counterfactual.py",
+  "tool_sha256": "a44595d1f7ca4fc78d913737ed4d4a602d3a64ee2771519eb802c0db2aa330bf",
+  "v2_native_evidence_sha256": "71702adb09f08014c8ce14bed7651162bff65787f8d4d4945bb2383710ca6a6c",
+  "v3_counterfactual": "NOT_RUN"
+}
