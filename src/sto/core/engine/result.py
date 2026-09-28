@@ -53,8 +53,9 @@ __all__ = [
 #: Named on the hash, so a stored result says which assembly produced it.
 #: Version three makes native-evidence-derived inactive-boundary relationships
 #: durable result provenance, so any published synthetic driver UUID resolves
-#: after persistence/restart instead of becoming an orphan.
-RESULT_PROFILE = "sto-result-v3"
+#: after persistence/restart instead of becoming an orphan. Version four binds
+#: results to the bounded RC01 assignment-envelope scheduler profiles.
+RESULT_PROFILE = "sto-result-v4"
 
 #: A row the plan scheduled and the passes placed.
 SCHEDULED = "scheduled"

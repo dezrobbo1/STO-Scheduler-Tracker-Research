@@ -579,9 +579,9 @@ class P1G2DiagnosticToolTests(unittest.TestCase):
         self._assert_poisoned_bytecode_is_ignored(external_prefix=True)
 
     def test_declared_production_basis_matches_this_worktree(self) -> None:
-        lineage = verify_production_basis()
-        self.assertEqual(lineage["declared_commit"], REPOSITORY_BASE)
-        self.assertTrue(lineage["verified_against_worktree"])
+        # Historical evidence must fail closed after a production change.
+        with self.assertRaisesRegex(DiagnosticError, "production basis"):
+            verify_production_basis()
 
     def test_lineage_rejects_a_relevant_change_but_not_evidence_edits(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

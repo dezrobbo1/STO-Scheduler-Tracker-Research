@@ -110,9 +110,9 @@ FROM_STATUS_TIME = "status_time"
 #: cannot hash the same as the unprogressed one it was computed from; version
 #: three carries the progress state too, so an activity completed on exactly
 #: its planned dates does not hash the same as one that has not begun. Version
-#: four carries the milestone-snap policy: it can change downstream free float
-#: even when every early coordinate happens to be the same.
-FORWARD_PASS_PROFILE = "sto-forward-pass-v4"
+#: four carries the milestone-snap policy; version five adds bounded RC01
+#: independent assignment-calendar placement and task-envelope propagation.
+FORWARD_PASS_PROFILE = "sto-forward-pass-v5"
 
 
 @dataclass(frozen=True, slots=True)
@@ -592,6 +592,21 @@ def _place(
 
     calendar = activity.calendar
     is_milestone = duration == 0
+
+    if activity.assignment_envelope is not None:
+        if pinned is not None or duration != activity.duration or finish_bound > start_bound:
+            raise ForwardPassError("SCHEDULE_ASSIGNMENT_ENVELOPE_UNMEASURED_BOUND", activity.uid)
+        spans = [earliest_span(row.calendar, start_bound, start_bound,
+                               row.work_duration, horizon)
+                 for row in activity.assignment_envelope]
+        if any(span is None for span in spans):
+            raise ForwardPassError("SCHEDULE_HORIZON_EXCEEDED", activity.uid,
+                                   "assignment envelope")
+        start = min(span[0] for span in spans if span is not None)
+        finish = max(span[1] for span in spans if span is not None)
+        if finish < finish_bound:
+            raise ForwardPassError("SCHEDULE_ASSIGNMENT_ENVELOPE_UNMEASURED_BOUND", activity.uid)
+        return start, finish
 
     if pinned is not None:
         if coordinate is None:

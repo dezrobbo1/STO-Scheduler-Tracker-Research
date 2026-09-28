@@ -5,6 +5,7 @@ from contextlib import contextmanager, redirect_stderr, redirect_stdout
 import hashlib
 import importlib.util
 import io
+import tarfile
 import json
 import marshal
 from pathlib import Path
@@ -45,9 +46,15 @@ def checkout(*, stub=True):
     """A disposable checkout containing real pinned calculation source."""
     with tempfile.TemporaryDirectory(prefix="sto-source-execution-test-") as directory:
         root = Path(directory)
-        for relative in ("src/sto/core", "src/sto/legacy"):
-            shutil.copytree(ROOT / relative, root / relative,
-                            ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+        # Historical lineage tests must execute the historical calculation,
+        # not silently substitute whichever production code is under review.
+        archive = subprocess.run(
+            ["git", "archive", "1982789f1c0aab83892dbac2f2d7b690ec9a85d6",
+             "src/sto/core", "src/sto/legacy"], cwd=ROOT, check=True,
+            capture_output=True,
+        ).stdout
+        with tarfile.open(fileobj=io.BytesIO(archive)) as tar:
+            tar.extractall(root, filter="data")
         for relative in ("src/sto/__init__.py", CLASSIFIER, TOOL_PATH, EXECUTION_PATH):
             target = root / relative
             target.parent.mkdir(parents=True, exist_ok=True)

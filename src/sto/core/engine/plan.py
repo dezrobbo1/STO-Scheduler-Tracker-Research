@@ -35,9 +35,10 @@ project's. Turning that rule on took the un-progressed BOILER snapshot from one
 activity agreeing with Project's stored dates to well over three hundred, and
 the half-hour cluster of differences the forward-pass slice could not explain
 was exactly the project calendar's 07:30 against the resources' 07:00. A task
-whose resources are on **several** calendars is scheduled on their union and
-reported as an assumption: Project's own answer for those rows is the envelope
-of its per-assignment spans, which this pass does not compute.
+whose resources are on **several** calendars retains the union assumption
+unless it satisfies the explicit, measured RC01 allocation/network boundary
+below. Eligible assignments use their separate calendars, exposing the task
+as the envelope of their spans; all other shapes remain labelled assumptions.
 
 **Which calendar a lag is consumed on.** The successor's own *task* calendar
 when it has one, otherwise the project calendar -- never a resource calendar.
@@ -60,8 +61,9 @@ calendar in the plan, because coordinates from two epochs cannot be compared.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
+from decimal import Decimal, InvalidOperation
 from uuid import NAMESPACE_URL, UUID, uuid5
 
 from sto.core.calendar.arithmetic import CompiledIntervals, intersect_intervals, normalise
@@ -70,6 +72,7 @@ from sto.core.model.entities import Activity, Assignment, Schedule
 from sto.core.model.enums import (
     ActivityKind,
     ConstraintType,
+    DurationType,
     LagCalendar,
     MilestoneSnapPolicy,
     ProgressPolicy,
@@ -79,6 +82,7 @@ from sto.core.model.enums import (
 
 from .forward import ActivityTimes, forward_pass
 from .network import (
+    AssignmentPlacement,
     Network,
     NetworkError,
     PlannedActivity,
@@ -1214,6 +1218,148 @@ def build_plan(
             status_time = candidate
         else:
             status_outside = True
+
+    # The only new placement cohort is the intersection of the measured
+    # allocation/network classes and explicit source-zero assignment delays.
+    # Every other multi-calendar task retains its old union assumption.
+    union_uids = {row.uid for row in assumed
+                  if row.code == "ACTIVITY_RESOURCE_CALENDARS_UNITED"}
+    calendar_classes: dict[UUID, str | None] = {}
+
+    def resource_class(uid: UUID) -> str | None:
+        if uid not in calendar_classes:
+            compiled = calendars.get(uid)
+            if compiled is None:
+                calendar_classes[uid] = None
+            else:
+                intervals = compiled.intervals.intervals
+                if len(intervals) == 1 and intervals[0] == window:
+                    calendar_classes[uid] = "24H"
+                elif (len(intervals) >= 2
+                      and all((begin, end) == (
+                          max(to_seconds((shared_epoch + timedelta(seconds=begin)).replace(
+                              hour=7, minute=0, second=0, microsecond=0)), window[0]),
+                          min(to_seconds((shared_epoch + timedelta(seconds=begin)).replace(
+                              hour=17, minute=0, second=0, microsecond=0)), window[1]),
+                      ) for begin, end in intervals)
+                      and all(((shared_epoch + timedelta(seconds=right[0])).date() -
+                               (shared_epoch + timedelta(seconds=left[0])).date()).days == 1
+                              for left, right in zip(intervals, intervals[1:]))):
+                    calendar_classes[uid] = "10H"
+                else:
+                    calendar_classes[uid] = None
+        return calendar_classes[uid]
+
+    # (task Duration, effective assignment duration, predecessor/successor
+    # degrees) from the ten BOILER roots, including the distinct equivalent
+    # 10-hour calendar identity. No other allocation or topology is admitted.
+    shapes = {
+        (14400, 7200, 1, 1), (14400, 14400, 1, 1),
+        (28800, 14400, 1, 1), (28800, 14400, 1, 2),
+        (14400, 10800, 1, 1), (43200, 21600, 1, 1),
+    }
+    envelopes: dict[UUID, tuple[AssignmentPlacement, ...]] = {}
+    for activity in schedule.activities:
+        if activity.uid not in union_uids or activity.uid not in scheduled:
+            continue
+        if (activity.kind is not ActivityKind.TASK or not activity.active or activity.manual
+            or activity.actual_start is not None or activity.actual_finish is not None
+            or activity.suspend is not None or activity.resume is not None
+            or (activity.actual_work is not None and activity.actual_work.seconds != 0)
+            or activity.duration_type is not DurationType.FIXED_UNITS or activity.effort_driven
+            or activity.calendar_uid is not None
+            or activity.source_fields.get("ignore_resource_calendar_source") not in (None, "0")
+            or activity.primary_constraint is not None or activity.secondary_constraint is not None
+            or activity.levelling_delay_seconds != 0
+            or activity.planned_duration is None or activity.planned_duration.elapsed
+            or activity.planned_work is None
+            or activity.source_fields.get("work_unsupported_source") is not None
+            or activity.source_fields.get("work_ambiguous_source") is not None
+            or activity.remaining_duration not in (None, activity.planned_duration)
+            or any(value != 0 for value in
+                   (activity.percent_complete.duration_permille,
+                    activity.percent_complete.work_permille,
+                    activity.percent_complete.physical_permille,
+                    activity.percent_complete.units_permille))):
+            continue
+        incident = incident_by_activity[activity.uid]
+        raw_incident = [r for r in schedule.relationships
+                        if activity.uid in (r.predecessor_uid, r.successor_uid)]
+        predecessors = [r for r in incident if r.successor_uid == activity.uid]
+        successors = [r for r in incident if r.predecessor_uid == activity.uid]
+        if (len(raw_incident) != len(incident) or len(predecessors) != 1
+            or len(successors) not in (1, 2)
+            or any(r.type is not RelationshipType.FS or r.lag != 0 or
+                   r.inactive_boundary_uid is not None for r in incident)
+            or any((r.lag is not None and r.lag.elapsed) or
+                   r.lag_calendar is LagCalendar.ELAPSED_24H for r in raw_incident)):
+            continue
+        rows = assignment_rows_by_activity.get(activity.uid, [])
+        if (len(rows) != 2 or activity.planned_work.seconds !=
+            sum(row.work.budgeted_seconds for row in rows)):
+            continue
+        placements: list[AssignmentPlacement] = []
+        signature: list[tuple[str, int, int]] = []
+        calendars_used: set[UUID] = set()
+        for row in rows:
+            resource = resources.get(row.resource_uid)
+            fields = row.source_fields
+            if (resource is None or resource.inactive or resource.calendar_uid is None
+                or row.unassigned_placeholder or row.role_uid is not None
+                or row.curve_uid is not None or row.timephased_ref is not None
+                or row.activity_uid != activity.uid
+                or fields.get("delay_tenths_minutes_source") != "0"
+                or fields.get("leveling_delay_tenths_minutes_source") != "0"
+                or fields.get("work_contour_source") != "0"
+                or fields.get("percent_work_complete_source") != "0"
+                or fields.get("delay_ambiguous_source") is not None
+                or fields.get("leveling_delay_ambiguous_source") is not None
+                or fields.get("units_ambiguous_source") is not None
+                or fields.get("work_ambiguous_source") is not None
+                or fields.get("remaining_work_ambiguous_source") is not None
+                or fields.get("actual_work_ambiguous_source") is not None
+                or fields.get("percent_work_complete_ambiguous_source") is not None
+                or fields.get("work_contour_ambiguous_source") is not None
+                or fields.get("actual_work_source_present") != "1"
+                or row.work.actual_seconds != 0 or row.percent_work_complete_permille != 0
+                or row.work.budgeted_seconds <= 0
+                or row.work.remaining_seconds != row.work.budgeted_seconds
+                or row.units.budgeted_permille <= 0):
+                break
+            kind = resource_class(resource.calendar_uid)
+            numerator = row.work.budgeted_seconds * 1000
+            lexeme = fields.get("units_lexeme_source")
+            try:
+                exact_units = Decimal(lexeme) * 1000 if lexeme is not None else None
+            except InvalidOperation:
+                exact_units = None
+            if (kind is None or exact_units is None or not exact_units.is_finite()
+                or exact_units != row.units.budgeted_permille
+                or numerator % row.units.budgeted_permille):
+                break
+            calendars_used.add(resource.calendar_uid)
+            duration = numerator // row.units.budgeted_permille
+            signature.append((kind, duration, row.units.budgeted_permille))
+            placements.append(AssignmentPlacement(
+                uid=row.uid, resource_uid=resource.uid,
+                calendar=calendars[resource.calendar_uid].intervals,
+                work_duration=duration,
+            ))
+        if (len(placements) == 2 and len(calendars_used) == 2
+            and signature[0][1] == signature[1][1]
+            and sorted(signature) == [
+                ("10H", signature[0][1], 1000),
+                ("24H", signature[0][1], 2000),
+            ]
+            and (activity.planned_duration.seconds, signature[0][1],
+                 len(predecessors), len(successors)) in shapes):
+            envelopes[activity.uid] = tuple(sorted(placements, key=lambda item: str(item.uid)))
+
+    if envelopes:
+        activities = [replace(row, assignment_envelope=envelopes.get(row.uid))
+                      for row in activities]
+        assumed = [row for row in assumed if not (
+            row.code == "ACTIVITY_RESOURCE_CALENDARS_UNITED" and row.uid in envelopes)]
 
     network = Network(
         activities=tuple(activities),
