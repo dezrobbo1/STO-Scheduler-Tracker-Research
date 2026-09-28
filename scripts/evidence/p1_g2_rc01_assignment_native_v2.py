@@ -197,7 +197,9 @@ def _calendar_signature(row: ET.Element) -> tuple[tuple[int, bool, tuple[tuple[s
             (_text(item, "FromTime") or "", _text(item, "ToTime") or "")
             for item in weekday.findall("p:WorkingTimes/p:WorkingTime", NS)
         )
-        result.append((int(day_text), _text(weekday, "DayWorking") == "1", intervals))
+        working = _text(weekday, "DayWorking")
+        _require(working in ("0", "1"), "calendar has invalid working-day flag")
+        result.append((int(day_text), working == "1", intervals))
     return tuple(result)
 
 
@@ -235,8 +237,11 @@ def parse_and_validate(payload: bytes) -> dict[str, object]:
         _require(_text(root, field) == expected, f"project input changed: {field}")
     _require(GUID.fullmatch(_text(root, "GUID") or "") is not None,
              "project GUID normalization is invalid")
-    _require(_text(root, "AutoLink") == "0" or _text(root, "Autolink") == "0",
-             "project AutoLink changed")
+    _require(_text(root, "AutoLink") is not None or _text(root, "Autolink") is not None,
+             "project AutoLink missing")
+    for spelling in ("AutoLink", "Autolink"):
+        _require(_text(root, spelling) in (None, "0"),
+                 f"project {spelling} changed")
     for key, value in PROJECT_NORMALIZED_OPTIONS.items():
         _require(_text(root, key) in (None, value), f"project scheduling option changed: {key}")
     for key, value in PROJECT_METADATA_VALUES.items():
@@ -306,10 +311,23 @@ def parse_and_validate(payload: bytes) -> dict[str, object]:
     _require(set(summary) in ({1, 2, 3, 4}, {0, 1, 2, 3, 4}),
              "task UID set changed")
     if 0 in summary:
+        reference_task = original.find("p:Tasks/p:Task", NS)
+        _require(reference_task is not None, "generator task missing")
+        _guard_extra(summary[0], reference_task,
+                     TASK_SAVE_FIELDS | TASK_NATIVE_OUTPUTS | {"CalendarUID"},
+                     "native summary")
         _require(_text(summary[0], "Summary") == "1" and not summary[0].findall(
             "p:PredecessorLink", NS), "unexpected native summary task")
         _require(_text(summary[0], "Name") in (generate.EXPERIMENT_ID,
                   generate.PROJECT_NAME), "unexpected native summary identity")
+        for field, value in {
+            "UID": "0", "ID": "0", "Manual": "0", "Active": "1",
+            "Type": "1", "CalendarUID": "-1", "PercentComplete": "0",
+            "PercentWorkComplete": "0", "ActualWork": "PT0H0M0S",
+            "ConstraintType": "0", "LevelingDelay": "0",
+        }.items():
+            _require(_text(summary[0], field) == value,
+                     f"unexpected native summary input: {field}")
         _require(not any(_text(a, "TaskUID") == "0" for a in root.findall(
             "p:Assignments/p:Assignment", NS)), "summary task participates in assignments")
         del task_rows[_text(summary[0], "Name")]
@@ -624,8 +642,11 @@ def classify(observations: dict[str, object]) -> dict[str, object]:
         )
 
     order_twin = (
-        task("A", "start") == task("B", "start")
-        and task("A", "finish") == task("B", "finish")
+        all(task("A", field) == task("B", field)
+            for field in ("start", "finish", "early_start", "early_finish"))
+        and all(observations["A"]["task"][field]
+                == observations["B"]["task"][field]
+                for field in ("duration", "remaining_duration"))
         and all(
             assignment("A", role, field) == assignment("B", role, field)
             for role in ("AM", "PM")
@@ -660,6 +681,15 @@ def classify(observations: dict[str, object]) -> dict[str, object]:
         == observations[case]["task"]["duration"]
         for case in "ABCD"
     )
+    coherent_union_rejection = all(
+        task(case, "start") == datetime(2026, 10, 12, 8)
+        and task(case, "finish") == datetime(2026, 10, 12, 12)
+        and task(case, "early_start") == task(case, "start")
+        and task(case, "early_finish") == task(case, "finish")
+        and observations[case]["task"]["duration"] == "PT4H0M0S"
+        and observations[case]["task"]["remaining_duration"] == "PT4H0M0S"
+        for case in "AB"
+    )
     controls_valid = (
         overlap_control
         and single_control
@@ -680,8 +710,7 @@ def classify(observations: dict[str, object]) -> dict[str, object]:
     }
     if all(predicates.values()):
         verdict = "V2_ASSIGNMENT_ENVELOPE_SUPPORTED"
-    elif (controls_valid and order_twin and duration_matches_assignment_work
-          and not all(envelope_checks[case] for case in "AB")):
+    elif controls_valid and order_twin and coherent_union_rejection:
         verdict = "V2_ASSIGNMENT_ENVELOPE_REJECTED"
     else:
         verdict = "V2_NATIVE_RESULT_INCONCLUSIVE"
@@ -763,8 +792,8 @@ def analyze(payload: bytes) -> dict[str, object]:
             "acceptance": "all seven predicates in classification.predicates are true; A/B 8h, C/D 4h; union prediction 08:00-12:00 for four declared working hours",
             "support": "V2_ASSIGNMENT_ENVELOPE_SUPPORTED",
             "rejection": (
-                "valid controls and stable order twin, but one or both separated tasks "
-                "do not equal their assignment envelope"
+                "valid controls and order twin; both A/B follow exact 08:00-12:00 "
+                "four-hour union placement despite valid PM assignments to 17:00"
             ),
             "inconclusive": "any invalid control, order effect, unknown normalization or mixed observation",
             "stopping_rule": (

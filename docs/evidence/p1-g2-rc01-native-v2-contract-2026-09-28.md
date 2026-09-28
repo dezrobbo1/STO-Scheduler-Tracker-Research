@@ -100,8 +100,10 @@ unrecalculated input yields `V2_NOT_RUN_UNRECALCULATED_INPUT`.
 7. A/B finish differs from the 12:00 current four-hour union prediction,
    with returned Duration and RemainingDuration 8h on A/B and 4h on C/D.
 
-With valid controls, identical order twins and a coherent incompatible
-separated-case rule, the verdict is `V2_ASSIGNMENT_ENVELOPE_REJECTED`.
+With valid controls and identical order twins, if A/B both return exact
+08:00–12:00 task and early spans with four-hour Duration/RemainingDuration
+despite valid PM assignments to 17:00, the verdict is
+`V2_ASSIGNMENT_ENVELOPE_REJECTED` (a coherent union-placement signature).
 Mixed results, failed controls, order dependence, inconsistent duration and
 other unexplained outputs are `V2_NATIVE_RESULT_INCONCLUSIVE`. An altered
 experiment-defining input is `V2_INPUT_CONTRACT_VIOLATED`, which **does not**

@@ -186,6 +186,36 @@ class Rc01V2Tests(unittest.TestCase):
                 self.assertEqual(native.analyze(encode(root))["classification"]["verdict"],
                                  "V2_NATIVE_RESULT_INCONCLUSIVE")
 
+        root = ET.fromstring(synthetic_v1_style_save())
+        set_field(get(root, "Tasks", 1), "EarlyFinish", "2026-10-12T12:00:00")
+        self.assertEqual(native.analyze(encode(root))["classification"]["verdict"],
+                         "V2_NATIVE_RESULT_INCONCLUSIVE")
+
+    def test_exact_coherent_union_signature_rejects_envelope(self):
+        root = ET.fromstring(synthetic_v1_style_save())
+        for uid in (1, 2):
+            task = get(root, "Tasks", uid)
+            for field in ("Duration", "RemainingDuration"):
+                set_field(task, field, "PT4H0M0S")
+            for field in ("Finish", "EarlyFinish"):
+                set_field(task, field, "2026-10-12T12:00:00")
+        result = native.analyze(encode(root))
+        self.assertEqual(result["classification"]["verdict"],
+                         "V2_ASSIGNMENT_ENVELOPE_REJECTED")
+        self.assertFalse(result["decision"]["boiler_counterfactual_authorized"])
+
+    def test_unobserved_calendar_and_option_changes_fail_closed(self):
+        root = ET.fromstring(synthetic_v1_style_save())
+        generator.add(root, "Autolink", "1")
+        self.assertEqual(native.analyze(encode(root))["classification"]["verdict"],
+                         "V2_INPUT_CONTRACT_VIOLATED")
+        root = ET.fromstring(synthetic_v1_style_save())
+        sunday = get(root, "Calendars", 1).find("p:WeekDays/p:WeekDay", NS)
+        assert sunday is not None
+        set_field(sunday, "DayWorking", "2")
+        self.assertEqual(native.analyze(encode(root))["classification"]["verdict"],
+                         "V2_INPUT_CONTRACT_VIOLATED")
+
     def test_append_only_receipt_has_exact_return_identity(self):
         receipt = json.loads(RECEIPT.read_text())
         self.assertEqual(receipt["classification"],
