@@ -871,7 +871,12 @@ def main() -> int:
     destination.add_argument("--output", type=Path)
     destination.add_argument("--check", type=Path)
     args = parser.parse_args()
-    sources = {"native return": args.native_return}
+    sources = {
+        "native return": args.native_return,
+        "pinned V2 input": ROOT / "tests/fixtures/P1-G2-RC01-ASSIGNMENT-ENVELOPE-NATIVE-MATRIX-V2.xml",
+        "historical V1 input": ROOT / "tests/fixtures/P1-G2-RC01-ASSIGNMENT-ENVELOPE-NATIVE-MATRIX-V1.xml",
+        "V1 invalid-return receipt": ROOT / "docs/evidence/p1-g2-rc01-native-v1-invalid-return-2026-09-28.json",
+    }
     if args.output:
         refuse_output_alias(args.output, sources)
     if args.check:

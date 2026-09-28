@@ -264,6 +264,20 @@ class Rc01V2Tests(unittest.TestCase):
             self.assertEqual(result.read_text(), "{}\n")
             self.assertEqual(before, source.read_bytes())
 
+    def test_cli_refuses_output_aliased_to_pinned_input(self):
+        import subprocess
+        import sys
+
+        before = FIXTURE.read_bytes()
+        result = subprocess.run(
+            [sys.executable, str(ROOT / "scripts/evidence/p1_g2_rc01_assignment_native_v2.py"),
+             str(FIXTURE), "--output", str(FIXTURE)],
+            capture_output=True, text=True,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("separate", result.stderr)
+        self.assertEqual(FIXTURE.read_bytes(), before)
+
 
 if __name__ == "__main__":
     unittest.main()
