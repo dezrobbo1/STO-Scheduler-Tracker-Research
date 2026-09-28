@@ -118,16 +118,19 @@ class Rc01BoilerPreResultTests(unittest.TestCase):
             symlink.symlink_to(source)
             hardlink = source.with_name("hardlinked.xml")
             os.link(source, hardlink)
+            protected = (cf.CURRENT_PATH, cf.NATIVE_PATH, FIXTURE, Path(cf.__file__),
+                         ROOT / "docs/evidence/p1-g2-rc01-boiler-counterfactual-predeclared-2026-09-28.json")
+            unchanged = {path: path.read_bytes() for path in protected}
             for output in (source, source.parent / ".." / source.parent.name / source.name,
-                           symlink, hardlink, cf.CURRENT_PATH, cf.NATIVE_PATH):
+                           symlink, hardlink, *protected):
                 with self.subTest(output=output):
                     with patch("sys.argv", ["p1_g2_rc01_boiler_counterfactual.py",
                                             str(source), "--output", str(output)]):
                         with self.assertRaisesRegex(ValueError, "aliases"):
                             cf.main()
             self.assertEqual(source.read_bytes(), before)
-            self.assertEqual(cf.CURRENT_PATH.read_bytes(), cf.pinned(cf.CURRENT_PATH, None, cf.CURRENT_SHA))
-            self.assertEqual(cf.NATIVE_PATH.read_bytes(), cf.pinned(cf.NATIVE_PATH, None, cf.NATIVE_SHA))
+            for path, content in unchanged.items():
+                self.assertEqual(path.read_bytes(), content)
 
     def test_separate_candidate_replaced_atomically_and_source_unchanged(self):
         with tempfile.TemporaryDirectory() as directory:

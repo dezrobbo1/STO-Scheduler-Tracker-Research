@@ -402,27 +402,38 @@ def build_record(source: Path) -> dict:
     }
 
 
+def protected_sources(boiler: Path) -> dict[str, Path]:
+    """Every immutable input read by this tool or cited as its preregistration."""
+    evidence = ROOT / "docs/evidence"
+    return {
+        "BOILER baseline": boiler,
+        "diagnostic tool": Path(__file__),
+        "current root evidence": CURRENT_PATH,
+        "V2 native evidence": NATIVE_PATH,
+        "frozen V2 input": ROOT / "tests/fixtures/P1-G2-RC01-ASSIGNMENT-ENVELOPE-NATIVE-MATRIX-V2.xml",
+        "V2 contract": evidence / "p1-g2-rc01-native-v2-contract-2026-09-28.md",
+        "V2 return receipt": evidence / "p1-g2-rc01-native-v2-return-2026-09-28.md",
+        "predeclared contract": evidence / "p1-g2-rc01-boiler-counterfactual-predeclared-2026-09-28.json",
+        "predeclared explanation": evidence / "p1-g2-rc01-boiler-counterfactual-predeclared-2026-09-28.md",
+        "first pre-result identity": evidence / "p1-g2-rc01-boiler-counterfactual-pre-result-identity-2026-09-28.json",
+        "current pre-result identity": evidence / "p1-g2-rc01-boiler-counterfactual-pre-result-identity-v2-2026-09-28.json",
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("boiler", type=Path)
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
+    sources = protected_sources(args.boiler)
     if args.output is not None:
-        current.refuse_output_alias(args.output, {
-            "BOILER baseline": args.boiler, "current root evidence": CURRENT_PATH,
-            "V2 native evidence": NATIVE_PATH,
-            "V2 return receipt": ROOT / "docs/evidence/p1-g2-rc01-native-v2-return-2026-09-28.md",
-        })
+        current.refuse_output_alias(args.output, sources)
     record = build_record(args.boiler)
     data = json.dumps(record, sort_keys=True, indent=2) + "\n"
     if args.output is None:
         print(data, end="")
     else:
-        current.write_output_safely(args.output, data, {
-            "BOILER baseline": args.boiler, "current root evidence": CURRENT_PATH,
-            "V2 native evidence": NATIVE_PATH,
-            "V2 return receipt": ROOT / "docs/evidence/p1-g2-rc01-native-v2-return-2026-09-28.md",
-        })
+        current.write_output_safely(args.output, data, sources)
     return 0
 
 
