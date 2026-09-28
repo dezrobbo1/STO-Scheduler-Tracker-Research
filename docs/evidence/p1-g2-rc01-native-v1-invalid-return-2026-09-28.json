@@ -1,0 +1,45 @@
+{
+  "schema": "sto-p1-g2-rc01-native-v1-invalid-return-v1",
+  "experiment_id": "P1-G2-RC01-ASSIGNMENT-ENVELOPE-NATIVE-MATRIX-V1",
+  "input": {
+    "path": "tests/fixtures/P1-G2-RC01-ASSIGNMENT-ENVELOPE-NATIVE-MATRIX-V1.xml",
+    "bytes": 20989,
+    "sha256": "9d7ad7a8a845fcf036827fe90b51d41431d0452ece57097ce86934bec8119313"
+  },
+  "native_return": {
+    "path_external": "P1-G2-RC01-ASSIGNMENT-ENVELOPE-NATIVE-MATRIX-V1 - RETURNED.xml",
+    "bytes": 54152,
+    "sha256": "5c190a0d4f41068559f37db845ec0d17a265dea89442453898d6daa3bc2b28ab",
+    "build_number": "16.0.20326.20140",
+    "first_validator_error": "project input changed: GUID"
+  },
+  "classification": "NATIVE_RETURN_INPUT_NORMALIZED_BEYOND_V1_CONTRACT",
+  "observed_input_differences": {
+    "project_guid": ["01010101-0101-4101-8101-010101010101", "04C578DF-D5BA-F111-9818-902E162C1984"],
+    "resource_guids": "four regenerated to their respective assigned calendar GUIDs; resource UIDs and calendar UID links unchanged",
+    "calendar_names": "UIDs 2-5 changed from four original RC01 labels to Unassigned; calendar GUIDs and productive intervals unchanged",
+    "task_duration_and_remaining_duration": "cases A and B PT4H0M0S -> PT8H0M0S; C and D unchanged at PT4H0M0S",
+    "task_calendar_uid": "absent -> -1 on all four; no explicit task calendar assigned",
+    "task_levelling_delay_format": "7 -> 8 on all four; levelling delay remains zero",
+    "project_finish_date": "2026-10-16T17:00:00 -> 2026-10-12T17:00:00",
+    "added_default_rows": "calendar UID 6 Standard, summary task UID 0 and null resource UID 0; no task or assignment references these rows",
+    "project_save_options": "additional save metadata and scheduling options; HonorConstraints=0 and TaskUpdatesResource=1; the original scheduling options remain fixed",
+    "resource_peak_and_allocation": "PeakUnits and OverAllocated calculated for repeated resources across four independent cases; MaxUnits numerically remains 1",
+    "assignment_work_units_order": "all seven Work values PT4H0M0S, Units 1.0 and UID declaration order 101-107 unchanged",
+    "task_type_effort_ignore_start_work": "all four original values unchanged",
+    "task_guid_assignment_guid_calendar_guid": "all original GUID values unchanged"
+  },
+  "raw_observations_not_classified": {
+    "A": ["2026-10-12T08:00:00", "2026-10-12T17:00:00"],
+    "B": ["2026-10-12T08:00:00", "2026-10-12T17:00:00"],
+    "C": ["2026-10-12T08:00:00", "2026-10-12T12:00:00"],
+    "D": ["2026-10-12T08:00:00", "2026-10-12T12:00:00"]
+  },
+  "decision": {
+    "assignment_envelope_supported": false,
+    "assignment_envelope_rejected": false,
+    "boiler_counterfactual_authorized": false,
+    "production_correction_authorized": false,
+    "p1_g2_met": false
+  }
+}
