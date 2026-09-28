@@ -8,7 +8,7 @@ is decided here is what a float is *measured in*, which of two floats a total
 float is, and when a float makes an activity critical -- and all three were
 measured against the real schedules rather than chosen.
 
-**A float is working time on the activity's own calendar**, not the difference
+Ordinary float is working time on the activity's own calendar, not the difference
 between two coordinates -- and "own" means the calendar the *task* carries or
 the project's, not the resource's the work was placed on. Microsoft Project
 places work on the resource's calendar and measures slack on the task's, which
@@ -24,6 +24,10 @@ thing far more loudly than the argument does: read off Microsoft Project's own
 stored early and late dates, the working-time reading reproduces the ``TotalSlack``
 Project stored for four hundred of the un-progressed BOILER snapshot's activities
 where the coordinate difference reproduces twenty.
+
+For the bounded elapsed-duration cohort, float is the signed elapsed coordinate
+gap; source-derived ``float_basis`` identifies it independently of the work
+calendar. The original working-time measurements below describe ordinary work.
 
 **A total float is the smaller of the start float and the finish float.** An
 activity's early and late spans can consume a calendar's gaps differently, so
@@ -109,7 +113,7 @@ from .progress import ProgressState
 #: while preserving the reported actual LateStart.
 #: Version seven adds the native-measured inactive-boundary Free-Slack
 #: reporting rule while leaving ordinary relationships unchanged.
-CRITICALITY_PROFILE = "sto-criticality-v7"
+CRITICALITY_PROFILE = "sto-criticality-v8"
 
 
 class CriticalityError(NetworkError):
@@ -124,7 +128,7 @@ class CriticalityError(NetworkError):
 
 @dataclass(frozen=True, slots=True)
 class ActivityFloat:
-    """One activity's slack, in working time on its own calendar.
+    """One activity's slack, in its explicit working or elapsed measurement basis.
 
     ``start_float`` and ``finish_float`` are the two readings the total float is
     the smaller of. They are kept rather than collapsed because when they
@@ -192,11 +196,7 @@ def signed_working(calendar: CompiledIntervals, start: int, finish: int) -> int:
 
 
 def span_float(early: int, late: int) -> int:
-    """The plain coordinate difference: elapsed slack, not working slack.
-
-    Not what the engine reports, and kept only so the file oracle can show the
-    two readings side by side -- it is the one the real schedules rule out.
-    """
+    """Signed coordinate difference used by bounded elapsed-float activities."""
 
     return late - early
 
@@ -213,6 +213,8 @@ def _free_float(
     calendar_placed_starts: frozenset[UUID],
     immovable: frozenset[UUID],
     project_late_finish: int,
+    *,
+    elapsed: bool = False,
 ) -> int:
     """Slack against the successors' *early* dates, not the project's late finish.
 
@@ -253,8 +255,11 @@ def _free_float(
     # to another path's finish as free float despite both actuals being fixed.
     if uid in immovable:
         return 0
+    def measure(start: int, finish: int) -> int:
+        return finish - start if elapsed else signed_working(calendar, start, finish)
+
     if not outgoing:
-        return signed_working(calendar, early_finish, project_late_finish)
+        return measure(early_finish, project_late_finish)
 
     slacks: list[int] = []
     for relationship in outgoing:
@@ -325,7 +330,7 @@ def _free_float(
                     "no snapped predecessor coordinate satisfies the relationship",
                 )
             permitted = snapped
-        slacks.append(signed_working(calendar, anchor, permitted))
+        slacks.append(measure(anchor, permitted))
     return min(slacks)
 
 
@@ -374,6 +379,7 @@ def float_analysis(
     early = forward.by_uid()
     late = backward.by_uid()
 
+    activities = network.activity_by_uid()
     calendars = {activity.uid: activity.float_calendar for activity in network.activities}
     # The calendar a lag falls back to when an edge names none is the one the
     # passes consumed it on -- the successor's scheduling calendar -- not the
@@ -495,10 +501,10 @@ def float_analysis(
         late_start = late[uid].remaining_start
         if late_start is None:
             late_start = late[uid].late_start
-        start_float = signed_working(calendar, early_start, late_start)
-        finish_float = signed_working(
-            calendar, early[uid].early_finish, late[uid].late_finish
-        )
+        measure = (span_float if activities[uid].float_basis == "elapsed"
+                   else lambda start, finish: signed_working(calendar, start, finish))
+        start_float = measure(early_start, late_start)
+        finish_float = measure(early[uid].early_finish, late[uid].late_finish)
         total = min(start_float, finish_float)
         free = _free_float(
             uid,
@@ -512,6 +518,7 @@ def float_analysis(
             calendar_placed_starts,
             complete,
             backward.project_late_finish,
+            elapsed=activities[uid].float_basis == "elapsed",
         )
         rows.append(
             ActivityFloat(

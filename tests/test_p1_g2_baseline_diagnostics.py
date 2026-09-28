@@ -775,23 +775,16 @@ class P1G2DiagnosticToolTests(unittest.TestCase):
         )
 
     @unittest.skipUnless(PRESENT, "exact BOILER baseline/UID 227 pair unavailable")
-    def test_exact_pair_reproduces_diagnosis_with_current_execution_lineage(self) -> None:
-        regenerated = build_record(BASELINE, REPEAT)
-        recorded = json.loads(EVIDENCE.read_text(encoding="utf-8"))
-        current_lineage = regenerated.pop("lineage")
-        recorded_lineage = recorded.pop("lineage")
-        # Only producer identity changes. Every field slot, causal confidence,
-        # dependency path, input identity and gate remains an exact comparison.
-        self.assertEqual(regenerated, recorded)
-        self.assertEqual(current_lineage["production_basis"],
-                         recorded_lineage["production_basis"])
-        for key in ("evidence_tool", "execution"):
-            identity = current_lineage[key]
-            payload = (ROOT / identity["path"]).read_bytes()
-            self.assertEqual(identity["bytes"], len(payload))
-            self.assertEqual(identity["sha256"], hashlib.sha256(payload).hexdigest())
-        self.assertEqual(current_lineage["execution"]["profile"],
-                         "sto-p1-g2-verified-source-v1")
+    def test_historical_diagnosis_refuses_a_changed_production_basis(self) -> None:
+        # The September 22 record belongs to its own immutable production
+        # basis; running its old analyzer against this new RC03 engine must
+        # refuse rather than overwrite 422 historical mismatches with zero.
+        before = EVIDENCE.read_bytes()
+        self.assertEqual(hashlib.sha256(before).hexdigest(),
+                         "2408fc99f282e9c600d3821b3c926f7deafa8c05044c7fec9a5f08b2b656bf63")
+        with self.assertRaisesRegex(DiagnosticError, "production basis worktree bytes differ"):
+            build_record(BASELINE, REPEAT)
+        self.assertEqual(EVIDENCE.read_bytes(), before)
 
 
 if __name__ == "__main__":

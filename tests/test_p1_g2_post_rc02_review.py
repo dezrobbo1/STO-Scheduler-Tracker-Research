@@ -11,6 +11,7 @@ import unittest
 from unittest import mock
 
 from scripts.evidence import p1_g2_post_rc02_review as review
+from scripts.evidence.p1_g2_execution import DiagnosticError as ExecutionDiagnosticError
 
 ROOT = Path(__file__).resolve().parents[1]
 EVIDENCE = ROOT / "docs/evidence/p1-g2-post-rc02-review-2026-09-25.json"
@@ -162,11 +163,16 @@ class PostRc02ReviewTests(unittest.TestCase):
             self.assertEqual(source.read_text(encoding="utf-8"), "source")
 
     @unittest.skipUnless(os.environ.get("STO_BOILER_BEFORE"), "external BOILER baseline not supplied")
-    def test_external_current_production_recomputation_matches_committed_record(self):
+    def test_historical_recomputation_refuses_changed_production_basis(self):
         source = Path(os.environ["STO_BOILER_BEFORE"])
         before = source.read_bytes()
-        record = review.build_record(source)
-        self.assertEqual(review.serialize(record).encode("utf-8"), EVIDENCE.read_bytes())
+        evidence = EVIDENCE.read_bytes()
+        self.assertEqual(hashlib.sha256(evidence).hexdigest(),
+                         "9a3ef68637b6e213188400f05fdca9bd216eebfbafa100f10f817623f5b8f3d3")
+        with self.assertRaisesRegex(ExecutionDiagnosticError,
+                                    "production basis worktree bytes differ"):
+            review.build_record(source)
+        self.assertEqual(EVIDENCE.read_bytes(), evidence)
         self.assertEqual(source.read_bytes(), before)
 
 

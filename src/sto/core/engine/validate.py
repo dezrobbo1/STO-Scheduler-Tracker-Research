@@ -47,7 +47,7 @@ from .progress import ProgressState, relationship_binds, state_of
 __all__ = ["VALIDATOR_PROFILE", "Violation", "validate_result"]
 
 #: Named on a report so a stored one says which rules were applied.
-VALIDATOR_PROFILE = "sto-validator-v5"
+VALIDATOR_PROFILE = "sto-validator-v6"
 
 
 @dataclass(frozen=True, slots=True)
@@ -457,8 +457,12 @@ def validate_result(
             if late_row.remaining_start is not None
             else late_row.late_start
         )
-        start_gap = _signed(activity.float_calendar, early_side, late_side)
-        finish_gap = _signed(activity.float_calendar, row.early_finish, late_row.late_finish)
+        if activity.float_basis == "elapsed":
+            start_gap = late_side - early_side
+            finish_gap = late_row.late_finish - row.early_finish
+        else:
+            start_gap = _signed(activity.float_calendar, early_side, late_side)
+            finish_gap = _signed(activity.float_calendar, row.early_finish, late_row.late_finish)
         measured = min(start_gap, finish_gap)
         reported = float_row.total_float
         if reported != measured:
@@ -563,9 +567,10 @@ def validate_result(
             # An open-ended tail is measured against the project late finish,
             # which is what makes its free float equal its total float rather
             # than unbounded.
-            expected = _signed(
-                activity.float_calendar, row.early_finish, backward.project_late_finish
-            )
+            expected = (backward.project_late_finish - row.early_finish
+                        if activity.float_basis == "elapsed" else
+                        _signed(activity.float_calendar, row.early_finish,
+                                backward.project_late_finish))
             if reported != expected:
                 violations.append(
                     Violation(
@@ -759,10 +764,12 @@ def _edges_hold_after(
     rather than treats as a pass.
     """
 
-    start = (row.early_start if activity.has_started else
-             _slipped(activity.float_calendar, row.early_start, slip))
-    finish = (row.early_finish if row.state is ProgressState.COMPLETE else
-              _slipped(activity.float_calendar, row.early_finish, slip))
+    def move(coordinate):
+        return (coordinate + slip if activity.float_basis == "elapsed" else
+                _slipped(activity.float_calendar, coordinate, slip))
+
+    start = row.early_start if activity.has_started else move(row.early_start)
+    finish = row.early_finish if row.state is ProgressState.COMPLETE else move(row.early_finish)
     if start is None or finish is None:
         return None
     exactly_pinned = (

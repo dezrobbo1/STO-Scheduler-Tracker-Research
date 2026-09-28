@@ -55,6 +55,7 @@ Every refusal is a code, never a guess, in the manner of
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Literal
 from uuid import UUID
 
 from sto.core.calendar.arithmetic import (
@@ -185,6 +186,9 @@ class PlannedActivity:
     #: routinely different shifts. ``None`` means the scheduling calendar, which
     #: is what the corpus declares and what an activity with no resource has.
     measure_calendar: CompiledIntervals | None = None
+    #: A separately evidenced, source-derived float measurement rule.  The
+    #: continuous placement calendar alone does not establish elapsed slack.
+    float_basis: Literal["working", "elapsed"] = "working"
     #: Present only for the bounded RC01 ordinary FS, unstarted allocation
     #: shapes. None keeps the former union-calendar rule and its assumption.
     assignment_envelope: tuple[AssignmentPlacement, ...] | None = None
@@ -332,7 +336,7 @@ class Network:
                         a.actual_finish,
                         a.remaining_duration,
                         calendar_digest(a.measure_calendar),
-                    ] + (
+                    ] + (["elapsed_float"] if a.float_basis == "elapsed" else []) + (
                         [[str(p.uid), str(p.resource_uid),
                           calendar_digest(p.calendar), p.work_duration]
                          for p in a.assignment_envelope]
@@ -424,6 +428,8 @@ class Network:
                 # would read as zero slack and a critical row rather than as
                 # a float that cannot be measured.
                 raise ForwardPassError("SCHEDULE_MEASURE_CALENDAR_EMPTY", activity.uid)
+            if activity.float_basis not in ("working", "elapsed"):
+                raise ForwardPassError("SCHEDULE_FLOAT_BASIS_INVALID", activity.uid)
             if activity.assignment_envelope is not None:
                 if (len(activity.assignment_envelope) < 2 or activity.has_started
                     or activity.constraint_type is not ConstraintType.ASAP):

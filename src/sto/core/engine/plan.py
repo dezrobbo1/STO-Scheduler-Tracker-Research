@@ -795,8 +795,9 @@ def build_plan(
         if elapsed:
             # Elapsed time counts every hour on the clock, working or not
             # (Microsoft's DurationFormat reference says so in as many words),
-            # so the span is placed on the continuous calendar. Slack is still
-            # measured where ADR-010 measures it. The rule is the format's
+            # so the span is placed on the continuous calendar. Slack normally
+            # remains on ADR-010's calendar; only the later bounded RC03 shape
+            # measures its float as elapsed time. The placement rule is the format's
             # documented meaning rather than a measurement of these files -- no
             # elapsed row here has ever been scheduled before -- so the row is
             # labelled, not silently claimed.
@@ -1360,6 +1361,63 @@ def build_plan(
                       for row in activities]
         assumed = [row for row in assumed if not (
             row.code == "ACTIVITY_RESOURCE_CALENDARS_UNITED" and row.uid in envelopes)]
+
+    # The real-file RC03 roots have unambiguous elapsed planned AND remaining
+    # duration of 96 hours, no progress/constraints, one full-time assignment
+    # on a 24-hour resource calendar, and ordinary zero-lag FS network logic.
+    # One has one successor, the other two.  Do
+    # not infer this measurement rule from the continuous placement calendar:
+    # unsupported elapsed tasks retain their labelled working-float assumption.
+    elapsed_float_uids: set[UUID] = set()
+    if resource_calendars_apply:
+        for activity in schedule.activities:
+            if activity.uid not in scheduled:
+                continue
+            planned, remaining = activity.planned_duration, activity.remaining_duration
+            rows = assignment_rows_by_activity.get(activity.uid, [])
+            assignment = rows[0] if len(rows) == 1 else None
+            raw_edges = [row for row in schedule.relationships if activity.uid in
+                         (row.predecessor_uid, row.successor_uid)]
+            incoming = [row for row in raw_edges if row.successor_uid == activity.uid]
+            outgoing = [row for row in raw_edges if row.predecessor_uid == activity.uid]
+            if (activity.kind is not ActivityKind.TASK or not activity.active or activity.manual
+                or planned is None or remaining is None
+                or not planned.elapsed or not remaining.elapsed
+                or planned.seconds != 345600 or remaining.seconds != planned.seconds
+                or activity.duration_type is not DurationType.FIXED_UNITS
+                or activity.effort_driven or activity.calendar_uid is not None
+                or activity.planned_work is None or activity.planned_work.seconds != planned.seconds
+                or activity.actual_start is not None or activity.actual_finish is not None
+                or activity.primary_constraint is not None or activity.secondary_constraint is not None
+                or activity.levelling_delay_seconds != 0
+                or activity.source_fields.get("ignore_resource_calendar_source") not in (None, "0")
+                or any(value != 0 for value in
+                       (activity.percent_complete.duration_permille,
+                        activity.percent_complete.work_permille,
+                        activity.percent_complete.physical_permille,
+                        activity.percent_complete.units_permille))
+                or activity.actual_work is not None and activity.actual_work.seconds != 0
+                or assignment is None or assignment.resource_uid not in resources
+                or resources[assignment.resource_uid].calendar_uid not in calendars
+                or calendars[resources[assignment.resource_uid].calendar_uid].intervals.intervals
+                   != (window,)
+                or assignment.units.budgeted_permille != 1000
+                or assignment.work.budgeted_seconds != planned.seconds
+                or assignment.work.remaining_seconds != planned.seconds
+                or assignment.work.actual_seconds != 0
+                or assignment.percent_work_complete_permille != 0
+                or assignment.source_fields.get("delay_tenths_minutes_source") != "0"
+                or assignment.source_fields.get("leveling_delay_tenths_minutes_source") != "0"
+                or len(incoming) != 1 or len(outgoing) not in (1, 2)
+                or any(not _zero_lag_fs_relationship(row) or
+                       row.lag_calendar is not LagCalendar.INHERIT_PROJECT_POLICY
+                       for row in raw_edges)
+                or len(incident_by_activity[activity.uid]) != len(raw_edges)):
+                continue
+            elapsed_float_uids.add(activity.uid)
+    if elapsed_float_uids:
+        activities = [replace(row, float_basis="elapsed") if row.uid in elapsed_float_uids
+                      else row for row in activities]
 
     network = Network(
         activities=tuple(activities),
