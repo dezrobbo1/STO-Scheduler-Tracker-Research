@@ -8,6 +8,7 @@ from pathlib import Path
 import tempfile
 import unittest
 import xml.etree.ElementTree as ET
+from unittest.mock import patch
 
 from scripts.evidence import p1_g2_rc01_assignment_native_v2 as native
 from scripts.evidence import p1_g2_rc01_assignment_native_v2_generate as generator
@@ -17,6 +18,10 @@ ROOT = Path(__file__).resolve().parents[1]
 FIXTURE = ROOT / "tests/fixtures/P1-G2-RC01-ASSIGNMENT-ENVELOPE-NATIVE-MATRIX-V2.xml"
 RECEIPT = ROOT / "docs/evidence/p1-g2-rc01-native-v1-invalid-return-2026-09-28.json"
 EXTERNAL_V1 = os.getenv("STO_RC01_V1_NATIVE_RETURN")
+EXTERNAL_V2_VALID = os.getenv("STO_RC01_V2_NATIVE_RETURN")
+EXTERNAL_V2_INVALID = os.getenv("STO_RC01_V2_INVALID_RETURN")
+VALID_V2_RECEIPT = ROOT / "docs/evidence/p1-g2-rc01-native-v2-valid-return-2026-09-28.json"
+INVALID_V2_RECEIPT = ROOT / "docs/evidence/p1-g2-rc01-native-v2-invalid-return-2026-09-28.json"
 NS = {"p": generator.URI}
 
 
@@ -180,6 +185,17 @@ class Rc01V2Tests(unittest.TestCase):
                 self.assertEqual(native.analyze(encode(root))["classification"]["verdict"],
                                  "V2_INPUT_CONTRACT_VIOLATED")
 
+    def test_non_mspdi_rows_cannot_classify_as_native_support(self):
+        for container, uid in (("Calendars", 2), ("Tasks", 1),
+                               ("Resources", 1), ("Assignments", 101)):
+            with self.subTest(container=container):
+                root = ET.fromstring(synthetic_v1_style_save())
+                get(root, container, uid).tag = generator.q("Bogus")
+                result = native.analyze(encode(root))
+                self.assertEqual(result["classification"]["verdict"],
+                                 "V2_INPUT_CONTRACT_VIOLATED")
+                self.assertFalse(result["decision"]["boiler_counterfactual_authorized"])
+
     def test_duration_can_recalculate_but_unexplained_duration_is_inconclusive(self):
         root = ET.fromstring(synthetic_v1_style_save())
         set_field(get(root, "Tasks", 1), "Duration", "PT7H0M0S")
@@ -247,6 +263,37 @@ class Rc01V2Tests(unittest.TestCase):
                          "project input changed: GUID")
         self.assertFalse(receipt["decision"]["boiler_counterfactual_authorized"])
 
+    def test_v2_return_receipts_preserve_distinct_external_file_identities(self):
+        valid = json.loads(VALID_V2_RECEIPT.read_text())
+        invalid = json.loads(INVALID_V2_RECEIPT.read_text())
+        self.assertEqual(valid["native_return"], {
+            "bytes": 54152,
+            "sha256": "674b2a70649991ac6b9624ced1d16ca88a5287fed35da08486a59986360d513e",
+        })
+        self.assertEqual(valid["project"]["build_number"], "16.0.20326.20140")
+        self.assertEqual(valid["classification"]["verdict"],
+                         "V2_ASSIGNMENT_ENVELOPE_SUPPORTED")
+        self.assertTrue(all(valid["classification"]["predicates"].values()))
+        self.assertTrue(valid["decision"]["boiler_counterfactual_authorized"])
+        self.assertFalse(valid["decision"]["production_correction_authorized"])
+        self.assertEqual(invalid["native_return"], {
+            "bytes": 54123,
+            "sha256": "3dfb874e7e0e5bb72502b1b87a0e884c96dcb5a730155fc156436a9579fa62f4",
+        })
+        self.assertEqual(invalid["classification"]["validation_failure"],
+                         "project input changed: Name")
+        self.assertFalse(invalid["decision"]["boiler_counterfactual_authorized"])
+
+    @unittest.skipUnless(EXTERNAL_V2_VALID, "external immutable V2 valid return not supplied")
+    def test_optional_genuine_v2_valid_return_matches_record(self):
+        payload = Path(EXTERNAL_V2_VALID or "").read_bytes()
+        self.assertEqual(native.analyze(payload), json.loads(VALID_V2_RECEIPT.read_text()))
+
+    @unittest.skipUnless(EXTERNAL_V2_INVALID, "external immutable V2 invalid return not supplied")
+    def test_optional_genuine_v2_invalid_return_matches_record(self):
+        payload = Path(EXTERNAL_V2_INVALID or "").read_bytes()
+        self.assertEqual(native.analyze(payload), json.loads(INVALID_V2_RECEIPT.read_text()))
+
     @unittest.skipUnless(EXTERNAL_V1, "external immutable V1 return not supplied")
     def test_optional_external_return_matches_receipt_without_writing(self):
         payload = Path(EXTERNAL_V1 or "").read_bytes()
@@ -298,6 +345,32 @@ class Rc01V2Tests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("separate", result.stderr)
         self.assertEqual(FIXTURE.read_bytes(), before)
+
+    def test_cli_protects_markdown_receipt_from_output_alias(self):
+        # Redirect ROOT into a temporary tree so the pre-fix false-success
+        # cannot overwrite the repository's genuine append-only receipt.
+        import sys
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for filename in (
+                "p1-g2-rc01-native-v1-invalid-return-2026-09-28.md",
+                "p1-g2-rc01-native-v2-invalid-return-2026-09-28.json",
+                "p1-g2-rc01-native-v2-valid-return-2026-09-28.json",
+                "p1-g2-rc01-native-v2-return-2026-09-28.md",
+            ):
+                with self.subTest(filename=filename):
+                    receipt = root / "docs/evidence" / filename
+                    receipt.parent.mkdir(parents=True, exist_ok=True)
+                    receipt.write_text("immutable receipt\n", encoding="utf-8")
+                    original = receipt.read_bytes()
+                    with patch.object(native, "ROOT", root), patch.object(sys, "argv", [
+                        "p1_g2_rc01_assignment_native_v2.py", str(FIXTURE),
+                        "--output", str(receipt),
+                    ]):
+                        with self.assertRaisesRegex(native.NativeEvidenceError, "separate"):
+                            native.main()
+                    self.assertEqual(receipt.read_bytes(), original)
 
 
 if __name__ == "__main__":

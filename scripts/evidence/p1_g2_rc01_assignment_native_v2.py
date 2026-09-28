@@ -145,6 +145,7 @@ def _named(container: ET.Element | None, kind: str) -> dict[str, ET.Element]:
     _require(container is not None, f"native return is missing {kind} container")
     rows: dict[str, ET.Element] = {}
     for row in list(container):
+        _require(row.tag == generate.q(kind.title()), f"unexpected {kind} row tag")
         name = _text(row, "Name")
         if name:
             _require(name not in rows, f"native return duplicates {kind} name {name}")
@@ -156,6 +157,7 @@ def _uid_rows(container: ET.Element | None, kind: str) -> dict[int, ET.Element]:
     _require(container is not None, f"native return is missing {kind} container")
     rows = {}
     for row in container:
+        _require(row.tag == generate.q(kind.title()), f"unexpected {kind} row tag")
         uid = _text(row, "UID")
         _require(uid is not None and uid.isdigit(), f"{kind} UID is invalid")
         key = int(uid)
@@ -464,6 +466,8 @@ def parse_and_validate(payload: bytes) -> dict[str, object]:
     assignments_element = root.find("p:Assignments", NS)
     _require(assignments_element is not None, "native return is missing assignments")
     assignment_rows = list(assignments_element)
+    _require(all(row.tag == generate.q("Assignment") for row in assignment_rows),
+             "unexpected assignment row tag")
     order = [_text(row, "UID") for row in assignment_rows]
     expected_order = [str(uid) for uid in generate.ASSIGNMENT_ORDER]
     _require(order == expected_order, "assignment order changed")
@@ -901,6 +905,10 @@ def main() -> int:
         "pinned V2 input": ROOT / "tests/fixtures/P1-G2-RC01-ASSIGNMENT-ENVELOPE-NATIVE-MATRIX-V2.xml",
         "historical V1 input": ROOT / "tests/fixtures/P1-G2-RC01-ASSIGNMENT-ENVELOPE-NATIVE-MATRIX-V1.xml",
         "V1 invalid-return receipt": ROOT / "docs/evidence/p1-g2-rc01-native-v1-invalid-return-2026-09-28.json",
+        "V1 invalid-return Markdown receipt": ROOT / "docs/evidence/p1-g2-rc01-native-v1-invalid-return-2026-09-28.md",
+        "V2 invalid-return receipt": ROOT / "docs/evidence/p1-g2-rc01-native-v2-invalid-return-2026-09-28.json",
+        "V2 valid-return receipt": ROOT / "docs/evidence/p1-g2-rc01-native-v2-valid-return-2026-09-28.json",
+        "V2 return Markdown receipt": ROOT / "docs/evidence/p1-g2-rc01-native-v2-return-2026-09-28.md",
     }
     if args.output:
         refuse_output_alias(args.output, sources)

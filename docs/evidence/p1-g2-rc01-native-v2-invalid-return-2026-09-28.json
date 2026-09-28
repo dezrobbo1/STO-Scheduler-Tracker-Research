@@ -1,0 +1,17 @@
+{
+  "classification": {
+    "validation_failure": "project input changed: Name",
+    "verdict": "V2_INPUT_CONTRACT_VIOLATED"
+  },
+  "decision": {
+    "boiler_counterfactual_authorized": false,
+    "native_experiment_passed": false,
+    "production_correction_authorized": false
+  },
+  "experiment_id": "P1-G2-RC01-ASSIGNMENT-ENVELOPE-NATIVE-MATRIX-V2",
+  "native_return": {
+    "bytes": 54123,
+    "sha256": "3dfb874e7e0e5bb72502b1b87a0e884c96dcb5a730155fc156436a9579fa62f4"
+  },
+  "schema": "sto-p1-g2-rc01-assignment-envelope-native-v2"
+}

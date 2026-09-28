@@ -1,0 +1,282 @@
+{
+  "classification": {
+    "assignment_calendar_compatibility": {
+      "A.101": true,
+      "A.102": true,
+      "B.103": true,
+      "B.104": true,
+      "C.105": true,
+      "C.106": true,
+      "D.107": true
+    },
+    "controls_valid": true,
+    "envelope_checks": {
+      "A": true,
+      "B": true,
+      "C": true
+    },
+    "observations": {
+      "A": {
+        "assignments": {
+          "101": {
+            "finish": "2026-10-12T12:00:00",
+            "resource_uid": 1,
+            "role": "AM",
+            "start": "2026-10-12T08:00:00",
+            "uid": 101,
+            "units": "1",
+            "work": "PT4H0M0S"
+          },
+          "102": {
+            "finish": "2026-10-12T17:00:00",
+            "resource_uid": 2,
+            "role": "PM",
+            "start": "2026-10-12T13:00:00",
+            "uid": 102,
+            "units": "1",
+            "work": "PT4H0M0S"
+          }
+        },
+        "task": {
+          "duration": "PT8H0M0S",
+          "early_finish": "2026-10-12T17:00:00",
+          "early_start": "2026-10-12T08:00:00",
+          "finish": "2026-10-12T17:00:00",
+          "remaining_duration": "PT8H0M0S",
+          "start": "2026-10-12T08:00:00"
+        },
+        "union_prediction": {
+          "finish": "2026-10-12T12:00:00",
+          "start": "2026-10-12T08:00:00"
+        }
+      },
+      "B": {
+        "assignments": {
+          "103": {
+            "finish": "2026-10-12T17:00:00",
+            "resource_uid": 2,
+            "role": "PM",
+            "start": "2026-10-12T13:00:00",
+            "uid": 103,
+            "units": "1",
+            "work": "PT4H0M0S"
+          },
+          "104": {
+            "finish": "2026-10-12T12:00:00",
+            "resource_uid": 1,
+            "role": "AM",
+            "start": "2026-10-12T08:00:00",
+            "uid": 104,
+            "units": "1",
+            "work": "PT4H0M0S"
+          }
+        },
+        "task": {
+          "duration": "PT8H0M0S",
+          "early_finish": "2026-10-12T17:00:00",
+          "early_start": "2026-10-12T08:00:00",
+          "finish": "2026-10-12T17:00:00",
+          "remaining_duration": "PT8H0M0S",
+          "start": "2026-10-12T08:00:00"
+        },
+        "union_prediction": {
+          "finish": "2026-10-12T12:00:00",
+          "start": "2026-10-12T08:00:00"
+        }
+      },
+      "C": {
+        "assignments": {
+          "105": {
+            "finish": "2026-10-12T12:00:00",
+            "resource_uid": 3,
+            "role": "AM",
+            "start": "2026-10-12T08:00:00",
+            "uid": 105,
+            "units": "1",
+            "work": "PT4H0M0S"
+          },
+          "106": {
+            "finish": "2026-10-12T12:00:00",
+            "resource_uid": 4,
+            "role": "AM",
+            "start": "2026-10-12T08:00:00",
+            "uid": 106,
+            "units": "1",
+            "work": "PT4H0M0S"
+          }
+        },
+        "task": {
+          "duration": "PT4H0M0S",
+          "early_finish": "2026-10-12T12:00:00",
+          "early_start": "2026-10-12T08:00:00",
+          "finish": "2026-10-12T12:00:00",
+          "remaining_duration": "PT4H0M0S",
+          "start": "2026-10-12T08:00:00"
+        },
+        "union_prediction": {
+          "finish": "2026-10-12T12:00:00",
+          "start": "2026-10-12T08:00:00"
+        }
+      },
+      "D": {
+        "assignments": {
+          "107": {
+            "finish": "2026-10-12T12:00:00",
+            "resource_uid": 1,
+            "role": "AM",
+            "start": "2026-10-12T08:00:00",
+            "uid": 107,
+            "units": "1",
+            "work": "PT4H0M0S"
+          }
+        },
+        "task": {
+          "duration": "PT4H0M0S",
+          "early_finish": "2026-10-12T12:00:00",
+          "early_start": "2026-10-12T08:00:00",
+          "finish": "2026-10-12T12:00:00",
+          "remaining_duration": "PT4H0M0S",
+          "start": "2026-10-12T08:00:00"
+        },
+        "union_prediction": {
+          "finish": "2026-10-12T12:00:00",
+          "start": "2026-10-12T08:00:00"
+        }
+      }
+    },
+    "predicates": {
+      "all_assignment_spans_match_their_resource_calendars": true,
+      "assignment_order_twin_is_identical": true,
+      "duration_is_consistent_with_assignment_work": true,
+      "overlap_control_is_valid": true,
+      "separated_cases_differ_from_union_prediction": true,
+      "single_resource_control_is_valid": true,
+      "two_assignment_tasks_equal_assignment_envelopes": true
+    },
+    "verdict": "V2_ASSIGNMENT_ENVELOPE_SUPPORTED"
+  },
+  "decision": {
+    "boiler_counterfactual_authorized": true,
+    "native_experiment_passed": true,
+    "production_correction_authorized": false
+  },
+  "experiment_id": "P1-G2-RC01-ASSIGNMENT-ENVELOPE-NATIVE-MATRIX-V2",
+  "input_identity": {
+    "bytes": 20989,
+    "path": "tests/fixtures/P1-G2-RC01-ASSIGNMENT-ENVELOPE-NATIVE-MATRIX-V2.xml",
+    "sha256": "f8c0b622e257186ee30c6b933aedebe697841dc41f72b2c3137ba0f77126cb0c"
+  },
+  "native_return": {
+    "bytes": 54152,
+    "sha256": "674b2a70649991ac6b9624ced1d16ca88a5287fed35da08486a59986360d513e"
+  },
+  "predeclared_contract": {
+    "acceptance": "all seven predicates in classification.predicates are true; A/B 8h, C/D 4h; union prediction 08:00-12:00 for four declared working hours",
+    "controls": {
+      "C": "two distinct but fully overlapping resource calendars",
+      "D": "single-resource supported-rule control"
+    },
+    "fields_read": {
+      "assignment_inputs": [
+        "UID",
+        "GUID",
+        "TaskUID",
+        "ResourceUID",
+        "Work",
+        "Units",
+        "ActualWork",
+        "RemainingWork",
+        "Delay",
+        "LevelingDelay"
+      ],
+      "assignment_outputs": [
+        "Start",
+        "Finish"
+      ],
+      "calendar_inputs": [
+        "UID",
+        "GUID",
+        "BaseCalendarUID",
+        "WeekDays.WorkingTimes"
+      ],
+      "calendar_save_normalization": [
+        "UID 2-5 display Name may become Unassigned; omission of inherited non-working weekend days only"
+      ],
+      "project_inputs": [
+        "Name",
+        "Title",
+        "ScheduleFromStart",
+        "StartDate",
+        "CalendarUID",
+        "DefaultStartTime",
+        "DefaultFinishTime",
+        "MinutesPerDay",
+        "MinutesPerWeek",
+        "DaysPerMonth",
+        "DefaultTaskType",
+        "NewTasksEffortDriven",
+        "NewTasksAreManual",
+        "HonorConstraints",
+        "TaskUpdatesResource"
+      ],
+      "project_native_identity_or_outputs": [
+        "GUID",
+        "BuildNumber",
+        "FinishDate"
+      ],
+      "resource_inputs": [
+        "UID",
+        "ID",
+        "CalendarUID",
+        "MaxUnits",
+        "CanLevel"
+      ],
+      "resource_native_identity_or_outputs": [
+        "GUID",
+        "PeakUnits",
+        "OverAllocated"
+      ],
+      "task_inputs": [
+        "UID",
+        "GUID",
+        "ID",
+        "Type",
+        "EffortDriven",
+        "IgnoreResourceCalendar",
+        "Work",
+        "Start",
+        "CalendarUID",
+        "ConstraintType",
+        "Manual",
+        "PercentComplete",
+        "LevelAssignments",
+        "LevelingCanSplit",
+        "LevelingDelay"
+      ],
+      "task_outputs": [
+        "Duration",
+        "RemainingDuration",
+        "Finish",
+        "EarlyStart",
+        "EarlyFinish",
+        "LateStart",
+        "LateFinish",
+        "FreeSlack",
+        "TotalSlack",
+        "Critical"
+      ]
+    },
+    "inconclusive": "any invalid control, order effect, unknown normalization or mixed observation",
+    "rejection": "valid controls and order twin; both A/B follow exact 08:00-12:00 four-hour union placement despite valid PM assignments to 17:00",
+    "stopping_rule": "support authorizes only a later diagnostic BOILER counterfactual; rejection or inconclusive stops RC01 without a production change",
+    "support": "V2_ASSIGNMENT_ENVELOPE_SUPPORTED"
+  },
+  "project": {
+    "build_number": "16.0.20326.20140",
+    "calendar_uid": "1",
+    "guid": "D953E5DE-DDBA-F111-9818-902E162C1984",
+    "name": "P1-G2-RC01-ASSIGNMENT-ENVELOPE-NATIVE-MATRIX-V2.xml",
+    "start": "2026-10-12T08:00:00"
+  },
+  "schema": "sto-p1-g2-rc01-assignment-envelope-native-v2"
+}
