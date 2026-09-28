@@ -54,6 +54,26 @@ class Rc01BoilerPreResultTests(unittest.TestCase):
                          "RC01_ASSIGNMENT_ENVELOPE_BOILER_COUNTERFACTUAL_OUTSIDE_NATIVE_BOUNDARY")
         self.assertFalse(record["decision"]["production_rc01_correction_authorized"])
 
+    def test_reviewed_v3_is_append_only_and_does_not_authorize_production(self):
+        old = json.loads((ROOT / "docs/evidence/p1-g2-rc01-boiler-counterfactual-2026-09-28.json").read_bytes())
+        path = ROOT / "docs/evidence/p1-g2-rc01-boiler-counterfactual-reviewed-v3-2026-09-28.json"
+        raw = path.read_bytes()
+        self.assertEqual(hashlib.sha256(raw).hexdigest(),
+                         "4a7b32e7050b8eb61860d08cc26e544e01e924f4096576ea67009c04c318b248")
+        current = json.loads(raw)
+        self.assertEqual(current["pre_result_tool"], cf.pre_result_identity())
+        self.assertEqual(current["source"], old["source"])
+        for field in ("before", "after", "movement", "decision", "validator"):
+            self.assertEqual(current[field], old[field])
+        self.assertEqual(len(current["applicability"]), 10)
+        self.assertEqual(sum(len(row["assignments"]) for row in current["applicability"]), 20)
+        for row in current["applicability"]:
+            self.assertEqual(row["classification"], "DIAGNOSTIC_EXTRAPOLATION_REQUIRED")
+            for assignment in row["assignments"]:
+                self.assertEqual(assignment["delay_tenths_minutes"], 0)
+                self.assertEqual(assignment["leveling_delay_tenths_minutes"], 0)
+        self.assertFalse(current["decision"]["production_rc01_correction_authorized"])
+
     def test_predeclared_evidence_identities_and_exact_baseline_refusal(self):
         inventory, v2 = cf.load_contract()
         self.assertEqual(len(inventory["current_recomputation"]["mismatches"]), 147)
