@@ -84,6 +84,30 @@ def _working_duration(start: datetime, finish: datetime) -> str:
     return f"PT{minutes // 60}H{minutes % 60}M0S"
 
 
+def _duration(start: datetime, finish: datetime, mode: str) -> str:
+    if mode == "PROJECT":
+        return _working_duration(start, finish)
+    _require(mode == "RESOURCE_UNION", "unknown duration measurement model")
+    # Every V3 task has an assignment on the synthetic 24-hour resource;
+    # the union of its assigned resource calendars is thus continuous.
+    minutes = int((finish - start).total_seconds() // 60)
+    _require(minutes >= 0, "negative task elapsed duration")
+    return f"PT{minutes // 60}H{minutes % 60}M0S"
+
+
+def _matching_duration_model(observed: dict, predicted: dict, names: dict) -> str | None:
+    matching = [mode for mode in ("PROJECT", "RESOURCE_UNION")
+                if all(observed[name]["Duration"] == _duration(predicted[name]["early_start"],
+                                                               predicted[name]["early_finish"], mode)
+                       and observed[name]["RemainingDuration"] ==
+                       _duration(predicted[name]["early_start"],
+                                 predicted[name]["early_finish"], mode)
+                       for name in names)]
+    # The matrix has positive-work off-project-hour discriminators, so these
+    # models cannot both match. Mixed models must stay inconclusive.
+    return matching[0] if len(matching) == 1 else None
+
+
 def _expected_calendar(row: ET.Element, calendar_uid: int) -> bool:
     observed = v2._calendar_signature(row)
     expected = tuple((day, calendar_uid != 1 or 2 <= day <= 6,
@@ -320,6 +344,7 @@ def analyze(payload: bytes) -> dict:
         return record
     expected = oracle.reference()
     tasks, _, assignment_specs = matrix.graph()
+    candidate_duration_model = _matching_duration_model(data["tasks"], expected, tasks)
     checks = {}
     for name, spec in tasks.items():
         predicted, actual = expected[name], data["tasks"][name]
@@ -330,9 +355,11 @@ def analyze(payload: bytes) -> dict:
         checks[f"{name}.TotalSlack"] = actual["TotalSlack"] == predicted["total_slack_minutes"] * 10
         checks[f"{name}.FreeSlack"] = actual["FreeSlack"] == predicted["free_slack_minutes"] * 10
         checks[f"{name}.Critical"] = actual["Critical"] == predicted["critical"]
-        # Duration is a recalculated task output measured by the PROJECT
-        # calendar, not by elapsed time or any one assignment calendar.
-        exact = _working_duration(predicted["early_start"], predicted["early_finish"])
+        # V2 cannot distinguish project-calendar measurement from the union
+        # of assignment resource calendars. Require ONE globally consistent,
+        # preregistered model across all controls and candidates.
+        exact = (_duration(predicted["early_start"], predicted["early_finish"],
+                           candidate_duration_model) if candidate_duration_model else None)
         checks[f"{name}.Duration"] = actual["Duration"] == exact and actual["RemainingDuration"] == exact
     for uid, spec in assignment_specs.items():
         expected_span = expected[spec["task"]]["assignments"][uid]
@@ -374,12 +401,14 @@ def analyze(payload: bytes) -> dict:
     # preserves the declared duration when the assignment envelope is shorter.
     # Assignments always remain inside their task; mixed rules are inconclusive.
     alternative = oracle.padded_reference()
+    alternative_duration_model = _matching_duration_model(data["tasks"], alternative, tasks)
     def matches_padded(name: str) -> bool:
         row, predicted = data["tasks"][name], alternative[name]
         dates = (("Start", "early_start"), ("Finish", "early_finish"),
                  ("EarlyStart", "early_start"), ("EarlyFinish", "early_finish"),
                  ("LateStart", "late_start"), ("LateFinish", "late_finish"))
-        expected_duration = _working_duration(predicted["early_start"], predicted["early_finish"])
+        expected_duration = (_duration(predicted["early_start"], predicted["early_finish"],
+                                       alternative_duration_model) if alternative_duration_model else None)
         return (all(row[field] == predicted[key] for field, key in dates)
                 and row["Duration"] == expected_duration
                 and row["RemainingDuration"] == expected_duration
@@ -396,6 +425,9 @@ def analyze(payload: bytes) -> dict:
                "V3_NETWORKED_ASSIGNMENT_ENVELOPE_INCONCLUSIVE")
     record["classification"] = {"verdict": verdict, "predicates": checks,
                                 "controls_valid": controls,
+                                "duration_model": (candidate_duration_model if support else
+                                                   alternative_duration_model if rejected else
+                                                   "UNDETERMINED"),
                                 "failed_predicates": sorted(k for k, ok in checks.items() if not ok)}
     record["root_to_native_case"] = mapping
     record["observations"] = {"tasks": {name: {key: value.isoformat() if isinstance(value, datetime) else value

@@ -36,7 +36,7 @@ def encoded(root: ET.Element) -> bytes:
     return ET.tostring(root, encoding="utf-8", xml_declaration=True) + b"\n"
 
 
-def synthetic_oracle_save(*, padded: bool = False) -> bytes:
+def synthetic_oracle_save(*, padded: bool = False, duration_model: str = "PROJECT") -> bytes:
     """Test double only: never publish as native observation."""
     root = ET.fromstring(matrix.build_fixture())
     predicted = oracle.padded_reference() if padded else oracle.reference()
@@ -50,7 +50,9 @@ def synthetic_oracle_save(*, padded: bool = False) -> bytes:
                            ("EarlyStart", "early_start"), ("EarlyFinish", "early_finish"),
                            ("LateStart", "late_start"), ("LateFinish", "late_finish")):
             set_field(row, field, expected[key].isoformat())
-        minutes = oracle.signed_project_minutes(expected["early_start"], expected["early_finish"])
+        minutes = (oracle.signed_project_minutes(expected["early_start"], expected["early_finish"])
+                   if duration_model == "PROJECT" else
+                   int((expected["early_finish"] - expected["early_start"]).total_seconds() // 60))
         for field in ("Duration", "RemainingDuration"):
             set_field(row, field, f"PT{minutes // 60}H{minutes % 60}M0S")
         for field, key in (("TotalSlack", "total_slack_minutes"),
@@ -177,7 +179,7 @@ class NetworkedV3Tests(unittest.TestCase):
 
     def test_project_calendar_duration_predicates_for_off_hours(self):
         prereg = json.loads((ROOT / "docs/evidence/p1-g2-rc01-networked-native-v3-r3-predeclared-2026-09-28.json").read_text())
-        self.assertEqual(prereg["preregistration_id"], matrix.PREREGISTRATION_ID)
+        self.assertEqual(prereg["preregistration_id"], matrix.EXPERIMENT_ID + "-R3-WORKING-DURATION")
         self.assertEqual(prereg["input"]["sha256"], matrix.INPUT_SHA256)
         self.assertEqual(prereg["input"]["bytes"], matrix.INPUT_BYTES)
         self.assertEqual(prereg["supersedes_unrun_r2_preregistration"]["json_sha256"],
@@ -196,6 +198,37 @@ class NetworkedV3Tests(unittest.TestCase):
         self.assertEqual(padded["classification"]["verdict"],
                          "V3_NETWORKED_ASSIGNMENT_ENVELOPE_REJECTED")
         self.assertFalse(padded["decision"]["production_rc01_correction_authorized"])
+
+    def test_distinguishing_duration_models_do_not_assume_v2_result(self):
+        prereg = json.loads((ROOT / "docs/evidence/p1-g2-rc01-networked-native-v3-r4-predeclared-2026-09-28.json").read_text())
+        self.assertEqual(prereg["preregistration_id"], matrix.PREREGISTRATION_ID)
+        self.assertEqual(prereg["input"]["sha256"], matrix.INPUT_SHA256)
+        self.assertEqual(prereg["input"]["bytes"], matrix.INPUT_BYTES)
+        self.assertEqual(prereg["supersedes_unrun_r3_preregistration"]["json_sha256"],
+                         hashlib.sha256((ROOT / "docs/evidence/p1-g2-rc01-networked-native-v3-r3-predeclared-2026-09-28.json").read_bytes()).hexdigest())
+        self.assertEqual(prereg["supersedes_unrun_r3_preregistration"]["md_sha256"],
+                         hashlib.sha256((ROOT / "docs/evidence/p1-g2-rc01-networked-native-v3-r3-predeclared-2026-09-28.md").read_bytes()).hexdigest())
+        tasks = matrix.graph()[0]
+        for mode, gap, driver, post in (("PROJECT", "PT0H30M0S", "PT24H0M0S", "PT0H0M0S"),
+                                         ("RESOURCE_UNION", "PT16H0M0S", "PT72H0M0S", "PT1H0M0S")):
+            with self.subTest(mode=mode):
+                root = ET.fromstring(synthetic_oracle_save(duration_model=mode))
+                for name, value in (("GAP", gap), ("FINISH-DRIVER", driver), ("D-POST", post)):
+                    self.assertEqual(find(root, "Tasks", tasks[name]["uid"]).findtext("p:Duration", namespaces=NS), value)
+                outcome = native.analyze(encoded(root))
+                self.assertEqual(outcome["classification"]["verdict"],
+                                 "V3_NETWORKED_ASSIGNMENT_ENVELOPE_SUPPORTED")
+                self.assertEqual(outcome["classification"]["duration_model"], mode)
+                rejected = native.analyze(synthetic_oracle_save(padded=True, duration_model=mode))
+                self.assertEqual(rejected["classification"]["verdict"],
+                                 "V3_NETWORKED_ASSIGNMENT_ENVELOPE_REJECTED")
+                self.assertEqual(rejected["classification"]["duration_model"], mode)
+                self.assertFalse(outcome["decision"]["production_rc01_correction_authorized"])
+        root = ET.fromstring(synthetic_oracle_save(duration_model="PROJECT"))
+        set_field(find(root, "Tasks", tasks["D-POST"]["uid"]), "Duration", "PT1H0M0S")
+        set_field(find(root, "Tasks", tasks["D-POST"]["uid"]), "RemainingDuration", "PT1H0M0S")
+        self.assertEqual(native.analyze(encoded(root))["classification"]["verdict"],
+                         "V3_NETWORKED_ASSIGNMENT_ENVELOPE_INCONCLUSIVE")
 
     def test_input_mutations_fail_before_classification(self):
         tasks, _, assignments = matrix.graph()
