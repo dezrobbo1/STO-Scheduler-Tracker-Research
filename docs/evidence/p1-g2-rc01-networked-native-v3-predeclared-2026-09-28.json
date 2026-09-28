@@ -1,0 +1,64 @@
+{
+  "schema": "sto-p1-g2-rc01-networked-assignment-envelope-native-v3-predeclared",
+  "status": "NOT_RUN_MICROSOFT_PROJECT_REQUIRED",
+  "experiment_id": "P1-G2-RC01-NETWORKED-ASSIGNMENT-ENVELOPE-NATIVE-MATRIX-V3",
+  "starting_main": "56ad5ef50c3c0a114032a13ea3686e0a4fa96255",
+  "predecessor_pr_63_merge_commit": "56ad5ef50c3c0a114032a13ea3686e0a4fa96255",
+  "input": {
+    "path": "tests/fixtures/P1-G2-RC01-NETWORKED-ASSIGNMENT-ENVELOPE-NATIVE-MATRIX-V3.xml",
+    "bytes": 112797,
+    "sha256": "33c9dd6253930fcb2b538cf51256749f4ea71a026719e8828e3b4fb8635c8eaa",
+    "project_start": "2026-10-12T08:00:00",
+    "project_calendar": "24 hours every day",
+    "resource_calendars": {
+      "24H": "00:00-00:00 (24 hours), every day",
+      "10H": "07:00-17:00, every day",
+      "10H_identity_twin": "07:00-17:00, every day; independent calendar UID and GUID"
+    },
+    "task_count": 32,
+    "assignment_count": 42,
+    "relationship_type": "ordinary zero-lag FS",
+    "cases": ["A", "A-ORDER-TWIN", "B", "C", "C-CALENDAR-IDENTITY-TWIN", "D", "E", "F", "ADJACENT-RC01"],
+    "returned_filename": "P1-G2-RC01-NETWORKED-ASSIGNMENT-ENVELOPE-NATIVE-MATRIX-V3.xml",
+    "returned_directory_must_differ_from_fixture_directory": true
+  },
+  "evidence_lineage": {
+    "current_roots_sha256": "9a3ef68637b6e213188400f05fdca9bd216eebfbafa100f10f817623f5b8f3d3",
+    "v2_valid_return_json_sha256": "71702adb09f08014c8ce14bed7651162bff65787f8d4d4945bb2383710ca6a6c",
+    "boiler_counterfactual_v3_json_sha256": "4a7b32e7050b8eb61860d08cc26e544e01e924f4096576ea67009c04c318b248",
+    "boiler_impact_json_sha256": "ec2adf6b5f07b293fb72865963fc34d97870256385e160be339b70b69b029b96",
+    "before_slots": 147,
+    "before_rc01": 144,
+    "before_rc03": 3,
+    "after_slots": 3,
+    "after_rc01": 0,
+    "after_rc03": 3,
+    "new_slots": 0,
+    "worsened_slots": 0,
+    "validator_violations": 0
+  },
+  "mechanical_root_mapping": {
+    "L0070": {"class": "A", "native_case": "A"},
+    "L0075": {"class": "A", "native_case": "A"},
+    "L0080": {"class": "B", "native_case": "B", "adjacent_case": "ADJACENT-RC01"},
+    "L0083": {"class": "A", "native_case": "A"},
+    "L0084": {"class": "C", "native_case": "C-CALENDAR-IDENTITY-TWIN", "adjacent_case": "ADJACENT-RC01"},
+    "L0114": {"class": "C", "native_case": "C"},
+    "L0127": {"class": "D", "native_case": "D"},
+    "L0148": {"class": "C", "native_case": "C"},
+    "L0157": {"class": "E", "native_case": "E"},
+    "L0190": {"class": "F", "native_case": "F"}
+  },
+  "oracle_sha256": "ea79cba3cf328b611e51306cb404571ab35dae02a88305365f11e6f97c409f39",
+  "returned_fields": {
+    "project": ["BuildNumber", "FinishDate"],
+    "task": ["Start", "Finish", "Duration", "RemainingDuration", "EarlyStart", "EarlyFinish", "LateStart", "LateFinish", "TotalSlack", "FreeSlack", "Critical"],
+    "assignment": ["Start", "Finish"]
+  },
+  "classifications": ["V3_NETWORKED_ASSIGNMENT_ENVELOPE_SUPPORTED", "V3_NETWORKED_ASSIGNMENT_ENVELOPE_REJECTED", "V3_NETWORKED_ASSIGNMENT_ENVELOPE_INCONCLUSIVE", "V3_INPUT_CONTRACT_VIOLATED"],
+  "rejection_model": "Every task and assignment matches the independent, fixed-duration 24-hour union reference on the entire network, with valid controls; mixed results are inconclusive",
+  "support": "Every exact task early/late/duration/float/critical output and every assignment own-calendar span matches the frozen reference; all controls/twins/fan-out/adjacency and all ten root classes pass",
+  "native_result": null,
+  "production_rc01_correction_authorized": false,
+  "p1_g2_met": false
+}
