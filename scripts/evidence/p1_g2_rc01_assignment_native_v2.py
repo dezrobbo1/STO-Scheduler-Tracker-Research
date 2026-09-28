@@ -188,6 +188,14 @@ def _validate_save_delta(row: ET.Element, expected: ET.Element,
                  f"semantic input changed: {where}.{name}")
 
 
+def _check_witnessed_save_inputs(row: ET.Element, where: str,
+                                 defaults: Mapping[str, str]) -> None:
+    """Saved scheduling/progress fields absent from V1 input stay at V1 values."""
+    for field, value in defaults.items():
+        _require(_text(row, field) in (None, value),
+                 f"witnessed save input changed: {where}.{field}")
+
+
 def _calendar_signature(row: ET.Element) -> tuple[tuple[int, bool, tuple[tuple[str, str], ...]], ...]:
     result: list[tuple[int, bool, tuple[tuple[str, str], ...]]] = []
     for weekday in row.findall("p:WeekDays/p:WeekDay", NS):
@@ -345,6 +353,13 @@ def parse_and_validate(payload: bytes) -> dict[str, object]:
         _validate_save_delta(row, expected_row,
                              TASK_NATIVE_OUTPUTS | {"LevelingDelayFormat", "CalendarUID"},
                              TASK_SAVE_FIELDS | {"CalendarUID"}, name)
+        _check_witnessed_save_inputs(row, name, {
+            "ActualOvertimeWork": "PT0H0M0S",
+            "OvertimeWork": "PT0H0M0S",
+            "RemainingOvertimeWork": "PT0H0M0S",
+            "ExternalTask": "0", "IsSubproject": "0",
+            "IsSubprojectReadOnly": "0", "ResumeValid": "0",
+        })
         exact = {
             "UID": str(spec["uid"]),
             "GUID": str(spec["guid"]),
@@ -422,6 +437,9 @@ def parse_and_validate(payload: bytes) -> dict[str, object]:
         _validate_save_delta(row, expected_row,
                              {"GUID", "MaxUnits", "PeakUnits", "OverAllocated"},
                              RESOURCE_SAVE_FIELDS, name)
+        _check_witnessed_save_inputs(row, name, {
+            "ActualOvertimeWork": "PT0H0M0S", "BookingType": "0",
+        })
         exact = {
             "UID": str(uid),
             "ID": str(uid),
@@ -462,6 +480,13 @@ def parse_and_validate(payload: bytes) -> dict[str, object]:
         _validate_save_delta(row, expected_row, {"Start", "Finish", "RegularWork"},
                              ASSIGNMENT_SAVE_FIELDS | {"RegularWork", "TimephasedData"},
                              f"assignment {uid}")
+        _check_witnessed_save_inputs(row, f"assignment {uid}", {
+            "ActualOvertimeWork": "PT0H0M0S",
+            "OvertimeWork": "PT0H0M0S",
+            "RemainingOvertimeWork": "PT0H0M0S",
+            "BookingType": "0", "FixedMaterial": "0",
+            "HasFixedRateUnits": "1",
+        })
         _require(_text(row, "RegularWork") in (None, generate.ASSIGNMENT_WORK),
                  f"assignment regular work changed: {uid}")
         exact_text = {

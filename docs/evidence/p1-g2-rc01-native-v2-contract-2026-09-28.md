@@ -75,6 +75,9 @@ options added in V1 are checked against that observation **when present**.
 Original options are pinned. Manual saved Start/Finish/Duration fields, if
 present, must equal their automatic calculated counterparts. Newly added
 timephased assignment allocations cannot silently replace four hours of work.
+Saved actual/overtime work fields, external-task status and assignment booking
+flags absent from V1 input must also retain their witnessed no-progress values;
+they cannot be treated as harmless added save metadata.
 No V1 evidence establishes any other normalization rule.
 
 ## Predeclared stopping rule

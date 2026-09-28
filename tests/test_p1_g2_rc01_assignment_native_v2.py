@@ -209,6 +209,14 @@ class Rc01V2Tests(unittest.TestCase):
         generator.add(root, "Autolink", "1")
         self.assertEqual(native.analyze(encode(root))["classification"]["verdict"],
                          "V2_INPUT_CONTRACT_VIOLATED")
+
+    def test_added_actual_overtime_cannot_fake_no_progress(self):
+        root = ET.fromstring(synthetic_v1_style_save())
+        generator.add(get(root, "Tasks", 1), "ActualOvertimeWork", "PT1H0M0S")
+        result = native.analyze(encode(root))
+        self.assertEqual(result["classification"]["verdict"],
+                         "V2_INPUT_CONTRACT_VIOLATED")
+        self.assertFalse(result["decision"]["boiler_counterfactual_authorized"])
         root = ET.fromstring(synthetic_v1_style_save())
         sunday = get(root, "Calendars", 1).find("p:WeekDays/p:WeekDay", NS)
         assert sunday is not None
