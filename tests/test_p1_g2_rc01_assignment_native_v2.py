@@ -75,6 +75,19 @@ class Rc01V2Tests(unittest.TestCase):
         self.assertTrue(imported["resource_calendar_identity_preserved"])
         self.assertTrue(imported["assignment_work_and_units_preserved"])
 
+    def test_standalone_generator_command_emits_pinned_bytes(self):
+        import subprocess
+        import sys
+
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "input.xml"
+            process = subprocess.run(
+                [sys.executable, str(ROOT / "scripts/evidence/p1_g2_rc01_assignment_native_v2_generate.py"),
+                 str(target)], cwd=ROOT, capture_output=True, text=True,
+            )
+            self.assertEqual(process.returncode, 0, process.stderr)
+            self.assertEqual(target.read_bytes(), FIXTURE.read_bytes())
+
     def test_exact_four_cases_and_order_twin(self):
         parsed = native.parse_and_validate(generator.build_fixture())
         self.assertEqual(parsed["assignment_order"], list(generator.ASSIGNMENT_ORDER))
