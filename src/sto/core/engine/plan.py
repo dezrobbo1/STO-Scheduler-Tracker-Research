@@ -61,6 +61,7 @@ calendar in the plan, because coordinates from two epochs cannot be compared.
 
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
@@ -1407,6 +1408,7 @@ def build_plan(
                 or activity.source_fields.get("effort_driven_source") != "0"
                 or activity.source_fields.get("task_leveling_delay_source") != "0"
                 or activity.primary_constraint is not None or activity.secondary_constraint is not None
+                or activity.deadline is not None
                 or activity.levelling_delay_seconds != 0
                 or activity.source_fields.get("ignore_resource_calendar_source") not in (None, "0")
                 or any(value != 0 for value in
@@ -1439,6 +1441,7 @@ def build_plan(
                    != "four-contiguous-24h"
                 or any(assignment.source_fields.get(field) is not None for field in (
                     "delay_ambiguous_source", "leveling_delay_ambiguous_source",
+                    "start_ambiguous_source", "finish_ambiguous_source",
                     "units_ambiguous_source", "work_ambiguous_source",
                     "remaining_work_ambiguous_source", "actual_work_ambiguous_source",
                     "percent_work_complete_ambiguous_source", "work_contour_ambiguous_source",
@@ -1454,7 +1457,15 @@ def build_plan(
                 or any(not _zero_lag_fs_relationship(row) or
                        row.lag_calendar is not LagCalendar.INHERIT_PROJECT_POLICY
                        for row in raw_edges)
-                or len(incident_by_activity[activity.uid]) != len(raw_edges)):
+                or any(row.source_fields.get("rc03_eligibility_ambiguous_source") is not None
+                       for row in raw_edges)
+                or any(row.inactive_boundary_uid is not None
+                       for row in incident_by_activity[activity.uid])
+                or Counter((row.uid, row.predecessor_uid, row.successor_uid,
+                            row.type, row.lag) for row in incident_by_activity[activity.uid])
+                   != Counter((row.uid, row.predecessor_uid, row.successor_uid,
+                               row.type, 0 if row.lag is None else row.lag.seconds)
+                              for row in raw_edges)):
                 continue
             elapsed_float_uids.add(activity.uid)
     if elapsed_float_uids:

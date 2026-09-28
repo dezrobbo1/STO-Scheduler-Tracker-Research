@@ -202,6 +202,14 @@ def _parse_tasks(container: ET.Element | None, add_extension):
                     "lag_format_source": _integer(link, "LagFormat"),
                     "cross_project": _boolean(link, "CrossProject", False),
                     "cross_project_name": _text(link, "CrossProjectName"),
+                    # A first-value parse cannot prove an ordinary source
+                    # edge when any defining field has a second declaration.
+                    "rc03_eligibility_ambiguous_source": any(
+                        len(link.findall(_q(name))) > 1 for name in (
+                            "PredecessorUID", "Type", "LinkLag", "LagFormat",
+                            "CrossProject", "CrossProjectName",
+                        )
+                    ),
                     "extensions": [
                         element_to_opaque(child, MSPDI_NAMESPACE)
                         for child in link

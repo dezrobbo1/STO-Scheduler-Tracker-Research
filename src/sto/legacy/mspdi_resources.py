@@ -126,6 +126,8 @@ def _parse_assignments(
             "resource_ref": _resource_ref(resource_uid, known_resource_uids),
             "start_source": _text(element, "Start"),
             "finish_source": _text(element, "Finish"),
+            "start_ambiguous_source": len(element.findall(_q("Start"))) > 1,
+            "finish_ambiguous_source": len(element.findall(_q("Finish"))) > 1,
             "units_source": _number(element, "Units"),
             "units_lexeme_source": _text(element, "Units"),
             "units_ambiguous_source": len(element.findall(_q("Units"))) > 1,

@@ -927,6 +927,8 @@ def migrate(
                 seq=int(row.get("source_order") or 0),
                 cross_project=bool(row.get("cross_project", False)),
                 cross_project_name=row.get("cross_project_name"),
+                source_fields=({"rc03_eligibility_ambiguous_source": "1"}
+                               if row.get("rc03_eligibility_ambiguous_source") else {}),
             )
         )
 
@@ -972,6 +974,8 @@ def migrate(
         which themselves carry four work rows. Unknown shapes get no marker.
         """
 
+        if row.get("start_ambiguous_source") or row.get("finish_ambiguous_source"):
+            return False
         phases = [extension_by_id[ref].get("payload", {})
                   for ref in row.get("extension_refs", ())
                   if ref in extension_by_id
@@ -1027,6 +1031,7 @@ def migrate(
             assignment_fields["units_lexeme_source"] = str(row["units_lexeme_source"])
         for key in ("delay_ambiguous_source", "leveling_delay_ambiguous_source",
                     "units_ambiguous_source", "work_ambiguous_source",
+                    "start_ambiguous_source", "finish_ambiguous_source",
                     "remaining_work_ambiguous_source", "actual_work_ambiguous_source",
                     "percent_work_complete_ambiguous_source", "work_contour_ambiguous_source"):
             if row.get(key):

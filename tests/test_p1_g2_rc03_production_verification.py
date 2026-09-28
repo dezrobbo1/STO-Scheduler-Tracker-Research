@@ -10,12 +10,14 @@ from pathlib import Path
 import tempfile
 import unittest
 from unittest import mock
+from uuid import NAMESPACE_URL, uuid5
 from xml.etree import ElementTree as ET
 
 from scripts.evidence import p1_g2_post_rc02_review as safe
 from scripts.evidence import p1_g2_rc03_production_verification as verification
 from scripts.evidence import p1_g2_baseline_diagnostics as baseline
 from scripts.evidence import p1_g2_rc02_boiler_counterfactual as keys
+import sto.core.engine.plan as plan_module
 from sto.core.engine.plan import build_plan
 from sto.core.model.entities import Duration
 from sto.core.model.enums import RelationshipType
@@ -138,6 +140,7 @@ class Rc03ProductionEvidenceTests(unittest.TestCase):
         self.assertEqual(basis(schedule), "elapsed")
         for changed in (
             replace(activity, actual_start=schedule.project.start),
+            replace(activity, deadline=schedule.project.start + timedelta(days=1)),
             replace(activity, manual=True),
             replace(activity, calendar_uid=schedule.project.default_calendar_uid),
             replace(activity, planned_duration=replace(activity.planned_duration,
@@ -294,6 +297,119 @@ class Rc03ProductionEvidenceTests(unittest.TestCase):
                 self.assertEqual(planned.float_basis if planned else "excluded",
                                  "working")
         self.assertEqual(Path(path).read_bytes(), original)
+
+    def test_xml_deadline_and_incident_source_ambiguities_stay_labelled(self):
+        path = os.environ.get("STO_RC03_PRODUCTION_BOILER")
+        if not path:
+            if os.environ.get("STO_REQUIRE_RC03_PRODUCTION") == "1":
+                self.fail("STO_RC03_PRODUCTION_BOILER required for source guard test")
+            self.skipTest("external BOILER baseline not supplied")
+        original = Path(path).read_bytes()
+        schedule = baseline._load(original)
+        root_uid = keys._leaf_maps(schedule)[1]["L0407"]
+        task = next(row for row in schedule.activities if row.uid == root_uid)
+        assignment = next(row for row in schedule.assignments
+                          if row.activity_uid == root_uid)
+        outgoing = next(row for row in schedule.relationships
+                        if row.predecessor_uid == root_uid)
+        successor = next(row for row in schedule.activities
+                         if row.uid == outgoing.successor_uid)
+        ns = f"{{{MSPDI_NAMESPACE}}}"
+
+        for label, kind, code, field, value, duplicate in (
+            ("deadline", "Task", baseline._source_uid(task), "Deadline",
+             (schedule.project.start + timedelta(days=1)).isoformat(), False),
+            ("predecessor UID", "Task", baseline._source_uid(task),
+             "PredecessorLink/PredecessorUID", "1", True),
+            ("relationship type", "Task", baseline._source_uid(task),
+             "PredecessorLink/Type", "2", True),
+            ("relationship lag", "Task", baseline._source_uid(task),
+             "PredecessorLink/LinkLag", "10", True),
+            ("relationship lag format", "Task", baseline._source_uid(task),
+             "PredecessorLink/LagFormat", "8", True),
+            ("cross project", "Task", baseline._source_uid(task),
+             "PredecessorLink/CrossProject", "1", True),
+            ("outgoing relationship", "Task", baseline._source_uid(successor),
+             "PredecessorLink/Type", "2", True),
+            ("assignment start", "Assignment", baseline._source_uid(assignment),
+             "Start", (assignment.start + timedelta(hours=1)).isoformat(), True),
+            ("assignment finish", "Assignment", baseline._source_uid(assignment),
+             "Finish", (assignment.finish + timedelta(hours=1)).isoformat(), True),
+        ):
+            with self.subTest(source=label):
+                tree = ET.fromstring(original)
+                container = "Tasks" if kind == "Task" else "Assignments"
+                node = next(row for row in tree.findall(f"{ns}{container}/{ns}{kind}")
+                            if row.findtext(f"{ns}UID") == code)
+                parts = field.split("/")
+                parent = node if len(parts) == 1 else node.find(f"{ns}{parts[0]}")
+                self.assertIsNotNone(parent)
+                item = parent.find(f"{ns}{parts[-1]}")
+                if duplicate:
+                    self.assertIsNotNone(item)
+                    extra = ET.fromstring(ET.tostring(item))
+                    extra.text = value
+                    parent.append(extra)
+                else:
+                    self.assertIsNone(item)
+                    ET.SubElement(parent, f"{ns}{parts[-1]}").text = value
+                changed = baseline._load(ET.tostring(tree, encoding="utf-8"))
+                changed_task = next(row for row in changed.activities
+                                    if baseline._source_uid(row) == baseline._source_uid(task))
+                start = changed.project.start
+                plan = build_plan(changed, (start - timedelta(days=90),
+                                            start + timedelta(days=365)))
+                planned = plan.network.activity_by_uid().get(changed_task.uid)
+                self.assertEqual(planned.float_basis if planned else "excluded", "working")
+        self.assertEqual(Path(path).read_bytes(), original)
+
+    def test_elapsed_root_to_inactive_middle_does_not_gain_derived_boundary(self):
+        path = os.environ.get("STO_RC03_PRODUCTION_BOILER")
+        if not path:
+            if os.environ.get("STO_REQUIRE_RC03_PRODUCTION") == "1":
+                self.fail("STO_RC03_PRODUCTION_BOILER required for boundary test")
+            self.skipTest("external BOILER baseline not supplied")
+        schedule = baseline._load(Path(path).read_bytes())
+        root_uid = keys._leaf_maps(schedule)[1]["L0407"]
+        root = next(row for row in schedule.activities if row.uid == root_uid)
+        outgoing = next(row for row in schedule.relationships
+                        if row.predecessor_uid == root_uid)
+        middle = replace(root, uid=uuid5(NAMESPACE_URL, "rc03-inactive-middle"),
+                         active=False, planned_duration=Duration(seconds=3600),
+                         remaining_duration=Duration(seconds=3600), source_fields={})
+        to_middle = replace(outgoing, successor_uid=middle.uid)
+        from_middle = replace(outgoing, uid=uuid5(NAMESPACE_URL, "rc03-middle-edge"),
+                              predecessor_uid=middle.uid, seq=outgoing.seq + 1)
+        amended = replace(schedule, activities=(*schedule.activities, middle),
+                          relationships=tuple(to_middle if row.uid == outgoing.uid else row
+                                              for row in schedule.relationships) + (from_middle,))
+        start = amended.project.start
+        plan = build_plan(amended, (start - timedelta(days=90),
+                                    start + timedelta(days=365)))
+        planned = plan.network.activity_by_uid().get(root_uid)
+        self.assertEqual(planned.float_basis if planned else "excluded", "working")
+        self.assertFalse(any(row.inactive_boundary_uid is not None and
+                             root_uid in (row.predecessor_uid, row.successor_uid)
+                             for row in plan.network.relationships))
+        # RC02 currently refuses an elapsed endpoint. If that independently
+        # bounded rule ever produces a replacement, RC03 must still compare
+        # the actual planned edge identity rather than its incident count.
+        measured = plan_module._inactive_boundary_endpoint_is_measured
+        with mock.patch.object(plan_module, "_inactive_boundary_endpoint_is_measured",
+                               side_effect=lambda row: row.uid == root_uid or measured(row)):
+            substituted = build_plan(amended, (start - timedelta(days=90),
+                                                start + timedelta(days=365)))
+        self.assertTrue(any(row.inactive_boundary_uid == middle.uid and
+                            row.predecessor_uid == root_uid
+                            for row in substituted.network.relationships))
+        raw_incident = {row.uid for row in amended.relationships
+                        if root_uid in (row.predecessor_uid, row.successor_uid)}
+        planned_incident = {row.uid for row in substituted.network.relationships
+                            if root_uid in (row.predecessor_uid, row.successor_uid)}
+        self.assertEqual(len(raw_incident), len(planned_incident))
+        self.assertNotEqual(raw_incident, planned_incident)
+        self.assertEqual(substituted.network.activity_by_uid()[root_uid].float_basis,
+                         "working")
 
 if __name__ == "__main__":
     unittest.main()
