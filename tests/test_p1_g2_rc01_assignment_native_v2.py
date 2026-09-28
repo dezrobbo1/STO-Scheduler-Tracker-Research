@@ -289,6 +289,18 @@ class Rc01V2Tests(unittest.TestCase):
         payload = Path(EXTERNAL_V2_VALID or "").read_bytes()
         self.assertEqual(native.analyze(payload), json.loads(VALID_V2_RECEIPT.read_text()))
 
+    @unittest.skipUnless(EXTERNAL_V2_VALID, "external immutable V2 valid return not supplied")
+    def test_read_only_check_can_compare_committed_receipt(self):
+        import sys
+
+        before = VALID_V2_RECEIPT.read_bytes()
+        with patch.object(sys, "argv", [
+            "p1_g2_rc01_assignment_native_v2.py", EXTERNAL_V2_VALID or "",
+            "--check", str(VALID_V2_RECEIPT),
+        ]):
+            self.assertEqual(native.main(), 0)
+        self.assertEqual(VALID_V2_RECEIPT.read_bytes(), before)
+
     @unittest.skipUnless(EXTERNAL_V2_INVALID, "external immutable V2 invalid return not supplied")
     def test_optional_genuine_v2_invalid_return_matches_record(self):
         payload = Path(EXTERNAL_V2_INVALID or "").read_bytes()

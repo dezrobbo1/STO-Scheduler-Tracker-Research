@@ -912,8 +912,6 @@ def main() -> int:
     }
     if args.output:
         refuse_output_alias(args.output, sources)
-    if args.check:
-        refuse_output_alias(args.check, sources)
     before = args.native_return.read_bytes()
     payload = serialize(analyze(before))
     if args.native_return.read_bytes() != before:
