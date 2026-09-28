@@ -1,0 +1,16 @@
+# V3-R6 uploaded return — preregistered result inconclusive
+
+An uploaded file with the exact R6 return basename was analyzed **without modifying it** using the unchanged, pre-result R6 analyzer. The uploaded file is 306,865 bytes, SHA-256 `729fc214b800fae3dc3ee2c31877076ce2de8b09ea4cce824ff6d40a404ee42a`; the committed R6 input remains 122,130 bytes, SHA-256 `414b78b7eef5ed41392ca387d89e60dc59488e74ba4dec6fdc2784a54a88a2d6`. The full [machine record](p1-g2-rc01-networked-native-v3-r6-inconclusive-return-2026-09-28.json) preserves the exact checks and synthetic observations. The uploaded XML remains outside the repository. No desktop operator attestation accompanied the upload; the file's `BuildNumber` is `16.0.20326.20140` but does not by itself establish genuine native provenance.
+
+The frozen analyzer verified its pinned fixture, preregistration, historical BOILER evidence, and pre-result tool-identity manifest; the return passed its semantic **input contract**. The exact machine verdict is `V3_NETWORKED_ASSIGNMENT_ENVELOPE_INCONCLUSIVE`. Of 405 frozen predicates, 367 passed and 38 failed: all 46 assignment own-calendar span checks passed, and all predeclared task early/late date, TotalSlack, Critical, topology, controls, and project-finish checks passed. All 35 task `Duration` checks failed **because one global preregistered duration model cannot fit every task**, even though the other 34 task durations individually match the union model or both admitted models. Three `FreeSlack` checks also failed.
+
+| Fixed predicate | Observed | Preregistered reference | Consequence |
+| --- | --- | --- | --- |
+| GAP `Duration` | `PT3H0M0S` | `PROJECT`: `PT0H30M0S`; `RESOURCE_UNION`: `PT16H0M0S` | Fits neither allowed global model; the required global duration gate fails for all tasks. |
+| ADJACENT-POST `FreeSlack` | 9,600 tenths of a minute | 9,900 tenths of a minute | Candidate float check fails. |
+| D-POST `FreeSlack` | 4,800 tenths of a minute | 5,100 tenths of a minute | Candidate float check fails. |
+| D-POST-LONG `FreeSlack` | 4,800 tenths of a minute | 5,100 tenths of a minute | Candidate float check fails. |
+
+The table states measured differences, not a post-return alternative formula. No acceptance predicate, source input, generator, analyzer, independent oracle, or historical evidence was changed to accommodate the return. The analyzer reports `duration_model: UNDETERMINED`, `machine_predicates_match_candidate: false`, `native_v3_supported: false`, `production_rc01_correction_authorized: false`, and `p1_g2_met: false`. All ten BOILER pseudonym roots still have their **candidate** V3 class mappings, but no root has an established V3 networked native boundary. The prior BOILER 147→3 result remains diagnostic; production scheduling remains unchanged. P1-G2 is OPEN, P1 is 4/5 IN PROGRESS, and P2 has NOT STARTED.
+
+Further native investigation would require a separately preregistered contract and a **new** exact synthetic input/round trip; reclassifying this R6 return under rules selected after seeing it cannot establish support. Desktop provenance of this uploaded file also remains unverified until the operator independently confirms the actual steps taken.
