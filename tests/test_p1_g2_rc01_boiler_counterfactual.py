@@ -61,7 +61,15 @@ class Rc01BoilerPreResultTests(unittest.TestCase):
         self.assertEqual(hashlib.sha256(raw).hexdigest(),
                          "4a7b32e7050b8eb61860d08cc26e544e01e924f4096576ea67009c04c318b248")
         current = json.loads(raw)
-        self.assertEqual(current["pre_result_tool"], cf.pre_result_identity())
+        registered = json.loads((ROOT / "docs/evidence/p1-g2-rc01-boiler-counterfactual-pre-result-identity-v3-2026-09-28.json").read_bytes())
+        self.assertEqual(current["pre_result_tool"],
+                         {"commit": registered["pre_result_commit"],
+                          "tool_path": registered["tool_path"],
+                          "tool_bytes": registered["tool_bytes"],
+                          "tool_sha256": registered["tool_sha256"]})
+        tool_bytes = Path(cf.__file__).read_bytes()
+        self.assertEqual(len(tool_bytes), registered["tool_bytes"])
+        self.assertEqual(hashlib.sha256(tool_bytes).hexdigest(), registered["tool_sha256"])
         self.assertEqual(current["source"], old["source"])
         for field in ("before", "after", "movement", "decision", "validator"):
             self.assertEqual(current[field], old[field])
