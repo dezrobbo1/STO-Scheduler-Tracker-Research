@@ -54,7 +54,9 @@ def _available():
 #: summaries it does not. Pinned so that closing the forward pass's residue
 #: raises these numbers deliberately rather than passing unnoticed.
 EXPECTED = {
-    "boiler_before": {"rolled": 94, "empty": 1, "exact": 75},
+    # Post-RC02 production forward movement on the exact e9b9b799 BOILER
+    # baseline: see p1-g2-rc01-boiler-counterfactual-2026-09-28.md.
+    "boiler_before": {"rolled": 94, "empty": 1, "exact": 88},
     "kiln": {"rolled": 86, "empty": 4, "exact": 36},
     "calciner": {"rolled": 219, "empty": 0, "exact": 206},
 }

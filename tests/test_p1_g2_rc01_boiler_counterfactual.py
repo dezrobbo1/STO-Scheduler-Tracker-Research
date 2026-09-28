@@ -4,6 +4,8 @@ from __future__ import annotations
 from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
+import hashlib
+import json
 import os
 import tempfile
 import unittest
@@ -21,6 +23,34 @@ def fixture():
 
 
 class Rc01BoilerPreResultTests(unittest.TestCase):
+    def test_published_boiler_result_obeys_predeclared_native_boundary(self):
+        result_path = ROOT / "docs/evidence/p1-g2-rc01-boiler-counterfactual-2026-09-28.json"
+        impact_path = ROOT / "docs/evidence/p1-g2-rc01-boiler-counterfactual-impact-2026-09-28.json"
+        result_bytes = result_path.read_bytes()
+        record = json.loads(result_bytes)
+        impact = json.loads(impact_path.read_bytes())
+        self.assertEqual(impact["measured_result"]["sha256"],
+                         hashlib.sha256(result_bytes).hexdigest())
+        self.assertEqual(impact["measured_result"]["bytes"], len(result_bytes))
+        self.assertEqual(record["pre_result_tool"], cf.pre_result_identity())
+        self.assertEqual(record["source"], {"bytes": cf.BASE_BYTES, "sha256": cf.BASE_SHA})
+        before = {tuple(key) for key in record["before"]["keys"]}
+        after = {tuple(key) for key in record["after"]["keys"]}
+        self.assertEqual(len(before), 147)
+        self.assertEqual(len(after), 3)
+        self.assertEqual(impact["by_current_group"]["G2-RC01"]["closed"], 144)
+        self.assertEqual(impact["by_current_group"]["G2-RC03"]["after"], 3)
+        self.assertEqual(len(after - before), 0)
+        self.assertEqual(sum(row["closed"] for row in impact["by_field"].values()),
+                         len(before - after))
+        self.assertEqual({row["leaf_id"] for row in record["applicability"]}, cf.ROOTS)
+        self.assertTrue(all(row["diagnostic_eligible"] for row in record["applicability"]))
+        self.assertTrue(all(row["classification"] == "DIAGNOSTIC_EXTRAPOLATION_REQUIRED"
+                            for row in record["applicability"]))
+        self.assertEqual(record["decision"]["classification"],
+                         "RC01_ASSIGNMENT_ENVELOPE_BOILER_COUNTERFACTUAL_OUTSIDE_NATIVE_BOUNDARY")
+        self.assertFalse(record["decision"]["production_rc01_correction_authorized"])
+
     def test_predeclared_evidence_identities_and_exact_baseline_refusal(self):
         inventory, v2 = cf.load_contract()
         self.assertEqual(len(inventory["current_recomputation"]["mismatches"]), 147)
