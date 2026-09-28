@@ -1,0 +1,18 @@
+{
+  "schema": "sto-p1-g2-rc01-boiler-counterfactual-pre-result-identity-v2",
+  "status": "PREDECLARED_NOT_RUN_EXACT_BOILER_REQUIRED",
+  "supersedes_pre_result_commit": "22fb53ae236bfd3d839ddc5f657e2899846d502f",
+  "supersession_reason": "Output alias safety now protects the frozen V2 input, the tool itself, V2 contract and both pre-result records before any real BOILER execution",
+  "production_main": "60313811d6867c28e71cb22bccfd3cc0c8f1618d",
+  "pre_result_commit": "236d8988da0f8cd8ed27407ddc31f39eb04dfb7e",
+  "tool_path": "scripts/evidence/p1_g2_rc01_boiler_counterfactual.py",
+  "tool_bytes": 24519,
+  "tool_sha256": "9b595114c0fe882fec5dae58abba090973a822eea62431834238f1998bc14437",
+  "current_root_evidence_sha256": "9a3ef68637b6e213188400f05fdca9bd216eebfbafa100f10f817623f5b8f3d3",
+  "v2_native_evidence_sha256": "71702adb09f08014c8ce14bed7651162bff65787f8d4d4945bb2383710ca6a6c",
+  "required_boiler_bytes": 3361935,
+  "required_boiler_sha256": "e9b9b7994cc5cc50479807b82c452da742a91de9f7de52b172a6be6f4f399c70",
+  "root_applicability_audit": "NOT_RUN",
+  "boiler_counterfactual": "NOT_RUN",
+  "production_rc01_correction_authorized": false
+}
