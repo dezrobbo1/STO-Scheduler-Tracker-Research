@@ -1,0 +1,14 @@
+{
+  "input": {
+    "bytes": 122130,
+    "path": "tests/fixtures/P1-G2-RC01-NETWORKED-ASSIGNMENT-ENVELOPE-NATIVE-MATRIX-V3-R6.xml",
+    "sha256": "414b78b7eef5ed41392ca387d89e60dc59488e74ba4dec6fdc2784a54a88a2d6"
+  },
+  "preregistration_id": "P1-G2-RC01-NETWORKED-ASSIGNMENT-ENVELOPE-NATIVE-MATRIX-V3-R6-PROJECT-SEED-TOOL-IDENTITY",
+  "schema": "sto-p1-g2-rc01-networked-v3-r6-tool-identity",
+  "tool_sha256_by_path": {
+    "scripts/evidence/p1_g2_rc01_networked_v3.py": "59be38e818a0e100588ec8669854276af0e961df94db7a11827b937893eb3ba9",
+    "scripts/evidence/p1_g2_rc01_networked_v3_generate.py": "a61989dfacf8952fbed8cb8689ae753a69a7f04538af9b1ce40d1c576c7d1066",
+    "scripts/evidence/p1_g2_rc01_networked_v3_oracle.py": "4d0cc9ae797f3b767e2a88944826f3b82f64f3c0a35eba6b9a8c98e4744a6db7"
+  }
+}

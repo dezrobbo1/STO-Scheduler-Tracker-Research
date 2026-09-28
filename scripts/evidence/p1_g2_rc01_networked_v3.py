@@ -22,7 +22,15 @@ from scripts.evidence import p1_g2_rc01_networked_v3_oracle as oracle
 
 NS = {"p": matrix.URI}
 SCHEMA = "sto-p1-g2-rc01-networked-assignment-envelope-native-v3"
+TOOL_MANIFEST = ROOT / "docs/evidence/p1-g2-rc01-networked-native-v3-r6-tool-identity-2026-09-28.json"
+PREREGISTRATION = ROOT / "docs/evidence/p1-g2-rc01-networked-native-v3-r6-predeclared-2026-09-28.json"
+TOOL_PATHS = ("scripts/evidence/p1_g2_rc01_networked_v3.py",
+              "scripts/evidence/p1_g2_rc01_networked_v3_generate.py",
+              "scripts/evidence/p1_g2_rc01_networked_v3_oracle.py")
 LINEAGE = {
+    "tests/fixtures/P1-G2-RC01-NETWORKED-ASSIGNMENT-ENVELOPE-NATIVE-MATRIX-V3-R5.xml": "053cbd7b569cc34c53cbfce11ec6b0370c78ef0483e4eb358ce58d4da54d516a",
+    "docs/evidence/p1-g2-rc01-networked-native-v3-r5-predeclared-2026-09-28.json": "a8ea400cebc001d7a894382f50968ec8518dccb802b78b6962c5edac9eef8981",
+    "docs/evidence/p1-g2-rc01-networked-native-v3-r5-predeclared-2026-09-28.md": "697e9fba6a71cdbc2836849d3026cf8123f12daba5cfbe3be17cfb4743e2b2ed",
     "tests/fixtures/P1-G2-RC01-NETWORKED-ASSIGNMENT-ENVELOPE-NATIVE-MATRIX-V3.xml": "c9c1ef3b6c850bfed1a0ecd41e6ad0fb69e4aac367ef578548c90986529df4e9",
     "docs/evidence/p1-g2-rc01-networked-native-v3-r4-predeclared-2026-09-28.json": "0de9271eb8d8a890d613fb7b8213b31757276544e807e69fc6de6bae467b1d51",
     "docs/evidence/p1-g2-rc01-networked-native-v3-r4-predeclared-2026-09-28.md": "e29196ad22ad37ff335ae2f6154609f9178f9efe18ee24e40be2e4f45d81e12a",
@@ -152,6 +160,35 @@ def verified_lineage() -> dict:
              "merged BOILER counterfactual movement/decision changed")
     return {"sha256_by_path": LINEAGE, "boiler_source_identity": result["source"],
             "before_slots": 147, "rc01_closed": 144, "rc03_after": 3}
+
+
+def verified_tool_identity() -> dict:
+    prereg_bytes = PREREGISTRATION.read_bytes()
+    prereg = json.loads(prereg_bytes)
+    _require(prereg["preregistration_id"] == matrix.PREREGISTRATION_ID
+             and prereg["input"] == {"bytes": matrix.INPUT_BYTES,
+                                       "sha256": matrix.INPUT_SHA256,
+                                       "path": str(matrix.FIXTURE),
+                                       "returned_filename": matrix.RETURN_NAME}
+             and prereg["tool_manifest_path"] == str(TOOL_MANIFEST.relative_to(ROOT)),
+             "pre-result preregistration contract changed")
+    raw = TOOL_MANIFEST.read_bytes()
+    manifest = json.loads(raw)
+    _require(set(manifest) == {"schema", "preregistration_id", "input", "tool_sha256_by_path"}
+             and manifest["schema"] == "sto-p1-g2-rc01-networked-v3-r6-tool-identity"
+             and manifest["preregistration_id"] == matrix.PREREGISTRATION_ID
+             and manifest["input"] == {"bytes": matrix.INPUT_BYTES,
+                                        "sha256": matrix.INPUT_SHA256,
+                                        "path": str(matrix.FIXTURE)}
+             and set(manifest["tool_sha256_by_path"]) == set(TOOL_PATHS),
+             "pre-result tool manifest contract changed")
+    for path, digest in manifest["tool_sha256_by_path"].items():
+        _require(hashlib.sha256((ROOT / path).read_bytes()).hexdigest() == digest,
+                 f"pre-result tool identity changed: {path}")
+    return {"path": str(TOOL_MANIFEST.relative_to(ROOT)),
+            "bytes": len(raw), "sha256": hashlib.sha256(raw).hexdigest(),
+            "preregistration_sha256": hashlib.sha256(prereg_bytes).hexdigest(),
+            "tool_sha256_by_path": manifest["tool_sha256_by_path"]}
 
 
 def _native_inputs(payload: bytes) -> dict:
@@ -347,6 +384,7 @@ def analyze(payload: bytes) -> dict:
                            "production_rc01_correction_authorized": False,
                            "p1_g2_met": False}}
     try:
+        tool_identity = verified_tool_identity()
         lineage = verified_lineage()
         data = _native_inputs(payload)
     except (NativeEvidenceError, KeyError, ValueError, OSError) as error:
@@ -354,6 +392,7 @@ def analyze(payload: bytes) -> dict:
                                     "reason": str(error)}
         return record
     record["native_build"] = data["build_number"]
+    record["tool_identity"] = tool_identity
     record["evidence_lineage"] = lineage
     if native_identity == {"bytes": matrix.INPUT_BYTES, "sha256": matrix.INPUT_SHA256} or not isinstance(data["build_number"], str) or v2.NATIVE_BUILD.fullmatch(data["build_number"]) is None:
         record["classification"] = {"verdict": "V3_NETWORKED_ASSIGNMENT_ENVELOPE_INCONCLUSIVE",
@@ -470,6 +509,7 @@ def main() -> int:
     sources = {"V3 returned source": args.native_return,
                "V3 fixed fixture": ROOT / matrix.FIXTURE,
                "V3 prior R4 fixture": ROOT / "tests/fixtures/P1-G2-RC01-NETWORKED-ASSIGNMENT-ENVELOPE-NATIVE-MATRIX-V3.xml",
+               "V3 prior R5 fixture": ROOT / "tests/fixtures/P1-G2-RC01-NETWORKED-ASSIGNMENT-ENVELOPE-NATIVE-MATRIX-V3-R5.xml",
                "BOILER applicability audit": ROOT / matrix.AUDIT,
                "V2 native result": ROOT / "docs/evidence/p1-g2-rc01-native-v2-valid-return-2026-09-28.json",
                "BOILER counterfactual result": ROOT / "docs/evidence/p1-g2-rc01-boiler-counterfactual-reviewed-v3-2026-09-28.json"}

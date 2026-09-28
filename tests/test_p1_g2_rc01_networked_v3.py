@@ -83,12 +83,18 @@ class NetworkedV3Tests(unittest.TestCase):
             self.assertEqual(target.read_bytes(), payload)
 
     def test_seed_spans_are_coherent_before_network_recalculation(self):
-        prereg = json.loads((ROOT / "docs/evidence/p1-g2-rc01-networked-native-v3-r5-predeclared-2026-09-28.json").read_text())
-        self.assertEqual(prereg["preregistration_id"], matrix.PREREGISTRATION_ID)
-        self.assertEqual(prereg["input"]["bytes"], matrix.INPUT_BYTES)
-        self.assertEqual(prereg["input"]["sha256"], matrix.INPUT_SHA256)
-        self.assertEqual(prereg["supersedes_r4_after_invalid_return"]["r4_return_sha256"],
+        r5 = json.loads((ROOT / "docs/evidence/p1-g2-rc01-networked-native-v3-r5-predeclared-2026-09-28.json").read_text())
+        self.assertEqual(r5["preregistration_id"], matrix.EXPERIMENT_ID + "-R5-COHERENT-INPUT")
+        self.assertEqual(r5["input"]["bytes"], 122130)
+        self.assertEqual(r5["input"]["sha256"],
+                         "053cbd7b569cc34c53cbfce11ec6b0370c78ef0483e4eb358ce58d4da54d516a")
+        self.assertEqual(r5["supersedes_r4_after_invalid_return"]["r4_return_sha256"],
                          "8ff29979fad5776af5909ca26f17715017793cf85a99b8308ab0a4adcd4baa33")
+        r6 = json.loads(native.PREREGISTRATION.read_text())
+        self.assertEqual(r6["preregistration_id"], matrix.PREREGISTRATION_ID)
+        self.assertEqual(r6["input"]["bytes"], matrix.INPUT_BYTES)
+        self.assertEqual(r6["input"]["sha256"], matrix.INPUT_SHA256)
+        self.assertEqual(r6["supersedes_unrun_r5"]["r5_fixture_sha256"], r5["input"]["sha256"])
         receipt = json.loads((ROOT / "docs/evidence/p1-g2-rc01-networked-native-v3-r4-invalid-return-2026-09-28.json").read_text())
         self.assertEqual(receipt["classification"]["verdict"], "V3_INPUT_CONTRACT_VIOLATED")
         self.assertFalse(receipt["decision"]["production_rc01_correction_authorized"])
@@ -101,10 +107,16 @@ class NetworkedV3Tests(unittest.TestCase):
         for name, spec in tasks.items():
             row = find(root, "Tasks", spec["uid"])
             self.assertEqual(row.findtext("p:Start", namespaces=NS), initial.isoformat())
-            self.assertEqual(row.findtext("p:Finish", namespaces=NS),
-                             (initial + timedelta(hours=spec["duration"])).isoformat())
+            finish = datetime.fromisoformat(row.findtext("p:Finish", namespaces=NS))
+            self.assertEqual(oracle.signed_project_minutes(initial, finish),
+                             spec["duration"] * 60)
             self.assertEqual(row.findtext("p:Duration", namespaces=NS),
                              matrix.duration(spec["duration"]))
+        self.assertEqual(find(root, "Tasks", tasks["GAP-PRE"]["uid"]).findtext("p:Finish", namespaces=NS),
+                         "2026-10-13T08:00:00")
+        self.assertEqual(find(root, "Tasks", tasks["FINISH-DRIVER"]["uid"]).findtext("p:Finish", namespaces=NS),
+                         "2026-10-23T08:00:00")
+        self.assertEqual(root.findtext("p:FinishDate", namespaces=NS), "2026-10-23T08:00:00")
         for uid, spec in assignments.items():
             row = find(root, "Assignments", uid)
             self.assertEqual(row.findtext("p:TaskUID", namespaces=NS),
@@ -117,6 +129,42 @@ class NetworkedV3Tests(unittest.TestCase):
         self.assertNotEqual(prior.read_bytes(), matrix.build_fixture())
         self.assertEqual(native.analyze(prior.read_bytes())["classification"]["verdict"],
                          "V3_INPUT_CONTRACT_VIOLATED")
+
+    def test_pre_result_tool_identity_fails_closed(self):
+        sample = native.analyze(synthetic_oracle_save())
+        self.assertEqual(sample["classification"]["verdict"],
+                         "V3_NETWORKED_ASSIGNMENT_ENVELOPE_SUPPORTED")
+        identity = sample["tool_identity"]
+        self.assertEqual(identity["sha256"], hashlib.sha256(native.TOOL_MANIFEST.read_bytes()).hexdigest())
+        self.assertEqual(identity["preregistration_sha256"],
+                         hashlib.sha256(native.PREREGISTRATION.read_bytes()).hexdigest())
+        self.assertEqual(set(identity["tool_sha256_by_path"]), set(native.TOOL_PATHS))
+        original_read = Path.read_bytes
+        guarded_tool = ROOT / native.TOOL_PATHS[0]
+        def changed_tool_bytes(path):
+            raw = original_read(path)
+            return raw + b"\n# late edit\n" if path == guarded_tool else raw
+        with patch.object(Path, "read_bytes", changed_tool_bytes):
+            self.assertEqual(native.analyze(synthetic_oracle_save())["classification"]["verdict"],
+                             "V3_INPUT_CONTRACT_VIOLATED")
+        with tempfile.TemporaryDirectory() as directory:
+            directory = Path(directory)
+            bad_manifest = json.loads(native.TOOL_MANIFEST.read_text())
+            bad_manifest["tool_sha256_by_path"][native.TOOL_PATHS[0]] = "0" * 64
+            altered = directory / "changed-manifest.json"
+            altered.write_text(json.dumps(bad_manifest))
+            with patch.object(native, "TOOL_MANIFEST", altered):
+                result = native.analyze(synthetic_oracle_save())
+                self.assertEqual(result["classification"]["verdict"],
+                                 "V3_INPUT_CONTRACT_VIOLATED")
+                self.assertFalse(result["decision"]["production_rc01_correction_authorized"])
+            bad_prereg = json.loads(native.PREREGISTRATION.read_text())
+            bad_prereg["input"]["sha256"] = "0" * 64
+            prereg_path = directory / "changed-prereg.json"
+            prereg_path.write_text(json.dumps(bad_prereg))
+            with patch.object(native, "PREREGISTRATION", prereg_path):
+                self.assertEqual(native.analyze(synthetic_oracle_save())["classification"]["verdict"],
+                                 "V3_INPUT_CONTRACT_VIOLATED")
 
     def test_project_save_network_link_format_only(self):
         root = ET.fromstring(synthetic_oracle_save())

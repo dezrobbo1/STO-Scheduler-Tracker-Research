@@ -21,8 +21,8 @@ URI = base.URI
 q = base.q
 add = base.add
 EXPERIMENT_ID = "P1-G2-RC01-NETWORKED-ASSIGNMENT-ENVELOPE-NATIVE-MATRIX-V3"
-PREREGISTRATION_ID = EXPERIMENT_ID + "-R5-COHERENT-INPUT"
-PROJECT_NAME = EXPERIMENT_ID + "-R5.xml"
+PREREGISTRATION_ID = EXPERIMENT_ID + "-R6-PROJECT-SEED-TOOL-IDENTITY"
+PROJECT_NAME = EXPERIMENT_ID + "-R6.xml"
 # The valid V2 save kept Project.Name only when its basename was unchanged.
 # Save V3 into a *different directory* using this same basename.
 RETURN_NAME = PROJECT_NAME
@@ -31,7 +31,7 @@ FIXTURE = Path("tests/fixtures") / PROJECT_NAME
 AUDIT = Path("docs/evidence/p1-g2-rc01-boiler-counterfactual-reviewed-v3-2026-09-28.json")
 AUDIT_SHA256 = "4a7b32e7050b8eb61860d08cc26e544e01e924f4096576ea67009c04c318b248"
 INPUT_BYTES = 122_130
-INPUT_SHA256 = "053cbd7b569cc34c53cbfce11ec6b0370c78ef0483e4eb358ce58d4da54d516a"
+INPUT_SHA256 = "414b78b7eef5ed41392ca387d89e60dc59488e74ba4dec6fdc2784a54a88a2d6"
 ZERO = "PT0H0M0S"
 NAMESPACE = uuid.UUID("a76d7892-c4cc-4b09-bba5-f093747dad63")
 
@@ -135,6 +135,25 @@ def duration(hours: int) -> str:
     return f"PT{hours}H0M0S"
 
 
+def project_seed_finish(start: datetime, hours: int) -> str:
+    """Encode declared task Duration on the fixed weekday project calendar."""
+    cursor = start
+    remaining = timedelta(hours=hours)
+    for _ in range(30):
+        if cursor.weekday() < 5:
+            opening = cursor.replace(hour=7, minute=30, second=0, microsecond=0)
+            closing = cursor.replace(hour=15, minute=30, second=0, microsecond=0)
+            begin = max(cursor, opening)
+            if begin < closing:
+                used = min(remaining, closing - begin)
+                cursor = begin + used
+                remaining -= used
+                if not remaining:
+                    return cursor.isoformat()
+        cursor = cursor.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+    raise ValueError("project-calendar seed horizon exhausted")
+
+
 def build_fixture() -> bytes:
     tasks, edges, assignments = graph()
     initial = datetime.fromisoformat(PROJECT_START)
@@ -144,7 +163,9 @@ def build_fixture() -> bytes:
     for key, value in (("SaveVersion", 14), ("BuildNumber", "0.0.0.0"),
                        ("Name", PROJECT_NAME), ("GUID", guid("project", 1)),
                        ("Title", EXPERIMENT_ID), ("ScheduleFromStart", 1),
-                       ("StartDate", PROJECT_START), ("FinishDate", "2026-10-19T08:00:00"),
+                       ("StartDate", PROJECT_START),
+                       ("FinishDate", max(project_seed_finish(initial, spec["duration"])
+                                          for spec in tasks.values())),
                        ("CalendarUID", 1), ("DefaultStartTime", "07:30:00"),
                        ("DefaultFinishTime", "15:30:00"), ("MinutesPerDay", 480),
                        ("MinutesPerWeek", 2400), ("DaysPerMonth", 20),
@@ -166,7 +187,7 @@ def build_fixture() -> bytes:
     for name, spec in tasks.items():
         row = ET.SubElement(task_container, q("Task"))
         work = sum(a["work"] for a in assignments.values() if a["task"] == name)
-        seed_finish = seeded(spec["duration"])
+        seed_finish = project_seed_finish(initial, spec["duration"])
         for key, value in (("UID", spec["uid"]), ("GUID", guid("task", name)),
                            ("ID", spec["uid"]), ("Name", f"V3-{name}"),
                            ("Active", 1), ("Manual", 0), ("Type", 0), ("IsNull", 0),
