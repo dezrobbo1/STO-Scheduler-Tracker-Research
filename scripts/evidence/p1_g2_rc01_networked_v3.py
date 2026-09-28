@@ -68,8 +68,9 @@ def _check_row(observed: ET.Element, expected: ET.Element, outputs: set[str],
                      for left, right in zip(returned_links, links)),
                  f"relationship/topology changed: {label}")
     v2._validate_save_delta(observed, expected, outputs | {"PredecessorLink"}, additions, label)
-    _require(len({child.tag for child in observed if child.tag != matrix.q("PredecessorLink")})
-             == len([child for child in observed if child.tag != matrix.q("PredecessorLink")]),
+    repeating = {matrix.q("PredecessorLink"), matrix.q("TimephasedData")}
+    _require(len({child.tag for child in observed if child.tag not in repeating})
+             == len([child for child in observed if child.tag not in repeating]),
              f"duplicate field at {label}")
 
 
@@ -79,10 +80,12 @@ def _date(row: ET.Element, field: str, label: str) -> datetime:
 
 def _expected_calendar(row: ET.Element, calendar_uid: int) -> bool:
     observed = v2._calendar_signature(row)
-    expected = tuple((day, True, matrix.INTERVALS[matrix.CALENDARS[calendar_uid][1]])
+    expected = tuple((day, calendar_uid != 1 or 2 <= day <= 6,
+                      matrix.INTERVALS[matrix.CALENDARS[calendar_uid][1]]
+                      if calendar_uid != 1 or 2 <= day <= 6 else ())
                      for day in range(1, 8))
-    # All seven weekdays work in this matrix; V2's omitted, NONworking
-    # weekend normalization does not apply here.
+    # Project works weekdays only; all seven days work on resource calendars.
+    # V2's omitted NONworking weekend normalization does not apply to resources.
     return observed == expected
 
 
@@ -288,10 +291,12 @@ def _native_inputs(payload: bytes) -> dict:
 def analyze(payload: bytes) -> dict:
     native_identity = {"bytes": len(payload), "sha256": hashlib.sha256(payload).hexdigest()}
     record = {"schema": SCHEMA, "experiment_id": matrix.EXPERIMENT_ID,
+              "preregistration_id": matrix.PREREGISTRATION_ID,
               "input_identity": {"path": str(matrix.FIXTURE), "bytes": matrix.INPUT_BYTES,
                                  "sha256": matrix.INPUT_SHA256},
               "native_return": native_identity,
               "decision": {"native_v3_supported": False,
+                           "machine_predicates_match_candidate": False,
                            "production_rc01_correction_authorized": False,
                            "p1_g2_met": False}}
     try:
@@ -319,9 +324,9 @@ def analyze(payload: bytes) -> dict:
         checks[f"{name}.TotalSlack"] = actual["TotalSlack"] == predicted["total_slack_minutes"] * 10
         checks[f"{name}.FreeSlack"] = actual["FreeSlack"] == predicted["free_slack_minutes"] * 10
         checks[f"{name}.Critical"] = actual["Critical"] == predicted["critical"]
-        # Duration is a recalculated Project output, but the isolated V2
-        # confirms it is measured on the project's working calendar. V3's
-        # project calendar is continuous, so it equals the envelope span.
+        # Duration is a recalculated output. Candidate resource calendars
+        # include continuous 24h work, so this candidate predicts its elapsed
+        # envelope as productive duration even across project nonwork.
         duration_hours = (predicted["early_finish"] - predicted["early_start"]).total_seconds() / 3600
         exact = matrix.duration(int(duration_hours)) if duration_hours.is_integer() else None
         checks[f"{name}.Duration"] = actual["Duration"] == exact and actual["RemainingDuration"] == exact
@@ -341,6 +346,14 @@ def analyze(payload: bytes) -> dict:
                                        expected["D"]["late_finish"] ==
                                        expected["D-POST-LONG"]["late_start"])
     checks["D_positive_free_float"] = expected["D"]["free_slack_minutes"] > 0
+    gap_10h = next(uid for uid, spec in assignment_specs.items()
+                   if spec["task"] == "GAP" and spec["role"] == "10H")
+    gap_24h = next(uid for uid, spec in assignment_specs.items()
+                   if spec["task"] == "GAP" and spec["role"] == "24H")
+    checks["GAP_networked_resource_gap"] = (
+        expected["GAP"]["assignments"][gap_10h][1] >
+        expected["GAP"]["assignments"][gap_24h][1] and
+        expected["GAP"]["early_finish"] == expected["GAP"]["assignments"][gap_10h][1])
     checks["nontrivial_late"] = all(expected[name]["late_start"] > expected[name]["early_start"]
                                      for name in matrix.CASES if name != "ADJACENT-RC01")
     checks["finish_driver_critical"] = expected["FINISH-DRIVER"]["critical"]
@@ -353,24 +366,25 @@ def analyze(payload: bytes) -> dict:
     controls = all(checks[key] for key in ("FINISH-DRIVER.Start", "FINISH-DRIVER.Finish",
                                                 "FINISH-DRIVER.TotalSlack", "finish_driver_critical",
                                                 "A_order_twin", "C_calendar_identity_twin"))
-    # Rejection is only a FULL coherent alternate model: each task follows
-    # fixed declared duration on the 24-hour union, and every assignment
-    # separately follows its calendar from those alternative network bounds.
-    # A mixed early/late rule can never count as rejection.
-    alternative = oracle.union_reference()
-    def matches_union(name: str) -> bool:
-        row, predicted, spec = data["tasks"][name], alternative[name], tasks[name]
+    # Rejection requires a FULL coherent alternate model: task end-padding
+    # preserves the declared duration when the assignment envelope is shorter.
+    # Assignments always remain inside their task; mixed rules are inconclusive.
+    alternative = oracle.padded_reference()
+    def matches_padded(name: str) -> bool:
+        row, predicted = data["tasks"][name], alternative[name]
         dates = (("Start", "early_start"), ("Finish", "early_finish"),
                  ("EarlyStart", "early_start"), ("EarlyFinish", "early_finish"),
                  ("LateStart", "late_start"), ("LateFinish", "late_finish"))
+        productive_hours = (predicted["early_finish"] - predicted["early_start"]).total_seconds() / 3600
+        expected_duration = matrix.duration(int(productive_hours)) if productive_hours.is_integer() else None
         return (all(row[field] == predicted[key] for field, key in dates)
-                and row["Duration"] == matrix.duration(spec["duration"])
-                and row["RemainingDuration"] == matrix.duration(spec["duration"])
+                and row["Duration"] == expected_duration
+                and row["RemainingDuration"] == expected_duration
                 and row["TotalSlack"] == predicted["total_slack_minutes"] * 10
                 and row["FreeSlack"] == predicted["free_slack_minutes"] * 10
                 and row["Critical"] == predicted["critical"])
     rejected = (not support and controls and
-                all(matches_union(name) for name in tasks) and
+                all(matches_padded(name) for name in tasks) and
                 all(data["assignments"][uid] == alternative[spec["task"]]["assignments"][uid]
                     for uid, spec in assignment_specs.items()) and
                 data["project_finish"] == alternative["_project_finish"])
@@ -386,10 +400,13 @@ def analyze(payload: bytes) -> dict:
                                              for name, row in data["tasks"].items()},
                               "assignments": {str(uid): [date.isoformat() for date in span]
                                               for uid, span in data["assignments"].items()}}
-    # Future genuine support plus exact ten-root audit and immutable BOILER
-    # result could permit a SEPARATE production PR; never a P1 gate change.
-    record["decision"]["native_v3_supported"] = support
-    record["decision"]["production_rc01_correction_authorized"] = support
+    # MSPDI BuildNumber and output dates can be hand-authored (the synthetic
+    # unit-test fixture does exactly that). Machine classification is NOT
+    # independent proof of desktop execution. Production authorization always
+    # requires a separate user-attested native provenance review and later PR.
+    record["decision"]["machine_predicates_match_candidate"] = support
+    record["decision"]["native_provenance"] = "UNVERIFIED_OPERATOR_ATTESTATION_REQUIRED"
+    record["decision"]["production_rc01_correction_authorized"] = False
     return record
 
 

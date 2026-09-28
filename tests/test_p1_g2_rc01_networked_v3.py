@@ -36,10 +36,10 @@ def encoded(root: ET.Element) -> bytes:
     return ET.tostring(root, encoding="utf-8", xml_declaration=True) + b"\n"
 
 
-def synthetic_oracle_save(*, union: bool = False) -> bytes:
+def synthetic_oracle_save(*, padded: bool = False) -> bytes:
     """Test double only: never publish as native observation."""
     root = ET.fromstring(matrix.build_fixture())
-    predicted = oracle.union_reference() if union else oracle.reference()
+    predicted = oracle.padded_reference() if padded else oracle.reference()
     tasks, _, assignments = matrix.graph()
     set_field(root, "BuildNumber", "16.0.99999.99999")
     set_field(root, "FinishDate", predicted["_project_finish"].isoformat())
@@ -96,7 +96,7 @@ class NetworkedV3Tests(unittest.TestCase):
         from sto.legacy import import_mspdi
         schedule = migrate(import_mspdi(ROOT / matrix.FIXTURE))[0]
         self.assertEqual((len(schedule.activities), len(schedule.assignments),
-                          len(schedule.resources), len(schedule.calendars)), (32, 42, 42, 4))
+                          len(schedule.resources), len(schedule.calendars)), (35, 46, 46, 4))
         self.assertEqual({a.duration_type.value for a in schedule.activities}, {"fixed_units"})
         self.assertTrue(all(row.start is not None and row.finish is not None and
                             row.units.budgeted_permille in (1000, 2000) and
@@ -106,7 +106,7 @@ class NetworkedV3Tests(unittest.TestCase):
 
     def test_allocation_arithmetic_network_order_identity_and_fanout(self):
         tasks, edges, assignments = matrix.graph()
-        self.assertEqual(len(matrix.CASES), 9)
+        self.assertEqual(len(matrix.CASES), 10)
         for name in matrix.CASES:
             if name == "ADJACENT-RC01":
                 continue
@@ -117,6 +117,7 @@ class NetworkedV3Tests(unittest.TestCase):
             self.assertEqual({a["calendar"] for a in rows},
                              {2, 4} if name == "C-CALENDAR-IDENTITY-TWIN" else {2, 3})
             self.assertEqual(tasks[name]["predecessors"], (f"{name}-PRE",))
+        self.assertEqual(tasks["GAP-PRE"]["duration"], 8)
         self.assertEqual([a["role"] for a in assignments.values() if a["task"] == "A"],
                          ["24H", "10H"])
         self.assertEqual([a["role"] for a in assignments.values() if a["task"] == "A-ORDER-TWIN"],
@@ -132,14 +133,18 @@ class NetworkedV3Tests(unittest.TestCase):
                                default=lambda value: value.isoformat() if isinstance(value, datetime)
                                else str(value)).encode()
         self.assertEqual(hashlib.sha256(canonical).hexdigest(),
-                         "ea79cba3cf328b611e51306cb404571ab35dae02a88305365f11e6f97c409f39")
+                         "e4c9182660a825f68c9ec79f1ec8a02738c92c628329567e0cbc1cc4c843c1dc")
         self.assertEqual(result["_project_finish"], datetime(2026, 10, 15, 8))
         self.assertEqual((result["A"]["early_start"], result["A"]["early_finish"]),
-                         (datetime(2026, 10, 12, 18), datetime(2026, 10, 13, 9)))
+                         (datetime(2026, 10, 12, 9), datetime(2026, 10, 12, 11)))
         self.assertEqual(result["A"]["effective_hours"], {21: 2, 22: 2})
-        self.assertEqual(result["B"]["early_finish"], datetime(2026, 10, 13, 11))
-        self.assertEqual(result["F"]["early_finish"], datetime(2026, 10, 13, 13))
-        self.assertEqual(result["D"]["free_slack_minutes"], 300)
+        self.assertEqual(result["B"]["early_finish"], datetime(2026, 10, 12, 13))
+        self.assertEqual(result["F"]["early_finish"], datetime(2026, 10, 12, 15))
+        self.assertEqual(result["D"]["free_slack_minutes"], 630)
+        self.assertEqual((result["GAP"]["early_start"], result["GAP"]["early_finish"]),
+                         (datetime(2026, 10, 12, 16), datetime(2026, 10, 13, 8)))
+        self.assertEqual(oracle.signed_project_minutes(datetime(2026, 10, 12, 16),
+                                                       datetime(2026, 10, 13, 8)), 30)
         self.assertEqual(result["D"]["late_finish"],
                          result["D-POST-LONG"]["late_start"])
         self.assertGreater(result["D-POST"]["late_start"], result["D-POST-LONG"]["late_start"])
@@ -163,6 +168,11 @@ class NetworkedV3Tests(unittest.TestCase):
         sample = native.analyze(synthetic_oracle_save())
         self.assertEqual(sample["classification"]["verdict"],
                          "V3_NETWORKED_ASSIGNMENT_ENVELOPE_SUPPORTED")
+        self.assertFalse(sample["decision"]["production_rc01_correction_authorized"])
+        self.assertFalse(sample["decision"]["native_v3_supported"])
+        self.assertTrue(sample["decision"]["machine_predicates_match_candidate"])
+        self.assertEqual(sample["decision"]["native_provenance"],
+                         "UNVERIFIED_OPERATOR_ATTESTATION_REQUIRED")
         self.assertEqual(sample["root_to_native_case"], matrix.root_mapping(ROOT / matrix.AUDIT))
 
     def test_input_mutations_fail_before_classification(self):
@@ -235,6 +245,24 @@ class NetworkedV3Tests(unittest.TestCase):
         self.assertEqual(native.analyze(encoded(root))["classification"]["verdict"],
                          "V3_INPUT_CONTRACT_VIOLATED")
 
+    def test_repeated_valid_timephased_rows_and_changed_work(self):
+        root = ET.fromstring(synthetic_oracle_save())
+        uid = next(uid for uid, spec in matrix.graph()[2].items()
+                   if spec["task"] == "FINISH-DRIVER")
+        row = find(root, "Assignments", uid)
+        for start, finish in (("2026-10-12T08:00:00", "2026-10-13T20:00:00"),
+                              ("2026-10-13T20:00:00", "2026-10-15T08:00:00")):
+            period = ET.SubElement(row, matrix.q("TimephasedData"))
+            for field, value in (("Type", 1), ("UID", uid), ("Unit", 1),
+                                 ("Start", start), ("Finish", finish),
+                                 ("Value", "PT36H0M0S")):
+                matrix.add(period, field, value)
+        self.assertEqual(native.analyze(encoded(root))["classification"]["verdict"],
+                         "V3_NETWORKED_ASSIGNMENT_ENVELOPE_SUPPORTED")
+        set_field(row.findall("p:TimephasedData", NS)[1], "Value", "PT35H0M0S")
+        self.assertEqual(native.analyze(encoded(root))["classification"]["verdict"],
+                         "V3_INPUT_CONTRACT_VIOLATED")
+
     def test_output_changes_are_not_oracle_inputs(self):
         root = ET.fromstring(synthetic_oracle_save())
         set_field(find(root, "Tasks", matrix.graph()[0]["C"]["uid"]), "LateStart",
@@ -246,11 +274,19 @@ class NetworkedV3Tests(unittest.TestCase):
         self.assertFalse(result["decision"]["production_rc01_correction_authorized"])
 
     def test_only_coherent_alternative_is_rejected(self):
-        result = native.analyze(synthetic_oracle_save(union=True))
+        alternative = oracle.padded_reference()
+        for name, row in alternative.items():
+            if name == "_project_finish":
+                continue
+            self.assertTrue(all(row["early_start"] <= start <= finish <= row["early_finish"]
+                                for start, finish in row["assignments"].values()))
+            self.assertTrue(all(row["late_start"] <= start <= finish <= row["late_finish"]
+                                for start, finish in row["late_assignments"].values()))
+        result = native.analyze(synthetic_oracle_save(padded=True))
         self.assertEqual(result["classification"]["verdict"],
                          "V3_NETWORKED_ASSIGNMENT_ENVELOPE_REJECTED")
         self.assertFalse(result["decision"]["production_rc01_correction_authorized"])
-        altered = ET.fromstring(synthetic_oracle_save(union=True))
+        altered = ET.fromstring(synthetic_oracle_save(padded=True))
         set_field(find(altered, "Tasks", matrix.graph()[0]["B"]["uid"]),
                   "LateStart", "2026-10-14T08:00:00")
         self.assertEqual(native.analyze(encoded(altered))["classification"]["verdict"],

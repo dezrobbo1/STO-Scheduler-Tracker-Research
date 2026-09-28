@@ -20,6 +20,7 @@ URI = base.URI
 q = base.q
 add = base.add
 EXPERIMENT_ID = "P1-G2-RC01-NETWORKED-ASSIGNMENT-ENVELOPE-NATIVE-MATRIX-V3"
+PREREGISTRATION_ID = EXPERIMENT_ID + "-R2-PROJECT-CALENDAR"
 PROJECT_NAME = EXPERIMENT_ID + ".xml"
 # The valid V2 save kept Project.Name only when its basename was unchanged.
 # Save V3 into a *different directory* using this same basename.
@@ -28,8 +29,8 @@ PROJECT_START = "2026-10-12T08:00:00"
 FIXTURE = Path("tests/fixtures") / PROJECT_NAME
 AUDIT = Path("docs/evidence/p1-g2-rc01-boiler-counterfactual-reviewed-v3-2026-09-28.json")
 AUDIT_SHA256 = "4a7b32e7050b8eb61860d08cc26e544e01e924f4096576ea67009c04c318b248"
-INPUT_BYTES = 112_797
-INPUT_SHA256 = "33c9dd6253930fcb2b538cf51256749f4ea71a026719e8828e3b4fb8635c8eaa"
+INPUT_BYTES = 122_492
+INPUT_SHA256 = "c9c1ef3b6c850bfed1a0ecd41e6ad0fb69e4aac367ef578548c90986529df4e9"
 ZERO = "PT0H0M0S"
 NAMESPACE = uuid.UUID("a76d7892-c4cc-4b09-bba5-f093747dad63")
 
@@ -39,18 +40,19 @@ def guid(kind: str, identity: int | str) -> str:
 
 
 CALENDARS = {
-    1: ("V3-PROJECT-24H", "24H"),
+    1: ("V3-PROJECT-8H", "PROJECT-8H"),
     2: ("V3-RESOURCE-24H", "24H"),
     3: ("V3-RESOURCE-10H", "10H"),
     4: ("V3-RESOURCE-10H-IDENTITY-TWIN", "10H"),
 }
 INTERVALS = {"24H": (("00:00:00", "00:00:00"),),
-             "10H": (("07:00:00", "17:00:00"),)}
+             "10H": (("07:00:00", "17:00:00"),),
+             "PROJECT-8H": (("07:30:00", "15:30:00"),)}
 # Each shape is (declared task duration hours, productive assignment hours).
 SHAPES = {"A": (4, 2), "B": (4, 4), "C": (8, 4),
           "D": (8, 4), "E": (4, 3), "F": (12, 6)}
 CASES = ("A", "A-ORDER-TWIN", "B", "C", "C-CALENDAR-IDENTITY-TWIN",
-         "D", "E", "F", "ADJACENT-RC01")
+         "D", "E", "F", "ADJACENT-RC01", "GAP")
 
 
 def graph() -> tuple[dict[str, dict], list[dict], dict[int, dict]]:
@@ -88,13 +90,13 @@ def graph() -> tuple[dict[str, dict], list[dict], dict[int, dict]]:
 
     for case in CASES:
         if case == "ADJACENT-RC01":
-            task("ADJACENT-PRE", 10)
+            task("ADJACENT-PRE", 1)
             candidate("ADJACENT-C", "C", ("ADJACENT-PRE",))
             candidate("ADJACENT-B", "B", ("ADJACENT-C",))
             task("ADJACENT-POST", 2, ("ADJACENT-B",))
             continue
-        task(f"{case}-PRE", 10)
-        candidate(case, case[0], (f"{case}-PRE",),
+        task(f"{case}-PRE", 8 if case == "GAP" else 1)
+        candidate(case, "A" if case == "GAP" else case[0], (f"{case}-PRE",),
                   second_calendar=4 if case == "C-CALENDAR-IDENTITY-TWIN" else 3,
                   reverse=case == "A-ORDER-TWIN")
         if case == "D":
@@ -110,12 +112,15 @@ def graph() -> tuple[dict[str, dict], list[dict], dict[int, dict]]:
     return tasks, edges, assignments
 
 
-def _week(row: ET.Element, intervals: tuple[tuple[str, str], ...]) -> None:
+def _week(row: ET.Element, intervals: tuple[tuple[str, str], ...], *, all_days: bool) -> None:
     week = ET.SubElement(row, q("WeekDays"))
     for day in range(1, 8):
         element = ET.SubElement(week, q("WeekDay"))
         add(element, "DayType", day)
-        add(element, "DayWorking", 1)
+        working_day = all_days or 2 <= day <= 6
+        add(element, "DayWorking", 1 if working_day else 0)
+        if not working_day:
+            continue
         working = ET.SubElement(element, q("WorkingTimes"))
         for start, end in intervals:
             interval = ET.SubElement(working, q("WorkingTime"))
@@ -134,9 +139,9 @@ def build_fixture() -> bytes:
                        ("Name", PROJECT_NAME), ("GUID", guid("project", 1)),
                        ("Title", EXPERIMENT_ID), ("ScheduleFromStart", 1),
                        ("StartDate", PROJECT_START), ("FinishDate", "2026-10-19T08:00:00"),
-                       ("CalendarUID", 1), ("DefaultStartTime", "08:00:00"),
-                       ("DefaultFinishTime", "17:00:00"), ("MinutesPerDay", 480),
-                       ("MinutesPerWeek", 3360), ("DaysPerMonth", 20),
+                       ("CalendarUID", 1), ("DefaultStartTime", "07:30:00"),
+                       ("DefaultFinishTime", "15:30:00"), ("MinutesPerDay", 480),
+                       ("MinutesPerWeek", 2400), ("DaysPerMonth", 20),
                        ("DefaultTaskType", 0), ("NewTasksEffortDriven", 0),
                        ("NewTasksEstimated", 0), ("AutoLink", 0),
                        ("NewTasksAreManual", 0), ("ProjectExternallyEdited", 0),
@@ -150,7 +155,7 @@ def build_fixture() -> bytes:
                            ("IsBaselineCalendar", 0),
                            ("BaseCalendarUID", -1 if uid == 1 else 1)):
             add(row, key, value)
-        _week(row, INTERVALS[semantic])
+        _week(row, INTERVALS[semantic], all_days=uid != 1)
     task_container = ET.SubElement(root, q("Tasks"))
     for name, spec in tasks.items():
         row = ET.SubElement(task_container, q("Task"))

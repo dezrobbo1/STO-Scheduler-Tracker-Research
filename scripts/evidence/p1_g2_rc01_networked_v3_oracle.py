@@ -8,6 +8,22 @@ from scripts.evidence import p1_g2_rc01_networked_v3_generate as matrix
 HOUR = timedelta(hours=1)
 
 
+def signed_project_minutes(earlier: datetime, later: datetime) -> int:
+    """Independent weekday 07:30–15:30 measuring calendar (BOILER class)."""
+    if later < earlier:
+        return -signed_project_minutes(later, earlier)
+    minutes = 0
+    cursor = earlier.replace(hour=0, minute=0, second=0, microsecond=0)
+    while cursor < later:
+        if cursor.weekday() < 5:
+            start = max(earlier, cursor + timedelta(hours=7, minutes=30))
+            end = min(later, cursor + timedelta(hours=15, minutes=30))
+            if end > start:
+                minutes += int((end - start).total_seconds() // 60)
+        cursor += timedelta(days=1)
+    return minutes
+
+
 def _intervals(day: datetime, calendar: int) -> tuple[tuple[datetime, datetime], ...]:
     midnight = day.replace(hour=0, minute=0, second=0, microsecond=0)
     if calendar == 2:
@@ -55,7 +71,7 @@ def placement(bound: datetime, hours: int, calendar: int, *, backward: bool = Fa
     raise ValueError("synthetic calendar horizon exhausted")
 
 
-def _reference(*, assignment_envelopes: bool) -> dict[str, dict]:
+def _reference(*, end_padding: bool) -> dict[str, dict]:
     tasks, edges, assignments = matrix.graph()
     incoming = {name: list(spec["predecessors"]) for name, spec in tasks.items()}
     outgoing: dict[str, list[str]] = {name: [] for name in tasks}
@@ -74,31 +90,34 @@ def _reference(*, assignment_envelopes: bool) -> dict[str, dict]:
                 raise ValueError("fractional assignment effective duration")
             early_assignments[assignment["uid"]] = placement(
                 bound, effective, assignment["calendar"])
-        predicted[name] = {"early_start": (min(x[0] for x in early_assignments.values())
-                                            if assignment_envelopes else bound),
-                           "early_finish": (max(x[1] for x in early_assignments.values())
-                                             if assignment_envelopes else bound + spec["duration"] * HOUR),
+        start = min(x[0] for x in early_assignments.values())
+        finish = max(x[1] for x in early_assignments.values())
+        pad = max(0, spec["duration"] - int((finish - start).total_seconds() // 3600)) \
+            if end_padding and len(rows) == 2 else 0
+        predicted[name] = {"early_start": start,
+                           "early_finish": finish + pad * HOUR,
                            "assignments": early_assignments,
+                           "end_padding_hours": pad,
                            "effective_hours": {a["uid"]: a["work"] // a["units"] for a in rows}}
     finish = max(row["early_finish"] for row in predicted.values())
     for name in reversed(tuple(tasks)):
         bound = min((predicted[s]["late_start"] for s in outgoing[name]),
                     default=finish)
         rows = [a for a in assignments.values() if a["task"] == name]
-        late_assignments = {a["uid"]: placement(bound, a["work"] // a["units"],
+        assignment_bound = bound - predicted[name]["end_padding_hours"] * HOUR
+        late_assignments = {a["uid"]: placement(assignment_bound, a["work"] // a["units"],
                                                 a["calendar"], backward=True) for a in rows}
         row = predicted[name]
-        row["late_start"] = (min(x[0] for x in late_assignments.values())
-                             if assignment_envelopes else bound - tasks[name]["duration"] * HOUR)
-        row["late_finish"] = (max(x[1] for x in late_assignments.values())
-                              if assignment_envelopes else bound)
+        row["late_start"] = min(x[0] for x in late_assignments.values())
+        row["late_finish"] = max(x[1] for x in late_assignments.values()) + \
+            row["end_padding_hours"] * HOUR
         row["late_assignments"] = late_assignments
-        # Project calendar is exactly continuous, so signed working time is
-        # the wall-clock difference. Match current STO's min(start, finish).
-        row["total_slack_minutes"] = int(min(row["late_start"] - row["early_start"],
-                                            row["late_finish"] - row["early_finish"]).total_seconds() // 60)
-        row["free_slack_minutes"] = int((min((predicted[s]["early_start"] for s in outgoing[name]),
-                                            default=finish) - row["early_finish"]).total_seconds() // 60)
+        row["total_slack_minutes"] = min(
+            signed_project_minutes(row["early_start"], row["late_start"]),
+            signed_project_minutes(row["early_finish"], row["late_finish"]))
+        row["free_slack_minutes"] = signed_project_minutes(
+            row["early_finish"], min((predicted[s]["early_start"]
+                                      for s in outgoing[name]), default=finish))
         row["critical"] = row["total_slack_minutes"] <= 0
     predicted["_project_finish"] = finish
     return predicted
@@ -106,9 +125,9 @@ def _reference(*, assignment_envelopes: bool) -> dict[str, dict]:
 
 def reference() -> dict[str, dict]:
     """Predeclared independent assignment-envelope candidate."""
-    return _reference(assignment_envelopes=True)
+    return _reference(end_padding=False)
 
 
-def union_reference() -> dict[str, dict]:
-    """Predeclared incompatible 24-hour-union fixed-duration alternative."""
-    return _reference(assignment_envelopes=False)
+def padded_reference() -> dict[str, dict]:
+    """Coherent alternative: declared-duration end padding after envelope."""
+    return _reference(end_padding=True)
