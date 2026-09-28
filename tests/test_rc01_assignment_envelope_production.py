@@ -103,6 +103,20 @@ class Rc01AssignmentEnvelopeProductionTests(unittest.TestCase):
                 self.assertIn("ACTIVITY_RESOURCE_CALENDARS_UNITED",
                               [a.code for a in plan.assumed if a.uid == task.uid])
 
+    def test_fractional_source_units_cannot_round_into_supported_allocation(self):
+        source = schedule()
+        task = by_name(source, "C")
+        assigned = next(row for row in source.assignments if row.activity_uid == task.uid
+                        and row.units.budgeted_permille == 1000)
+        uri = "{http://schemas.microsoft.com/project}"
+        document = ET.fromstring(FIXTURE.read_bytes())
+        row = next(row for row in document.findall(f"./{uri}Assignments/{uri}Assignment")
+                   if row.findtext(f"{uri}UID") == assigned.external_refs[0].uid)
+        row.find(f"{uri}Units").text = "1.00001"
+        changed = _load(ET.tostring(document))
+        plan, _, _ = calculate(changed)
+        self.assertIsNone(plan.network.activity_by_uid()[task.uid].assignment_envelope)
+
     def test_network_fingerprint_commits_to_assignment_work_and_calendar(self):
         source = schedule()
         original, _, _ = calculate(source)

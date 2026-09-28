@@ -63,6 +63,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
+from decimal import Decimal, InvalidOperation
 from uuid import NAMESPACE_URL, UUID, uuid5
 
 from sto.core.calendar.arithmetic import CompiledIntervals, intersect_intervals, normalise
@@ -1309,6 +1310,9 @@ def build_plan(
                 or fields.get("percent_work_complete_source") != "0"
                 or fields.get("delay_ambiguous_source") is not None
                 or fields.get("leveling_delay_ambiguous_source") is not None
+                or fields.get("units_ambiguous_source") is not None
+                or fields.get("work_ambiguous_source") is not None
+                or fields.get("remaining_work_ambiguous_source") is not None
                 or fields.get("actual_work_source_present") != "1"
                 or row.work.actual_seconds != 0 or row.percent_work_complete_permille != 0
                 or row.work.budgeted_seconds <= 0
@@ -1317,7 +1321,14 @@ def build_plan(
                 break
             kind = resource_class(resource.calendar_uid)
             numerator = row.work.budgeted_seconds * 1000
-            if kind is None or numerator % row.units.budgeted_permille:
+            lexeme = fields.get("units_lexeme_source")
+            try:
+                exact_units = Decimal(lexeme) * 1000 if lexeme is not None else None
+            except InvalidOperation:
+                exact_units = None
+            if (kind is None or exact_units is None or not exact_units.is_finite()
+                or exact_units != row.units.budgeted_permille
+                or numerator % row.units.budgeted_permille):
                 break
             calendars_used.add(resource.calendar_uid)
             duration = numerator // row.units.budgeted_permille

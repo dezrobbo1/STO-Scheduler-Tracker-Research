@@ -965,7 +965,11 @@ def migrate(
                     "work_contour_source", "percent_work_complete_source"):
             if row.get(key) is not None:
                 assignment_fields[key] = str(row[key])
-        for key in ("delay_ambiguous_source", "leveling_delay_ambiguous_source"):
+        if row.get("units_lexeme_source") is not None:
+            assignment_fields["units_lexeme_source"] = str(row["units_lexeme_source"])
+        for key in ("delay_ambiguous_source", "leveling_delay_ambiguous_source",
+                    "units_ambiguous_source", "work_ambiguous_source",
+                    "remaining_work_ambiguous_source"):
             if row.get(key):
                 assignment_fields[key] = "1"
         if actual_work is not None:
