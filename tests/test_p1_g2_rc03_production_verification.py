@@ -153,6 +153,17 @@ class Rc03ProductionEvidenceTests(unittest.TestCase):
                 self.assertNotEqual(basis(amended), "elapsed")
         for changed in (
             replace(assignment, units=replace(assignment.units, budgeted_permille=2000)),
+            replace(assignment, source_fields={**assignment.source_fields,
+                                               "units_lexeme_source": "1.00001"}),
+            replace(assignment, source_fields={**assignment.source_fields,
+                                               "work_contour_source": "1"}),
+            replace(assignment, source_fields={**assignment.source_fields,
+                                               "percent_work_complete_source": "1"}),
+            replace(assignment, timephased_ref="synthetic-timephased"),
+            replace(assignment, curve_uid=assignment.uid),
+            replace(assignment, source_fields={key: value
+                for key, value in assignment.source_fields.items()
+                if key != "units_lexeme_source"}),
             replace(assignment, source_fields={key: value
                 for key, value in assignment.source_fields.items()
                 if key != "actual_work_source_present"}),

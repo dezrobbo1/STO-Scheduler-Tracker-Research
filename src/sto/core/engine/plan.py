@@ -1376,6 +1376,12 @@ def build_plan(
             planned, remaining = activity.planned_duration, activity.remaining_duration
             rows = assignment_rows_by_activity.get(activity.uid, [])
             assignment = rows[0] if len(rows) == 1 else None
+            lexeme = (assignment.source_fields.get("units_lexeme_source")
+                      if assignment is not None else None)
+            try:
+                exact_units = Decimal(lexeme) * 1000 if lexeme is not None else None
+            except InvalidOperation:
+                exact_units = None
             incoming = raw_incoming.get(activity.uid, ())
             outgoing = raw_outgoing.get(activity.uid, ())
             raw_edges = [*incoming, *outgoing]
@@ -1387,6 +1393,9 @@ def build_plan(
                 or activity.effort_driven or activity.calendar_uid is not None
                 or activity.planned_work is None or activity.planned_work.seconds != planned.seconds
                 or activity.actual_start is not None or activity.actual_finish is not None
+                or activity.suspend is not None or activity.resume is not None
+                or activity.source_fields.get("work_unsupported_source") is not None
+                or activity.source_fields.get("work_ambiguous_source") is not None
                 or activity.primary_constraint is not None or activity.secondary_constraint is not None
                 or activity.levelling_delay_seconds != 0
                 or activity.source_fields.get("ignore_resource_calendar_source") not in (None, "0")
@@ -1397,10 +1406,17 @@ def build_plan(
                         activity.percent_complete.units_permille))
                 or activity.actual_work is not None and activity.actual_work.seconds != 0
                 or assignment is None or assignment.resource_uid not in resources
+                or assignment.activity_uid != activity.uid or assignment.unassigned_placeholder
+                or assignment.role_uid is not None or assignment.curve_uid is not None
+                or assignment.timephased_ref is not None
+                or resources[assignment.resource_uid].inactive
+                or resources[assignment.resource_uid].is_role
                 or resources[assignment.resource_uid].calendar_uid not in calendars
                 or calendars[resources[assignment.resource_uid].calendar_uid].intervals.intervals
                    != (window,)
                 or assignment.units.budgeted_permille != 1000
+                or exact_units is None or not exact_units.is_finite()
+                or exact_units != assignment.units.budgeted_permille
                 or assignment.work.budgeted_seconds != planned.seconds
                 or assignment.work.remaining_seconds != planned.seconds
                 or assignment.work.actual_seconds != 0
@@ -1414,6 +1430,8 @@ def build_plan(
                     "actual_work_unsupported_source",
                 ))
                 or assignment.percent_work_complete_permille != 0
+                or assignment.source_fields.get("percent_work_complete_source") != "0"
+                or assignment.source_fields.get("work_contour_source") != "0"
                 or assignment.source_fields.get("delay_tenths_minutes_source") != "0"
                 or assignment.source_fields.get("leveling_delay_tenths_minutes_source") != "0"
                 or len(incoming) != 1 or len(outgoing) not in (1, 2)
