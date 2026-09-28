@@ -128,6 +128,10 @@ def _parse_assignments(
             "percent_work_complete_source": _integer(element, "PercentWorkComplete"),
             "delay_tenths_minutes_source": _integer(element, "Delay"),
             "leveling_delay_tenths_minutes_source": _integer(element, "LevelingDelay"),
+            # A duplicate zero followed by a nonzero value must not become a
+            # proven zero merely because the generic reader picks the first.
+            "delay_ambiguous_source": len(element.findall(_q("Delay"))) > 1,
+            "leveling_delay_ambiguous_source": len(element.findall(_q("LevelingDelay"))) > 1,
             "leveling_delay_format_source": _integer(element, "LevelingDelayFormat"),
             "work_contour_source": _integer(element, "WorkContour"),
             "milestone_source": _boolean(element, "Milestone"),

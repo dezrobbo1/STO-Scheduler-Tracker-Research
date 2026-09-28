@@ -958,6 +958,16 @@ def migrate(
             **_unsupported_fields("actual_work", raw_actual_work),
             **_unsupported_fields("remaining_work", raw_remaining_work),
         }
+        # Preserve source presence separately from the canonical zero defaults:
+        # the bounded assignment-envelope rule needs explicit, unambiguous
+        # zero delays and cannot infer them from an absent MSPDI field.
+        for key in ("delay_tenths_minutes_source", "leveling_delay_tenths_minutes_source",
+                    "work_contour_source", "percent_work_complete_source"):
+            if row.get(key) is not None:
+                assignment_fields[key] = str(row[key])
+        for key in ("delay_ambiguous_source", "leveling_delay_ambiguous_source"):
+            if row.get(key):
+                assignment_fields[key] = "1"
         if actual_work is not None:
             # ``WorkTriple.actual_seconds`` defaults to zero, so it cannot by
             # itself distinguish an explicit source zero from an absent value.

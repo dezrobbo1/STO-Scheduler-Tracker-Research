@@ -21,12 +21,8 @@ class Rc02ProductionVerificationTests(unittest.TestCase):
             verification.PRODUCTION_COMMIT,
             "1982789f1c0aab83892dbac2f2d7b690ec9a85d6",
         )
-        basis = verification.verify_current_production_basis()
-        self.assertEqual(
-            basis["path_tree_sha256"],
-            verification.PRODUCTION_BASIS_PATH_TREE_SHA256,
-        )
-        self.assertTrue(basis["verified_against_worktree"])
+        with self.assertRaisesRegex(Exception, "production basis"):
+            verification.verify_current_production_basis()
 
     def test_committed_result_is_exact_counterfactual_equivalence(self):
         record = json.loads(RESULT.read_text(encoding="utf-8"))

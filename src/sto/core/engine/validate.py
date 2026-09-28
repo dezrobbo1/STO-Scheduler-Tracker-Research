@@ -47,7 +47,7 @@ from .progress import ProgressState, relationship_binds, state_of
 __all__ = ["VALIDATOR_PROFILE", "Violation", "validate_result"]
 
 #: Named on a report so a stored one says which rules were applied.
-VALIDATOR_PROFILE = "sto-validator-v4"
+VALIDATOR_PROFILE = "sto-validator-v5"
 
 
 @dataclass(frozen=True, slots=True)
@@ -232,31 +232,60 @@ def validate_result(
         if state is not ProgressState.COMPLETE:
             expected = activity.remaining
             begins = row.remaining_start if row.remaining_start is not None else row.early_start
-            consumed = working_between(activity.calendar, begins, row.early_finish)
-            if consumed != expected:
-                violations.append(
-                    Violation(
-                        "EARLY_SPAN_WRONG_LENGTH",
-                        uid,
-                        f"consumes {consumed}, duration {expected}",
-                    )
-                )
             late_begins = (
                 late_row.remaining_start
                 if late_row.remaining_start is not None
                 else late_row.late_start
             )
-            late_consumed = working_between(
-                activity.calendar, late_begins, late_row.late_finish
-            )
-            if late_consumed != expected:
-                violations.append(
-                    Violation(
-                        "LATE_SPAN_WRONG_LENGTH",
-                        uid,
-                        f"consumes {late_consumed}, duration {expected}",
-                    )
-                )
+            if activity.assignment_envelope is not None:
+                # A task envelope can consume more/less union-calendar time
+                # than its declared Duration. Verify each assignment's Work
+                # independently, then the extrema, without calling either
+                # pass's earliest_span/latest_span placement primitive.
+                early_spans = []
+                late_spans = []
+                for allocation in activity.assignment_envelope:
+                    early_start = next_working(allocation.calendar, begins)
+                    early_finish = (None if early_start is None else
+                                    add_working(allocation.calendar, early_start,
+                                                allocation.work_duration))
+                    late_start = sub_working(allocation.calendar, late_row.late_finish,
+                                             allocation.work_duration)
+                    late_finish = (None if late_start is None else
+                                   add_working(allocation.calendar, late_start,
+                                               allocation.work_duration))
+                    if (early_start is None or early_finish is None or
+                        working_between(allocation.calendar, early_start,
+                                        early_finish) != allocation.work_duration):
+                        violations.append(Violation("EARLY_ASSIGNMENT_SPAN_INVALID", uid,
+                                                    str(allocation.uid)))
+                    else:
+                        early_spans.append((early_start, early_finish))
+                    if (late_start is None or late_finish is None or
+                        working_between(allocation.calendar, late_start,
+                                        late_finish) != allocation.work_duration):
+                        violations.append(Violation("LATE_ASSIGNMENT_SPAN_INVALID", uid,
+                                                    str(allocation.uid)))
+                    else:
+                        late_spans.append((late_start, late_finish))
+                if (len(early_spans) != len(activity.assignment_envelope) or
+                    (min(x[0] for x in early_spans), max(x[1] for x in early_spans)) !=
+                    (begins, row.early_finish)):
+                    violations.append(Violation("EARLY_ASSIGNMENT_ENVELOPE_INVALID", uid))
+                if (len(late_spans) != len(activity.assignment_envelope) or
+                    (min(x[0] for x in late_spans), max(x[1] for x in late_spans)) !=
+                    (late_begins, late_row.late_finish)):
+                    violations.append(Violation("LATE_ASSIGNMENT_ENVELOPE_INVALID", uid))
+            else:
+                consumed = working_between(activity.calendar, begins, row.early_finish)
+                if consumed != expected:
+                    violations.append(Violation("EARLY_SPAN_WRONG_LENGTH", uid,
+                                                f"consumes {consumed}, duration {expected}"))
+                late_consumed = working_between(activity.calendar, late_begins,
+                                                 late_row.late_finish)
+                if late_consumed != expected:
+                    violations.append(Violation("LATE_SPAN_WRONG_LENGTH", uid,
+                                                f"consumes {late_consumed}, duration {expected}"))
 
             # --- remaining work obeys the floor the policy gives it -------
             if state is ProgressState.IN_PROGRESS and row.remaining_start is not None:

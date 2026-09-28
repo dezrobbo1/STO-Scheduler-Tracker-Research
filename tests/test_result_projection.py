@@ -884,7 +884,7 @@ class TheProjectionAnswersForEveryRowTests(unittest.TestCase):
         schedule, result = _projected(FIXTURE)
         provenance = result.provenance
         self.assertEqual(provenance.canonical_hash, canonical_sha256(encode_schedule(schedule)))
-        self.assertEqual(provenance.result_profile, "sto-result-v3")
+        self.assertEqual(provenance.result_profile, "sto-result-v4")
         self.assertTrue(provenance.forward_profile.startswith("sto-forward-pass-"))
         self.assertLess(provenance.horizon_start, provenance.horizon_finish)
 
@@ -1122,7 +1122,7 @@ class AStoredCalculationComesBackTests(unittest.TestCase):
 
         self.assertEqual(header["result_fingerprint"], expected.fingerprint)
         self.assertEqual(header["canonical_hash"], stored.canonical_hash)
-        self.assertEqual(header["profiles"]["result"], "sto-result-v3")
+        self.assertEqual(header["profiles"]["result"], "sto-result-v4")
         self.assertEqual(len(rows), len(expected.activities))
         self.assertEqual(
             len(summaries), len(expected.summaries) + len(expected.empty_summaries)

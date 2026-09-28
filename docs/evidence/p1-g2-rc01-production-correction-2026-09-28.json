@@ -1,0 +1,236 @@
+{
+  "after": {
+    "by_group": {
+      "G2-RC01": 0,
+      "G2-RC02": 0,
+      "G2-RC03": 3,
+      "G2-RC04": 0
+    },
+    "remaining_keys": [
+      [
+        "L0407",
+        "free_float"
+      ],
+      [
+        "L0407",
+        "total_float"
+      ],
+      [
+        "L0411",
+        "total_float"
+      ]
+    ],
+    "slots": 3
+  },
+  "before": {
+    "by_group": {
+      "G2-RC01": 144,
+      "G2-RC03": 3
+    },
+    "leaves": 39,
+    "slots": 147
+  },
+  "boiler": {
+    "bytes": 3361935,
+    "sha256": "e9b9b7994cc5cc50479807b82c452da742a91de9f7de52b172a6be6f4f399c70"
+  },
+  "decision": {
+    "classification": "RC01_PRODUCTION_CORRECTION_VERIFIED",
+    "p1_g2_closed": false,
+    "p1_gate": "4/5 IN PROGRESS",
+    "p2_started": false
+  },
+  "disposition": {
+    "eligible_root_leaf_ids": [
+      "L0070",
+      "L0075",
+      "L0080",
+      "L0083",
+      "L0084",
+      "L0114",
+      "L0127",
+      "L0148",
+      "L0157",
+      "L0190"
+    ],
+    "excluded_activities": 9,
+    "partition_exact": true,
+    "scheduled_leaves": 451
+  },
+  "historical_evidence": {
+    "counterfactual_sha256": "30be4ebaac5aa6a6e43aa8d4fa08a90fd531bc506d6b068463a3bbcf4052675e",
+    "historical_production_authorization": false,
+    "impact_sha256": "ec2adf6b5f07b293fb72865963fc34d97870256385e160be339b70b69b029b96",
+    "post_rc02_sha256": "9a3ef68637b6e213188400f05fdca9bd216eebfbafa100f10f817623f5b8f3d3",
+    "r6_inconclusive_sha256": "540b2fb3664c1884ba5d928adf52e5be0dc149941bb3e7f2c2478e595843f7d2",
+    "r6_operator_attestation_sha256": "5310a6b2e138eec60ed808529f2ad193140a75c4e8890a3d87d00bb4b4e6db62",
+    "r6_verdict": "V3_NETWORKED_ASSIGNMENT_ENVELOPE_INCONCLUSIVE"
+  },
+  "movement": {
+    "by_field": {
+      "critical": {
+        "after": 0,
+        "before": 2,
+        "closed": 2,
+        "new": 0
+      },
+      "early_finish": {
+        "after": 0,
+        "before": 27,
+        "closed": 27,
+        "new": 0
+      },
+      "early_start": {
+        "after": 0,
+        "before": 21,
+        "closed": 21,
+        "new": 0
+      },
+      "finish": {
+        "after": 0,
+        "before": 27,
+        "closed": 27,
+        "new": 0
+      },
+      "free_float": {
+        "after": 1,
+        "before": 7,
+        "closed": 6,
+        "new": 0
+      },
+      "late_finish": {
+        "after": 0,
+        "before": 6,
+        "closed": 6,
+        "new": 0
+      },
+      "late_start": {
+        "after": 0,
+        "before": 15,
+        "closed": 15,
+        "new": 0
+      },
+      "start": {
+        "after": 0,
+        "before": 21,
+        "closed": 21,
+        "new": 0
+      },
+      "total_float": {
+        "after": 2,
+        "before": 21,
+        "closed": 19,
+        "new": 0
+      }
+    },
+    "closed_first_divergences": 22,
+    "closed_rc01": 144,
+    "new_keys": [],
+    "non_rc01_movement": 0,
+    "root_movement": {
+      "L0070": {
+        "after_slots": 0,
+        "before_slots": 4,
+        "closed_slots": 4,
+        "first_divergence_closed": 3
+      },
+      "L0075": {
+        "after_slots": 0,
+        "before_slots": 4,
+        "closed_slots": 4,
+        "first_divergence_closed": 3
+      },
+      "L0080": {
+        "after_slots": 0,
+        "before_slots": 6,
+        "closed_slots": 6,
+        "first_divergence_closed": 1
+      },
+      "L0083": {
+        "after_slots": 0,
+        "before_slots": 3,
+        "closed_slots": 3,
+        "first_divergence_closed": 3
+      },
+      "L0084": {
+        "after_slots": 0,
+        "before_slots": 5,
+        "closed_slots": 5,
+        "first_divergence_closed": 3
+      },
+      "L0114": {
+        "after_slots": 0,
+        "before_slots": 5,
+        "closed_slots": 5,
+        "first_divergence_closed": 3
+      },
+      "L0127": {
+        "after_slots": 0,
+        "before_slots": 2,
+        "closed_slots": 2,
+        "first_divergence_closed": 1
+      },
+      "L0148": {
+        "after_slots": 0,
+        "before_slots": 3,
+        "closed_slots": 3,
+        "first_divergence_closed": 1
+      },
+      "L0157": {
+        "after_slots": 0,
+        "before_slots": 1,
+        "closed_slots": 1,
+        "first_divergence_closed": 1
+      },
+      "L0190": {
+        "after_slots": 0,
+        "before_slots": 3,
+        "closed_slots": 3,
+        "first_divergence_closed": 3
+      }
+    },
+    "worsened_keys": []
+  },
+  "network_fingerprint": "7a9849047f619d1c02186379a363c44f4020e666371fe113caf7d48c9bf6c315",
+  "optional_real_fixtures": {
+    "CALCINER": "UNAVAILABLE_NOT_RUN",
+    "KILN": "UNAVAILABLE_NOT_RUN"
+  },
+  "pr64_merge_commit": "a899a0c3b76f21016be89ff2fd0111065b81a4c6",
+  "production_files": [
+    "src/sto/core/engine/backward.py",
+    "src/sto/core/engine/forward.py",
+    "src/sto/core/engine/network.py",
+    "src/sto/core/engine/plan.py",
+    "src/sto/core/engine/result.py",
+    "src/sto/core/engine/validate.py",
+    "src/sto/core/model/migrate/sto_v011.py",
+    "src/sto/legacy/mspdi_resources.py"
+  ],
+  "production_projection_sha256": "42cda393e5bf60c1e39a9ace26f54c00c51824412bdb9de2b1361e354ffbadc0",
+  "profiles": {
+    "new": {
+      "backward": "sto-backward-pass-v9",
+      "forward": "sto-forward-pass-v5",
+      "result": "sto-result-v4",
+      "validator": "sto-validator-v5"
+    },
+    "old": {
+      "backward": "sto-backward-pass-v8",
+      "forward": "sto-forward-pass-v4",
+      "result": "sto-result-v3",
+      "validator": "sto-validator-v4"
+    }
+  },
+  "schema": "sto-p1-g2-rc01-production-verification-v1",
+  "starting_main": "a899a0c3b76f21016be89ff2fd0111065b81a4c6",
+  "validation": {
+    "codex_review": "PENDING_PUBLISHED_PR_HEAD",
+    "hosted_ci": "PENDING_PUBLISHED_PR_HEAD",
+    "required_mode_exact_BOILER": "PASS"
+  },
+  "validator": {
+    "profile": "sto-validator-v5",
+    "violations": []
+  }
+}

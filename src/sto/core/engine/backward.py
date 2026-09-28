@@ -133,8 +133,9 @@ FROM_ACTUALS = "actuals"
 #: an in-progress activity's actual LateStart separate from its movable late
 #: remaining span. Version eight applies the measured inactive-boundary fan-out
 #: rule: all derived edges bind forward, while only the unique latest successor
-#: in one inactive boundary binds its active predecessor backward.
-BACKWARD_PASS_PROFILE = "sto-backward-pass-v8"
+#: in one inactive boundary binds its active predecessor backward. Version nine
+#: places the bounded RC01 assignments on their own late-calendar spans.
+BACKWARD_PASS_PROFILE = "sto-backward-pass-v9"
 
 
 @dataclass(frozen=True, slots=True)
@@ -542,6 +543,21 @@ def _place(
     calendar = activity.calendar
     is_milestone = duration == 0
     floor = calendar.first if calendar.first is not None else 0
+
+    if activity.assignment_envelope is not None:
+        if pinned is not None or duration != activity.duration:
+            raise BackwardPassError("SCHEDULE_ASSIGNMENT_ENVELOPE_UNMEASURED_BOUND", activity.uid)
+        spans = [latest_span(row.calendar, start_bound, finish_bound,
+                             row.work_duration, row.calendar.first or 0)
+                 for row in activity.assignment_envelope]
+        if any(span is None for span in spans):
+            raise BackwardPassError("SCHEDULE_FLOOR_EXCEEDED", activity.uid,
+                                    "assignment envelope")
+        start = min(span[0] for span in spans if span is not None)
+        finish = max(span[1] for span in spans if span is not None)
+        if start > start_bound or finish > finish_bound:
+            raise BackwardPassError("SCHEDULE_ASSIGNMENT_ENVELOPE_UNMEASURED_BOUND", activity.uid)
+        return start, finish
 
     if pinned is not None:
         if coordinate is None:

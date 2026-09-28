@@ -138,6 +138,16 @@ class BackwardPassError(NetworkError):
 
 
 @dataclass(frozen=True, slots=True)
+class AssignmentPlacement:
+    """One proven-zero-delay assignment on its own resource calendar."""
+
+    uid: UUID
+    resource_uid: UUID
+    calendar: CompiledIntervals
+    work_duration: int
+
+
+@dataclass(frozen=True, slots=True)
 class PlannedActivity:
     """One activity as the engine sees it.
 
@@ -175,6 +185,9 @@ class PlannedActivity:
     #: routinely different shifts. ``None`` means the scheduling calendar, which
     #: is what the corpus declares and what an activity with no resource has.
     measure_calendar: CompiledIntervals | None = None
+    #: Present only for the bounded RC01 ordinary FS, unstarted allocation
+    #: shapes. None keeps the former union-calendar rule and its assumption.
+    assignment_envelope: tuple[AssignmentPlacement, ...] | None = None
 
     @property
     def float_calendar(self) -> CompiledIntervals:
@@ -319,7 +332,12 @@ class Network:
                         a.actual_finish,
                         a.remaining_duration,
                         calendar_digest(a.measure_calendar),
-                    ]
+                    ] + (
+                        [[str(p.uid), str(p.resource_uid),
+                          calendar_digest(p.calendar), p.work_duration]
+                         for p in a.assignment_envelope]
+                        if a.assignment_envelope is not None else []
+                    )
                     for a in self.activities
                 ],
                 "relationships": [
@@ -406,6 +424,13 @@ class Network:
                 # would read as zero slack and a critical row rather than as
                 # a float that cannot be measured.
                 raise ForwardPassError("SCHEDULE_MEASURE_CALENDAR_EMPTY", activity.uid)
+            if activity.assignment_envelope is not None:
+                if (len(activity.assignment_envelope) < 2 or activity.has_started
+                    or activity.constraint_type is not ConstraintType.ASAP):
+                    raise ForwardPassError("SCHEDULE_ASSIGNMENT_ENVELOPE_INVALID", activity.uid)
+                for placement in activity.assignment_envelope:
+                    if placement.work_duration <= 0 or not placement.calendar.intervals:
+                        raise ForwardPassError("SCHEDULE_ASSIGNMENT_ENVELOPE_INVALID", activity.uid)
             if (
                 activity.constraint_type in _DATED_CONSTRAINTS
                 and activity.constraint_coordinate is None
