@@ -23,6 +23,13 @@ from scripts.evidence import p1_g2_rc01_networked_v3_oracle as oracle
 NS = {"p": matrix.URI}
 SCHEMA = "sto-p1-g2-rc01-networked-assignment-envelope-native-v3"
 LINEAGE = {
+    "tests/fixtures/P1-G2-RC01-NETWORKED-ASSIGNMENT-ENVELOPE-NATIVE-MATRIX-V3.xml": "c9c1ef3b6c850bfed1a0ecd41e6ad0fb69e4aac367ef578548c90986529df4e9",
+    "docs/evidence/p1-g2-rc01-networked-native-v3-r4-predeclared-2026-09-28.json": "0de9271eb8d8a890d613fb7b8213b31757276544e807e69fc6de6bae467b1d51",
+    "docs/evidence/p1-g2-rc01-networked-native-v3-r4-predeclared-2026-09-28.md": "e29196ad22ad37ff335ae2f6154609f9178f9efe18ee24e40be2e4f45d81e12a",
+    "docs/evidence/p1-g2-rc01-networked-native-v3-r4-invalid-return-2026-09-28.json": "ef9c1f5ee205ee85afc61308d8562b782c1b0de2744803b79623dd765a28c955",
+    "docs/evidence/p1-g2-rc01-networked-native-v3-r4-invalid-return-2026-09-28.md": "0c6707025512a1517747328b067071235c935527a3caf258cc52482e1603d4c7",
+    "docs/evidence/p1-g2-rc01-networked-native-v3-r5-predeclared-2026-09-28.json": "a8ea400cebc001d7a894382f50968ec8518dccb802b78b6962c5edac9eef8981",
+    "docs/evidence/p1-g2-rc01-networked-native-v3-r5-predeclared-2026-09-28.md": "697e9fba6a71cdbc2836849d3026cf8123f12daba5cfbe3be17cfb4743e2b2ed",
     "docs/evidence/p1-g2-post-rc02-review-2026-09-25.json": "9a3ef68637b6e213188400f05fdca9bd216eebfbafa100f10f817623f5b8f3d3",
     "docs/evidence/p1-g2-rc01-native-v2-valid-return-2026-09-28.json": "71702adb09f08014c8ce14bed7651162bff65787f8d4d4945bb2383710ca6a6c",
     "docs/evidence/p1-g2-rc01-boiler-counterfactual-reviewed-v3-2026-09-28.json": matrix.AUDIT_SHA256,
@@ -63,8 +70,17 @@ def _check_row(observed: ET.Element, expected: ET.Element, outputs: set[str],
     links = expected.findall("p:PredecessorLink", NS)
     if links:
         returned_links = observed.findall("p:PredecessorLink", NS)
+        def link_fields(link: ET.Element) -> tuple[str | None, ...]:
+            allowed = {"PredecessorUID", "Type", "LinkLag", "LagFormat", "CrossProject"}
+            _require(not link.attrib and len(link) == len({child.tag for child in link})
+                     and {child.tag.rsplit("}", 1)[-1] for child in link} <= allowed,
+                     f"relationship fields changed: {label}")
+            _require(_text(link, "CrossProject") in (None, "0"),
+                     f"cross-project relationship changed: {label}")
+            return tuple(_text(link, field) for field in
+                         ("PredecessorUID", "Type", "LinkLag", "LagFormat"))
         _require(len(returned_links) == len(links) and
-                 all(ET.tostring(left) == ET.tostring(right)
+                 all(link_fields(left) == link_fields(right)
                      for left, right in zip(returned_links, links)),
                  f"relationship/topology changed: {label}")
     v2._validate_save_delta(observed, expected, outputs | {"PredecessorLink"}, additions, label)
@@ -183,7 +199,7 @@ def _native_inputs(payload: bytes) -> dict:
     _require(set(calendars) == set(expected_calendars), "calendar UID set changed")
     for uid, expected in expected_calendars.items():
         actual = calendars[uid]
-        _check_row(actual, expected, {"Name", "WeekDays"} if uid != 1 else set(),
+        _check_row(actual, expected, {"Name", "WeekDays"} if uid != 1 else {"WeekDays"},
                    set(), f"calendar {uid}")
         _require(_text(actual, "Name") in
                  ({matrix.CALENDARS[uid][0], "Unassigned"} if uid != 1 else
@@ -250,6 +266,7 @@ def _native_inputs(payload: bytes) -> dict:
         observed[name] = fields
     resources = _rows(result, "Resources")
     expected_resources = _rows(fixed, "Resources")
+    resource_specs = {spec["resource_uid"]: spec for spec in assignment_specs.values()}
     if 0 in resources:
         null = resources.pop(0)
         _require(_text(null, "ID") == "0" and _text(null, "CanLevel") == "1" and
@@ -259,7 +276,7 @@ def _native_inputs(payload: bytes) -> dict:
         resource = resources[uid]
         _check_row(resource, expected, RESOURCE_OUTPUTS | {"GUID", "MaxUnits"},
                    v2.RESOURCE_SAVE_FIELDS, f"resource {uid}")
-        spec = assignment_specs[uid]
+        spec = resource_specs[uid]
         _require(_text(resource, "GUID") in (matrix.guid("resource", uid),
                  matrix.guid("calendar", spec["calendar"])),
                  f"resource GUID changed: {uid}")
@@ -282,7 +299,7 @@ def _native_inputs(payload: bytes) -> dict:
                    f"assignment {uid}")
         _require(_text(row, "GUID") == matrix.guid("assignment", uid) and
                  _text(row, "TaskUID") == str(task_specs[spec["task"]]["uid"]) and
-                 _text(row, "ResourceUID") == str(uid), f"assignment linkage changed: {uid}")
+                 _text(row, "ResourceUID") == str(spec["resource_uid"]), f"assignment linkage changed: {uid}")
         _require(v2._decimal(_text(row, "Units"), f"assignment {uid}") == spec["units"] and
                  _text(row, "RegularWork") in (None, matrix.duration(spec["work"])),
                  f"assignment Units/Work changed: {uid}")
@@ -452,6 +469,7 @@ def main() -> int:
     args = parser.parse_args()
     sources = {"V3 returned source": args.native_return,
                "V3 fixed fixture": ROOT / matrix.FIXTURE,
+               "V3 prior R4 fixture": ROOT / "tests/fixtures/P1-G2-RC01-NETWORKED-ASSIGNMENT-ENVELOPE-NATIVE-MATRIX-V3.xml",
                "BOILER applicability audit": ROOT / matrix.AUDIT,
                "V2 native result": ROOT / "docs/evidence/p1-g2-rc01-native-v2-valid-return-2026-09-28.json",
                "BOILER counterfactual result": ROOT / "docs/evidence/p1-g2-rc01-boiler-counterfactual-reviewed-v3-2026-09-28.json"}

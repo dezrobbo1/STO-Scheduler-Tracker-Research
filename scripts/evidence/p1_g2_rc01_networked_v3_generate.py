@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timedelta
 import hashlib
 import json
 from pathlib import Path
@@ -20,8 +21,8 @@ URI = base.URI
 q = base.q
 add = base.add
 EXPERIMENT_ID = "P1-G2-RC01-NETWORKED-ASSIGNMENT-ENVELOPE-NATIVE-MATRIX-V3"
-PREREGISTRATION_ID = EXPERIMENT_ID + "-R4-DURATION-DISCRIMINATOR"
-PROJECT_NAME = EXPERIMENT_ID + ".xml"
+PREREGISTRATION_ID = EXPERIMENT_ID + "-R5-COHERENT-INPUT"
+PROJECT_NAME = EXPERIMENT_ID + "-R5.xml"
 # The valid V2 save kept Project.Name only when its basename was unchanged.
 # Save V3 into a *different directory* using this same basename.
 RETURN_NAME = PROJECT_NAME
@@ -29,14 +30,16 @@ PROJECT_START = "2026-10-12T08:00:00"
 FIXTURE = Path("tests/fixtures") / PROJECT_NAME
 AUDIT = Path("docs/evidence/p1-g2-rc01-boiler-counterfactual-reviewed-v3-2026-09-28.json")
 AUDIT_SHA256 = "4a7b32e7050b8eb61860d08cc26e544e01e924f4096576ea67009c04c318b248"
-INPUT_BYTES = 122_492
-INPUT_SHA256 = "c9c1ef3b6c850bfed1a0ecd41e6ad0fb69e4aac367ef578548c90986529df4e9"
+INPUT_BYTES = 122_130
+INPUT_SHA256 = "053cbd7b569cc34c53cbfce11ec6b0370c78ef0483e4eb358ce58d4da54d516a"
 ZERO = "PT0H0M0S"
 NAMESPACE = uuid.UUID("a76d7892-c4cc-4b09-bba5-f093747dad63")
 
 
 def guid(kind: str, identity: int | str) -> str:
-    return str(uuid.uuid5(NAMESPACE, f"v3/{kind}/{identity}"))
+    # Project writes these pinned task, calendar and assignment UUIDs in upper
+    # case. Fix representation in the NEW R5 input before another desktop run.
+    return str(uuid.uuid5(NAMESPACE, f"v3/{kind}/{identity}")).upper()
 
 
 CALENDARS = {
@@ -69,7 +72,7 @@ def graph() -> tuple[dict[str, dict], list[dict], dict[int, dict]]:
         for predecessor in predecessors:
             edges.append(dict(predecessor=predecessor, successor=name, type=1, lag=0))
         if kind == "control":
-            assignments[1000 + uid] = dict(uid=1000 + uid, task=name,
+            assignments[1000 + uid] = dict(uid=1000 + uid, resource_uid=len(assignments) + 1, task=name,
                                             calendar=calendar, work=duration,
                                             units=1, role="control")
 
@@ -84,7 +87,7 @@ def graph() -> tuple[dict[str, dict], list[dict], dict[int, dict]]:
             rows.reverse()
         for ordinal, (role, calendar, work, units) in enumerate(rows, 1):
             assignment_uid = uid * 10 + ordinal
-            assignments[assignment_uid] = dict(uid=assignment_uid, task=name,
+            assignments[assignment_uid] = dict(uid=assignment_uid, resource_uid=len(assignments) + 1, task=name,
                                                calendar=calendar, work=work,
                                                units=units, role=role)
 
@@ -134,6 +137,9 @@ def duration(hours: int) -> str:
 
 def build_fixture() -> bytes:
     tasks, edges, assignments = graph()
+    initial = datetime.fromisoformat(PROJECT_START)
+    def seeded(hours: int) -> str:
+        return (initial + timedelta(hours=hours)).isoformat()
     root = ET.Element(q("Project"))
     for key, value in (("SaveVersion", 14), ("BuildNumber", "0.0.0.0"),
                        ("Name", PROJECT_NAME), ("GUID", guid("project", 1)),
@@ -160,21 +166,22 @@ def build_fixture() -> bytes:
     for name, spec in tasks.items():
         row = ET.SubElement(task_container, q("Task"))
         work = sum(a["work"] for a in assignments.values() if a["task"] == name)
+        seed_finish = seeded(spec["duration"])
         for key, value in (("UID", spec["uid"]), ("GUID", guid("task", name)),
                            ("ID", spec["uid"]), ("Name", f"V3-{name}"),
                            ("Active", 1), ("Manual", 0), ("Type", 0), ("IsNull", 0),
                            ("CreateDate", "2026-09-28T08:00:00"), ("WBS", spec["uid"]),
                            ("OutlineNumber", spec["uid"]), ("OutlineLevel", 1),
                            ("Priority", 500), ("Start", PROJECT_START),
-                           ("Finish", "2026-10-12T12:00:00"),
+                           ("Finish", seed_finish),
                            ("Duration", duration(spec["duration"])), ("DurationFormat", 7),
                            ("Work", duration(work)), ("EffortDriven", 0),
                            ("Recurring", 0), ("OverAllocated", 0), ("Estimated", 0),
                            ("Milestone", 0), ("Summary", 0), ("Critical", 0),
                            ("EarlyStart", PROJECT_START),
-                           ("EarlyFinish", "2026-10-12T12:00:00"),
+                           ("EarlyFinish", seed_finish),
                            ("LateStart", PROJECT_START),
-                           ("LateFinish", "2026-10-12T12:00:00"),
+                           ("LateFinish", seed_finish),
                            ("FreeSlack", 12345), ("TotalSlack", 12345),
                            ("PercentComplete", 0), ("PercentWorkComplete", 0),
                            ("ActualDuration", ZERO), ("ActualWork", ZERO),
@@ -197,7 +204,7 @@ def build_fixture() -> bytes:
             add(link, "LagFormat", 7)
     resources = ET.SubElement(root, q("Resources"))
     for assignment in assignments.values():
-        uid = assignment["uid"]
+        uid = assignment["resource_uid"]
         row = ET.SubElement(resources, q("Resource"))
         for key, value in (("UID", uid), ("GUID", guid("resource", uid)),
                            ("ID", uid), ("Name", f"V3-RESOURCE-{uid}"), ("Type", 1),
@@ -215,11 +222,11 @@ def build_fixture() -> bytes:
         uid = spec["uid"]
         row = ET.SubElement(assignment_container, q("Assignment"))
         for key, value in (("UID", uid), ("GUID", guid("assignment", uid)),
-                           ("TaskUID", tasks[spec["task"]]["uid"]), ("ResourceUID", uid),
+                           ("TaskUID", tasks[spec["task"]]["uid"]), ("ResourceUID", spec["resource_uid"]),
                            ("PercentWorkComplete", 0), ("ActualWork", ZERO),
                            ("RemainingWork", duration(spec["work"])),
                            ("Work", duration(spec["work"])), ("Start", PROJECT_START),
-                           ("Finish", "2026-10-12T12:00:00"), ("Units", spec["units"]),
+                           ("Finish", seeded(spec["work"] // spec["units"])), ("Units", spec["units"]),
                            ("Delay", 0), ("LevelingDelay", 0),
                            ("LevelingDelayFormat", 7), ("Milestone", 0),
                            ("Overallocated", 0), ("WorkContour", 0), ("Confirmed", 1),

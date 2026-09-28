@@ -1,7 +1,7 @@
 """V3 preregistration tests. Synthetic saves are NEVER native evidence."""
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 import hashlib
 import json
 import os
@@ -82,6 +82,53 @@ class NetworkedV3Tests(unittest.TestCase):
             self.assertEqual(proc.returncode, 0, proc.stderr)
             self.assertEqual(target.read_bytes(), payload)
 
+    def test_seed_spans_are_coherent_before_network_recalculation(self):
+        prereg = json.loads((ROOT / "docs/evidence/p1-g2-rc01-networked-native-v3-r5-predeclared-2026-09-28.json").read_text())
+        self.assertEqual(prereg["preregistration_id"], matrix.PREREGISTRATION_ID)
+        self.assertEqual(prereg["input"]["bytes"], matrix.INPUT_BYTES)
+        self.assertEqual(prereg["input"]["sha256"], matrix.INPUT_SHA256)
+        self.assertEqual(prereg["supersedes_r4_after_invalid_return"]["r4_return_sha256"],
+                         "8ff29979fad5776af5909ca26f17715017793cf85a99b8308ab0a4adcd4baa33")
+        receipt = json.loads((ROOT / "docs/evidence/p1-g2-rc01-networked-native-v3-r4-invalid-return-2026-09-28.json").read_text())
+        self.assertEqual(receipt["classification"]["verdict"], "V3_INPUT_CONTRACT_VIOLATED")
+        self.assertFalse(receipt["decision"]["production_rc01_correction_authorized"])
+        prior = ROOT / "tests/fixtures/P1-G2-RC01-NETWORKED-ASSIGNMENT-ENVELOPE-NATIVE-MATRIX-V3.xml"
+        self.assertEqual(hashlib.sha256(prior.read_bytes()).hexdigest(),
+                         "c9c1ef3b6c850bfed1a0ecd41e6ad0fb69e4aac367ef578548c90986529df4e9")
+        root = ET.fromstring(matrix.build_fixture())
+        tasks, _, assignments = matrix.graph()
+        initial = datetime.fromisoformat(matrix.PROJECT_START)
+        for name, spec in tasks.items():
+            row = find(root, "Tasks", spec["uid"])
+            self.assertEqual(row.findtext("p:Start", namespaces=NS), initial.isoformat())
+            self.assertEqual(row.findtext("p:Finish", namespaces=NS),
+                             (initial + timedelta(hours=spec["duration"])).isoformat())
+            self.assertEqual(row.findtext("p:Duration", namespaces=NS),
+                             matrix.duration(spec["duration"]))
+        for uid, spec in assignments.items():
+            row = find(root, "Assignments", uid)
+            self.assertEqual(row.findtext("p:TaskUID", namespaces=NS),
+                             str(tasks[spec["task"]]["uid"]))
+            self.assertEqual(row.findtext("p:ResourceUID", namespaces=NS),
+                             str(spec["resource_uid"]))
+            self.assertEqual(row.findtext("p:Finish", namespaces=NS),
+                             (initial + timedelta(hours=spec["work"] // spec["units"])).isoformat())
+            self.assertEqual(spec["work"] % spec["units"], 0)
+        self.assertNotEqual(prior.read_bytes(), matrix.build_fixture())
+        self.assertEqual(native.analyze(prior.read_bytes())["classification"]["verdict"],
+                         "V3_INPUT_CONTRACT_VIOLATED")
+
+    def test_project_save_network_link_format_only(self):
+        root = ET.fromstring(synthetic_oracle_save())
+        row = find(root, "Tasks", matrix.graph()[0]["A"]["uid"])
+        link = row.find("p:PredecessorLink", NS)
+        matrix.add(link, "CrossProject", 0)
+        link.text = "\n  "
+        for field in link:
+            field.tail = "\n  "
+        self.assertEqual(native.analyze(encoded(root))["classification"]["verdict"],
+                         "V3_NETWORKED_ASSIGNMENT_ENVELOPE_SUPPORTED")
+
     def test_all_ten_root_shapes_mapped_from_exact_merged_audit(self):
         mapping = matrix.root_mapping(ROOT / matrix.AUDIT)
         self.assertEqual({k: row["class"] for k, row in mapping.items()}, {
@@ -109,6 +156,7 @@ class NetworkedV3Tests(unittest.TestCase):
     def test_allocation_arithmetic_network_order_identity_and_fanout(self):
         tasks, edges, assignments = matrix.graph()
         self.assertEqual(len(matrix.CASES), 10)
+        self.assertEqual(sorted(a["resource_uid"] for a in assignments.values()), list(range(1, 47)))
         for name in matrix.CASES:
             if name == "ADJACENT-RC01":
                 continue
@@ -180,8 +228,8 @@ class NetworkedV3Tests(unittest.TestCase):
     def test_project_calendar_duration_predicates_for_off_hours(self):
         prereg = json.loads((ROOT / "docs/evidence/p1-g2-rc01-networked-native-v3-r3-predeclared-2026-09-28.json").read_text())
         self.assertEqual(prereg["preregistration_id"], matrix.EXPERIMENT_ID + "-R3-WORKING-DURATION")
-        self.assertEqual(prereg["input"]["sha256"], matrix.INPUT_SHA256)
-        self.assertEqual(prereg["input"]["bytes"], matrix.INPUT_BYTES)
+        self.assertEqual(prereg["input"]["sha256"], "c9c1ef3b6c850bfed1a0ecd41e6ad0fb69e4aac367ef578548c90986529df4e9")
+        self.assertEqual(prereg["input"]["bytes"], 122492)
         self.assertEqual(prereg["supersedes_unrun_r2_preregistration"]["json_sha256"],
                          hashlib.sha256((ROOT / "docs/evidence/p1-g2-rc01-networked-native-v3-r2-predeclared-2026-09-28.json").read_bytes()).hexdigest())
         self.assertEqual(prereg["supersedes_unrun_r2_preregistration"]["md_sha256"],
@@ -201,9 +249,9 @@ class NetworkedV3Tests(unittest.TestCase):
 
     def test_distinguishing_duration_models_do_not_assume_v2_result(self):
         prereg = json.loads((ROOT / "docs/evidence/p1-g2-rc01-networked-native-v3-r4-predeclared-2026-09-28.json").read_text())
-        self.assertEqual(prereg["preregistration_id"], matrix.PREREGISTRATION_ID)
-        self.assertEqual(prereg["input"]["sha256"], matrix.INPUT_SHA256)
-        self.assertEqual(prereg["input"]["bytes"], matrix.INPUT_BYTES)
+        self.assertEqual(prereg["preregistration_id"], matrix.EXPERIMENT_ID + "-R4-DURATION-DISCRIMINATOR")
+        self.assertEqual(prereg["input"]["sha256"], "c9c1ef3b6c850bfed1a0ecd41e6ad0fb69e4aac367ef578548c90986529df4e9")
+        self.assertEqual(prereg["input"]["bytes"], 122492)
         self.assertEqual(prereg["supersedes_unrun_r3_preregistration"]["json_sha256"],
                          hashlib.sha256((ROOT / "docs/evidence/p1-g2-rc01-networked-native-v3-r3-predeclared-2026-09-28.json").read_bytes()).hexdigest())
         self.assertEqual(prereg["supersedes_unrun_r3_preregistration"]["md_sha256"],
@@ -232,6 +280,7 @@ class NetworkedV3Tests(unittest.TestCase):
 
     def test_input_mutations_fail_before_classification(self):
         tasks, _, assignments = matrix.graph()
+        resource_uid = assignments[21]["resource_uid"]
         mutations = [
             ("Tasks", tasks["A"]["uid"], "UID", "900"),
             ("Tasks", tasks["A"]["uid"], "GUID", "00000000-0000-4000-8000-000000000001"),
@@ -243,9 +292,9 @@ class NetworkedV3Tests(unittest.TestCase):
             ("Tasks", tasks["A"]["uid"], "PercentComplete", "1"),
             ("Tasks", tasks["A"]["uid"], "ConstraintType", "2"),
             ("Tasks", tasks["A"]["uid"], "LevelingDelay", "1"),
-            ("Resources", 21, "UID", "900"),
-            ("Resources", 21, "CalendarUID", "3"),
-            ("Resources", 21, "CanLevel", "1"),
+            ("Resources", resource_uid, "UID", "900"),
+            ("Resources", resource_uid, "CalendarUID", "3"),
+            ("Resources", resource_uid, "CanLevel", "1"),
             ("Calendars", 3, "BaseCalendarUID", "2"),
             ("Assignments", 21, "UID", "900"),
             ("Assignments", 21, "Work", "PT5H0M0S"),
@@ -261,12 +310,16 @@ class NetworkedV3Tests(unittest.TestCase):
                 self.assertEqual(native.analyze(encoded(root))["classification"]["verdict"],
                                  "V3_INPUT_CONTRACT_VIOLATED")
         for mode in ("predecessor", "lag", "calendar_interval", "assignment_order",
-                     "added_levelling", "unbounded_start", "task_calendar", "project_start"):
+                     "added_levelling", "unbounded_start", "task_calendar", "project_start",
+                     "cross_project_link"):
             with self.subTest(mode=mode):
                 root = ET.fromstring(synthetic_oracle_save())
                 if mode in ("predecessor", "lag"):
                     link = find(root, "Tasks", tasks["D-POST"]["uid"]).findall("p:PredecessorLink", NS)[0]
                     set_field(link, "PredecessorUID" if mode == "predecessor" else "LinkLag", "55")
+                elif mode == "cross_project_link":
+                    link = find(root, "Tasks", tasks["A"]["uid"]).find("p:PredecessorLink", NS)
+                    matrix.add(link, "CrossProject", 1)
                 elif mode == "calendar_interval":
                     set_field(find(root, "Calendars", 3).find("p:WeekDays/p:WeekDay/p:WorkingTimes/p:WorkingTime", NS),
                               "FromTime", "08:00:00")
@@ -290,7 +343,8 @@ class NetworkedV3Tests(unittest.TestCase):
         set_field(root, "AutoLink", "0")
         for uid in (2, 3, 4):
             set_field(find(root, "Calendars", uid), "Name", "Unassigned")
-        set_field(find(root, "Resources", 21), "GUID", matrix.guid("calendar", 2))
+        set_field(find(root, "Resources", matrix.graph()[2][21]["resource_uid"]),
+                  "GUID", matrix.guid("calendar", 2))
         task = find(root, "Tasks", matrix.graph()[0]["A"]["uid"])
         matrix.add(task, "CalendarUID", "-1")
         set_field(task, "LevelingDelayFormat", "8")
