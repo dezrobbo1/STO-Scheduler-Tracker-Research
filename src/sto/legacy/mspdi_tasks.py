@@ -5,6 +5,7 @@ from typing import Any
 from xml.etree import ElementTree as ET
 
 from .duration import duration_value
+from .mspdi_rc03_source import singleton_ambiguities, unsupported_source_enums
 from .opaque import element_to_opaque, local_name
 from .mspdi_shared import (
     IMPORTER_PROFILE,
@@ -46,6 +47,11 @@ def _task_common(element: ET.Element, ref: str, source_order: int) -> dict[str, 
         "duration": duration_value(_text(element, "Duration")),
         "work": duration_value(_text(element, "Work")),
         "work_ambiguous_source": len(element.findall(_q("Work"))) > 1,
+        # The bounded elapsed-float rule must not read first-of-two values
+        # as proof of an unstarted, unconstrained task. Preserve ambiguity at
+        # the import boundary while keeping the ordinary reader unchanged.
+        "rc03_eligibility_ambiguous_source": bool(singleton_ambiguities(element, "task")),
+        "rc03_shape_unsupported_source": bool(unsupported_source_enums(element, "task")),
         "calendar_ref": _calendar_ref(calendar_uid),
         "estimated": _boolean(element, "Estimated"),
         "milestone_source": bool(_boolean(element, "Milestone", False)),
@@ -188,6 +194,11 @@ def _parse_tasks(container: ET.Element | None, add_extension):
                     "lag_format_source": _integer(link, "LagFormat"),
                     "cross_project": _boolean(link, "CrossProject", False),
                     "cross_project_name": _text(link, "CrossProjectName"),
+                    # A first-value parse cannot prove an ordinary source
+                    # edge when any defining field has a second declaration.
+                    "rc03_eligibility_ambiguous_source": bool(
+                        singleton_ambiguities(link, "relationship")
+                    ) or bool(unsupported_source_enums(link, "relationship")),
                     "extensions": [
                         element_to_opaque(child, MSPDI_NAMESPACE)
                         for child in link

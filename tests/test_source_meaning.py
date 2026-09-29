@@ -960,6 +960,7 @@ class ElapsedDurationIsNotWorkingTimeTests(unittest.TestCase):
         _, plan, _ = _plan(_document([_task(1, duration_format="8")]))
         self.assertEqual(plan.assumed_by_code(), {"ACTIVITY_DURATION_ELAPSED": 1})
         self.assertEqual(len(plan.network.activities), 1)
+        self.assertEqual(plan.network.activities[0].float_basis, "working")
 
 
 class UnknownWorkIsNotZeroWorkTests(unittest.TestCase):

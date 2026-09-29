@@ -258,7 +258,7 @@ def _agreement(path: Path) -> dict:
 
 
 class StoredDateAgreementTests(unittest.TestCase):
-    """How far the pass reproduces the dates Project stored, pinned (ADR-010).
+    """Current forward-date agreement with the stored Project files, pinned.
 
     These are the numbers the diagnosis of the forward-pass residue ended on.
     Pinned so that a rule change moves them deliberately: a drop is a
@@ -272,22 +272,22 @@ class StoredDateAgreementTests(unittest.TestCase):
             {k: counts[k] for k in ("compared", "early_start", "early_finish", "exact", "first", "inherited")},
             {
                 "compared": 451,
-                "early_start": 430,
-                "early_finish": 424,
-                "exact": 424,
-                "first": 6,
-                "inherited": 21,
+                "early_start": 451,
+                "early_finish": 451,
+                "exact": 451,
+                "first": 0,
+                "inherited": 0,
             },
         )
         self.assertEqual(
             counts["assumed"],
             {
-                "ACTIVITY_RESOURCE_CALENDARS_UNITED": 11,
+                "ACTIVITY_RESOURCE_CALENDARS_UNITED": 1,
                 "ACTIVITY_SUCCESSOR_OF_INACTIVE": 2,
                 # The file's two elapsed tasks, which were scheduled as
                 # working time until C1 read the DurationFormat that says
-                # otherwise. Neither agrees with Project's stored dates
-                # either way, so the exact count above does not move.
+                # otherwise. Both now agree on early dates, while their
+                # elapsed placement assumption remains explicit.
                 "ACTIVITY_DURATION_ELAPSED": 2,
             },
         )
@@ -402,7 +402,7 @@ class StoredDateAgreementTests(unittest.TestCase):
                 == activities[uid].source_observations.early_finish
             )
         self.assertLess(exact[False], 60)
-        self.assertEqual(exact[True], 424)
+        self.assertEqual(exact[True], 451)
 
 
 if __name__ == "__main__":

@@ -6,6 +6,7 @@ from typing import Any
 from xml.etree import ElementTree as ET
 
 from .mspdi_calendars import _parse_calendars
+from .mspdi_rc03_source import singleton_ambiguities, unsupported_source_enums
 from .mspdi_resources import _parse_assignments, _parse_resources
 from .mspdi_shared import (
     IMPORTER_PROFILE,
@@ -18,6 +19,7 @@ from .mspdi_shared import (
     _integer,
     _parse_custom_field_definitions,
     _project_identity,
+    _q,
     _text,
 )
 from .mspdi_tasks import _parse_tasks
@@ -101,6 +103,8 @@ def import_mspdi(path: str | Path) -> dict[str, Any]:
         "created_at": _text(root, "CreationDate"),
         "last_saved_at": _text(root, "LastSaved"),
         "schedule_from_start": _boolean(root, "ScheduleFromStart"),
+        "rc03_direction_ambiguous_source": bool(singleton_ambiguities(root, "project"))
+        or bool(unsupported_source_enums(root, "project")),
         "start": _text(root, "StartDate"),
         "finish": _text(root, "FinishDate"),
         "status_date": _text(root, "StatusDate"),

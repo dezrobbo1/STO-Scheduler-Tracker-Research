@@ -47,6 +47,7 @@ from sto.core.engine import (
     float_analysis,
     forward_pass,
     span_float,
+    validate_result,
 )
 from sto.core.engine.criticality import signed_working
 from sto.core.model.migrate.sto_v011 import migrate
@@ -218,9 +219,15 @@ class BackwardPassRunsTests(unittest.TestCase):
         early = self.boiler.forward.by_uid()
         # Span length is working time on the calendar the work was *placed*
         # on, which is not the calendar a float is measured in (ADR-010).
-        placed_on = {a.uid: a.calendar for a in self.boiler.network.activities}
+        placed_on = {a.uid: a for a in self.boiler.network.activities}
         for row in self.boiler.backward.times:
-            calendar = placed_on[row.uid]
+            activity = placed_on[row.uid]
+            if activity.assignment_envelope is not None:
+                # An envelope spans independent resource calendars and need
+                # not contain its declared task Duration on the old union.
+                # The independent validator checks each assignment span.
+                continue
+            calendar = activity.calendar
             self.assertEqual(
                 working_between(calendar, row.late_start, row.late_finish),
                 working_between(
@@ -230,6 +237,8 @@ class BackwardPassRunsTests(unittest.TestCase):
                 ),
                 f"late span is a different length on {row.uid}",
             )
+        self.assertEqual(validate_result(self.boiler.network, self.boiler.forward,
+                                         self.boiler.backward, self.boiler.floats), ())
 
     def test_the_file_carries_no_constraint_the_backward_pass_would_defer(self):
         """Measured, because it bounds what the difference against Project can be.
@@ -320,7 +329,7 @@ class FloatRuleTests(unittest.TestCase):
 
     def test_our_free_float_rule_reproduces_the_stored_free_slack(self):
         expected = {
-            "boiler_before": (450, 451),
+            "boiler_before": (451, 451),
             "kiln": (408, 416),
             "calciner": (1732, 1763),
         }
@@ -396,8 +405,8 @@ class CriticalityRuleTests(unittest.TestCase):
         self.assertGreater(min(ordinary), threshold)
 
 
-class NotClaimedTests(unittest.TestCase):
-    """What the engine does and does not reproduce, pinned so it cannot drift.
+class CurrentAgreementTests(unittest.TestCase):
+    """BOILER now agrees exactly; other real schedules retain measured gaps.
 
     Our late dates inherit whatever the forward pass still gets wrong. Pinning
     the counts at what they are means that moving the forward pass will fail
@@ -407,7 +416,7 @@ class NotClaimedTests(unittest.TestCase):
     """
 
     @unittest.skipUnless(FIXTURES["boiler_before"].is_file(), "BOILER baseline unavailable")
-    def test_our_late_dates_do_not_reproduce_the_ones_project_stored(self):
+    def test_our_late_dates_now_reproduce_the_ones_project_stored(self):
         boiler = _Loaded(FIXTURES["boiler_before"])
         late = boiler.backward.by_uid()
         late_start = late_finish = exact = 0
@@ -425,20 +434,13 @@ class NotClaimedTests(unittest.TestCase):
                 exact += 1
         self.assertEqual(
             (compared, late_start, late_finish, exact),
-            (451, 436, 445, 436),
+            (451, 451, 451, 451),
             "the forward pass's remaining difference has moved",
         )
 
     @unittest.skipUnless(FIXTURES["boiler_before"].is_file(), "BOILER baseline unavailable")
-    def test_our_own_float_agrees_with_the_file_on_a_minority_of_rows(self):
-        """A local quantity survives a global misplacement better than a date does.
-
-        Free float is the gap between an activity and its immediate successors,
-        so it is largely unaffected by the whole schedule sitting in the wrong
-        place; total float is measured against the project finish and is not.
-        The gap between these two numbers is the shape of the forward pass's
-        remaining difference, which is why both are recorded.
-        """
+    def test_our_own_float_now_agrees_with_every_boiler_row(self):
+        """Pin all 451 BOILER float and criticality values after RC01/RC03."""
 
         boiler = _Loaded(FIXTURES["boiler_before"])
         ours = boiler.floats.by_uid()
@@ -451,9 +453,9 @@ class NotClaimedTests(unittest.TestCase):
             free += ours[uid].free_float == row.free_float_seconds
             critical += ours[uid].critical == row.critical
         self.assertEqual(compared, 451)
-        self.assertEqual(total, 430)
-        self.assertEqual(free, 444)
-        self.assertEqual(critical, 449)
+        self.assertEqual(total, 451)
+        self.assertEqual(free, 451)
+        self.assertEqual(critical, 451)
 
     def test_the_other_two_files_are_pinned_at_what_they_are(self):
         """KILN and CALCINER, late dates and floats, so ADR-010's table is a pin.

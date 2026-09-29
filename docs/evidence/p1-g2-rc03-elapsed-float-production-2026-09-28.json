@@ -1,0 +1,122 @@
+{
+  "after": {
+    "keys": [],
+    "slots": 0,
+    "unresolved_leaves": 0
+  },
+  "before": {
+    "keys": [
+      [
+        "L0407",
+        "free_float"
+      ],
+      [
+        "L0407",
+        "total_float"
+      ],
+      [
+        "L0411",
+        "total_float"
+      ]
+    ],
+    "leaves": 2,
+    "slots": 3
+  },
+  "boiler": {
+    "bytes": 3361935,
+    "sha256": "e9b9b7994cc5cc50479807b82c452da742a91de9f7de52b172a6be6f4f399c70"
+  },
+  "controlled_uid227": {
+    "added_rows": 0,
+    "baseline_mismatches": 0,
+    "build": "16.0.20228.20186",
+    "bytes": 3362778,
+    "classifications": {
+      "ENGINE_NATIVE_AGREEMENT": 43,
+      "EXPLICIT_EXCLUSION": 81,
+      "UNCHANGED": 4016
+    },
+    "common_leaves": 460,
+    "field_slots": 4140,
+    "g3_native_changed_reconciled": 43,
+    "removed_rows": 0,
+    "sha256": "6e0e5321ecadf4b8d9e96685968112803975737a61444104b45ae8cfa522df66",
+    "unexpected_transition_differences": 0,
+    "unexplained": 0
+  },
+  "decision": {
+    "boiler_rc03_closed": true,
+    "p1_g2_met": true,
+    "p1_gate": "5/5 PASS",
+    "p2_started": false
+  },
+  "eligibility": {
+    "elapsed_float_leaves": [
+      "L0407",
+      "L0411"
+    ],
+    "elapsed_placement_assumption_retained": true,
+    "other_elapsed_leaves_promoted": 0
+  },
+  "identities": {
+    "criticality_profile": {
+      "after": "sto-criticality-v8",
+      "before": "sto-criticality-v7"
+    },
+    "float_result_after": "1ed54d52ea56e5a00f99c043051436043933876c998a4f1dc59bd65ffc0dd4b6",
+    "float_result_before": "26c8cd9988587e06b33776e5426aa822abf94c21d4b0d4a98c894ebbe5d3faf8",
+    "network_after": "e33b6a39deedc77977bfdd96977194b886ab656f65e831e0aa7843f945e10368",
+    "network_before": "7a9849047f619d1c02186379a363c44f4020e666371fe113caf7d48c9bf6c315",
+    "result_profile": {
+      "after": "sto-result-v5",
+      "before": "sto-result-v4"
+    },
+    "validator_profile": {
+      "after": "sto-validator-v6",
+      "before": "sto-validator-v5"
+    }
+  },
+  "movement": {
+    "changed_slots": {
+      "L0407": {
+        "free_float": {
+          "after": 7200,
+          "before": 0,
+          "delta_seconds": 7200,
+          "source": 7200
+        },
+        "total_float": {
+          "after": 387000,
+          "before": 86400,
+          "delta_seconds": 300600,
+          "source": 387000
+        }
+      },
+      "L0411": {
+        "total_float": {
+          "after": 361800,
+          "before": 70200,
+          "delta_seconds": 291600,
+          "source": 361800
+        }
+      }
+    },
+    "new_keys": [],
+    "other_output_slots_changed": 0,
+    "worsened_keys": []
+  },
+  "pr65_merge_commit": "4d981101b3ef0c238646ed45380f8ba34afd0cae",
+  "predecessor_record_sha256": "9781ce3e02ff429ee4f3f46ff8cb1f7e4b7f7decea66a8dc179e20a6bed07c75",
+  "projection": {
+    "coordinates_before_and_after_sha256": "e18c1f8d02c3fd224b1cdc22b583d2530f7770da2040935e50c613ab633e0c9d",
+    "excluded": 9,
+    "other_outputs_before_and_after_sha256": "8743a9c873ce9695b25b0b94d7dc8c0472fa37678e8cef9770f29ee75ecb992b",
+    "scheduled": 451
+  },
+  "schema": "sto-p1-g2-rc03-production-verification-v1",
+  "starting_main": "4d981101b3ef0c238646ed45380f8ba34afd0cae",
+  "validator": {
+    "profile": "sto-validator-v6",
+    "violations": []
+  }
+}

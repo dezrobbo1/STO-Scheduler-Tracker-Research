@@ -55,7 +55,9 @@ __all__ = [
 #: durable result provenance, so any published synthetic driver UUID resolves
 #: after persistence/restart instead of becoming an orphan. Version four binds
 #: results to the bounded RC01 assignment-envelope scheduler profiles.
-RESULT_PROFILE = "sto-result-v4"
+#: Version five includes the explicitly bounded elapsed-float semantic and
+#: binds persisted provenance to the corrected criticality profile.
+RESULT_PROFILE = "sto-result-v5"
 
 #: A row the plan scheduled and the passes placed.
 SCHEDULED = "scheduled"

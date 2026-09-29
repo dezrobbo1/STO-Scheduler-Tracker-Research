@@ -14,7 +14,7 @@ than a guess.
 
 from __future__ import annotations
 
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 from math import isfinite
 from typing import Any
 from uuid import UUID
@@ -650,6 +650,8 @@ def migrate(
                 base_uid=calendar_uid_by_ref.get(str(base_ref)) if base_ref else None,
                 week=week,
                 exceptions=exceptions,
+                source_fields=({"rc03_uid_ambiguous_source": "1"}
+                               if row.get("rc03_uid_ambiguous_source") else {}),
                 external_refs=(_ref(system, row, snapshot_sha),),
             )
         )
@@ -786,6 +788,24 @@ def migrate(
             fields.update(_unsupported_fields(name, _duration(row.get(key))))
         if row.get("work_ambiguous_source"):
             fields["work_ambiguous_source"] = "1"
+        if row.get("rc03_eligibility_ambiguous_source"):
+            fields["rc03_eligibility_ambiguous_source"] = "1"
+        if row.get("rc03_shape_unsupported_source"):
+            fields["rc03_shape_unsupported_source"] = "1"
+        raw_remaining_work = row.get("remaining_work_source")
+        if isinstance(raw_remaining_work, dict) and raw_remaining_work.get("raw") is not None:
+            fields["remaining_work_source_lexeme"] = str(raw_remaining_work["raw"])
+        # These MSPDI task fields are preserved as vendor extensions, rather
+        # than populated in Activity.effort_driven / levelling_delay_seconds.
+        # Keep the source values available for the bounded elapsed-float rule.
+        for name, key in (("EffortDriven", "effort_driven_source"),
+                          ("LevelingDelay", "task_leveling_delay_source")):
+            values = [extension_by_id[ref].get("payload", {}).get("text")
+                      for ref in row.get("extension_refs", ())
+                      if ref in extension_by_id
+                      and extension_by_id[ref].get("payload", {}).get("name") == name]
+            if len(values) == 1 and values[0] is not None:
+                fields[key] = str(values[0]).strip()
         if row.get("is_null_source"):
             # A null placeholder row is a gap Project keeps in its task list,
             # not work. Dropping the flag made it look like an ordinary task.
@@ -911,6 +931,8 @@ def migrate(
                 seq=int(row.get("source_order") or 0),
                 cross_project=bool(row.get("cross_project", False)),
                 cross_project_name=row.get("cross_project_name"),
+                source_fields=({"rc03_eligibility_ambiguous_source": "1"}
+                               if row.get("rc03_eligibility_ambiguous_source") else {}),
             )
         )
 
@@ -926,7 +948,19 @@ def migrate(
         resources.append(
             Resource(
                 uid=uid,
-                source_fields=_unresolved_calendar_fields(calendar_ref),
+                source_fields={
+                    **_unresolved_calendar_fields(calendar_ref),
+                    **({"generic_resource_source": "1" if row["generic_source"] else "0"}
+                       if row.get("generic_source") is not None else {}),
+                    **({"rc03_resource_ambiguous_source": "1"}
+                       if row.get("rc03_resource_ambiguous_source") else {}),
+                    **({"resource_type_source": str(row["source_resource_type"])}
+                       if row.get("source_resource_type") is not None else {}),
+                    **({"null_resource_source": "1"}
+                       if row.get("is_null_source") is True else {}),
+                    **({"cost_resource_source": "1"}
+                       if row.get("cost_resource_source") is True else {}),
+                },
                 name=row.get("name") or "",
                 code=row.get("initials"),
                 type=resource_type,
@@ -942,6 +976,47 @@ def migrate(
         )
 
     assignments: list[Assignment] = []
+
+    def _measured_timephased_work(row: dict[str, Any]) -> bool:
+        """Recognize only the four consecutive 24-hour work rows of the RC03 roots.
+
+        A bare TimephasedData presence flag would exclude the measured roots,
+        which themselves carry four work rows. Unknown shapes get no marker.
+        """
+
+        if row.get("rc03_eligibility_ambiguous_source") or any(row.get(key) for key in (
+            "start_ambiguous_source", "finish_ambiguous_source",
+            "assignment_uid_ambiguous_source",
+            "task_ref_ambiguous_source", "resource_ref_ambiguous_source",
+        )):
+            return False
+        phases = [extension_by_id[ref].get("payload", {})
+                  for ref in row.get("extension_refs", ())
+                  if ref in extension_by_id
+                  and extension_by_id[ref].get("payload", {}).get("name") == "TimephasedData"]
+        if len(phases) != 4:
+            return False
+        spans: list[tuple[datetime, datetime]] = []
+        for phase in phases:
+            children = phase.get("children", ())
+            values = {child.get("name"): child.get("text") for child in children}
+            if (len(children) != 6 or len(values) != 6
+                or set(values) != {"UID", "Type", "Start", "Finish", "Unit", "Value"}
+                or values["UID"] != str(row.get("id", "")).removeprefix("assignment:")
+                or values["Type"] != "1" or values["Unit"] != "1"
+                or values["Value"] != "PT24H0M0S"):
+                return False
+            try:
+                begin, end = _dt(values["Start"]), _dt(values["Finish"])
+            except MigrationError:
+                return False
+            if begin is None or end is None or end - begin != timedelta(hours=24):
+                return False
+            spans.append((begin, end))
+        return (all(left[1] == right[0] for left, right in zip(spans, spans[1:]))
+                and spans[0][0] == _dt(row.get("start_source"))
+                and spans[-1][1] == _dt(row.get("finish_source")))
+
     for row in document.get("assignments", []):
         uid = uid_for(EntityKind.ASSIGNMENT, row)
         task_ref = row.get("task_ref")
@@ -960,6 +1035,8 @@ def migrate(
             **_unsupported_fields("actual_work", raw_actual_work),
             **_unsupported_fields("remaining_work", raw_remaining_work),
         }
+        if row.get("rc03_eligibility_ambiguous_source"):
+            assignment_fields["rc03_eligibility_ambiguous_source"] = "1"
         # Preserve source presence separately from the canonical zero defaults:
         # the bounded assignment-envelope rule needs explicit, unambiguous
         # zero delays and cannot infer them from an absent MSPDI field.
@@ -971,6 +1048,9 @@ def migrate(
             assignment_fields["units_lexeme_source"] = str(row["units_lexeme_source"])
         for key in ("delay_ambiguous_source", "leveling_delay_ambiguous_source",
                     "units_ambiguous_source", "work_ambiguous_source",
+                    "start_ambiguous_source", "finish_ambiguous_source",
+                    "assignment_uid_ambiguous_source",
+                    "task_ref_ambiguous_source", "resource_ref_ambiguous_source",
                     "remaining_work_ambiguous_source", "actual_work_ambiguous_source",
                     "percent_work_complete_ambiguous_source", "work_contour_ambiguous_source"):
             if row.get(key):
@@ -980,6 +1060,8 @@ def migrate(
             # itself distinguish an explicit source zero from an absent value.
             # The native late-date evidence boundary needs that distinction.
             assignment_fields["actual_work_source_present"] = "1"
+        if _measured_timephased_work(row):
+            assignment_fields["timephased_work_shape_source"] = "four-contiguous-24h"
         assignments.append(
             Assignment(
                 uid=uid,
@@ -1076,6 +1158,8 @@ def migrate(
         minutes_per_day=project_row.get("minutes_per_day"),
         minutes_per_week=project_row.get("minutes_per_week"),
         days_per_month=project_row.get("days_per_month"),
+        source_fields=({"rc03_direction_ambiguous_source": "1"}
+                       if project_row.get("rc03_direction_ambiguous_source") else {}),
     )
 
     snapshot = SourceSnapshot(

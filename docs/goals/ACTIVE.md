@@ -22,20 +22,16 @@ not start until the previous gate passes.
 <!-- roadmap:begin now -->
 <!-- generated from docs/goals/roadmap.json by `sto roadmap render`; edit the JSON, not this -->
 
-**P1 — Engine and local planner trial** (in progress; 4 of 5 gate criteria met)
+**P2 — Live execution loop** (not started; 0 of 6 gate criteria met)
 
 | | Gate criterion | Shown by |
 |---|---|---|
-| ✓ | The 47 executable conformance cases pass, byte-identically across three processes | `tests/test_conformance_determinism.py` |
-| · | The controlled BOILER baseline and Project output: every leaf activity gets a disposition, and no unresolved engine/source difference remains across start, finish, early and late dates, float and criticality | `docs/evidence/p1-final-native-progress-2026-09-20.md` ‡ |
-| ✓ | The controlled Microsoft Project recalculation reports zero unexpected differences under the predeclared field contract | `tests/test_controlled_native_progress_repeat_boiler.py` ‡ |
-| ✓ | A persisted import shows calculated dates beside the ones it imported; one duration edit moves its successors; reset restores the baseline; the scenario exports; and a restart reproduces the same result from the same input hash | `scripts/browser-acceptance-pl14.py` ‡ |
-| ✓ | Every API route rejects an unauthenticated request, and a project is readable only by an actor authorised on it | `tests/test_authentication.py` ‡ |
-
-‡ the clean controlled baseline/repeat pair lives outside the repository; bounded RC01 production verification on the exact controlled BOILER closes all 144 RC01 slots without new/worsened keys, leaving 3 RC03 mismatch slots across 2 leaves, so P1-G2 remains open; set `STO_REQUIRE_CONTROLLED_NATIVE_REPEAT=1` to make their absence a failure rather than a skip.
-‡ the clean controlled baseline/repeat pair lives outside the repository; all 43 native-changed fields reconcile and the transition has zero unexpected differences; set `STO_REQUIRE_CONTROLLED_NATIVE_REPEAT=1` to make their absence a failure rather than a skip.
-‡ the API CI job supplies PostgreSQL and Chromium, drives the rendered workflow, restarts the application, and uploads its screenshots and export; set `STO_REQUIRE_DB=1` to make their absence a failure rather than a skip.
-‡ the API CI job supplies PostgreSQL and runs the route inventory, two-user project matrix, session, CSRF and device-token acceptance with database absence treated as a failure; set `STO_REQUIRE_DB=1` to make their absence a failure rather than a skip.
+| · | Incremental rescheduling equals a full recompute on a thousand random networks | — |
+| · | An accepted live execution update reaches a subscribed client in under a second at the 95th percentile on a real-sized schedule, with the workload and connected trial conditions recorded | — |
+| · | Replaying the update log from the baseline reproduces the head hash | — |
+| · | A two-device field trial queues supported execution reports for three tasks and communication operations while both devices are offline, survives application process termination and reopening, reconnects and synchronises without loss or duplicate accepted records or effects, preserving activity association and deterministic server acceptance ordering; recorded in docs/evidence | — |
+| · | The approved forecast moves only on planner approval, with reported progress passing supervisor then planner review | — |
+| · | Communication and media leave execution state, schedule state and schedule hashes unchanged; a separate authorised execution command against the same activity is independently audited and causes the corresponding live recalculation and subscribed update without bypassing approved-forecast review | — |
 
 <!-- roadmap:end now -->
 
@@ -320,9 +316,11 @@ trial file needs it (ADR-011).
 The future live execution loop includes field communication, sharing delivery
 and offline foundations while keeping messages outside execution authority.
 The field-communication change was a roadmap correction, not P2 entry. The
-later clean controlled repeat closes the bounded-transition criterion P1-G3,
-but its 422 static baseline mismatches keep P1-G2 open and P1 at 4/5. P2 is
-still not started and the limited S7/PL4 exception recorded in
+clean controlled repeat originally closed P1-G3 while exposing 422 baseline
+mismatches on the 2026-09-22 engine. Bounded RC02, RC01 and RC03 production
+corrections now close those mismatches; the exact controlled repeat rechecked
+all 4,140 fields with zero unresolved results. P1 is 5/5 PASSED; P2 is NOT
+STARTED. The limited S7/PL4 exception recorded in
 `docs/evidence/p1-gate-entry-decision-2026-09-20.md` was never enacted. ADR-016
 records the communication boundaries and
 `docs/history/2026-09-20-field-communication-roadmap.md` the review decision.
@@ -363,17 +361,18 @@ across several inactive rows and every other unmeasured shape remain explicitly
 labelled. Synthetic boundary drivers carry durable source-edge lineage in result
 profile `sto-result-v3`.
 
-The post-correction BOILER inventory reproduces the immutable merged PR #60
+At the RC02 milestone, the post-correction BOILER inventory reproduced the immutable merged PR #60
 acceptance contract: **422 -> 147 mismatch slots, 105 -> 39 affected leaves,
 and RC02 258 -> 0**, with the same by-field/by-group inventory and the same
 movement classification across all original 422 mismatch keys. Production
 projection/key-set hashes are retained as current-run identities only, not as a
-self-declared counterfactual oracle. The remaining inventory is 143 RC01 slots,
-3 RC03 slots and 1 RC04 slot. BOILER, KILN and CALCINER retain clean validator
-results under the corrected profiles. RC02 is therefore closed in production
-for the bounded measured semantic, but P1-G2 remains open, P1 remains 4/5 and
-P2 remains not started. The next root-cause review begins from the 147-slot
-post-correction inventory, with RC01 the dominant remaining family.
+self-declared counterfactual oracle. At that stage 143 RC01 slots, 3 RC03 slots
+and 1 RC04 slot remained. BOILER, KILN and CALCINER retained clean validator
+results under those profiles. The later bounded RC01 and RC03 production
+corrections close every current BOILER mismatch; the [RC03 final gate
+record](../evidence/p1-g2-rc03-elapsed-float-production-2026-09-28.md) also
+rechecks the exact Project-controlled pair and preserves the earlier 147-slot
+inventory as historical evidence.
 
 P2 order and ownership, maintained from `docs/goals/roadmap.json`:
 
@@ -710,10 +709,10 @@ set `STO_REQUIRE_BOILER=1` so its absence fails instead of skipping quietly.
 The exact day-5 pair remains a separate `STO_REQUIRE_DAY5=1` historical gate,
 and the two completion files Project recalculated use `STO_REQUIRE_NATIVE=1`.
 The first controlled in-progress pair is required with
-`STO_REQUIRE_CONTROLLED_NATIVE=1`; the clean baseline/repeat pair that closes
-P1-G3 while keeping P1-G2's static parity gap explicit is required with
-`STO_REQUIRE_CONTROLLED_NATIVE_REPEAT=1`. The roadmap names the latter
-conditional evidence.
+`STO_REQUIRE_CONTROLLED_NATIVE=1`; the clean baseline/repeat pair that now
+closes P1-G2 and preserves P1-G3 is required with
+`STO_REQUIRE_CONTROLLED_NATIVE_REPEAT=1`. The final RC03 verifier also requires
+the exact BOILER and UID227 files with `STO_REQUIRE_RC03_PRODUCTION=1`.
 The float and criticality rules are evidence from KILN and CALCINER as much as
 from BOILER, which is why those two now have variables of their own.
 `fixtures/README.md` records every file's hash, what it proves and how to

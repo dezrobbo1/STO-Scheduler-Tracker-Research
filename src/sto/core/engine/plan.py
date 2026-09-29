@@ -61,6 +61,7 @@ calendar in the plan, because coordinates from two epochs cannot be compared.
 
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
@@ -77,7 +78,9 @@ from sto.core.model.enums import (
     MilestoneSnapPolicy,
     ProgressPolicy,
     RelationshipType,
+    ResourceType,
     ScheduleDirection,
+    SchedulingClass,
 )
 
 from .forward import ActivityTimes, forward_pass
@@ -795,8 +798,9 @@ def build_plan(
         if elapsed:
             # Elapsed time counts every hour on the clock, working or not
             # (Microsoft's DurationFormat reference says so in as many words),
-            # so the span is placed on the continuous calendar. Slack is still
-            # measured where ADR-010 measures it. The rule is the format's
+            # so the span is placed on the continuous calendar. Slack normally
+            # remains on ADR-010's calendar; only the later bounded RC03 shape
+            # measures its float as elapsed time. The placement rule is the format's
             # documented meaning rather than a measurement of these files -- no
             # elapsed row here has ever been scheduled before -- so the row is
             # labelled, not silently claimed.
@@ -1360,6 +1364,149 @@ def build_plan(
                       for row in activities]
         assumed = [row for row in assumed if not (
             row.code == "ACTIVITY_RESOURCE_CALENDARS_UNITED" and row.uid in envelopes)]
+
+    # The real-file RC03 roots have unambiguous elapsed planned AND remaining
+    # duration of 96 hours, no progress/constraints, one full-time assignment
+    # on a 24-hour resource calendar, and ordinary zero-lag FS network logic.
+    # One has one successor, the other two.  Do
+    # not infer this measurement rule from the continuous placement calendar:
+    # unsupported elapsed tasks retain their labelled working-float assumption.
+    elapsed_float_uids: set[UUID] = set()
+    if resource_calendars_apply:
+        source_activities = {row.uid: row for row in schedule.activities}
+        source_calendars = {row.uid: row for row in schedule.calendars}
+
+        def rc03_calendar_lineage_clear(uid: UUID | None) -> bool:
+            seen: set[UUID] = set()
+            while uid is not None:
+                if uid in seen or uid not in source_calendars:
+                    return False
+                seen.add(uid)
+                row = source_calendars[uid]
+                if row.source_fields.get("rc03_uid_ambiguous_source") is not None:
+                    return False
+                uid = row.base_uid
+            return True
+
+        for activity in schedule.activities:
+            if activity.uid not in scheduled:
+                continue
+            planned, remaining = activity.planned_duration, activity.remaining_duration
+            rows = assignment_rows_by_activity.get(activity.uid, [])
+            assignment = rows[0] if len(rows) == 1 else None
+            lexeme = (assignment.source_fields.get("units_lexeme_source")
+                      if assignment is not None else None)
+            try:
+                exact_units = Decimal(lexeme) if lexeme is not None else None
+            except InvalidOperation:
+                exact_units = None
+            incoming = raw_incoming.get(activity.uid, ())
+            outgoing = raw_outgoing.get(activity.uid, ())
+            raw_edges = [*incoming, *outgoing]
+            if (activity.kind is not ActivityKind.TASK or not activity.active or activity.manual
+                or planned is None or remaining is None
+                or not planned.elapsed or not remaining.elapsed
+                or planned.seconds != 345600 or remaining.seconds != planned.seconds
+                or activity.duration_type is not DurationType.FIXED_UNITS
+                or activity.effort_driven or activity.calendar_uid is not None
+                or activity.planned_work is None or activity.planned_work.seconds != planned.seconds
+                or activity.actual_start is not None or activity.actual_finish is not None
+                or activity.suspend is not None or activity.resume is not None
+                or activity.source_fields.get("work_unsupported_source") is not None
+                or activity.source_fields.get("work_ambiguous_source") is not None
+                or activity.source_fields.get("rc03_eligibility_ambiguous_source") is not None
+                or activity.source_fields.get("rc03_shape_unsupported_source") is not None
+                or project.source_fields.get("rc03_direction_ambiguous_source") is not None
+                or activity.source_fields.get("remaining_work_source_lexeme") != "PT96H0M0S"
+                or any(activity.source_fields.get(field) is not None for field in (
+                    "actual_work_unsupported_source", "actual_duration_unsupported_source",
+                    "remaining_work_unsupported_source",
+                ))
+                or (activity.actual_duration is not None
+                    and activity.actual_duration.seconds != 0)
+                or activity.source_fields.get("effort_driven_source") != "0"
+                or activity.source_fields.get("task_leveling_delay_source") != "0"
+                or activity.primary_constraint is not None or activity.secondary_constraint is not None
+                or activity.deadline is not None
+                or activity.levelling_delay_seconds != 0
+                or activity.source_fields.get("ignore_resource_calendar_source") not in (None, "0")
+                or any(value != 0 for value in
+                       (activity.percent_complete.duration_permille,
+                        activity.percent_complete.work_permille,
+                        activity.percent_complete.physical_permille,
+                        activity.percent_complete.units_permille))
+                or activity.actual_work is not None and activity.actual_work.seconds != 0
+                or assignment is None or assignment.resource_uid not in resources
+                or assignment.activity_uid != activity.uid or assignment.unassigned_placeholder
+                or assignment.role_uid is not None or assignment.curve_uid is not None
+                or assignment.timephased_ref is not None
+                or resources[assignment.resource_uid].inactive
+                or resources[assignment.resource_uid].is_role
+                or resources[assignment.resource_uid].type is not ResourceType.LABOR
+                or resources[assignment.resource_uid].scheduling_class is not SchedulingClass.RENEWABLE
+                or resources[assignment.resource_uid].source_fields.get("resource_type_source") != "1"
+                or resources[assignment.resource_uid].source_fields.get("null_resource_source") is not None
+                or resources[assignment.resource_uid].source_fields.get("cost_resource_source") is not None
+                or resources[assignment.resource_uid].source_fields.get(
+                    "generic_resource_source") != "0"
+                or resources[assignment.resource_uid].source_fields.get(
+                    "rc03_resource_ambiguous_source") is not None
+                or resources[assignment.resource_uid].calendar_uid not in calendars
+                or not rc03_calendar_lineage_clear(
+                    resources[assignment.resource_uid].calendar_uid)
+                or calendars[resources[assignment.resource_uid].calendar_uid].intervals.intervals
+                   != (window,)
+                or assignment.units.budgeted_permille != 1000
+                or exact_units is None or not exact_units.is_finite()
+                or exact_units != 1
+                or assignment.work.budgeted_seconds != planned.seconds
+                or assignment.work.remaining_seconds != planned.seconds
+                or assignment.work.actual_seconds != 0
+                or assignment.source_fields.get("actual_work_source_present") != "1"
+                or assignment.source_fields.get("timephased_work_shape_source")
+                   != "four-contiguous-24h"
+                or assignment.source_fields.get("rc03_eligibility_ambiguous_source") is not None
+                or any(assignment.source_fields.get(field) is not None for field in (
+                    "delay_ambiguous_source", "leveling_delay_ambiguous_source",
+                    "start_ambiguous_source", "finish_ambiguous_source",
+                    "assignment_uid_ambiguous_source",
+                    "task_ref_ambiguous_source", "resource_ref_ambiguous_source",
+                    "units_ambiguous_source", "work_ambiguous_source",
+                    "remaining_work_ambiguous_source", "actual_work_ambiguous_source",
+                    "percent_work_complete_ambiguous_source", "work_contour_ambiguous_source",
+                    "work_unsupported_source", "remaining_work_unsupported_source",
+                    "actual_work_unsupported_source",
+                ))
+                or assignment.percent_work_complete_permille != 0
+                or assignment.source_fields.get("percent_work_complete_source") != "0"
+                or assignment.source_fields.get("work_contour_source") != "0"
+                or assignment.source_fields.get("delay_tenths_minutes_source") != "0"
+                or assignment.source_fields.get("leveling_delay_tenths_minutes_source") != "0"
+                or len(incoming) != 1 or len(outgoing) not in (1, 2)
+                or len({(row.predecessor_uid, row.successor_uid, row.type)
+                        for row in raw_edges}) != len(raw_edges)
+                or any(not _zero_lag_fs_relationship(row) or
+                       row.lag_calendar is not LagCalendar.INHERIT_PROJECT_POLICY
+                       for row in raw_edges)
+                or any(row.lag is None or row.lag.source_format_code != 7
+                       for row in raw_edges)
+                or any(row.source_fields.get("rc03_eligibility_ambiguous_source") is not None
+                       for row in raw_edges)
+                or any(uid not in source_activities or source_activities[uid].source_fields.get(
+                       "rc03_eligibility_ambiguous_source") is not None
+                       for row in raw_edges for uid in (row.predecessor_uid, row.successor_uid))
+                or any(row.inactive_boundary_uid is not None
+                       for row in incident_by_activity[activity.uid])
+                or Counter((row.uid, row.predecessor_uid, row.successor_uid,
+                            row.type, row.lag) for row in incident_by_activity[activity.uid])
+                   != Counter((row.uid, row.predecessor_uid, row.successor_uid,
+                               row.type, 0 if row.lag is None else row.lag.seconds)
+                              for row in raw_edges)):
+                continue
+            elapsed_float_uids.add(activity.uid)
+    if elapsed_float_uids:
+        activities = [replace(row, float_basis="elapsed") if row.uid in elapsed_float_uids
+                      else row for row in activities]
 
     network = Network(
         activities=tuple(activities),

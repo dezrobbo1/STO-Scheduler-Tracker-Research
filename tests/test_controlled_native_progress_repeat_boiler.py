@@ -241,30 +241,15 @@ class ControlledNativeProgressRepeatBoilerTests(unittest.TestCase):
         self.assertEqual(
             dict(summary.classifications),
             {
-                BASELINE_MISMATCH: 422,
                 ENGINE_NATIVE_AGREEMENT: 43,
                 EXPLICIT_EXCLUSION: 81,
-                UNCHANGED: 3_594,
+                UNCHANGED: 4_016,
             },
         )
         self.assertEqual(summary.unexplained, ())
-        self.assertEqual(len(summary.baseline_mismatches), 422)
-        self.assertEqual(
-            Counter(field for _, field in summary.baseline_mismatches),
-            {
-                "start": 62,
-                "finish": 67,
-                "early_start": 62,
-                "early_finish": 67,
-                "late_start": 42,
-                "late_finish": 33,
-                "total_float": 71,
-                "free_float": 16,
-                "critical": 2,
-            },
-        )
+        self.assertEqual(summary.baseline_mismatches, ())
         self.assertEqual(summary.unexpected_transition_count, 0)
-        self.assertEqual(summary.unexplained_count, 422)
+        self.assertEqual(summary.unexplained_count, 0)
 
     def test_assignment_outputs_move_without_input_corruption(self):
         before_assignments = unique_rows(
@@ -358,8 +343,8 @@ class ControlledNativeProgressRepeatBoilerTests(unittest.TestCase):
             dispositions,
             Counter(
                 {
-                    "SUPPORTED_CALCULATED": 433,
-                    "ASSUMED_LABELLED": 18,
+                    "SUPPORTED_CALCULATED": 446,
+                    "ASSUMED_LABELLED": 5,
                     "EXCLUDED_CODED": 9,
                 }
             ),
