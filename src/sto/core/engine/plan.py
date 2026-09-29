@@ -1373,6 +1373,8 @@ def build_plan(
     # unsupported elapsed tasks retain their labelled working-float assumption.
     elapsed_float_uids: set[UUID] = set()
     if resource_calendars_apply:
+        source_activities = {row.uid: row for row in schedule.activities}
+        source_calendars = {row.uid: row for row in schedule.calendars}
         for activity in schedule.activities:
             if activity.uid not in scheduled:
                 continue
@@ -1400,6 +1402,7 @@ def build_plan(
                 or activity.source_fields.get("work_unsupported_source") is not None
                 or activity.source_fields.get("work_ambiguous_source") is not None
                 or activity.source_fields.get("rc03_eligibility_ambiguous_source") is not None
+                or project.source_fields.get("rc03_direction_ambiguous_source") is not None
                 or activity.source_fields.get("remaining_work_source_lexeme") != "PT96H0M0S"
                 or any(activity.source_fields.get(field) is not None for field in (
                     "actual_work_unsupported_source", "actual_duration_unsupported_source",
@@ -1435,6 +1438,9 @@ def build_plan(
                 or resources[assignment.resource_uid].source_fields.get(
                     "rc03_resource_ambiguous_source") is not None
                 or resources[assignment.resource_uid].calendar_uid not in calendars
+                or resources[assignment.resource_uid].calendar_uid not in source_calendars
+                or source_calendars[resources[assignment.resource_uid].calendar_uid].source_fields.get(
+                    "rc03_uid_ambiguous_source") is not None
                 or calendars[resources[assignment.resource_uid].calendar_uid].intervals.intervals
                    != (window,)
                 or assignment.units.budgeted_permille != 1000
@@ -1470,6 +1476,9 @@ def build_plan(
                        for row in raw_edges)
                 or any(row.source_fields.get("rc03_eligibility_ambiguous_source") is not None
                        for row in raw_edges)
+                or any(uid not in source_activities or source_activities[uid].source_fields.get(
+                       "rc03_eligibility_ambiguous_source") is not None
+                       for row in raw_edges for uid in (row.predecessor_uid, row.successor_uid))
                 or any(row.inactive_boundary_uid is not None
                        for row in incident_by_activity[activity.uid])
                 or Counter((row.uid, row.predecessor_uid, row.successor_uid,

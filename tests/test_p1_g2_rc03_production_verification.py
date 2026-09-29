@@ -229,6 +229,9 @@ class Rc03ProductionEvidenceTests(unittest.TestCase):
         task_code = baseline._source_uid(root_task)
         assignment_code = baseline._source_uid(assignment)
         resource_code = baseline._source_uid(resource)
+        calendar = next(row for row in schedule.calendars
+                        if row.uid == resource.calendar_uid)
+        calendar_code = baseline._source_uid(calendar)
         ns = f"{{{MSPDI_NAMESPACE}}}"
 
         def source_node(tree, group, kind, code):
@@ -290,6 +293,8 @@ class Rc03ProductionEvidenceTests(unittest.TestCase):
             ("duplicate task identity", "Tasks", "Task", task_code, "UID", "1"),
             ("duplicate resource identity", "Resources", "Resource", resource_code,
              "UID", "1"),
+            ("duplicate calendar identity", "Calendars", "Calendar", calendar_code,
+             "UID", "1"),
             ("duplicate assignment identity", "Assignments", "Assignment",
              assignment_code, "UID", "1"),
             ("duplicate assignment task", "Assignments", "Assignment", assignment_code,
@@ -316,6 +321,21 @@ class Rc03ProductionEvidenceTests(unittest.TestCase):
                                  "working")
         self.assertEqual(Path(path).read_bytes(), original)
 
+        tree = ET.fromstring(original)
+        direction = tree.find(f"{ns}ScheduleFromStart")
+        self.assertIsNotNone(direction)
+        duplicate = ET.fromstring(ET.tostring(direction))
+        duplicate.text = "0"
+        tree.append(duplicate)
+        changed = baseline._load(ET.tostring(tree, encoding="utf-8"))
+        changed_task = next(row for row in changed.activities
+                            if baseline._source_uid(row) == task_code)
+        start = changed.project.start
+        plan = build_plan(changed, (start - timedelta(days=90),
+                                    start + timedelta(days=365)))
+        planned = plan.network.activity_by_uid().get(changed_task.uid)
+        self.assertEqual(planned.float_basis if planned else "excluded", "working")
+
     def test_xml_deadline_and_incident_source_ambiguities_stay_labelled(self):
         path = os.environ.get("STO_RC03_PRODUCTION_BOILER")
         if not path:
@@ -330,6 +350,10 @@ class Rc03ProductionEvidenceTests(unittest.TestCase):
                           if row.activity_uid == root_uid)
         outgoing = next(row for row in schedule.relationships
                         if row.predecessor_uid == root_uid)
+        incoming = next(row for row in schedule.relationships
+                        if row.successor_uid == root_uid)
+        predecessor = next(row for row in schedule.activities
+                           if row.uid == incoming.predecessor_uid)
         successor = next(row for row in schedule.activities
                          if row.uid == outgoing.successor_uid)
         ns = f"{{{MSPDI_NAMESPACE}}}"
@@ -351,6 +375,12 @@ class Rc03ProductionEvidenceTests(unittest.TestCase):
              "PredecessorLink/Type", "2", True),
             ("duplicate whole outgoing relationship", "Task", baseline._source_uid(successor),
              "PredecessorLink", None, True),
+            ("ambiguous predecessor identity", "Task", baseline._source_uid(predecessor),
+             "UID", "1", True),
+            ("ambiguous successor identity", "Task", baseline._source_uid(successor),
+             "UID", "1", True),
+            ("ambiguous task summary", "Task", baseline._source_uid(task),
+             "Summary", "1", True),
             ("assignment start", "Assignment", baseline._source_uid(assignment),
              "Start", (assignment.start + timedelta(hours=1)).isoformat(), True),
             ("assignment finish", "Assignment", baseline._source_uid(assignment),

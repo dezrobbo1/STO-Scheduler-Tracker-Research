@@ -650,6 +650,8 @@ def migrate(
                 base_uid=calendar_uid_by_ref.get(str(base_ref)) if base_ref else None,
                 week=week,
                 exceptions=exceptions,
+                source_fields=({"rc03_uid_ambiguous_source": "1"}
+                               if row.get("rc03_uid_ambiguous_source") else {}),
                 external_refs=(_ref(system, row, snapshot_sha),),
             )
         )
@@ -1152,6 +1154,8 @@ def migrate(
         minutes_per_day=project_row.get("minutes_per_day"),
         minutes_per_week=project_row.get("minutes_per_week"),
         days_per_month=project_row.get("days_per_month"),
+        source_fields=({"rc03_direction_ambiguous_source": "1"}
+                       if project_row.get("rc03_direction_ambiguous_source") else {}),
     )
 
     snapshot = SourceSnapshot(

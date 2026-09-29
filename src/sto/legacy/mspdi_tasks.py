@@ -51,7 +51,7 @@ def _task_common(element: ET.Element, ref: str, source_order: int) -> dict[str, 
         # the import boundary while keeping the ordinary reader unchanged.
         "rc03_eligibility_ambiguous_source": any(
             len(element.findall(_q(name))) > 1 for name in (
-                "UID", "Active", "Manual", "Type", "IsNull", "Milestone", "Duration",
+                "UID", "Active", "Manual", "Type", "Summary", "IsNull", "Milestone", "Duration",
                 "DurationFormat", "RemainingDuration", "Work", "RemainingWork",
                 "ActualDuration", "ActualWork", "PercentComplete",
                 "PercentWorkComplete", "PhysicalPercentComplete", "ActualStart",

@@ -18,6 +18,7 @@ from .mspdi_shared import (
     _integer,
     _parse_custom_field_definitions,
     _project_identity,
+    _q,
     _text,
 )
 from .mspdi_tasks import _parse_tasks
@@ -101,6 +102,7 @@ def import_mspdi(path: str | Path) -> dict[str, Any]:
         "created_at": _text(root, "CreationDate"),
         "last_saved_at": _text(root, "LastSaved"),
         "schedule_from_start": _boolean(root, "ScheduleFromStart"),
+        "rc03_direction_ambiguous_source": len(root.findall(_q("ScheduleFromStart"))) > 1,
         "start": _text(root, "StartDate"),
         "finish": _text(root, "FinishDate"),
         "status_date": _text(root, "StatusDate"),

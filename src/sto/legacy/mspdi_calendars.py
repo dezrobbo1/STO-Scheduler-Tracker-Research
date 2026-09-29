@@ -79,6 +79,7 @@ def _parse_calendars(container: ET.Element | None, add_extension) -> list[dict[s
                 entity="Calendar", uid=uid, guid=_text(element, "GUID")
             ),
             "name": _text(element, "Name"),
+            "rc03_uid_ambiguous_source": len(element.findall(_q("UID"))) > 1,
             "is_base": _boolean(element, "IsBaseCalendar"),
             "is_baseline": _boolean(element, "IsBaselineCalendar"),
             "base_calendar_ref": _calendar_ref(_integer(element, "BaseCalendarUID")),
