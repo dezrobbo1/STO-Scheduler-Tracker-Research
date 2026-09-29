@@ -31,6 +31,7 @@ their identity forward, which are new, and which the later file no longer has.
 | | |
 |---|---|
 | What is being built now | `docs/goals/ACTIVE.md` |
+| P1 → P2 implementation handover | `docs/research/2026-09-29-p1-p2-handover.md` |
 | Working mode and boundaries | `AGENTS.md` |
 | Decisions | `docs/adr/`, with `docs/adr/LEGACY-INDEX.md` mapping the frozen repositories' ADRs |
 | The design, frozen 2026-09-02 and not maintained | `docs/roadmap/CONSOLIDATION-PLAN.md` |

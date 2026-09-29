@@ -2,6 +2,13 @@
 
 Status: accepted for future P2 design, 2026-09-20; implementation not started.
 
+> **Current status note — 2026-09-29.** P1 subsequently closed **5/5 PASS**
+> when PR #66 merged at `b13286b2d893185f4fe71dbc036ecb036b8ba452`.
+> P2 remains **not started**. References below to P1 evidence being open or
+> P2 entry requirements being unsatisfied describe this ADR's 2026-09-20
+> decision context and are retained as history; current phase/gate truth comes
+> from `docs/goals/roadmap.json` and its rendered `docs/goals/ACTIVE.md` view.
+
 ## Context
 
 The field-communication research and independent roadmap review concluded

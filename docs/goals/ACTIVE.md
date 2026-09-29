@@ -4,9 +4,10 @@ STO is becoming its own scheduler: import from a CMMS, Primavera P6 or Microsoft
 Project; track, manage and schedule in real time; export back to any of them.
 Today it imports Microsoft Project XML, stores and calculates an immutable
 baseline, and persists one duration scenario that makes downstream movement
-visible; the rest is the roadmap below, and the 2026-09-07 comprehensive review
-(`docs/history/2026-09-08-review-answered-and-roadmap-resequenced.md`) is
-the honest statement of the distance.
+visible. The current P1 → P2 implementation handover is
+`docs/research/2026-09-29-p1-p2-handover.md`; the 2026-09-07 comprehensive
+review (`docs/history/2026-09-08-review-answered-and-roadmap-resequenced.md`)
+remains historical context rather than current phase status.
 `AGENTS.md` holds the boundaries, `docs/adr/` the decisions, and
 `docs/history/` how each decision was reached.
 `docs/roadmap/CONSOLIDATION-PLAN.md` is the design behind the summary below —
@@ -312,6 +313,11 @@ fixture, and the first native `.mpp` import — is Phase 3's, arriving when a
 trial file needs it (ADR-011).
 
 ## Next: the rest of the roadmap
+
+Before implementation begins, use `docs/research/2026-09-29-p1-p2-handover.md`
+as the bounded bridge from completed P1 evidence to P2. It indexes accepted
+repository semantics separately from provisional UX/research hypotheses; it
+adds no phase gate and does not reopen P1.
 
 The future live execution loop includes field communication, sharing delivery
 and offline foundations while keeping messages outside execution authority.
