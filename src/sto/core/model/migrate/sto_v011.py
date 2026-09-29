@@ -954,6 +954,8 @@ def migrate(
                        if row.get("source_resource_type") is not None else {}),
                     **({"null_resource_source": "1"}
                        if row.get("is_null_source") is True else {}),
+                    **({"cost_resource_source": "1"}
+                       if row.get("cost_resource_source") is True else {}),
                 },
                 name=row.get("name") or "",
                 code=row.get("initials"),
@@ -980,6 +982,7 @@ def migrate(
 
         if any(row.get(key) for key in (
             "start_ambiguous_source", "finish_ambiguous_source",
+            "assignment_uid_ambiguous_source",
             "task_ref_ambiguous_source", "resource_ref_ambiguous_source",
         )):
             return False
@@ -995,6 +998,7 @@ def migrate(
             values = {child.get("name"): child.get("text") for child in children}
             if (len(children) != 6 or len(values) != 6
                 or set(values) != {"UID", "Type", "Start", "Finish", "Unit", "Value"}
+                or values["UID"] != str(row.get("id", "")).removeprefix("assignment:")
                 or values["Type"] != "1" or values["Unit"] != "1"
                 or values["Value"] != "PT24H0M0S"):
                 return False
@@ -1039,6 +1043,7 @@ def migrate(
         for key in ("delay_ambiguous_source", "leveling_delay_ambiguous_source",
                     "units_ambiguous_source", "work_ambiguous_source",
                     "start_ambiguous_source", "finish_ambiguous_source",
+                    "assignment_uid_ambiguous_source",
                     "task_ref_ambiguous_source", "resource_ref_ambiguous_source",
                     "remaining_work_ambiguous_source", "actual_work_ambiguous_source",
                     "percent_work_complete_ambiguous_source", "work_contour_ambiguous_source"):

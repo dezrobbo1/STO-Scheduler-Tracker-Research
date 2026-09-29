@@ -1429,6 +1429,7 @@ def build_plan(
                 or resources[assignment.resource_uid].scheduling_class is not SchedulingClass.RENEWABLE
                 or resources[assignment.resource_uid].source_fields.get("resource_type_source") != "1"
                 or resources[assignment.resource_uid].source_fields.get("null_resource_source") is not None
+                or resources[assignment.resource_uid].source_fields.get("cost_resource_source") is not None
                 or resources[assignment.resource_uid].source_fields.get(
                     "generic_resource_source") != "0"
                 or resources[assignment.resource_uid].source_fields.get(
@@ -1448,6 +1449,7 @@ def build_plan(
                 or any(assignment.source_fields.get(field) is not None for field in (
                     "delay_ambiguous_source", "leveling_delay_ambiguous_source",
                     "start_ambiguous_source", "finish_ambiguous_source",
+                    "assignment_uid_ambiguous_source",
                     "task_ref_ambiguous_source", "resource_ref_ambiguous_source",
                     "units_ambiguous_source", "work_ambiguous_source",
                     "remaining_work_ambiguous_source", "actual_work_ambiguous_source",

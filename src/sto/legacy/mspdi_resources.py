@@ -70,7 +70,8 @@ def _parse_resources(container: ET.Element | None, add_extension):
             "generic_source": _boolean(element, "IsGeneric"),
             "rc03_resource_ambiguous_source": any(
                 len(element.findall(_q(name))) > 1 for name in (
-                    "IsGeneric", "IsInactive", "CalendarUID", "Type", "IsNull",
+                    "UID", "IsGeneric", "IsInactive", "CalendarUID", "Type",
+                    "IsNull", "IsCostResource",
                 )
             ),
             "inactive_source": _boolean(element, "IsInactive"),
@@ -124,6 +125,7 @@ def _parse_assignments(
             "external_references": _external_references(entity="Assignment", uid=uid, guid=_text(element, "GUID")),
             "task_ref": task_ref_by_uid.get(task_uid) if task_uid is not None else None,
             "resource_ref": _resource_ref(resource_uid, known_resource_uids),
+            "assignment_uid_ambiguous_source": len(element.findall(_q("UID"))) > 1,
             "task_ref_ambiguous_source": len(element.findall(_q("TaskUID"))) > 1,
             "resource_ref_ambiguous_source": len(element.findall(_q("ResourceUID"))) > 1,
             "start_source": _text(element, "Start"),

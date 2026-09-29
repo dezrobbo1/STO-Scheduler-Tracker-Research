@@ -242,6 +242,8 @@ class Rc03ProductionEvidenceTests(unittest.TestCase):
             ("material resource", "Resources", "Resource", resource_code, "Type", "0"),
             ("cost resource", "Resources", "Resource", resource_code, "Type", "2"),
             ("null resource", "Resources", "Resource", resource_code, "IsNull", "1"),
+            ("explicit cost resource", "Resources", "Resource", resource_code,
+             "IsCostResource", "1"),
             ("unreadable actual work", "Tasks", "Task", task_code, "ActualWork", "P1M"),
             ("unreadable actual duration", "Tasks", "Task", task_code, "ActualDuration", "P1M"),
             ("unreadable remaining work", "Tasks", "Task", task_code, "RemainingWork", "P1M"),
@@ -251,6 +253,8 @@ class Rc03ProductionEvidenceTests(unittest.TestCase):
              "Units", "1.00000000000000000000000000001"),
             ("changed timephased work", "Assignments", "Assignment",
              assignment_code, "TimephasedData/Value", "PT23H0M0S"),
+            ("foreign timephased owner", "Assignments", "Assignment",
+             assignment_code, "TimephasedData/UID", "1"),
         ):
             with self.subTest(source=label):
                 tree = ET.fromstring(original)
@@ -281,6 +285,13 @@ class Rc03ProductionEvidenceTests(unittest.TestCase):
              "PercentComplete", "100"),
             ("duplicate generic resource", "Resources", "Resource", resource_code,
              "IsGeneric", "1"),
+            ("duplicate cost resource", "Resources", "Resource", resource_code,
+             "IsCostResource", "1"),
+            ("duplicate task identity", "Tasks", "Task", task_code, "UID", "1"),
+            ("duplicate resource identity", "Resources", "Resource", resource_code,
+             "UID", "1"),
+            ("duplicate assignment identity", "Assignments", "Assignment",
+             assignment_code, "UID", "1"),
             ("duplicate assignment task", "Assignments", "Assignment", assignment_code,
              "TaskUID", "1"),
             ("duplicate assignment resource", "Assignments", "Assignment", assignment_code,
