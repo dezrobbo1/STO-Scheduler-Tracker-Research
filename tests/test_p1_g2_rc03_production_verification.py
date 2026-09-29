@@ -22,6 +22,15 @@ from sto.core.engine.plan import build_plan
 from sto.core.model.entities import Duration
 from sto.core.model.enums import RelationshipType
 from sto.legacy import MSPDI_NAMESPACE
+from sto.legacy.mspdi_rc03_source import (
+    RC03_REPEATING_FIELDS,
+    RC03_SINGLETON_FIELDS,
+    RC03_SOURCE_ENUMS,
+    admitted_source_enum,
+    calendar_ambiguities,
+    singleton_ambiguities,
+    unsupported_source_enums,
+)
 
 
 RESULT = (Path(__file__).resolve().parents[1] / "docs/evidence" /
@@ -29,6 +38,55 @@ RESULT = (Path(__file__).resolve().parents[1] / "docs/evidence" /
 
 
 class Rc03ProductionEvidenceTests(unittest.TestCase):
+    def test_finite_rc03_source_admission_contract(self):
+        # The imported marker and this enumeration consume the SAME field
+        # sets. Keep repeating rows out of singleton ambiguity detection.
+        self.assertEqual(set(RC03_SINGLETON_FIELDS), {
+            "project", "task", "relationship", "assignment", "resource",
+            "calendar", "calendar_weekday", "calendar_working_time",
+            "calendar_exception", "calendar_time_period",
+        })
+        self.assertEqual({key.partition(".")[0] for key in RC03_SOURCE_ENUMS}, {
+            "project", "task", "relationship", "assignment", "resource",
+        })
+        self.assertTrue({
+            "project.ScheduleFromStart", "task.Type", "task.DurationFormat",
+            "task.ConstraintType", "resource.Type", "relationship.Type",
+            "relationship.LagFormat", "assignment.WorkContour",
+        }.issubset(RC03_SOURCE_ENUMS))
+        self.assertFalse(RC03_REPEATING_FIELDS.intersection(
+            set().union(*RC03_SINGLETON_FIELDS.values())))
+        ns = f"{{{MSPDI_NAMESPACE}}}"
+        for kind, fields in RC03_SINGLETON_FIELDS.items():
+            self.assertTrue(fields, kind)
+            for name in fields:
+                with self.subTest(kind=kind, singleton=name):
+                    element = ET.Element(f"{ns}{kind}")
+                    ET.SubElement(element, f"{ns}{name}").text = "0"
+                    self.assertFalse(singleton_ambiguities(element, kind))
+                    ET.SubElement(element, f"{ns}{name}").text = "1"
+                    self.assertEqual(singleton_ambiguities(element, kind), {name})
+        for qualified, admitted in RC03_SOURCE_ENUMS.items():
+            kind, name = qualified.split(".")
+            with self.subTest(enum=qualified):
+                element = ET.Element(f"{ns}{kind}")
+                self.assertFalse(admitted_source_enum(element, kind, name))
+                field = ET.SubElement(element, f"{ns}{name}")
+                for value in admitted:
+                    field.text = value
+                    self.assertTrue(admitted_source_enum(element, kind, name))
+                field.text = "999"
+                self.assertFalse(admitted_source_enum(element, kind, name))
+                self.assertIn(name, unsupported_source_enums(element, kind))
+        calendar = ET.Element(f"{ns}Calendar")
+        weekdays = ET.SubElement(calendar, f"{ns}WeekDays")
+        day = ET.SubElement(weekdays, f"{ns}WeekDay")
+        ET.SubElement(day, f"{ns}DayWorking").text = "1"
+        ET.SubElement(day, f"{ns}DayWorking").text = "0"
+        self.assertIn("WeekDay/DayWorking", calendar_ambiguities(calendar))
+        for name in RC03_REPEATING_FIELDS:
+            self.assertNotIn(name, RC03_SINGLETON_FIELDS["calendar"])
+
     def test_committed_record_leaves_controlled_gate_open(self):
         record = json.loads(RESULT.read_bytes())
         self.assertEqual(record["after"]["keys"], [])
@@ -232,6 +290,9 @@ class Rc03ProductionEvidenceTests(unittest.TestCase):
         calendar = next(row for row in schedule.calendars
                         if row.uid == resource.calendar_uid)
         calendar_code = baseline._source_uid(calendar)
+        base_calendar = next(row for row in schedule.calendars
+                             if row.uid == calendar.base_uid)
+        base_calendar_code = baseline._source_uid(base_calendar)
         ns = f"{{{MSPDI_NAMESPACE}}}"
 
         def source_node(tree, group, kind, code):
@@ -295,6 +356,10 @@ class Rc03ProductionEvidenceTests(unittest.TestCase):
              "UID", "1"),
             ("duplicate calendar identity", "Calendars", "Calendar", calendar_code,
              "UID", "1"),
+            ("duplicate calendar base", "Calendars", "Calendar", calendar_code,
+             "BaseCalendarUID", "1"),
+            ("duplicate inherited calendar base", "Calendars", "Calendar",
+             base_calendar_code, "BaseCalendarUID", "1"),
             ("duplicate assignment identity", "Assignments", "Assignment",
              assignment_code, "UID", "1"),
             ("duplicate assignment task", "Assignments", "Assignment", assignment_code,
@@ -412,6 +477,21 @@ class Rc03ProductionEvidenceTests(unittest.TestCase):
                                             start + timedelta(days=365)))
                 planned = plan.network.activity_by_uid().get(changed_task.uid)
                 self.assertEqual(planned.float_basis if planned else "excluded", "working")
+        tree = ET.fromstring(original)
+        node = next(row for row in tree.findall(f"{ns}Tasks/{ns}Task")
+                    if row.findtext(f"{ns}UID") == baseline._source_uid(task))
+        link = next(row for row in node.findall(f"{ns}PredecessorLink")
+                    if row.findtext(f"{ns}PredecessorUID")
+                    == baseline._source_uid(predecessor))
+        link.find(f"{ns}LagFormat").text = "999"
+        changed = baseline._load(ET.tostring(tree, encoding="utf-8"))
+        changed_task = next(row for row in changed.activities
+                            if baseline._source_uid(row) == baseline._source_uid(task))
+        start = changed.project.start
+        plan = build_plan(changed, (start - timedelta(days=90),
+                                    start + timedelta(days=365)))
+        planned = plan.network.activity_by_uid().get(changed_task.uid)
+        self.assertEqual(planned.float_basis if planned else "excluded", "working")
         self.assertEqual(Path(path).read_bytes(), original)
 
     def test_elapsed_root_to_inactive_middle_does_not_gain_derived_boundary(self):

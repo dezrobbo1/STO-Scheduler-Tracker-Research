@@ -1375,6 +1375,19 @@ def build_plan(
     if resource_calendars_apply:
         source_activities = {row.uid: row for row in schedule.activities}
         source_calendars = {row.uid: row for row in schedule.calendars}
+
+        def rc03_calendar_lineage_clear(uid: UUID | None) -> bool:
+            seen: set[UUID] = set()
+            while uid is not None:
+                if uid in seen or uid not in source_calendars:
+                    return False
+                seen.add(uid)
+                row = source_calendars[uid]
+                if row.source_fields.get("rc03_uid_ambiguous_source") is not None:
+                    return False
+                uid = row.base_uid
+            return True
+
         for activity in schedule.activities:
             if activity.uid not in scheduled:
                 continue
@@ -1402,6 +1415,7 @@ def build_plan(
                 or activity.source_fields.get("work_unsupported_source") is not None
                 or activity.source_fields.get("work_ambiguous_source") is not None
                 or activity.source_fields.get("rc03_eligibility_ambiguous_source") is not None
+                or activity.source_fields.get("rc03_shape_unsupported_source") is not None
                 or project.source_fields.get("rc03_direction_ambiguous_source") is not None
                 or activity.source_fields.get("remaining_work_source_lexeme") != "PT96H0M0S"
                 or any(activity.source_fields.get(field) is not None for field in (
@@ -1438,9 +1452,8 @@ def build_plan(
                 or resources[assignment.resource_uid].source_fields.get(
                     "rc03_resource_ambiguous_source") is not None
                 or resources[assignment.resource_uid].calendar_uid not in calendars
-                or resources[assignment.resource_uid].calendar_uid not in source_calendars
-                or source_calendars[resources[assignment.resource_uid].calendar_uid].source_fields.get(
-                    "rc03_uid_ambiguous_source") is not None
+                or not rc03_calendar_lineage_clear(
+                    resources[assignment.resource_uid].calendar_uid)
                 or calendars[resources[assignment.resource_uid].calendar_uid].intervals.intervals
                    != (window,)
                 or assignment.units.budgeted_permille != 1000
@@ -1452,6 +1465,7 @@ def build_plan(
                 or assignment.source_fields.get("actual_work_source_present") != "1"
                 or assignment.source_fields.get("timephased_work_shape_source")
                    != "four-contiguous-24h"
+                or assignment.source_fields.get("rc03_eligibility_ambiguous_source") is not None
                 or any(assignment.source_fields.get(field) is not None for field in (
                     "delay_ambiguous_source", "leveling_delay_ambiguous_source",
                     "start_ambiguous_source", "finish_ambiguous_source",
@@ -1473,6 +1487,8 @@ def build_plan(
                         for row in raw_edges}) != len(raw_edges)
                 or any(not _zero_lag_fs_relationship(row) or
                        row.lag_calendar is not LagCalendar.INHERIT_PROJECT_POLICY
+                       for row in raw_edges)
+                or any(row.lag is None or row.lag.source_format_code != 7
                        for row in raw_edges)
                 or any(row.source_fields.get("rc03_eligibility_ambiguous_source") is not None
                        for row in raw_edges)

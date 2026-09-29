@@ -790,6 +790,8 @@ def migrate(
             fields["work_ambiguous_source"] = "1"
         if row.get("rc03_eligibility_ambiguous_source"):
             fields["rc03_eligibility_ambiguous_source"] = "1"
+        if row.get("rc03_shape_unsupported_source"):
+            fields["rc03_shape_unsupported_source"] = "1"
         raw_remaining_work = row.get("remaining_work_source")
         if isinstance(raw_remaining_work, dict) and raw_remaining_work.get("raw") is not None:
             fields["remaining_work_source_lexeme"] = str(raw_remaining_work["raw"])
@@ -982,7 +984,7 @@ def migrate(
         which themselves carry four work rows. Unknown shapes get no marker.
         """
 
-        if any(row.get(key) for key in (
+        if row.get("rc03_eligibility_ambiguous_source") or any(row.get(key) for key in (
             "start_ambiguous_source", "finish_ambiguous_source",
             "assignment_uid_ambiguous_source",
             "task_ref_ambiguous_source", "resource_ref_ambiguous_source",
@@ -1033,6 +1035,8 @@ def migrate(
             **_unsupported_fields("actual_work", raw_actual_work),
             **_unsupported_fields("remaining_work", raw_remaining_work),
         }
+        if row.get("rc03_eligibility_ambiguous_source"):
+            assignment_fields["rc03_eligibility_ambiguous_source"] = "1"
         # Preserve source presence separately from the canonical zero defaults:
         # the bounded assignment-envelope rule needs explicit, unambiguous
         # zero delays and cannot infer them from an absent MSPDI field.

@@ -4,6 +4,7 @@ from typing import Any
 from xml.etree import ElementTree as ET
 
 from .opaque import element_to_opaque, local_name
+from .mspdi_rc03_source import calendar_ambiguities
 from .mspdi_shared import (
     MSPDI_NAMESPACE,
     MspdiImportError,
@@ -79,7 +80,7 @@ def _parse_calendars(container: ET.Element | None, add_extension) -> list[dict[s
                 entity="Calendar", uid=uid, guid=_text(element, "GUID")
             ),
             "name": _text(element, "Name"),
-            "rc03_uid_ambiguous_source": len(element.findall(_q("UID"))) > 1,
+            "rc03_uid_ambiguous_source": bool(calendar_ambiguities(element)),
             "is_base": _boolean(element, "IsBaseCalendar"),
             "is_baseline": _boolean(element, "IsBaselineCalendar"),
             "base_calendar_ref": _calendar_ref(_integer(element, "BaseCalendarUID")),

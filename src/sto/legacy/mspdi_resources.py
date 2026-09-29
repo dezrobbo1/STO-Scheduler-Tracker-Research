@@ -5,6 +5,7 @@ from typing import Any
 from xml.etree import ElementTree as ET
 
 from .duration import duration_value
+from .mspdi_rc03_source import singleton_ambiguities, unsupported_source_enums
 from .opaque import local_name
 from .mspdi_shared import (
     MspdiImportError,
@@ -68,12 +69,8 @@ def _parse_resources(container: ET.Element | None, add_extension):
             "booking_type_source": _integer(element, "BookingType"),
             "created_at": _text(element, "CreationDate"),
             "generic_source": _boolean(element, "IsGeneric"),
-            "rc03_resource_ambiguous_source": any(
-                len(element.findall(_q(name))) > 1 for name in (
-                    "UID", "IsGeneric", "IsInactive", "CalendarUID", "Type",
-                    "IsNull", "IsCostResource",
-                )
-            ),
+            "rc03_resource_ambiguous_source": bool(singleton_ambiguities(
+                element, "resource")) or bool(unsupported_source_enums(element, "resource")),
             "inactive_source": _boolean(element, "IsInactive"),
             "enterprise_source": _boolean(element, "IsEnterprise"),
             "cost_resource_source": _boolean(element, "IsCostResource"),
@@ -128,6 +125,9 @@ def _parse_assignments(
             "assignment_uid_ambiguous_source": len(element.findall(_q("UID"))) > 1,
             "task_ref_ambiguous_source": len(element.findall(_q("TaskUID"))) > 1,
             "resource_ref_ambiguous_source": len(element.findall(_q("ResourceUID"))) > 1,
+            "rc03_eligibility_ambiguous_source": bool(singleton_ambiguities(
+                element, "assignment")) or bool(unsupported_source_enums(
+                    element, "assignment")),
             "start_source": _text(element, "Start"),
             "finish_source": _text(element, "Finish"),
             "start_ambiguous_source": len(element.findall(_q("Start"))) > 1,
