@@ -239,6 +239,9 @@ class Rc03ProductionEvidenceTests(unittest.TestCase):
             ("effort driven", "Tasks", "Task", task_code, "EffortDriven", "1"),
             ("task leveling", "Tasks", "Task", task_code, "LevelingDelay", "60"),
             ("generic resource", "Resources", "Resource", resource_code, "IsGeneric", "1"),
+            ("material resource", "Resources", "Resource", resource_code, "Type", "0"),
+            ("cost resource", "Resources", "Resource", resource_code, "Type", "2"),
+            ("null resource", "Resources", "Resource", resource_code, "IsNull", "1"),
             ("unreadable actual work", "Tasks", "Task", task_code, "ActualWork", "P1M"),
             ("unreadable actual duration", "Tasks", "Task", task_code, "ActualDuration", "P1M"),
             ("unreadable remaining work", "Tasks", "Task", task_code, "RemainingWork", "P1M"),
@@ -278,6 +281,10 @@ class Rc03ProductionEvidenceTests(unittest.TestCase):
              "PercentComplete", "100"),
             ("duplicate generic resource", "Resources", "Resource", resource_code,
              "IsGeneric", "1"),
+            ("duplicate assignment task", "Assignments", "Assignment", assignment_code,
+             "TaskUID", "1"),
+            ("duplicate assignment resource", "Assignments", "Assignment", assignment_code,
+             "ResourceUID", "1"),
         ):
             with self.subTest(source=label):
                 tree = ET.fromstring(original)
@@ -331,6 +338,8 @@ class Rc03ProductionEvidenceTests(unittest.TestCase):
              "PredecessorLink/CrossProject", "1", True),
             ("outgoing relationship", "Task", baseline._source_uid(successor),
              "PredecessorLink/Type", "2", True),
+            ("duplicate whole outgoing relationship", "Task", baseline._source_uid(successor),
+             "PredecessorLink", None, True),
             ("assignment start", "Assignment", baseline._source_uid(assignment),
              "Start", (assignment.start + timedelta(hours=1)).isoformat(), True),
             ("assignment finish", "Assignment", baseline._source_uid(assignment),
@@ -348,7 +357,8 @@ class Rc03ProductionEvidenceTests(unittest.TestCase):
                 if duplicate:
                     self.assertIsNotNone(item)
                     extra = ET.fromstring(ET.tostring(item))
-                    extra.text = value
+                    if value is not None:
+                        extra.text = value
                     parent.append(extra)
                 else:
                     self.assertIsNone(item)

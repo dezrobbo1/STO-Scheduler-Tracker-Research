@@ -78,7 +78,9 @@ from sto.core.model.enums import (
     MilestoneSnapPolicy,
     ProgressPolicy,
     RelationshipType,
+    ResourceType,
     ScheduleDirection,
+    SchedulingClass,
 )
 
 from .forward import ActivityTimes, forward_pass
@@ -1423,6 +1425,10 @@ def build_plan(
                 or assignment.timephased_ref is not None
                 or resources[assignment.resource_uid].inactive
                 or resources[assignment.resource_uid].is_role
+                or resources[assignment.resource_uid].type is not ResourceType.LABOR
+                or resources[assignment.resource_uid].scheduling_class is not SchedulingClass.RENEWABLE
+                or resources[assignment.resource_uid].source_fields.get("resource_type_source") != "1"
+                or resources[assignment.resource_uid].source_fields.get("null_resource_source") is not None
                 or resources[assignment.resource_uid].source_fields.get(
                     "generic_resource_source") != "0"
                 or resources[assignment.resource_uid].source_fields.get(
@@ -1442,6 +1448,7 @@ def build_plan(
                 or any(assignment.source_fields.get(field) is not None for field in (
                     "delay_ambiguous_source", "leveling_delay_ambiguous_source",
                     "start_ambiguous_source", "finish_ambiguous_source",
+                    "task_ref_ambiguous_source", "resource_ref_ambiguous_source",
                     "units_ambiguous_source", "work_ambiguous_source",
                     "remaining_work_ambiguous_source", "actual_work_ambiguous_source",
                     "percent_work_complete_ambiguous_source", "work_contour_ambiguous_source",
@@ -1454,6 +1461,8 @@ def build_plan(
                 or assignment.source_fields.get("delay_tenths_minutes_source") != "0"
                 or assignment.source_fields.get("leveling_delay_tenths_minutes_source") != "0"
                 or len(incoming) != 1 or len(outgoing) not in (1, 2)
+                or len({(row.predecessor_uid, row.successor_uid, row.type)
+                        for row in raw_edges}) != len(raw_edges)
                 or any(not _zero_lag_fs_relationship(row) or
                        row.lag_calendar is not LagCalendar.INHERIT_PROJECT_POLICY
                        for row in raw_edges)

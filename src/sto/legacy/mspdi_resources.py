@@ -124,6 +124,8 @@ def _parse_assignments(
             "external_references": _external_references(entity="Assignment", uid=uid, guid=_text(element, "GUID")),
             "task_ref": task_ref_by_uid.get(task_uid) if task_uid is not None else None,
             "resource_ref": _resource_ref(resource_uid, known_resource_uids),
+            "task_ref_ambiguous_source": len(element.findall(_q("TaskUID"))) > 1,
+            "resource_ref_ambiguous_source": len(element.findall(_q("ResourceUID"))) > 1,
             "start_source": _text(element, "Start"),
             "finish_source": _text(element, "Finish"),
             "start_ambiguous_source": len(element.findall(_q("Start"))) > 1,

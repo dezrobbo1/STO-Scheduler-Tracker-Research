@@ -950,6 +950,10 @@ def migrate(
                        if row.get("generic_source") is not None else {}),
                     **({"rc03_resource_ambiguous_source": "1"}
                        if row.get("rc03_resource_ambiguous_source") else {}),
+                    **({"resource_type_source": str(row["source_resource_type"])}
+                       if row.get("source_resource_type") is not None else {}),
+                    **({"null_resource_source": "1"}
+                       if row.get("is_null_source") is True else {}),
                 },
                 name=row.get("name") or "",
                 code=row.get("initials"),
@@ -974,7 +978,10 @@ def migrate(
         which themselves carry four work rows. Unknown shapes get no marker.
         """
 
-        if row.get("start_ambiguous_source") or row.get("finish_ambiguous_source"):
+        if any(row.get(key) for key in (
+            "start_ambiguous_source", "finish_ambiguous_source",
+            "task_ref_ambiguous_source", "resource_ref_ambiguous_source",
+        )):
             return False
         phases = [extension_by_id[ref].get("payload", {})
                   for ref in row.get("extension_refs", ())
@@ -1032,6 +1039,7 @@ def migrate(
         for key in ("delay_ambiguous_source", "leveling_delay_ambiguous_source",
                     "units_ambiguous_source", "work_ambiguous_source",
                     "start_ambiguous_source", "finish_ambiguous_source",
+                    "task_ref_ambiguous_source", "resource_ref_ambiguous_source",
                     "remaining_work_ambiguous_source", "actual_work_ambiguous_source",
                     "percent_work_complete_ambiguous_source", "work_contour_ambiguous_source"):
             if row.get(key):
