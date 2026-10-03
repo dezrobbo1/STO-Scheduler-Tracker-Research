@@ -9,16 +9,19 @@ from __future__ import annotations
 
 import json
 import asyncio
+import base64
+import binascii
 import uuid
 from contextlib import asynccontextmanager
 from datetime import timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, Response, UploadFile
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
 from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
 
@@ -57,6 +60,7 @@ from sto.scheduling.live_operations import (
     ExecutionOperation, LiveOperationRefused, receipt as live_receipt,
     submit as submit_live,
 )
+from sto.scheduling import trial_communication as trial
 
 from . import schemas
 from .auth import (
@@ -237,6 +241,13 @@ def create_app(
     # Below the multipart parser, so an oversized body is refused while it is
     # arriving rather than after it has been spooled.
     app.add_middleware(BoundedBody, limit=MAX_UPLOAD_BYTES + _MULTIPART_ALLOWANCE)
+    # Packaged field WebViews use bearer device credentials from these origins.
+    # Browser sessions remain same-origin with SameSite=strict and CSRF; no
+    # cross-origin cookies or arbitrary origin reflection are enabled.
+    app.add_middleware(CORSMiddleware,
+        allow_origins=["capacitor://localhost", "https://localhost"],
+        allow_credentials=False, allow_methods=["GET", "POST"],
+        allow_headers=["Authorization", "Content-Type"])
 
     @app.middleware("http")
     async def keep_actor_responses_out_of_shared_caches(request: Request, call_next):
@@ -601,6 +612,7 @@ def create_app(
     )
     def latest_calculation(
         project_id: uuid.UUID,
+        kind: Literal["baseline", "live_working"] = Query(default="baseline"),
         access: ProjectAccess = Depends(require_viewer),
         workspace: Workspace = Depends(ws),
     ) -> Any:
@@ -613,7 +625,7 @@ def create_app(
         """
 
         try:
-            payload = workspace.latest_calculation(project_id)
+            payload = workspace.latest_calculation(project_id, kind=kind)
         except UnknownProject:
             raise HTTPException(404, "no such project") from None
         except IntegrityError as error:
@@ -1014,17 +1026,102 @@ def create_app(
             raise HTTPException(404, "no such operation")
         return live_receipt(row)
 
+    # PL5 architecture trial only. These domain rows and their media never
+    # enter the S7 execution table or canonical schedule documents.
+    @app.post("/api/projects/{project_id}/trial-messages",
+              response_model=schemas.TrialMessageReceipt)
+    def submit_trial_message(project_id: uuid.UUID, body: schemas.TrialMessageSubmission,
+                             response: Response,
+                             access: ProjectAccess = Depends(require_planner),
+                             workspace: Workspace = Depends(ws)) -> Any:
+        try:
+            result, created = trial.submit_message(workspace, access,
+                message_id=body.id, activity_uid=body.activity_uid, text=body.text,
+                auth_now=auth_service.now)
+        except trial.TrialRefused as error:
+            raise HTTPException(error.status, {"code": error.code}) from error
+        response.status_code = 201 if created else 200
+        return result
+
+    @app.get("/api/projects/{project_id}/trial-messages/{message_id}",
+             response_model=schemas.TrialMessageReceipt)
+    def read_trial_message(project_id: uuid.UUID, message_id: uuid.UUID,
+                           access: ProjectAccess = Depends(require_viewer),
+                           workspace: Workspace = Depends(ws)) -> Any:
+        with workspace.connect() as conn:
+            row = trial.message_receipt(conn, project_id, message_id)
+        if row is None:
+            raise HTTPException(404, "no such trial message")
+        return row
+
+    @app.post("/api/projects/{project_id}/trial-media",
+              response_model=schemas.TrialMediaReceipt)
+    def upload_trial_media(project_id: uuid.UUID, body: schemas.TrialMediaSubmission,
+                           response: Response,
+                           access: ProjectAccess = Depends(require_planner),
+                           workspace: Workspace = Depends(ws)) -> Any:
+        try:
+            original = base64.b64decode(body.base64, validate=True)
+        except (binascii.Error, ValueError):
+            raise HTTPException(422, {"code": "TRIAL_MEDIA_ENCODING_INVALID"}) from None
+        try:
+            result, created = trial.upload_media(workspace, access,
+                media_id=body.id, activity_uid=body.activity_uid, mime=body.mime,
+                original=original, sha256=body.sha256,
+                annotations=[row.model_dump(exclude_none=True) for row in body.annotations],
+                auth_now=auth_service.now)
+        except trial.TrialRefused as error:
+            raise HTTPException(error.status, {"code": error.code}) from error
+        response.status_code = 201 if created else 200
+        return result
+
+    @app.get("/api/projects/{project_id}/trial-media/{media_id}",
+             response_model=schemas.TrialMediaReceipt)
+    def read_trial_media(project_id: uuid.UUID, media_id: uuid.UUID,
+                         access: ProjectAccess = Depends(require_viewer),
+                         workspace: Workspace = Depends(ws)) -> Any:
+        with workspace.connect() as conn:
+            row = trial.media_receipt(conn, project_id, media_id)
+        if row is None:
+            raise HTTPException(404, "no such trial media")
+        return row
+
+    @app.get("/api/projects/{project_id}/trial-media/{media_id}/original")
+    def trial_original(project_id: uuid.UUID, media_id: uuid.UUID,
+                       access: ProjectAccess = Depends(require_viewer),
+                       workspace: Workspace = Depends(ws)) -> Response:
+        with workspace.connect() as conn:
+            row = conn.execute("SELECT original,mime FROM pl5_trial_media "
+                               "WHERE project_id=%s AND id=%s",
+                               (project_id, media_id)).fetchone()
+        if row is None:
+            raise HTTPException(404, "no such trial media")
+        return Response(bytes(row["original"]), media_type=row["mime"])
+
+    @app.post("/api/projects/{project_id}/trial-media/{media_id}/link",
+              response_model=schemas.TrialMediaReceipt)
+    def link_trial_media(project_id: uuid.UUID, media_id: uuid.UUID,
+                         body: schemas.TrialMediaLink, response: Response,
+                         access: ProjectAccess = Depends(require_planner),
+                         workspace: Workspace = Depends(ws)) -> Any:
+        try:
+            result, created = trial.link_media(workspace, access, media_id=media_id,
+                message_id=body.message_id, auth_now=auth_service.now)
+        except trial.TrialRefused as error:
+            raise HTTPException(error.status, {"code": error.code}) from error
+        response.status_code = 201 if created else 200
+        return result
+
     def _changes(workspace: Workspace, project_id: uuid.UUID, after: int,
                  limit: int) -> dict[str, Any]:
         with workspace.connect() as conn:
             cursor = repo.live_cursor(conn, project_id)
             if after > cursor:
                 raise LiveOperationRefused("LIVE_CURSOR_UNKNOWN")
-            rows = repo.live_changes(conn, project_id=project_id,
-                                     after=after, limit=limit + 1)
+            rows = trial.change_feed(conn, project_id, after, limit + 1)
         selected = rows[:limit]
         return {
-            "events": [live_receipt(row) for row in selected],
+            "events": selected,
             "next_cursor": selected[-1]["server_sequence"] if selected else after,
             "has_more": len(rows) > limit,
         }
@@ -1079,7 +1176,7 @@ def create_app(
                 for event in batch["events"]:
                     cursor = event["server_sequence"]
                     data = json.dumps(jsonable_encoder(event), separators=(",", ":"))
-                    yield f"id: {cursor}\nevent: execution\ndata: {data}\n\n"
+                    yield f"id: {cursor}\nevent: {event.get('kind', 'execution')}\ndata: {data}\n\n"
                 if not batch["has_more"]:
                     yield ": keepalive\n\n"
                     await asyncio.sleep(0.25)

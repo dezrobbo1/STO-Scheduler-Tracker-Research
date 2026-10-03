@@ -5,6 +5,8 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
+from typing import Literal
+
 from pydantic import BaseModel, Field, StrictInt, field_validator
 
 from .auth import (
@@ -120,8 +122,75 @@ class ExecutionReceipt(BaseModel):
     execution: dict[str, str | int | None]
 
 
+class TrialMessageSubmission(BaseModel):
+    id: uuid.UUID
+    activity_uid: uuid.UUID
+    text: str = Field(min_length=1, max_length=2000)
+
+
+class TrialMessageReceipt(BaseModel):
+    kind: Literal["trial_message"]
+    id: uuid.UUID
+    project_id: uuid.UUID
+    actor_user_id: uuid.UUID
+    activity_uid: uuid.UUID
+    version_id: uuid.UUID
+    text: str
+    server_sequence: int
+    accepted_at: datetime
+    status: Literal["accepted"]
+
+
+class TrialAnnotation(BaseModel):
+    kind: Literal["arrow", "circle", "text"]
+    x: float = Field(ge=0, le=1)
+    y: float = Field(ge=0, le=1)
+    toX: float | None = Field(default=None, ge=0, le=1)
+    toY: float | None = Field(default=None, ge=0, le=1)
+    radius: float | None = Field(default=None, ge=0, le=1)
+    text: str | None = Field(default=None, max_length=80)
+
+
+class TrialMediaSubmission(BaseModel):
+    id: uuid.UUID
+    activity_uid: uuid.UUID
+    mime: Literal["image/jpeg", "image/png"]
+    base64: str = Field(min_length=1, max_length=7_000_000)
+    sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    annotations: list[TrialAnnotation] = Field(max_length=30)
+
+
+class TrialMediaLink(BaseModel):
+    message_id: uuid.UUID
+
+
+class TrialMediaReceipt(BaseModel):
+    kind: Literal["trial_media"]
+    id: uuid.UUID
+    project_id: uuid.UUID
+    actor_user_id: uuid.UUID
+    activity_uid: uuid.UUID
+    mime: str
+    sha256: str
+    annotations: list[TrialAnnotation]
+    uploaded_at: datetime
+    status: Literal["uploaded", "linked"]
+    message_id: uuid.UUID | None
+    server_sequence: int | None
+
+
+class TrialMediaLinkReceipt(BaseModel):
+    kind: Literal["trial_media_link"]
+    id: uuid.UUID
+    project_id: uuid.UUID
+    media_id: uuid.UUID
+    message_id: uuid.UUID
+    server_sequence: int
+    accepted_at: datetime
+
+
 class ExecutionChanges(BaseModel):
-    events: list[ExecutionReceipt]
+    events: list[ExecutionReceipt | TrialMessageReceipt | TrialMediaLinkReceipt]
     next_cursor: int
     has_more: bool
 

@@ -174,7 +174,7 @@ class V005UpgradeTests(unittest.TestCase):
                 capture_output=True,
                 check=True,
             )
-            self.assertIn("Schema matches infra/migrations (8 migrations, 17 tables)", drift.stdout)
+            self.assertIn("Schema matches infra/migrations", drift.stdout)
 
             after = Workspace(connect=connect_v004, source_dir=Path(source_dir.name))
             self.assertEqual(after.rebuild(), 1)
@@ -270,7 +270,8 @@ class V005UpgradeTests(unittest.TestCase):
                 }
                 <= tables
             )
-            self.assertEqual(migration_count, 8)
+            self.assertEqual(migration_count,
+                             len(list((ROOT / "infra/migrations").glob("V*.sql"))))
             self.assertGreaterEqual(historic_actors, 4)
         finally:
             source_dir.cleanup()

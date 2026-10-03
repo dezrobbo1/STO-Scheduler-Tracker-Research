@@ -52,7 +52,7 @@ if comm -13 "$WORK/expected" "$WORK/applied" | grep -q . ; then
 fi
 
 # --- 2. the schema itself, not the ledger's opinion of it --------------------------------------
-grep -hoiE 'CREATE TABLE (IF NOT EXISTS )?[a-z_.]+' "$MIGRATIONS_DIR"/V*.sql \
+grep -hoiE 'CREATE TABLE (IF NOT EXISTS )?[a-z0-9_.]+' "$MIGRATIONS_DIR"/V*.sql \
   | sed -E 's/.*[[:space:]]//; s/^public\.//' | sort -u > "$WORK/tables-expected"
 # schema_migration_log is this script's own bookkeeping and no migration creates it.
 psql -Atc "SELECT tablename FROM pg_tables WHERE schemaname = 'public'" \
