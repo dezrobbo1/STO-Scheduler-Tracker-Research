@@ -198,6 +198,26 @@ class ExecutionTests(unittest.TestCase):
         self.assertEqual(canonical_sha256(encode_schedule(schedule)), original_hash)
         self.assertIsNone(baseline.schedule.activity_by_uid()[uid].remaining_duration)
 
+    def test_zero_duration_task_uses_engine_milestone_eligibility(self):
+        schedule = source()
+        uid = schedule.activities[0].uid
+        schedule = replace(schedule, activities=tuple(
+            replace(row, planned_duration=replace(row.planned_duration, seconds=0),
+                    remaining_duration=replace(row.remaining_duration, seconds=0))
+            if row.uid == uid else row for row in schedule.activities
+        ))
+        baseline = calculate_state(schedule, WINDOW)
+        self.assertEqual(schedule.activity_by_uid()[uid].kind.value, "task")
+        self.assertTrue(baseline.plan.network.activity_by_uid()[uid].is_milestone)
+        original_document = encode_schedule(schedule)
+        with self.assertRaises(ExecutionError) as caught:
+            apply_execution(baseline, change(schedule, uid,
+                                             actual_start=datetime(2026, 1, 5, 9),
+                                             remaining_seconds=3600))
+        self.assertEqual(caught.exception.code, "EXECUTION_ACTIVITY_UNSUPPORTED")
+        self.assertEqual(encode_schedule(schedule), original_document)
+        self.assertEqual(canonical_sha256(original_document), baseline.canonical_hash)
+
     def test_non_elapsed_planned_fallback_still_creates_remaining_duration(self):
         schedule = source()
         uid = schedule.activities[0].uid

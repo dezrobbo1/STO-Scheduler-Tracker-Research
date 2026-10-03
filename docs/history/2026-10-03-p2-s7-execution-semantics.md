@@ -90,14 +90,18 @@ that bound was named, even when it equals the old forward finish; fallback
 uses the same bound. Default-bound recalculation continues to follow the new
 forward finish. Two regressions compare fallback with a fresh full backward
 pass for both explicit-bound shapes.
+Execution eligibility also checks the engine's duration-based milestone
+condition. A zero-duration canonical task that lacks a source milestone flag
+is refused with `EXECUTION_ACTIVITY_UNSUPPORTED` rather than becoming positive
+remaining work; import and P1 placement rules remain unchanged.
 
 Validation at the local branch before publication:
 
 ```text
 PYTHONPATH=src python3 -m unittest discover -s tests -p test_s7_execution.py
-Ran 16 tests — OK
+Ran 17 tests — OK
 PYTHONPATH=src python3 -m unittest discover -s tests
-Ran 1112 tests — OK (skipped=189)
+Ran 1113 tests — OK (skipped=189)
 ```
 
 The bare suite's skips include PostgreSQL/API and unavailable private/native

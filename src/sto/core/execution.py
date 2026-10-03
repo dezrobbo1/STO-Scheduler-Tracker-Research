@@ -101,7 +101,9 @@ def apply_execution(previous: CalculatedState, change: ExecutionChange) -> Calcu
     if activity is None:
         raise ExecutionError("EXECUTION_ACTIVITY_UNKNOWN")
     prior_result = previous.result.by_uid().get(change.activity_uid)
+    planned = previous.plan.network.activity_by_uid().get(change.activity_uid)
     if (not activity.active or activity.manual or activity.kind is not ActivityKind.TASK
+            or planned is None or planned.is_milestone
             or prior_result is None or prior_result.disposition != SCHEDULED):
         raise ExecutionError("EXECUTION_ACTIVITY_UNSUPPORTED")
     if activity.actual_finish is not None:
