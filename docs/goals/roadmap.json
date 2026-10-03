@@ -239,8 +239,8 @@
         {
           "id": "P2-G3",
           "text": "Replaying the update log from the baseline reproduces the head hash",
-          "met": false,
-          "evidence": null
+          "met": true,
+          "evidence": "docs/history/2026-10-03-p2-pl4-live-operations.md"
         },
         {
           "id": "P2-G4",
@@ -545,7 +545,7 @@
       "id": "PL4",
       "title": "Live event API, sync, idempotency and audit",
       "phase": "P2",
-      "status": "not_started",
+      "status": "done",
       "days": null,
       "effort_note": "The former live-loop allowance is superseded by shared event acceptance, authorisation, catch-up and recovery scope. Re-estimate with PL5's early real-device trial.",
       "scope": [

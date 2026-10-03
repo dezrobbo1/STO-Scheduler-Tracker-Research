@@ -377,7 +377,7 @@ class Workspace:
     # --- reading ---------------------------------------------------------------
 
     def rebuild(self) -> int:
-        """Load and verify every project's baseline head. Called at boot.
+        """Load baseline heads and verify live heads. Called at boot.
 
         A version that does not hash to what it says is not served and is
         not fatal to the process: the other projects are fine, and a boot
@@ -399,6 +399,19 @@ class Workspace:
                 # ``load`` publishes the diagnosis only when the failed row is
                 # still the head. Repeating it here would undo that check.
                 pass
+        for head in heads:
+            if head["head_kind"] != "live_working":
+                continue
+            try:
+                with self.connect() as conn:
+                    row = repo.head_version(
+                        conn, project_id=head["project_id"], kind="live_working",
+                        with_document=True,
+                    )
+                if row is not None:
+                    _verify(head["project_id"], row)
+            except IntegrityError as error:
+                self.integrity_failures[head["project_id"]] = str(error)
         return len(self._resident)
 
     def resident_ids(self) -> frozenset[uuid.UUID]:
@@ -1518,6 +1531,10 @@ class Workspace:
             # that scenario historic and removes only its movable head; both
             # the scenario version and its calculation remain auditable.
             repo.delete_head(conn, project_id=project_id, kind="scenario")
+            # A live head derives from one exact imported baseline. Preserve
+            # its immutable history but stop presenting it as current after a
+            # new import, just as the planner scenario above is superseded.
+            repo.delete_head(conn, project_id=project_id, kind="live_working")
             conn.commit()
 
         with self._state_lock:

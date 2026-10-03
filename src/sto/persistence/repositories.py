@@ -301,6 +301,84 @@ def get_version(
     ).fetchone()
 
 
+# --- committed live execution history -----------------------------------------
+
+
+def live_operation(conn: psycopg.Connection, *, project_id: uuid.UUID,
+                   operation_id: uuid.UUID) -> dict[str, Any] | None:
+    return conn.execute(
+        "SELECT o.*, c.server_sequence, c.accepted_at "
+        "FROM live_execution_operations o JOIN project_committed_changes c ON c.id = o.change_id "
+        "WHERE o.project_id = %s AND o.operation_id = %s",
+        (project_id, operation_id),
+    ).fetchone()
+
+
+def live_cursor(conn: psycopg.Connection, project_id: uuid.UUID) -> int:
+    row = conn.execute(
+        "SELECT COALESCE(MAX(server_sequence), 0) AS cursor "
+        "FROM project_committed_changes WHERE project_id = %s", (project_id,),
+    ).fetchone()
+    assert row is not None
+    return int(row["cursor"])
+
+
+def live_changes(conn: psycopg.Connection, *, project_id: uuid.UUID,
+                 after: int, limit: int) -> list[dict[str, Any]]:
+    return conn.execute(
+        "SELECT o.*, c.server_sequence, c.accepted_at "
+        "FROM project_committed_changes c "
+        "JOIN live_execution_operations o ON o.change_id = c.id "
+        "WHERE c.project_id = %s AND c.server_sequence > %s "
+        "ORDER BY c.server_sequence LIMIT %s",
+        (project_id, after, limit),
+    ).fetchall()
+
+
+def insert_project_change(conn: psycopg.Connection, *, project_id: uuid.UUID,
+                          source_id: uuid.UUID, server_sequence: int) -> uuid.UUID:
+    row = conn.execute(
+        "INSERT INTO project_committed_changes "
+        "(project_id, source_id, kind, server_sequence) "
+        "VALUES (%s, %s, 'execution', %s) RETURNING id",
+        (project_id, source_id, server_sequence),
+    ).fetchone()
+    assert row is not None
+    return row["id"]
+
+
+def insert_live_operation(conn: psycopg.Connection, *, effect_id: uuid.UUID,
+                          project_id: uuid.UUID,
+                          operation_id: uuid.UUID, actor_user_id: uuid.UUID,
+                          semantic_payload: dict[str, Any], semantic_fingerprint: str,
+                          baseline_version_id: uuid.UUID, base_version_id: uuid.UUID,
+                          base_calculation_id: uuid.UUID,
+                          result_version_id: uuid.UUID, calculation_id: uuid.UUID,
+                          result_hash: str, result_fingerprint: str,
+                          change_id: uuid.UUID) -> dict[str, Any]:
+    row = conn.execute(
+        """INSERT INTO live_execution_operations
+           (id, project_id, operation_id, actor_user_id, semantic_payload,
+            semantic_fingerprint, baseline_version_id, base_version_id, base_calculation_id,
+            result_version_id, calculation_id, result_hash,
+            result_fingerprint, change_id)
+           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+           RETURNING *""",
+        (effect_id, project_id, operation_id, actor_user_id, Jsonb(semantic_payload),
+         semantic_fingerprint, baseline_version_id, base_version_id, base_calculation_id,
+         result_version_id, calculation_id, result_hash, result_fingerprint,
+         change_id),
+    ).fetchone()
+    assert row is not None
+    committed = conn.execute(
+        "SELECT o.*, c.server_sequence, c.accepted_at "
+        "FROM live_execution_operations o JOIN project_committed_changes c ON c.id = o.change_id "
+        "WHERE o.id = %s", (row["id"],),
+    ).fetchone()
+    assert committed is not None
+    return committed
+
+
 def heads_for_all_projects(conn: psycopg.Connection) -> list[dict[str, Any]]:
     return conn.execute(
         f"""

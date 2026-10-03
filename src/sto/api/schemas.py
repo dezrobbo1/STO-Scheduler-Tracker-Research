@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, StrictInt, field_validator
 
 from .auth import (
     PASSWORD_MAX_LENGTH,
@@ -93,6 +93,37 @@ class ScheduleHead(BaseModel):
     engine_profile: str | None
     cause_type: str
     created_at: datetime
+
+
+class ExecutionSubmission(BaseModel):
+    operation_id: uuid.UUID
+    expected_version_id: uuid.UUID
+    expected_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    activity_uid: uuid.UUID
+    actual_start: datetime | None = None
+    actual_finish: datetime | None = None
+    remaining_seconds: StrictInt | None = None
+
+
+class ExecutionReceipt(BaseModel):
+    project_id: uuid.UUID
+    operation_id: uuid.UUID
+    actor_user_id: uuid.UUID
+    status: str
+    server_sequence: int
+    accepted_at: datetime
+    base_version_id: uuid.UUID
+    result_version_id: uuid.UUID
+    calculation_id: uuid.UUID
+    canonical_hash: str
+    result_fingerprint: str
+    execution: dict[str, str | int | None]
+
+
+class ExecutionChanges(BaseModel):
+    events: list[ExecutionReceipt]
+    next_cursor: int
+    has_more: bool
 
 
 class Project(BaseModel):

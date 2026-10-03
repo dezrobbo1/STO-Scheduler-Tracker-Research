@@ -1,22 +1,23 @@
 """FastAPI application. One worker, one process, one resident workspace.
 
-Boot rebuilds every project's baseline head from the database and verifies its
-hash. That is the persistence gate in operational form: if a restart cannot
+Boot rebuilds every project's baseline head and verifies its live head from
+the database. That is the persistence gate in operational form: if a restart cannot
 reproduce what it stored, the process does not come up quietly.
 """
 
 from __future__ import annotations
 
 import json
+import asyncio
 import uuid
 from contextlib import asynccontextmanager
 from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
-from fastapi import Depends, FastAPI, File, HTTPException, Request, Response, UploadFile
+from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, Response, UploadFile
 from fastapi.encoders import jsonable_encoder
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 #: The largest upload this API will read. A schedule of CALCINER's size is
@@ -47,6 +48,12 @@ from sto.scheduling.working_schedule import (
     StaleSchedule,
     UnknownProject,
     Workspace,
+    _verify,
+)
+from sto.core.execution import ExecutionChange
+from sto.scheduling.live_operations import (
+    ExecutionOperation, LiveOperationRefused, receipt as live_receipt,
+    submit as submit_live,
 )
 
 from . import schemas
@@ -943,6 +950,133 @@ def create_app(
                 raise HTTPException(404, "no such project")
             rows = repo.list_versions(conn, project_id=project_id)
         return [_head(row) for row in rows]
+
+    @app.get("/api/projects/{project_id}/live", response_model=schemas.ScheduleHead)
+    def live_head(project_id: uuid.UUID,
+                  access: ProjectAccess = Depends(require_viewer),
+                  workspace: Workspace = Depends(ws)) -> Any:
+        with workspace.connect() as conn:
+            row = repo.head_version(conn, project_id=project_id, kind="live_working",
+                                    with_document=True)
+            if row is None:
+                row = repo.head_version(conn, project_id=project_id, kind="baseline",
+                                        with_document=True)
+        if row is None:
+            raise HTTPException(404, "no schedule")
+        try:
+            _verify(project_id, row)
+        except IntegrityError as error:
+            raise HTTPException(500, str(error)) from error
+        return _head(row)
+
+    @app.post("/api/projects/{project_id}/execution-operations",
+              response_model=schemas.ExecutionReceipt)
+    def submit_execution(project_id: uuid.UUID, body: schemas.ExecutionSubmission,
+                         response: Response,
+                         access: ProjectAccess = Depends(require_planner),
+                         workspace: Workspace = Depends(ws)) -> Any:
+        operation = ExecutionOperation(
+            operation_id=body.operation_id, expected_version_id=body.expected_version_id,
+            change=ExecutionChange(
+                activity_uid=body.activity_uid, expected_hash=body.expected_hash,
+                actual_start=body.actual_start, actual_finish=body.actual_finish,
+                remaining_seconds=body.remaining_seconds,
+            ),
+        )
+        try:
+            result, created = submit_live(workspace, project_id, access, operation,
+                                          auth_now=auth_service.now)
+        except LiveOperationRefused as error:
+            raise HTTPException(error.status, {"code": error.code}) from error
+        response.status_code = 201 if created else 200
+        return result
+
+    @app.get("/api/projects/{project_id}/execution-operations/{operation_id}",
+             response_model=schemas.ExecutionReceipt)
+    def execution_receipt(project_id: uuid.UUID, operation_id: uuid.UUID,
+                          access: ProjectAccess = Depends(require_viewer),
+                          workspace: Workspace = Depends(ws)) -> Any:
+        with workspace.connect() as conn:
+            row = repo.live_operation(conn, project_id=project_id,
+                                      operation_id=operation_id)
+        if row is None:
+            raise HTTPException(404, "no such operation")
+        return live_receipt(row)
+
+    def _changes(workspace: Workspace, project_id: uuid.UUID, after: int,
+                 limit: int) -> dict[str, Any]:
+        with workspace.connect() as conn:
+            cursor = repo.live_cursor(conn, project_id)
+            if after > cursor:
+                raise LiveOperationRefused("LIVE_CURSOR_UNKNOWN")
+            rows = repo.live_changes(conn, project_id=project_id,
+                                     after=after, limit=limit + 1)
+        selected = rows[:limit]
+        return {
+            "events": [live_receipt(row) for row in selected],
+            "next_cursor": selected[-1]["server_sequence"] if selected else after,
+            "has_more": len(rows) > limit,
+        }
+
+    @app.get("/api/projects/{project_id}/changes",
+             response_model=schemas.ExecutionChanges)
+    def execution_changes(project_id: uuid.UUID, after: int = Query(default=0, ge=0),
+                          limit: int = Query(default=100, ge=1, le=200),
+                          access: ProjectAccess = Depends(require_viewer),
+                          workspace: Workspace = Depends(ws)) -> Any:
+        try:
+            return _changes(workspace, project_id, after, limit)
+        except LiveOperationRefused as error:
+            raise HTTPException(error.status, {"code": error.code}) from error
+
+    @app.get("/api/projects/{project_id}/changes/stream")
+    async def execution_stream(request: Request, project_id: uuid.UUID,
+                               after: int = Query(default=0, ge=0),
+                               access: ProjectAccess = Depends(require_viewer),
+                               workspace: Workspace = Depends(ws)) -> StreamingResponse:
+        # Credentials stay in headers/cookies. A cursor is not an authority token.
+        try:
+            await asyncio.to_thread(_changes, workspace, project_id, after, 1)
+        except LiveOperationRefused as error:
+            raise HTTPException(error.status, {"code": error.code}) from error
+        service = auth(request)
+        authorization = request.headers.get("authorization")
+        raw_session = request.cookies.get(service.config.cookie_name)
+
+        def fresh_access() -> bool:
+            try:
+                current = (service.authenticate_device(authorization.partition(" ")[2])
+                           if authorization else service.authenticate_session(raw_session))
+            except AuthenticationFailed:
+                return False
+            if current.user_id != access.actor.user_id or (
+                current.project_id is not None and current.project_id != project_id
+            ):
+                return False
+            with workspace.connect() as conn:
+                membership = auth_repo.get_membership(
+                    conn, project_id=project_id, user_id=current.user_id)
+            return membership is not None
+
+        async def committed_events():
+            cursor = after
+            while not await request.is_disconnected():
+                if not await asyncio.to_thread(fresh_access):
+                    return
+                batch = await asyncio.to_thread(_changes, workspace, project_id,
+                                                cursor, 100)
+                for event in batch["events"]:
+                    cursor = event["server_sequence"]
+                    data = json.dumps(jsonable_encoder(event), separators=(",", ":"))
+                    yield f"id: {cursor}\nevent: execution\ndata: {data}\n\n"
+                if not batch["has_more"]:
+                    yield ": keepalive\n\n"
+                    await asyncio.sleep(0.25)
+
+        return StreamingResponse(
+            committed_events(), media_type="text/event-stream",
+            headers={"Cache-Control": "private, no-store", "X-Accel-Buffering": "no"},
+        )
 
     inventory: dict[tuple[str, str], str] = {}
     for route in app.routes:
