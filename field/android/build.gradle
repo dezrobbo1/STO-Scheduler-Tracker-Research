@@ -22,6 +22,15 @@ allprojects {
         google()
         mavenCentral()
     }
+    // Capacitor's generated Cordova test variant pulls Kotlin 1.6.21 jdk7/jdk8
+    // alongside the 1.8.22 stdlib. Align only instrumented-test runtime
+    // classpaths; production dependency resolution is unchanged.
+    configurations.configureEach {
+        if (name.endsWith('AndroidTestRuntimeClasspath')) {
+            resolutionStrategy.force 'org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.8.22',
+                    'org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.8.22'
+        }
+    }
 }
 
 task clean(type: Delete) {
