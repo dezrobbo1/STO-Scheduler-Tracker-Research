@@ -69,10 +69,17 @@ def _assemble(
     return CalculatedState(schedule, canonical_hash, horizon, plan, forward, backward, result, recalc)
 
 
-def calculate_state(schedule: Schedule, horizon: tuple[datetime, datetime]) -> CalculatedState:
+def calculate_state(
+    schedule: Schedule,
+    horizon: tuple[datetime, datetime],
+    *,
+    epoch: datetime | None = None,
+    resource_calendars_apply: bool = True,
+) -> CalculatedState:
     """Fresh full recomputation; the reference oracle for S7."""
     canonical_hash = canonical_sha256(encode_schedule(schedule))
-    plan = build_plan(schedule, horizon)
+    plan = build_plan(schedule, horizon, epoch=epoch,
+                      resource_calendars_apply=resource_calendars_apply)
     forward = forward_pass(plan.network, snap_milestones=plan.snap_milestones,
                            progress_policy=plan.progress_policy)
     backward = backward_pass(plan.network, forward)
@@ -137,6 +144,8 @@ def apply_execution(previous: CalculatedState, change: ExecutionChange) -> Calcu
     if change.actual_start is None and change.actual_finish is None and change.remaining_seconds is None:
         raise ExecutionError("EXECUTION_EMPTY_CHANGE")
     old_duration = activity.remaining_duration or activity.planned_duration
+    if remaining is not None and old_duration is not None and old_duration.elapsed:
+        raise ExecutionError("EXECUTION_ELAPSED_REMAINING_UNSUPPORTED")
     duration = None if remaining is None else Duration(
         remaining,
         unit=old_duration.unit if old_duration is not None else None,
@@ -150,10 +159,19 @@ def apply_execution(previous: CalculatedState, change: ExecutionChange) -> Calcu
         changed if row.uid == activity.uid else row for row in previous.schedule.activities
     ))
     canonical_hash = canonical_sha256(encode_schedule(schedule))
-    plan = build_plan(schedule, previous.horizon)
+    plan = build_plan(schedule, previous.horizon, epoch=previous.plan.epoch,
+                      resource_calendars_apply=previous.plan.resource_calendars_apply)
     if change.activity_uid not in plan.network.activity_by_uid():
         raise ExecutionError("EXECUTION_ACTIVITY_UNSUPPORTED")
-    if plan.progress_policy is not previous.plan.progress_policy or plan.snap_milestones != previous.plan.snap_milestones:
+    def context(p: Plan) -> tuple[object, ...]:
+        return (
+            p.epoch, p.resource_calendars_apply, p.progress_policy,
+            p.snap_milestones, p.critical_float_threshold,
+            p.status_time_outside_window, p.network.project_start,
+            p.network.horizon, p.network.status_time, p.calendars,
+            p.wbs_children,
+        )
+    if context(plan) != context(previous.plan):
         raise ExecutionError("EXECUTION_CONTEXT_CHANGED")
     recalc = recalculate_network(previous.plan.network, plan.network,
                                  previous.forward, previous.backward, activity.uid)

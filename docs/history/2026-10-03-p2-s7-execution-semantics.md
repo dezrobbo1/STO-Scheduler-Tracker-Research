@@ -64,19 +64,33 @@ counted as an accepted change: the test checks the incremental path refuses it
 with the same code, records that proposal, and tries the next seeded activity.
 The completed run yielded 2,000 accepted changes: 1,312 bounded incremental,
 688 full fallbacks; 297 changed project finish and 1,703 did not. Four rejected
-candidates produced `SCHEDULE_FLOOR_EXCEEDED` on both paths. Targeted tests
+candidates produced `SCHEDULE_FLOOR_EXCEEDED` on both paths. Sixteen no-op
+proposals were skipped before acceptance; each of the 2,000 accepted changes
+is asserted to change its activity and network. These counts come from the
+post-review rerun under the same network seeds and candidate-selection seeds;
+the mode and finish totals coincidentally match the first run. Targeted tests
 cover immutable actual history, completion, stale bases, exclusions, elapsed
 remaining, progress policy, real bounded traversal of a proper component,
 whole-network fallback, released edges, deferred constraints and three fresh
 processes with different Python hash seeds.
 
+Post-review corrections preserve the prior calculation window, explicit epoch
+and resource-calendar application choice in the derived plan and full-reference
+oracle. Schedule-derived progress policy, milestone snap, critical-float
+threshold, status context and project/window coordinates are checked for drift.
+An elapsed planned duration with no prior Remaining Duration now refuses the
+creation of Remaining Duration with `EXECUTION_ELAPSED_REMAINING_UNSUPPORTED`;
+it cannot silently become non-elapsed. Regression tests cover both settings,
+the corresponding fresh full calculations, refusal and unchanged canonical
+input/hash.
+
 Validation at the local branch before publication:
 
 ```text
 PYTHONPATH=src python3 -m unittest discover -s tests -p test_s7_execution.py
-Ran 9 tests — OK
+Ran 14 tests — OK
 PYTHONPATH=src python3 -m unittest discover -s tests
-Ran 1105 tests — OK (skipped=189)
+Ran 1110 tests — OK (skipped=189)
 ```
 
 The bare suite's skips include PostgreSQL/API and unavailable private/native

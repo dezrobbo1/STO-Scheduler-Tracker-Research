@@ -22,7 +22,8 @@ from sto.core.engine.rollup import roll_up
 from sto.core.execution import ExecutionChange, ExecutionError, apply_execution, calculate_state
 from sto.core.hashing import canonical_sha256
 from sto.core.model.codec import encode_schedule
-from sto.core.model.enums import ConstraintType, ProgressPolicy, RelationshipType
+from sto.core.model.entities import Assignment, Resource, TimeInterval
+from sto.core.model.enums import CalendarType, ConstraintType, ProgressPolicy, RelationshipType
 from sto.core.model.migrate.sto_v011 import migrate
 from sto.legacy import import_mspdi
 
@@ -40,6 +41,65 @@ def change(schedule, uid, **facts):
 
 
 class ExecutionTests(unittest.TestCase):
+    def test_execution_preserves_disabled_resource_calendars_and_full_reference_context(self):
+        schedule = source()
+        task = schedule.activities[0]
+        assigned_resource = uuid5(NAMESPACE_URL, "s7/afternoon-worker")
+        resource_calendar = replace(
+            schedule.calendars[0], uid=uuid5(NAMESPACE_URL, "s7/afternoon-resource"),
+            type=CalendarType.RESOURCE,
+            base_uid=schedule.calendars[0].uid,
+            week=tuple(replace(day, intervals=(TimeInterval(13 * 3600, 17 * 3600),))
+                       for day in schedule.calendars[0].week if day.day == 2),
+        )
+        schedule = replace(
+            schedule, calendars=(*schedule.calendars, resource_calendar),
+            activities=tuple(replace(row, source_fields={**row.source_fields,
+                             "ignore_resource_calendar_source": "0"}) if row.uid == schedule.activities[1].uid
+                             else row for row in schedule.activities),
+            resources=(Resource(assigned_resource, calendar_uid=resource_calendar.uid),),
+            assignments=(Assignment(uuid5(NAMESPACE_URL, "s7/assignment"),
+                                    activity_uid=schedule.activities[1].uid,
+                                    resource_uid=assigned_resource),),
+        )
+        baseline = calculate_state(schedule, WINDOW, resource_calendars_apply=False)
+        command = change(schedule, task.uid, actual_start=datetime(2026, 1, 5, 9), remaining_seconds=3600)
+        updated = apply_execution(baseline, command)
+        reference = calculate_state(updated.schedule, WINDOW, resource_calendars_apply=False)
+        self.assertFalse(updated.plan.resource_calendars_apply)
+        self.assertFalse(reference.plan.resource_calendars_apply)
+        self.assertEqual(updated.result, reference.result)
+        self.assertEqual(updated.canonical_hash, reference.canonical_hash)
+        self.assertEqual(updated.result.by_uid()[schedule.activities[1].uid],
+                         reference.result.by_uid()[schedule.activities[1].uid])
+        self.assertNotEqual(reference.result.by_uid()[schedule.activities[1].uid].early_start,
+                            calculate_state(updated.schedule, WINDOW, resource_calendars_apply=True).result.by_uid()[schedule.activities[1].uid].early_start)
+
+    def test_execution_preserves_explicit_epoch_in_full_reference(self):
+        schedule = source()
+        epoch = WINDOW[0] - timedelta(days=7)
+        baseline = calculate_state(schedule, WINDOW, epoch=epoch)
+        uid = next(row.uid for row in schedule.activities if baseline.result.by_uid()[row.uid].disposition == "scheduled")
+        updated = apply_execution(baseline, change(schedule, uid, actual_start=datetime(2026, 1, 5, 9), remaining_seconds=3600))
+        reference = calculate_state(updated.schedule, WINDOW, epoch=epoch)
+        self.assertEqual(updated.plan.epoch, epoch)
+        self.assertEqual(updated.result, reference.result)
+        self.assertEqual(updated.canonical_hash, reference.canonical_hash)
+        self.assertEqual(updated.canonical_hash, calculate_state(updated.schedule, WINDOW).canonical_hash)
+        self.assertNotEqual(reference.plan.epoch, calculate_state(updated.schedule, WINDOW).plan.epoch)
+
+    def test_execution_refuses_semantic_plan_context_drift(self):
+        schedule = source()
+        baseline = calculate_state(schedule, WINDOW)
+        uid = schedule.activities[0].uid
+        command = change(schedule, uid, actual_start=datetime(2026, 1, 5, 9), remaining_seconds=3600)
+        altered_plan = replace(baseline.plan,
+                               critical_float_threshold=baseline.plan.critical_float_threshold + 1)
+        with self.assertRaises(ExecutionError) as caught:
+            apply_execution(replace(baseline, plan=altered_plan), command)
+        self.assertEqual(caught.exception.code, "EXECUTION_CONTEXT_CHANGED")
+        self.assertEqual(baseline.canonical_hash, canonical_sha256(encode_schedule(schedule)))
+
     def test_start_remaining_finish_keeps_actual_history_and_matches_fresh_full(self):
         baseline = calculate_state(source(), WINDOW)
         uid = next(row.uid for row in baseline.schedule.activities if row.uid in baseline.result.by_uid() and baseline.result.by_uid()[row.uid].disposition == "scheduled")
@@ -118,6 +178,41 @@ class ExecutionTests(unittest.TestCase):
                     apply_execution(state, replace(command, expected_hash=state.canonical_hash))
                 self.assertEqual(caught.exception.code, code)
 
+    def test_elapsed_planned_fallback_is_refused_without_changing_canonical_input(self):
+        schedule = source()
+        uid = schedule.activities[0].uid
+        schedule = replace(schedule, activities=tuple(
+            replace(row, planned_duration=replace(row.planned_duration, elapsed=True),
+                    remaining_duration=None) if row.uid == uid else row
+            for row in schedule.activities
+        ))
+        baseline = calculate_state(schedule, WINDOW)
+        original_document = encode_schedule(schedule)
+        original_hash = baseline.canonical_hash
+        with self.assertRaises(ExecutionError) as caught:
+            apply_execution(baseline, change(schedule, uid,
+                                             actual_start=datetime(2026, 1, 5, 9),
+                                             remaining_seconds=3600))
+        self.assertEqual(caught.exception.code, "EXECUTION_ELAPSED_REMAINING_UNSUPPORTED")
+        self.assertEqual(encode_schedule(schedule), original_document)
+        self.assertEqual(canonical_sha256(encode_schedule(schedule)), original_hash)
+        self.assertIsNone(baseline.schedule.activity_by_uid()[uid].remaining_duration)
+
+    def test_non_elapsed_planned_fallback_still_creates_remaining_duration(self):
+        schedule = source()
+        uid = schedule.activities[0].uid
+        schedule = replace(schedule, activities=tuple(
+            replace(row, remaining_duration=None) if row.uid == uid else row
+            for row in schedule.activities
+        ))
+        baseline = calculate_state(schedule, WINDOW)
+        updated = apply_execution(baseline, change(schedule, uid,
+                                                   actual_start=datetime(2026, 1, 5, 9),
+                                                   remaining_seconds=3600))
+        self.assertFalse(updated.schedule.activity_by_uid()[uid].remaining_duration.elapsed)
+        self.assertNotEqual(updated.canonical_hash, baseline.canonical_hash)
+        self.assertEqual(updated.result, calculate_state(updated.schedule, WINDOW).result)
+
     def test_hash_and_result_are_stable_across_process_hash_seeds(self):
         code = """from datetime import datetime
 from sto.core.execution import calculate_state,apply_execution,ExecutionChange
@@ -185,6 +280,7 @@ class EquivalenceTests(unittest.TestCase):
         modes = Counter()
         finishes = Counter()
         refusals = Counter()
+        skipped_noops = 0
         for seed in range(1000):
             original = network(seed)
             policy = (ProgressPolicy.RETAINED_LOGIC, ProgressPolicy.PROGRESS_OVERRIDE, ProgressPolicy.NONE)[seed % 3]
@@ -201,6 +297,9 @@ class EquivalenceTests(unittest.TestCase):
                 for index in candidates:
                     row = original.activities[index]
                     replacement = replace(row, actual_start=before.by_uid()[row.uid].early_start, remaining_duration=max(1, row.duration - 1)) if row.actual_start is None else replace(row, remaining_duration=max(1, row.remaining_duration - 1))
+                    if replacement == row:
+                        skipped_noops += 1
+                        continue
                     changed = replace(original, activities=tuple(replacement if i == index else value for i, value in enumerate(original.activities)))
                     try:
                         expected = forward_pass(changed, progress_policy=policy)
@@ -215,6 +314,8 @@ class EquivalenceTests(unittest.TestCase):
                 else:
                     self.fail(f"seed={seed}, step={step}: no supported execution candidate")
                 with self.subTest(seed=seed, step=step):
+                    self.assertNotEqual(replacement, row, "accepted execution candidate must change semantics")
+                    self.assertNotEqual(changed, original)
                     computed = recalculate_network(original, changed, before, late, row.uid)
                     self.assertEqual(computed.forward, expected)
                     self.assertEqual(computed.backward, expected_late)
@@ -231,7 +332,8 @@ class EquivalenceTests(unittest.TestCase):
         self.assertEqual(set(finishes), {True, False})
         self.assertTrue(all(code.startswith("SCHEDULE_") for code in refusals))
         print(f"S7 campaign: seeds=0..999 accepted=2000 modes={dict(modes)} "
-              f"finish_changed={dict(finishes)} refused_proposals={dict(refusals)}", file=sys.stderr)
+              f"finish_changed={dict(finishes)} refused_proposals={dict(refusals)} "
+              f"skipped_noops={skipped_noops}", file=sys.stderr)
 
     def test_explicit_fallback_when_component_spans_network(self):
         original = Network((PlannedActivity(uuid5(NAMESPACE_URL, "a"), 3, CAL), PlannedActivity(uuid5(NAMESPACE_URL, "b"), 5, CAL)), (PlannedRelationship(uuid5(NAMESPACE_URL, "edge"), uuid5(NAMESPACE_URL, "a"), uuid5(NAMESPACE_URL, "b")),), 0, 3000)
