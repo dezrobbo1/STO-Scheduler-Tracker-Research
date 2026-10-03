@@ -94,14 +94,14 @@ def _credential_still_valid(conn, access: ProjectAccess, now: datetime) -> bool:
         row = conn.execute(
             "SELECT s.revoked_at, s.expires_at, u.enabled, s.user_id "
             "FROM server_sessions s JOIN users u ON u.id = s.user_id "
-            "WHERE s.id = %s FOR SHARE OF s",
+            "WHERE s.id = %s FOR SHARE OF s, u",
             (actor.session_id,),
         ).fetchone()
     else:
         row = conn.execute(
             "SELECT t.revoked_at, t.expires_at, u.enabled, t.user_id "
             "FROM device_tokens t JOIN users u ON u.id = t.user_id "
-            "WHERE t.id = %s AND t.project_id = %s FOR SHARE OF t",
+            "WHERE t.id = %s AND t.project_id = %s FOR SHARE OF t, u",
             (actor.device_token_id, access.project_id),
         ).fetchone()
     return bool(row is not None and row["user_id"] == actor.user_id
@@ -117,13 +117,13 @@ def submit(workspace: Workspace, project_id: uuid.UUID, access: ProjectAccess,
     payload = semantic_payload(project_id, actor.user_id, operation)
     fingerprint = canonical_sha256(payload)
     with workspace.connect() as conn:
-        if not repo.lock_project(conn, project_id):
-            raise LiveOperationRefused("LIVE_PROJECT_UNKNOWN", 404)
-        # Hold a shared credential row lock until commit. A logout, token
-        # revocation or account disable cannot commit between this check and
-        # the authoritative effect; a prior revocation is observed here.
+        # Hold both credential and user locks until commit. Account disable
+        # locks the user before affected projects, so take these locks before
+        # the project lock as well.
         if not _credential_still_valid(conn, access, auth_now()):
             raise LiveOperationRefused("LIVE_CREDENTIAL_EXPIRED", 401)
+        if not repo.lock_project(conn, project_id):
+            raise LiveOperationRefused("LIVE_PROJECT_UNKNOWN", 404)
         # Membership mutation also locks this project row. Check authority
         # inside the same serialized transaction, including on a retry.
         membership = auth_repo.get_membership(conn, project_id=project_id,

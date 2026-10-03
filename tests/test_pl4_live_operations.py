@@ -495,3 +495,31 @@ class LiveOperationDatabaseTests(unittest.TestCase):
             with self.connect() as conn:
                 from sto.persistence import repositories as repo
                 self.assertEqual(repo.live_cursor(conn, uuid.UUID(project)), 0)
+
+    def test_acceptance_holds_enabled_user_row_until_commit(self):
+        from sto.scheduling import live_operations
+
+        with self.client() as client:
+            project, baseline, uids = self.prepared(client)
+            body = self.command(client, project, baseline, uids[0])
+            original = live_operations._credential_still_valid
+            checked = []
+
+            def verify_lock(conn, access, now):
+                valid = original(conn, access, now)
+                if not checked:
+                    with self.connect() as other:
+                        with self.assertRaises(psycopg.errors.LockNotAvailable):
+                            other.execute(
+                                "SELECT id FROM users WHERE id = %s FOR UPDATE NOWAIT",
+                                (access.actor.user_id,),
+                            )
+                    checked.append(True)
+                return valid
+
+            with patch.object(live_operations, "_credential_still_valid",
+                              side_effect=verify_lock):
+                accepted = client.post(f"/api/projects/{project}/execution-operations",
+                                       json=body)
+            self.assertEqual(accepted.status_code, 201, accepted.text)
+            self.assertTrue(checked)

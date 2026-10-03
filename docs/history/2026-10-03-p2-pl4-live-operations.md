@@ -105,16 +105,20 @@ after credential expiry all left no accepted state or cursor. A response lost
 after commit was recovered by the same request and by receipt lookup. SSE
 read no uncommitted row; after reconnect, catch-up returned missed rows in
 order. A V007→V008 upgrade and repository schema-drift check passed.
+The post-publication review held both the credential and enabled-user rows
+through commit, acquiring them before the project lock to preserve the
+account-disable lock order. A regression proves a concurrent writer cannot
+lock the user row during acceptance.
 
 P2-G2 remains **open**. No representative real-sized schedule with recorded
 connected subscriber workload and enough accepted update samples was run;
 the synthetic test and 250 ms polling interval are functional evidence, not
 a p95 latency claim. P2-G4, G5 and G6 remain open for their later slices.
 
-Local validation: the PostgreSQL-required focused module passed 12 tests;
-the complete PostgreSQL-required suite passed 1,126 tests with 98 conditional
-skips; the bare standard-library suite passed 1,125 tests with 201 expected
-conditional skips. Fresh migration application and schema drift matched 8
+Local validation after that correction: the PostgreSQL-required focused module
+passed 13 tests; the complete PostgreSQL-required suite passed 1,127 tests
+with 98 conditional skips; the bare standard-library suite passed 1,125 tests
+with 201 expected conditional skips. Fresh migration application and schema drift matched 8
 migrations and 17 tables. Roadmap render/check, status/gate, compileall and
 `git diff --check` passed. Hosted CI and its authenticated browser acceptance
 are reported in the PR validation.
