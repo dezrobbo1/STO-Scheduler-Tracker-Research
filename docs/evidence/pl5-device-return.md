@@ -1,8 +1,14 @@
 # PL5 genuine-device return package
 
 This is an unexecuted procedure. Fill a private manifest with synthetic trial
-IDs and evidence filenames; do not commit credentials or private photos. Use
-the exact PR head SHA as both app and server build SHA, and apply through V009.
+IDs and evidence filenames; do not commit credentials or private photos. Run
+the verifier from a checkout of the exact PR head SHA used for both app and
+server; it refuses a manifest naming another SHA. Set `STO_BUILD_SHA` to that
+commit in the server deployment environment before API startup, then capture
+the authenticated `GET /api/trial-build` response; the verifier refuses an
+absent or different deployed identity. Independently retain the server
+deployment/build log and each native install/build record to establish
+that those binaries really came from that checkout. Apply through V009.
 Native targets currently declare Android API 24 minimum and iOS 15.0 minimum.
 The trial requires one physical iOS device and one physical Android device.
 
@@ -12,7 +18,10 @@ The trial requires one physical iOS device and one physical Android device.
    `scripts/db/apply-migrations.sh`, and serve HTTPS reachable from both
    devices. Start with a fresh synthetic project; import
    `tests/fixtures/synthetic-workspace-chain.mspdi.xml`, calculate the baseline,
-   and record the `GET /live` version/hash and `GET /changes?after=0` cursor.
+   and save the complete `GET /live` and `GET /changes?after=0` JSON in
+   `baseline_server.live` and `baseline_server.changes` before either device
+   goes offline. Require an empty feed and cursor zero; the verifier also
+   checks the immutable `/versions` entry and accepted execution's base.
    Confirm activity identities returned by `GET /calculations/latest` for
    **Isolate equipment**, **Execute inspection**, **Restore equipment**;
    expected source GUIDs end `0002`, `0003`, `0004` respectively. Record actual
@@ -43,7 +52,8 @@ The trial requires one physical iOS device and one physical Android device.
    do not silently change the original command.
 2. On A capture/select one synthetic photo, draw arrow, circle and short
    text, and queue it against A's note. Preserve screenshot of queued photo,
-   annotation and SHA-256 of the original. Interrupt transfer later during
+   annotation and SHA-256 of the original. Record the immutable media UUID,
+   owning A note UUID and activity UUID. Interrupt transfer later during
    reconnect; compare original SHA after retry. Continue normal UI work while
    media is pending.
 3. Terminate both app **processes** with the OS application switcher/process
@@ -62,8 +72,9 @@ The trial requires one physical iOS device and one physical Android device.
    This is an explicit PL4 global-head conflict, not lost field work. Do not
    rebase or assign new IDs to the two stale commands. Both clients catch up
    the committed order and agree on final live hash. The server has exactly
-   one accepted execution effect, two accepted notes and at most one link
-   event. These are the expected outcomes for this frozen-base trial; if
+   one accepted execution effect, two accepted notes and exactly one expected
+   link event with the recorded media/message relationship. These are the
+   expected outcomes for this frozen-base trial; if
    P2-G4 interpretation demands three *accepted* execution effects, this
    trial alone does not close the gate and a separately sequenced device run
    must be designed without silently rebasing offline work.
@@ -77,7 +88,8 @@ termination; explicit force-quit/force-stop; offline reopen; reconnect; lost
 HTTP acknowledgement after server commit (same ID/receipt); token expiry;
 server membership revoke/role downgrade while offline; account disable;
 device-token revoke; logout and Account A→B switch; device reboot; old build
-with pending v1 store→new v2 build upgrade; interrupted media transfer; deep
+with pending v2 store→new v3 build upgrade (and v1→v3 where available);
+interrupted media transfer; deep
 link `sto-field://project/<project-id>/activity/<activity-id>` after fresh
 auth/catch-up. Mark unrun entries **unexecuted**, rather than “pass”. Remote
 revocation cannot be known before network contact. Do not treat push arrival
@@ -85,13 +97,17 @@ as authority; production push infrastructure is not installed by this trial.
 
 ## Return and verify
 
-Return the server baseline/final `GET /live`, paged committed feed JSON,
+Return the server `GET /api/trial-build`, baseline/final `GET /live`, the initial empty change page,
+immutable `/versions`, paged committed feed JSON, server deploy SHA evidence,
+native build/install SHA evidence,
 execution receipts, trial message/media receipts, device screenshots and a
 redacted `manifest.json`. The manifest keys are `server` (HTTPS), `project_id`,
-`baseline_hash`, `baseline_version_id`, `baseline_cursor`, `server_sha`,
+`baseline_hash`, `baseline_version_id`, `baseline_cursor` (zero),
+`baseline_server` (captured `live` and empty `changes` JSON), `server_sha`,
 `app_sha`, `final_hash`, `device_a`, `device_b`, `execution` (three objects with
 `operation_id`, `activity_uid`, `local_final_state`, `error_code`), and
-`communication` (two objects with `id`, `activity_uid`). Device entries need
+`communication` (two objects with `id`, `activity_uid`), and `media` with
+`id`, `message_id`, `activity_uid`, `original_sha256`. Device entries need
 `model`, `os`, `app_sha`, `offline_evidence`, `termination_evidence`,
 `reopen_evidence`, `reconnect_evidence`, `final_cursor`, `final_hash`. The stale two must have
 `local_final_state=needs_attention`, `error_code=LIVE_STALE_HEAD`.
@@ -102,8 +118,16 @@ Run with a current viewer token stored only in the environment:
 STO_TRIAL_VERIFY_TOKEN=... python3 scripts/verify-pl5-device-trial.py manifest.json
 ```
 
-The verifier fails closed on missing evidence fields, cursor gaps, missing or
-duplicate accepted records, stale items lacking attention state, changed
+The verifier requires exact build SHA equality with its checkout and the
+authenticated server build response, the
+recorded baseline version/hash in immutable server history and the execution
+receipt's base, exactly one accepted execution, both specified notes, exactly
+one matching linked media receipt/event and server original-byte digest, no
+unrelated committed event, and
+both devices' final cursor/hash. A false manifest can still misstate physical
+hardware or installed binary; inspect independent deployment/build and device
+evidence before any gate decision. The verifier fails closed on cursor gaps,
+missing/duplicate records, stale items lacking attention state, changed
 activity links, or a final hash that differs from the accepted execution.
 Inspect returned device evidence and lifecycle matrix separately before
 deciding PL5/P2-G4. This script does not certify a photo's pixels, genuine

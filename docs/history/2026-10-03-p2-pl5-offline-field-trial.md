@@ -20,7 +20,9 @@ The transactional v1→v2 migration preserves pending IDs, payloads and cursor.
 
 An enqueue transaction commits before the UI says “Queued locally.” Separate
 execution and trial-message rows retain immutable UUIDs, original actor,
-project, activity and semantic payload. States are queued, sending, accepted
+project, activity and semantic payload. Local schema v3 adds an actor/project
+partitioned committed-feed projection. Its v2→v3 migration retains pending
+work, media and cursor. States are queued, sending, accepted
 or applied (execution only), needs_auth and needs_attention. Retry is bounded
 exponential backoff from one to sixty seconds with bounded jitter. 401 holds
 for same-account reauthentication; stale head, permission refusal, conflicting
@@ -30,10 +32,15 @@ the same ID. No local timestamp supplies server order.
 
 On reconnect the client authenticates and checks project access, recovers
 receipts, drains eligible intentions, then pages the durable PL4 cursor and
-stores the current live head and matching calculation in one local transaction.
+stores each committed event, current live head and matching calculation with
+the cursor in one local transaction. Remote accepted trial notes and linked
+media are projected durably and displayed separately from local intentions.
 It rejects cursor gaps and a calculation for a different head. SSE and a
-foreground timer trigger catch-up; neither is a durable source. Cache displays
-last-confirmed time and offline/checking state. Local logout removes the
+foreground timer trigger catch-up; neither is a durable source. A sync is
+confirmed only after current authority, project access and catch-up complete;
+offline/auth/access failures do not announce authoritative success. Cache displays
+last-confirmed time and offline/checking state. Local logout aborts the stream
+and active HTTP request, waits for the old sync to settle, then removes the
 active token before clearing the protected UI while retaining encrypted,
 attributed pending work for the original account. A different account sees
 only its own cache, queue and media; it cannot submit the former actor's work.
@@ -57,6 +64,22 @@ original is stored before the annotation UI opens. Media size is bounded to
 digits in table names. The server's calculation route permits an explicitly
 selected live head so the field cache does not masquerade baseline rows as
 current live rows.
+
+## Bounded pre-device review correction
+
+The reviewed head `ebb2ebb06deb97ee5534905b235c6369b5684eb3` exposed
+account handover, false sync success, and lost remote-note projection defects.
+The client now aborts/settles old-account sync before logout completes, returns
+explicit sync outcomes, and commits all caught-up events atomically with its
+cursor. Resume-photo failures are visible, and a failed native rollback no
+longer masks the initiating transaction failure. Original-media responses are
+attachments with `nosniff`; Android instrumentation checks the actual app ID.
+The device-return verifier now binds its build claims to its checkout and an
+authenticated, deployment-configured server build response, checks
+captured baseline fields against immutable server history and the execution
+base, accounts for the exact committed trial events, and requires the specified
+media link/receipt and original digest. These automated corrections do not
+constitute genuine-device evidence.
 
 The provisional trial accepts planner/admin capability, because the current
 repository has no separately evidenced field-execution/communication role.

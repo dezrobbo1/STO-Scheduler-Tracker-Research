@@ -28,6 +28,7 @@ jobs:
           distribution: temurin
           java-version: "21"
       - run: ./android/gradlew -p android assembleDebug
+      - run: ./android/gradlew -p android assembleAndroidTest
 
   api:
     # The persistence gate: needs PostgreSQL and the api extra. The bare job

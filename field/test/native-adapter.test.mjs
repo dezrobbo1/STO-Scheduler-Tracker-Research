@@ -32,3 +32,18 @@ test('native adapter excludes other readers until the durable queue transaction 
   assert.equal((await read)[0].id, 'x');
   sqlite.close();
 });
+
+test('rollback failure cannot mask the initiating transaction failure', async () => {
+  for (const phase of ['action', 'commit']) {
+    const original = new Error(`${phase} rejected`);
+    const connection = {
+      async beginTransaction() {},
+      async commitTransaction() { if (phase === 'commit') throw original; },
+      async rollbackTransaction() { throw new Error('rollback unavailable'); },
+    };
+    await assert.rejects(new NativeDb(connection).transaction(async () => {
+      if (phase === 'action') throw original;
+      return 'work';
+    }), error => error === original);
+  }
+});

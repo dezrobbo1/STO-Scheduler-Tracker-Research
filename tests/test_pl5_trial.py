@@ -8,6 +8,7 @@ import tempfile
 import unittest
 import uuid
 import hashlib
+from unittest.mock import patch
 from pathlib import Path
 
 from tests.test_pl4_live_operations import ADMIN_URL, ROOT, SOURCE, reachable
@@ -75,8 +76,11 @@ class TrialDatabaseTests(unittest.TestCase):
             self.assertEqual(upload.status_code, 201, upload.text)
             self.assertEqual(client.post(f"/api/projects/{project}/trial-media",
                                          json=media).json(), upload.json())
-            self.assertEqual(client.get(f"/api/projects/{project}/trial-media/{media_id}/original").content,
-                             bytes([0, 1, 2, 3]))
+            original = client.get(f"/api/projects/{project}/trial-media/{media_id}/original")
+            self.assertEqual(original.content, bytes([0, 1, 2, 3]))
+            self.assertEqual(original.headers["content-type"], "image/png")
+            self.assertEqual(original.headers["x-content-type-options"], "nosniff")
+            self.assertTrue(original.headers["content-disposition"].startswith("attachment;"))
             self.assertEqual(client.post(f"/api/projects/{project}/trial-media", json={
                 **media, "base64": "AAECAQ==",
                 "sha256": hashlib.sha256(bytes([0, 1, 2, 1])).hexdigest(),
@@ -97,6 +101,23 @@ class TrialDatabaseTests(unittest.TestCase):
                 self.assertEqual(repo.live_cursor(conn, uuid.UUID(project)), 2)
                 self.assertEqual(conn.execute("SELECT count(*) AS n FROM live_execution_operations "
                                               "WHERE project_id=%s", (uuid.UUID(project),)).fetchone()["n"], 0)
+
+    def test_authenticated_trial_build_identity_fails_closed_without_deployment_sha(self):
+        from sto.scheduling.working_schedule import Workspace
+        from sto.api.app import create_app
+        from fastapi.testclient import TestClient
+
+        workspace = Workspace(connect=self.connect, source_dir=Path(self.temp.name))
+        with patch.dict(os.environ, {"STO_BUILD_SHA": "d" * 40}):
+            with self.auth.client(workspace) as client:
+                response = client.get("/api/trial-build")
+                self.assertEqual(response.status_code, 200, response.text)
+                self.assertEqual(response.json(), {"server_sha": "d" * 40})
+        with patch.dict(os.environ, {"STO_BUILD_SHA": ""}):
+            with self.auth.client(workspace) as client:
+                self.assertEqual(client.get("/api/trial-build").status_code, 503)
+            with TestClient(create_app(workspace, self.auth.service)) as guest:
+                self.assertEqual(guest.get("/api/trial-build").status_code, 401)
 
     def test_media_before_message_and_current_authority(self):
         from sto.scheduling.working_schedule import Workspace

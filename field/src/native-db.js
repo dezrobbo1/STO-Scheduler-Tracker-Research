@@ -36,7 +36,8 @@ export class NativeDb {
         await this.connection.commitTransaction();
         return result;
       } catch (error) {
-        await this.connection.rollbackTransaction();
+        try { await this.connection.rollbackTransaction(); }
+        catch { /* A failed rollback must not replace the initiating failure. */ }
         throw error;
       }
     });

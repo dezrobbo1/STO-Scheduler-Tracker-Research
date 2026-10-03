@@ -8,6 +8,8 @@ reproduce what it stored, the process does not come up quietly.
 from __future__ import annotations
 
 import json
+import os
+import re
 import asyncio
 import base64
 import binascii
@@ -358,6 +360,16 @@ def create_app(
     @app.get("/healthz", include_in_schema=False)
     def liveness() -> dict[str, str]:
         return {"status": "ok"}
+
+    # Deployment-provided source identity for the bounded physical-device
+    # return; absence refuses evidence rather than fabricating a build claim.
+    trial_build_sha = os.environ.get("STO_BUILD_SHA", "")
+
+    @app.get("/api/trial-build", include_in_schema=False)
+    def trial_build(actor: Actor = Depends(authenticated())) -> dict[str, str]:
+        if not re.fullmatch(r"[0-9a-f]{40}", trial_build_sha):
+            raise HTTPException(503, {"code": "TRIAL_BUILD_IDENTITY_UNAVAILABLE"})
+        return {"server_sha": trial_build_sha}
 
     @app.post("/api/auth/login", response_model=schemas.SessionResponse)
     def login(
@@ -1096,7 +1108,10 @@ def create_app(
                                (project_id, media_id)).fetchone()
         if row is None:
             raise HTTPException(404, "no such trial media")
-        return Response(bytes(row["original"]), media_type=row["mime"])
+        return Response(bytes(row["original"]), media_type=row["mime"], headers={
+            "X-Content-Type-Options": "nosniff",
+            "Content-Disposition": f'attachment; filename="{media_id}"',
+        })
 
     @app.post("/api/projects/{project_id}/trial-media/{media_id}/link",
               response_model=schemas.TrialMediaReceipt)

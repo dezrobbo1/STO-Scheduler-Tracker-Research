@@ -48,6 +48,40 @@ test('live activity cache requests the matching calculated version, never baseli
   } finally { globalThis.fetch = original; }
 });
 
+test('cancelled transport aborts an in-flight request and cannot initiate later old-token requests', async () => {
+  const original = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = (url, options) => {
+    calls.push(options.headers.Authorization);
+    return new Promise((resolve, reject) => options.signal.addEventListener('abort',
+      () => reject(new DOMException('Aborted', 'AbortError')), {once: true}));
+  };
+  try {
+    const transport = new FieldTransport('https://sto.example', 'old-secret');
+    const pending = transport.authority();
+    transport.cancelPending();
+    await assert.rejects(pending, {name: 'AbortError'});
+    await assert.rejects(transport.project(P), {name: 'AbortError'});
+    assert.deepEqual(calls, ['Bearer old-secret']);
+  } finally { globalThis.fetch = original; }
+});
+
+test('aborted subscription never starts another request with the old bearer', async () => {
+  const original = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async () => { calls.push('fetch'); throw new Error('unexpected request'); };
+  try {
+    const transport = new FieldTransport('https://sto.example', 'old-secret');
+    const signal = new AbortController();
+    signal.abort();
+    await assert.rejects(transport.subscribe(P, 0, () => {}, signal.signal), {name: 'AbortError'});
+    transport.cancelPending();
+    await assert.rejects(transport.subscribe(P, 0, () => {}, new AbortController().signal),
+      {name: 'AbortError'});
+    assert.deepEqual(calls, []);
+  } finally { globalThis.fetch = original; }
+});
+
 test('queued success follows durable insert; restart and account switch preserve identity and visibility', async () => {
   const file = `/tmp/sto-field-${crypto.randomUUID()}.db`;
   const db = database(file);
@@ -80,7 +114,7 @@ test('failed durable commit produces no queued item and migration keeps pending 
     [ID, A, P, 'execution', JSON.stringify(payload), 'queued']);
   const store = await FieldStore.open(db);
   assert.equal((await store.items(A, P))[0].id, ID);
-  assert.equal((await db.all('SELECT version FROM local_meta'))[0].version, 2);
+  assert.equal((await db.all('SELECT version FROM local_meta'))[0].version, 3);
   const originalTransaction = db.transaction;
   db.transaction = action => originalTransaction(async tx => {
     await action(tx);
@@ -89,6 +123,24 @@ test('failed durable commit produces no queued item and migration keeps pending 
   await assert.rejects(store.enqueueMessage(A, P, {id: 'bad', activity_uid: ACT, text: 'x'}),
     /power loss/);
   assert.equal((await store.items(A, P)).length, 1);
+  db.close();
+});
+
+test('v2 to v3 upgrade retains pending execution, media, actor partition and cursor', async () => {
+  const db = database();
+  const old = await FieldStore.open(db);
+  await old.enqueueExecution(A, P, payload);
+  await old.saveMedia(A, P, {id: V, message_id: ID, activity_uid: ACT,
+    mime: 'image/png', original: new Uint8Array([1, 2]), annotations: []});
+  await old.setCursor(A, P, 7, V, 'a'.repeat(64));
+  await db.run('UPDATE local_meta SET version=2');
+  await db.exec('DROP TABLE committed_trial_events');
+  const upgraded = await FieldStore.open(db);
+  assert.equal((await db.all('SELECT version FROM local_meta'))[0].version, 3);
+  assert.deepEqual((await upgraded.items(A, P))[0].payload, payload);
+  assert.equal((await upgraded.media(A, P, V)).message_id, ID);
+  assert.equal((await upgraded.cache(A, P)).cursor, 7);
+  assert.deepEqual(await upgraded.committedMessages(B, P), []);
   db.close();
 });
 
@@ -186,7 +238,8 @@ test('expired credential holds original work; same actor resumes, another actor 
     async project() { return {id: P}; }, async receipt() { return null; },
     async submitExecution(project, sent) { assert.deepEqual(sent, payload); sends++;
       return {operation_id: ID, status: 'applied', server_sequence: 1}; },
-    async changes(project, after) { return {events: after ? [] : [{server_sequence: 1}],
+    async changes(project, after) { return {events: after ? [] : [{server_sequence: 1,
+      operation_id: ID}],
       next_cursor: after || 1, has_more: false}; },
     async live() { return {version_id: V, canonical_hash: 'b'.repeat(64)}; },
   };
@@ -301,4 +354,182 @@ test('cursor gap is refused without persisting a false authoritative position', 
   await assert.rejects(sync.catchUp(A, P), /SERVER_CURSOR_GAP/);
   assert.equal(await store.cache(A, P), null);
   store.db.close();
+});
+
+test('sync outcomes distinguish unavailable authority, expired credentials, revoked project, failed catch-up and confirmation', async () => {
+  const store = await FieldStore.open(database());
+  const transport = {
+    async authority() { throw new TypeError('offline'); },
+    async project() { return {id: P}; },
+    async changes() { return {events: [], next_cursor: 0, has_more: false}; },
+    async live() { return {version_id: V, canonical_hash: 'a'.repeat(64)}; },
+  };
+  const sync = new SyncEngine(store, transport);
+  assert.equal((await sync.run(A, P)).status, 'offline');
+  transport.authority = async () => { throw Object.assign(new Error('expired'), {status: 401}); };
+  assert.equal((await sync.run(A, P)).status, 'needs_auth');
+  await store.enqueueExecution(A, P, payload);
+  transport.authority = async () => { throw Object.assign(new Error('disabled'), {status: 403}); };
+  assert.equal((await sync.run(A, P)).status, 'needs_attention');
+  assert.equal((await store.items(A, P))[0].state, 'needs_attention');
+  transport.authority = async () => ({user_id: A});
+  transport.project = async () => { throw Object.assign(new Error('revoked'), {status: 404}); };
+  assert.equal((await sync.run(A, P)).status, 'needs_attention');
+  transport.project = async () => ({id: P});
+  transport.changes = async () => { throw new TypeError('offline'); };
+  assert.equal((await sync.run(A, P)).status, 'offline');
+  assert.equal(await store.cache(A, P), null);
+  transport.changes = async () => ({events: [], next_cursor: 0, has_more: false});
+  assert.equal((await sync.run(A, P)).status, 'confirmed');
+  assert.equal((await store.cache(A, P)).cursor, 0);
+  store.db.close();
+});
+
+test('receipt lookup failure cannot become a confirmed sync merely because catch-up succeeds', async () => {
+  const store = await FieldStore.open(database());
+  await store.enqueueExecution(A, P, payload);
+  const transport = {
+    async authority() { return {user_id: A}; }, async project() { return {id: P}; },
+    async receipt() { throw new TypeError('receipt unavailable'); },
+    async changes() { return {events: [], next_cursor: 0, has_more: false}; },
+    async live() { return {version_id: V, canonical_hash: 'a'.repeat(64)}; },
+  };
+  assert.equal((await new SyncEngine(store, transport).run(A, P)).status, 'offline');
+  assert.equal((await store.items(A, P))[0].state, 'queued');
+  store.db.close();
+});
+
+test('credential revoked during receipt reconciliation stops further media submissions', async () => {
+  const store = await FieldStore.open(database());
+  await store.enqueueExecution(A, P, payload);
+  await store.saveMedia(A, P, {id: V, message_id: ID, activity_uid: ACT,
+    mime: 'image/png', original: new Uint8Array([1, 2]), annotations: []});
+  await store.finalizeMedia(A, P, V, []);
+  let uploaded = 0;
+  const transport = {
+    async authority() { return {user_id: A}; }, async project() { return {id: P}; },
+    async receipt() { throw Object.assign(new Error('revoked'), {status: 401}); },
+    async uploadMedia() { uploaded++; },
+    async changes() { throw Object.assign(new Error('revoked'), {status: 401}); },
+  };
+  const result = await new SyncEngine(store, transport).run(A, P);
+  assert.equal(result.status, 'needs_auth');
+  assert.equal(uploaded, 0);
+  store.db.close();
+});
+
+test('cancelled execution sync cannot issue later old-account requests; a new account sync is independent', async () => {
+  const store = await FieldStore.open(database());
+  await store.enqueueExecution(A, P, payload);
+  await store.enqueueMessage(A, P, {id: V, activity_uid: ACT, text: 'A note'});
+  await store.enqueueExecution(B, P, {...payload, operation_id: 'bbbbbbbb-1111-4111-8111-bbbbbbbbbbbb'});
+  const controller = new AbortController();
+  let entered, release;
+  const pending = new Promise(resolve => { release = resolve; });
+  const started = new Promise(resolve => { entered = resolve; });
+  const calls = [];
+  const transport = {
+    async authority() { calls.push('authority'); entered(); await pending; return {user_id: A}; },
+    async project() { calls.push('project'); },
+    async receipt() { calls.push('receipt'); },
+    async submitExecution() { calls.push('execution'); },
+    async submitMessage() { calls.push('message'); },
+    async uploadMedia() { calls.push('media'); },
+    async changes() { calls.push('changes'); },
+  };
+  const oldRun = new SyncEngine(store, transport).run(A, P, {signal: controller.signal});
+  await started;
+  controller.abort();
+  release();
+  assert.equal((await oldRun).status, 'aborted');
+  assert.deepEqual(calls, ['authority']);
+  assert.equal((await store.items(A, P))[0].state, 'queued');
+  const next = new SyncEngine(store, {
+    async authority() { return {user_id: B}; }, async project() { return {id: P}; },
+    async receipt() { return null; },
+    async submitExecution() { return {operation_id: 'bbbbbbbb-1111-4111-8111-bbbbbbbbbbbb', status: 'applied'}; },
+    async changes() { return {events: [], next_cursor: 0, has_more: false}; },
+    async live() { return {version_id: V, canonical_hash: 'a'.repeat(64)}; },
+  });
+  assert.equal((await next.run(B, P)).status, 'confirmed');
+  assert.equal((await store.items(B, P))[0].state, 'applied');
+  assert.equal((await store.items(A, P))[0].state, 'queued');
+  store.db.close();
+});
+
+test('cancelled media sync cannot begin another old-credential transfer or link', async () => {
+  const store = await FieldStore.open(database());
+  await store.enqueueMessage(A, P, {id: ID, activity_uid: ACT, text: 'Photo'});
+  await store.transition(A, P, ID, 'accepted', {receipt: {id: ID}});
+  for (const id of [V, ACT]) {
+    await store.saveMedia(A, P, {id, message_id: ID, activity_uid: ACT,
+      mime: 'image/png', original: new Uint8Array([1, 2]), annotations: []});
+    await store.finalizeMedia(A, P, id, []);
+  }
+  const controller = new AbortController();
+  let entered, release;
+  const pending = new Promise(resolve => { release = resolve; });
+  const started = new Promise(resolve => { entered = resolve; });
+  const calls = [];
+  const transport = {
+    async authority() { return {user_id: A}; }, async project() { return {id: P}; },
+    async messageReceipt() { return {id: ID, status: 'accepted'}; },
+    async uploadMedia(project, media) { calls.push(`upload:${media.id}`); entered(); await pending;
+      return {id: media.id, status: 'uploaded'}; },
+    async linkMedia() { calls.push('link'); },
+    async changes() { calls.push('changes'); },
+  };
+  const run = new SyncEngine(store, transport).run(A, P, {signal: controller.signal});
+  await started;
+  controller.abort(); release();
+  assert.equal((await run).status, 'aborted');
+  assert.deepEqual(calls, [`upload:${V}`]);
+  store.db.close();
+});
+
+test('committed trial note and link project durably before cursor advance and repeat without duplication', async () => {
+  const file = `/tmp/sto-field-feed-${crypto.randomUUID()}.db`;
+  const db = database(file);
+  const store = await FieldStore.open(db);
+  const events = [
+    {kind: 'trial_message', id: ID, actor_user_id: A, activity_uid: ACT,
+      text: 'A: isolation observed', server_sequence: 1, status: 'accepted'},
+    {kind: 'trial_media_link', id: V, media_id: V, message_id: ID, server_sequence: 2},
+  ];
+  const transport = {
+    async changes(project, after) { return {events: events.filter(e => e.server_sequence > after),
+      next_cursor: 2, has_more: false}; },
+    async live() { return {version_id: V, canonical_hash: 'a'.repeat(64)}; },
+  };
+  const sync = new SyncEngine(store, transport);
+  await sync.catchUp(B, P);
+  assert.equal((await store.cache(B, P)).cursor, 2);
+  assert.deepEqual((await store.committedMessages(B, P)).map(row =>
+    [row.id, row.activity_uid, row.text, row.media_ids]),
+    [[ID, ACT, 'A: isolation observed', [V]]]);
+  assert.deepEqual(await store.committedMessages(A, P), []);
+  db.close();
+  const reopened = await FieldStore.open(database(file));
+  await new SyncEngine(reopened, transport).catchUp(B, P);
+  assert.equal((await reopened.committedMessages(B, P)).length, 1);
+  assert.equal((await reopened.cache(B, P)).cursor, 2);
+  reopened.db.close();
+  const {unlinkSync} = await import('node:fs'); unlinkSync(file);
+});
+
+test('failed feed projection transaction rolls back both message and cursor', async () => {
+  const db = database();
+  const store = await FieldStore.open(db);
+  const originalTransaction = db.transaction;
+  db.transaction = action => originalTransaction(async tx => {
+    await action(tx);
+    throw new Error('power loss before feed commit');
+  });
+  await assert.rejects(store.commitFeedPage(A, P,
+    [{kind: 'trial_message', id: ID, actor_user_id: B, activity_uid: ACT,
+      text: 'remote', server_sequence: 1}], 1, V, 'a'.repeat(64), null, 1000),
+  /power loss before feed commit/);
+  assert.equal(await store.cache(A, P), null);
+  assert.deepEqual(await store.committedMessages(A, P), []);
+  db.close();
 });

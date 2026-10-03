@@ -5,6 +5,8 @@ import { FieldStore } from './store.js';
 import { openNativeDb } from './native-db.js';
 import { FieldTransport } from './transport.js';
 import { SyncEngine } from './sync.js';
+import {finishAccountSession, syncStatusMessage} from './session.js';
+import {resumeDraftWithNotice, clearProtectedPreview} from './photo.js';
 
 const element = id => document.getElementById(id);
 const store = await (async () => FieldStore.open(await openNativeDb()))().catch(error => {
@@ -17,9 +19,12 @@ let identity = store ? await store.activeIdentity() : null;
 let transport = identity ? new FieldTransport(identity.server, identity.token) : null;
 let engine = transport ? new SyncEngine(store, transport) : null;
 let syncing = null;
+let syncAbort = null;
 let streamAbort = null;
+let signingOut = false;
 let active = true;
 let photo = null;
+let photoUrl = null;
 let annotations = [];
 let tool = 'circle';
 let arrowStart = null;
@@ -59,6 +64,7 @@ async function render() {
   }
   if ([...activity.options].some(option => option.value === selected)) activity.value = selected;
   const items = await store.items(current.actor, current.project);
+  if (identity !== current) return;
   const list = element('outbox'); list.replaceChildren();
   const messageChoice = element('message-choice'); messageChoice.replaceChildren();
   for (const item of items) {
@@ -72,30 +78,48 @@ async function render() {
       `${item.payload.text.slice(0, 40)} · ${label(item.state)}`, item.id));
   }
   const mediaList = element('media-list'); mediaList.replaceChildren();
-  for (const entry of await store.allMedia(current.actor, current.project)) {
+  const mediaRows = await store.allMedia(current.actor, current.project);
+  if (identity !== current) return;
+  for (const entry of mediaRows) {
     const li = document.createElement('li');
     li.textContent = `${label(entry.state)} · ${entry.id}${entry.error_code ? ` · ${entry.error_code}` : ''}`;
     if (entry.state === 'draft') {
       const resume = document.createElement('button');
       resume.textContent = 'Finish annotation';
-      resume.addEventListener('click', () => resumePhoto(entry.id));
+      resume.addEventListener('click', () => { void resumePhoto(entry.id); });
       li.append(' ', resume);
     }
     mediaList.append(li);
   }
+  const committed = element('committed-notes'); committed.replaceChildren();
+  for (const event of await store.committedMessages(current.actor, current.project)) {
+    if (identity !== current) return;
+    const li = document.createElement('li');
+    const heading = document.createElement('strong');
+    heading.textContent = 'Server accepted note';
+    const detail = document.createElement('small');
+    detail.textContent = `${event.activity_uid} · ${event.text}${event.media_ids.length ? ` · ${event.media_ids.length} linked photo` : ''}`;
+    li.append(heading, detail); committed.append(li);
+  }
 }
 
 async function syncNow() {
-  if (!identity || !active || !store) return;
+  if (!identity || !active || !store || signingOut) return;
   if (syncing) return syncing;
   const current = identity;
+  const controller = new AbortController();
+  syncAbort = controller;
   syncing = (async () => {
     try {
-      await engine.run(current.actor, current.project);
-      if (identity === current) notice('Synchronisation checked. Server receipts and cursor are authoritative.');
+      const result = await engine.run(current.actor, current.project, {signal: controller.signal});
+      const message = syncStatusMessage(result);
+      if (identity === current && !signingOut && message) notice(message);
     } catch (error) {
-      if (identity === current) notice(`Still cached locally; sync unavailable: ${error.message}`);
-    } finally { syncing = null; if (identity === current) await render(); }
+      if (identity === current && !signingOut) notice(`Still cached locally; sync unavailable: ${error.message}`);
+    } finally {
+      syncing = null; syncAbort = null;
+      if (identity === current && !signingOut) await render();
+    }
   })();
   return syncing;
 }
@@ -104,7 +128,9 @@ async function streamLoop(current, controller) {
   while (identity === current && active && !controller.signal.aborted) {
     try {
       await syncNow();
+      if (controller.signal.aborted || signingOut || identity !== current) return;
       const cursor = (await store.cache(current.actor, current.project))?.cursor ?? 0;
+      if (controller.signal.aborted || signingOut || identity !== current) return;
       await transport.subscribe(current.project, cursor, () => syncNow(), controller.signal);
     } catch { /* durable catch-up on the timer/resume is the recovery path */ }
     if (controller.signal.aborted || identity !== current) return;
@@ -114,14 +140,14 @@ async function streamLoop(current, controller) {
 
 function startLive() {
   streamAbort?.abort();
-  if (!identity || !active) return;
+  if (!identity || !active || signingOut) return;
   streamAbort = new AbortController();
   void streamLoop(identity, streamAbort);
 }
 
 element('connect-form').addEventListener('submit', async event => {
   event.preventDefault();
-  if (!store) return;
+  if (!store || signingOut) return;
   const proposed = {server: element('server').value.trim().replace(/\/$/, ''),
     project: element('project').value.trim(), token: element('token').value.trim()};
   try {
@@ -137,20 +163,31 @@ element('connect-form').addEventListener('submit', async event => {
 });
 
 element('logout').addEventListener('click', async () => {
-  try { await store.logout(); }
+  if (signingOut || !identity) return;
+  signingOut = true;
+  syncAbort?.abort();
+  try { await finishAccountSession({streamAbort, transport, syncing, store}); }
   catch {
+    transport = new FieldTransport(identity.server, identity.token);
+    engine = new SyncEngine(store, transport);
+    signingOut = false;
+    startLive();
     notice('Local sign-out failed. The account is still active; retry before handing over the device.');
     return;
   }
-  streamAbort?.abort();
   identity = null; transport = null; engine = null;
   element('field').hidden = true;
   element('outbox').replaceChildren(); element('media-list').replaceChildren();
+  element('committed-notes').replaceChildren();
   element('activity').replaceChildren(); element('message-choice').replaceChildren();
-  element('message-text').value = ''; element('photo-canvas').replaceChildren?.();
-  photo = null; annotations = [];
+  element('message-text').value = '';
+  if (photoUrl) URL.revokeObjectURL(photoUrl);
+  photoUrl = null;
+  photo = null; image = null; annotations = [];
+  clearProtectedPreview(canvas, element('annotation'));
   notice('Signed out locally. Pending work is retained for the original account; revoke the device token on the server if the device is lost.');
   showIdentity();
+  signingOut = false;
 });
 
 element('execution').addEventListener('submit', async event => {
@@ -214,13 +251,29 @@ function draw() {
 }
 
 async function resumePhoto(id) {
-  const current = await store.media(identity.actor, identity.project, id);
-  photo = current; annotations = current.annotations;
-  const blob = new Blob([current.original], {type: current.mime});
-  const url = URL.createObjectURL(blob);
-  image = new Image();
-  image.onload = () => { URL.revokeObjectURL(url); draw(); element('annotation').hidden = false; };
-  image.src = url;
+  const currentIdentity = identity;
+  return resumeDraftWithNotice(store, currentIdentity, id, notice, current => {
+    if (identity !== currentIdentity) throw new Error('Account changed before photo opened');
+    photo = current; annotations = current.annotations;
+    const blob = new Blob([current.original], {type: current.mime});
+    if (photoUrl) URL.revokeObjectURL(photoUrl);
+    const url = URL.createObjectURL(blob);
+    photoUrl = url;
+    const preview = new Image();
+    image = preview;
+    preview.onload = () => {
+      URL.revokeObjectURL(url);
+      if (photoUrl === url) photoUrl = null;
+      if (identity !== currentIdentity || image !== preview || photo?.id !== id) return;
+      draw(); element('annotation').hidden = false;
+    };
+    preview.onerror = () => {
+      URL.revokeObjectURL(url);
+      if (photoUrl === url) photoUrl = null;
+      if (identity === currentIdentity) notice('Photo preview could not be loaded. Original remains saved locally.');
+    };
+    preview.src = url;
+  });
 }
 
 async function capture(bytes, mime) {
@@ -233,7 +286,7 @@ async function capture(bytes, mime) {
       activity_uid: note.payload.activity_uid, mime, original: bytes, annotations: []});
     // Native capture has returned; the immutable original is already durable
     // before editing, previewing or claiming the image was saved.
-    await resumePhoto(id); notice('Original photo saved locally. Finish annotation to queue transfer.');
+    if (await resumePhoto(id)) notice('Original photo saved locally. Finish annotation to queue transfer.');
     await render();
   } catch (error) { notice(`Photo not saved: ${error.message}`); }
 }

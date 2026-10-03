@@ -23,6 +23,11 @@ CREATE TABLE IF NOT EXISTS active_identity (
   singleton INTEGER PRIMARY KEY CHECK(singleton=1), actor TEXT NOT NULL,
   project TEXT NOT NULL, token TEXT NOT NULL, server TEXT NOT NULL);`;
 
+const V3 = `CREATE TABLE IF NOT EXISTS committed_trial_events (
+  actor TEXT NOT NULL, project TEXT NOT NULL, server_sequence INTEGER NOT NULL,
+  kind TEXT NOT NULL, source_id TEXT NOT NULL, payload TEXT NOT NULL,
+  PRIMARY KEY(actor, project, server_sequence));`;
+
 const decode = value => value === null ? null : JSON.parse(value);
 const encode = value => JSON.stringify(value);
 const bytesToBase64 = bytes => {
@@ -45,7 +50,7 @@ export class FieldStore {
       await tx.exec('CREATE TABLE IF NOT EXISTS local_meta (version INTEGER NOT NULL)');
       const rows = await tx.all('SELECT version FROM local_meta');
       let version = rows[0]?.version ?? 0;
-      if (version > 2) throw new Error('LOCAL_SCHEMA_NEWER_THAN_APP');
+      if (version > 3) throw new Error('LOCAL_SCHEMA_NEWER_THAN_APP');
       if (version < 1) {
         await tx.exec(V1);
         await tx.run('INSERT INTO local_meta(version) VALUES (1)');
@@ -54,6 +59,11 @@ export class FieldStore {
       if (version < 2) {
         await tx.exec(V2);
         await tx.run('UPDATE local_meta SET version=2');
+        version = 2;
+      }
+      if (version < 3) {
+        await tx.exec(V3);
+        await tx.run('UPDATE local_meta SET version=3');
       }
     });
     return store;
@@ -131,18 +141,61 @@ export class FieldStore {
   async setCursor(actor, project, cursor, versionId, canonicalHash, activities = null,
     now = Date.now()) {
     await this.db.transaction(async tx => {
-      const row = (await tx.all('SELECT * FROM project_cache WHERE actor=? AND project=?',
-        [actor, project]))[0];
-      const existing = row ? {...row, activities: decode(row.activities)} : null;
-      if (existing && cursor < existing.cursor) throw new Error('LOCAL_CURSOR_REGRESSION');
-      await tx.run(`INSERT INTO project_cache(actor,project,cursor,version_id,canonical_hash,synced_at,activities)
-        VALUES(?,?,?,?,?,?,?) ON CONFLICT(actor,project) DO UPDATE SET
-        cursor=excluded.cursor,version_id=excluded.version_id,
-        canonical_hash=excluded.canonical_hash,synced_at=excluded.synced_at,
-        activities=excluded.activities`,
-      [actor, project, cursor, versionId, canonicalHash, now,
-        encode(activities ?? existing?.activities ?? [])]);
+      await this.#setCursorTx(tx, actor, project, cursor, versionId, canonicalHash, activities, now);
     });
+  }
+
+  async #setCursorTx(tx, actor, project, cursor, versionId, canonicalHash, activities, now) {
+    const row = (await tx.all('SELECT * FROM project_cache WHERE actor=? AND project=?',
+      [actor, project]))[0];
+    const existing = row ? {...row, activities: decode(row.activities)} : null;
+    if (existing && cursor < existing.cursor) throw new Error('LOCAL_CURSOR_REGRESSION');
+    await tx.run(`INSERT INTO project_cache(actor,project,cursor,version_id,canonical_hash,synced_at,activities)
+      VALUES(?,?,?,?,?,?,?) ON CONFLICT(actor,project) DO UPDATE SET
+      cursor=excluded.cursor,version_id=excluded.version_id,
+      canonical_hash=excluded.canonical_hash,synced_at=excluded.synced_at,
+      activities=excluded.activities`,
+    [actor, project, cursor, versionId, canonicalHash, now,
+      encode(activities ?? existing?.activities ?? [])]);
+  }
+
+  async commitFeedPage(actor, project, events, cursor, versionId, canonicalHash,
+    activities = null, now = Date.now()) {
+    await this.db.transaction(async tx => {
+      for (const event of events) {
+        const sourceId = event.operation_id ?? event.id;
+        if (!sourceId || !event.kind || !Number.isSafeInteger(event.server_sequence))
+          throw new Error('LOCAL_FEED_EVENT_INVALID');
+        const previous = (await tx.all(`SELECT kind,source_id,payload FROM committed_trial_events
+          WHERE actor=? AND project=? AND server_sequence=?`,
+        [actor, project, event.server_sequence]))[0];
+        if (previous) {
+          if (previous.kind !== event.kind || previous.source_id !== sourceId ||
+              previous.payload !== encode(event)) throw new Error('LOCAL_FEED_IDENTITY_CONFLICT');
+        } else {
+          await tx.run(`INSERT INTO committed_trial_events
+            (actor,project,server_sequence,kind,source_id,payload) VALUES(?,?,?,?,?,?)`,
+          [actor, project, event.server_sequence, event.kind, sourceId, encode(event)]);
+        }
+      }
+      await this.#setCursorTx(tx, actor, project, cursor, versionId, canonicalHash, activities, now);
+    });
+  }
+
+  async committedMessages(actor, project) {
+    const rows = await this.db.all(`SELECT kind,payload FROM committed_trial_events
+      WHERE actor=? AND project=? ORDER BY server_sequence`, [actor, project]);
+    const messages = new Map();
+    const links = [];
+    for (const row of rows) {
+      const event = decode(row.payload);
+      if (row.kind === 'trial_message') messages.set(event.id, {...event, media_ids: []});
+      if (row.kind === 'trial_media_link') links.push(event);
+    }
+    for (const link of links) {
+      if (messages.has(link.message_id)) messages.get(link.message_id).media_ids.push(link.media_id);
+    }
+    return [...messages.values()];
   }
 
   async saveMedia(actor, project, {id, message_id, activity_uid, mime, original, annotations}) {
