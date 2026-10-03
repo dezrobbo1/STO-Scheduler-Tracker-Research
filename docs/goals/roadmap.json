@@ -213,7 +213,7 @@
     {
       "id": "P2",
       "title": "Live execution loop",
-      "status": "not_started",
+      "status": "in_progress",
       "effort_note": "Scope has grown materially. PL4 and PL5's original allowances no longer describe the shared delivery and mobile recovery work, and PL15 was not budgeted. Re-estimate P2 after PL5's early real-device trial establishes the mobile, authentication and media recovery boundary; no complete phase effort total is currently supported.",
       "slices": [
         "S7",
@@ -227,8 +227,8 @@
         {
           "id": "P2-G1",
           "text": "Incremental rescheduling equals a full recompute on a thousand random networks",
-          "met": false,
-          "evidence": null
+          "met": true,
+          "evidence": "tests/test_s7_execution.py"
         },
         {
           "id": "P2-G2",
@@ -534,7 +534,7 @@
       "id": "S7",
       "title": "Execution semantics and deterministic recalculation",
       "phase": "P2",
-      "status": "not_started",
+      "status": "done",
       "days": 5,
       "scope": [
         "Authoritative actual start, actual finish, remaining duration and supported progress semantics; execution-domain validation and deterministic recalculation, including incremental/full equivalence.",

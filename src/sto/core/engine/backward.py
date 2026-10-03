@@ -187,6 +187,9 @@ class BackwardPass:
     #: The forward pass's milestone placement policy. Kept on the result so
     #: criticality can refuse two passes that used different placement domains.
     snap_milestones: bool = False
+    #: Whether the caller named a contractual late bound, even when its value
+    #: happened to equal the old forward finish. Recalculation must preserve it.
+    project_late_finish_explicit: bool = False
 
     def by_uid(self) -> dict[UUID, ActivityLateTimes]:
         return {row.uid: row for row in self.times}
@@ -506,6 +509,7 @@ def backward_pass(
         times=times,
         order=tuple(reversed(forward.order)),
         project_late_finish=late_finish,
+        project_late_finish_explicit=project_late_finish is not None,
         deferred_constraints=tuple(deferred),
         fingerprint=_fingerprint(
             times,
