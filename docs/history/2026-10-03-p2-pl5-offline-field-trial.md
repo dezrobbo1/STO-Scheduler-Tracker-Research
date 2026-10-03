@@ -80,15 +80,35 @@ idempotent trial acceptance/conflicting reuse, immutable activity association,
 media before message, independent linking, committed mixed feed, no live-head
 or schedule-hash change from text/media, and exact PL4 replay with a trial
 message interleaved with execution. The focused PL4 suite remains green.
-Fresh V001→V009 application and drift checks passed locally. The complete
-PostgreSQL-required and bare suites, native shell sync, browser acceptance
-and hosted CI are reported on the published PR after final validation.
+Fresh V001→V009 application and drift checks passed locally. The following
+named commands passed in Work mode:
+
+```bash
+STO_REQUIRE_DB=1 PYTHONPATH=src .venv/bin/python -m unittest discover -s tests -p test_pl5_trial.py -v
+STO_REQUIRE_DB=1 PYTHONPATH=src .venv/bin/python -m unittest discover -s tests -p test_pl4_live_operations.py
+STO_REQUIRE_DB=1 PYTHONPATH=src .venv/bin/python -m unittest discover -s tests
+PYTHONPATH=src python3 -m unittest discover -s tests
+PYTHONPATH=src python3 -m sto.cli roadmap render --check
+PYTHONPATH=src python3 -m sto.cli roadmap status
+PYTHONPATH=src python3 -m sto.cli roadmap gate
+python3 -m compileall -q src scripts tests
+git diff --check
+cd field && npm ci && npm test && npm run build && npx cap sync
+```
+
+Local authenticated browser acceptance could not start because the Playwright
+Chromium CDN delivered a truncated archive. Hosted CI #348 at corrected head
+`1d2e2e58ad191d7d62351b51a992b98146b9c6c5` passed its PostgreSQL suite,
+fresh migration/drift, authenticated PL14 Chromium browser workflow, Python
+3.12/3.13 bare suites, field tests/build/Capacitor sync and an Android debug
+build. The final PR head's hosted result is recorded in the PR body.
 
 ## Real-device evidence and unexecuted acceptance
 
 No genuine iOS or Android device was accessible in this Work environment.
 Capacitor generated iOS/Android native project shells and copied web assets;
-neither a genuine native build nor the native SQLCipher runtime, OS lifecycle,
+CI assembled an Android debug build. Neither a genuine-device build/run nor
+the native SQLCipher runtime, OS lifecycle,
 camera permissions, secure-secret persistence, background/suspend, force-quit,
 device reboot, network transitions, app upgrade, push/deep link, or interrupted
 binary transfer has been observed on hardware. The simulator/emulator and
