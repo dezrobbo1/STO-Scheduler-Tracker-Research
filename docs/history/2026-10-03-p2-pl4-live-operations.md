@@ -117,8 +117,8 @@ a p95 latency claim. P2-G4, G5 and G6 remain open for their later slices.
 
 Local validation after that correction: the PostgreSQL-required focused module
 passed 13 tests; the complete PostgreSQL-required suite passed 1,127 tests
-with 98 conditional skips; the bare standard-library suite passed 1,125 tests
-with 201 expected conditional skips. Fresh migration application and schema drift matched 8
+with 98 conditional skips; the bare standard-library suite passed 1,126 tests
+with 202 expected conditional skips. Fresh migration application and schema drift matched 8
 migrations and 17 tables. Roadmap render/check, status/gate, compileall and
 `git diff --check` passed. Hosted CI and its authenticated browser acceptance
 are reported in the PR validation.
