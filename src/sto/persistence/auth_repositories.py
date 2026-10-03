@@ -286,6 +286,12 @@ def _lock_admin_state(conn: psycopg.Connection) -> None:
     conn.execute("SELECT pg_advisory_xact_lock(hashtext('sto-auth-admin-state'))")
 
 
+def lock_auth_state_for_acceptance(conn: psycopg.Connection) -> None:
+    """Exclude authority mutations without serializing independent live submissions."""
+
+    conn.execute("SELECT pg_advisory_xact_lock_shared(hashtext('sto-auth-admin-state'))")
+
+
 def _other_enabled_admins(
     conn: psycopg.Connection, *, project_id: uuid.UUID, user_id: uuid.UUID
 ) -> int:
