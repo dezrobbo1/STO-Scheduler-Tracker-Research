@@ -23,11 +23,11 @@ not start until the previous gate passes.
 <!-- roadmap:begin now -->
 <!-- generated from docs/goals/roadmap.json by `sto roadmap render`; edit the JSON, not this -->
 
-**P2 — Live execution loop** (not started; 0 of 6 gate criteria met)
+**P2 — Live execution loop** (in progress; 1 of 6 gate criteria met)
 
 | | Gate criterion | Shown by |
 |---|---|---|
-| · | Incremental rescheduling equals a full recompute on a thousand random networks | — |
+| ✓ | Incremental rescheduling equals a full recompute on a thousand random networks | `tests/test_s7_execution.py` |
 | · | An accepted live execution update reaches a subscribed client in under a second at the 95th percentile on a real-sized schedule, with the workload and connected trial conditions recorded | — |
 | · | Replaying the update log from the baseline reproduces the head hash | — |
 | · | A two-device field trial queues supported execution reports for three tasks and communication operations while both devices are offline, survives application process termination and reopening, reconnects and synchronises without loss or duplicate accepted records or effects, preserving activity association and deterministic server acceptance ordering; recorded in docs/evidence | — |
