@@ -59,7 +59,8 @@ an explicit 1–200 page bound, ascending committed rows and `next_cursor` /
 `has_more`. A negative cursor is invalid; one beyond the committed maximum is
 `LIVE_CURSOR_UNKNOWN`. No compaction or expiry is implemented. Authenticated
 SSE at `GET /changes/stream?after=N` polls the durable feed at 250 ms,
-emits committed event IDs and periodically rechecks current access. Credentials
+emits committed event IDs and rechecks current access on every poll. Production
+API connections are returned to a bounded pool between polls. Credentials
 stay in cookie/header, never the URL. A disconnected subscriber resumes by
 the explicit catch-up endpoint and then subscribes from its last cursor; SSE
 is a notification path, not the audit store. A slow subscriber may disconnect
@@ -106,22 +107,33 @@ after commit was recovered by the same request and by receipt lookup. SSE
 read no uncommitted row; after reconnect, catch-up returned missed rows in
 order. A V007→V008 upgrade and repository schema-drift check passed.
 The post-publication review held both the credential and enabled-user rows
-through commit, acquiring them before the project lock to preserve the
-account-disable lock order. A regression proves a concurrent writer cannot
-lock the user row during acceptance.
+through commit. A shared auth-admin advisory lock now precedes those and the
+project row, excluding membership/account mutations with incompatible row-lock
+orders while independent live submissions remain concurrent. Coded engine
+`NetworkError` refusals return their stable code as 422 and roll back without
+an accepted effect. Baseline and live-head integrity diagnoses are separate:
+a good baseline refresh cannot clear a still-corrupt live head, while an import
+that supersedes that head clears its obsolete diagnosis. The PL4 roadmap
+acceptance now names delivered execution catch-up; PL15 owns the later
+communication projection and attachment access.
 
 P2-G2 remains **open**. No representative real-sized schedule with recorded
 connected subscriber workload and enough accepted update samples was run;
 the synthetic test and 250 ms polling interval are functional evidence, not
 a p95 latency claim. P2-G4, G5 and G6 remain open for their later slices.
 
-Local validation after that correction: the PostgreSQL-required focused module
-passed 13 tests; the complete PostgreSQL-required suite passed 1,127 tests
-with 98 conditional skips; the bare standard-library suite passed 1,126 tests
-with 202 expected conditional skips. Fresh migration application and schema drift matched 8
-migrations and 17 tables. Roadmap render/check, status/gate, compileall and
-`git diff --check` passed. Hosted CI and its authenticated browser acceptance
-are reported in the PR validation.
+Validation commands passed:
+
+```bash
+STO_REQUIRE_DB=1 PYTHONPATH=src .venv/bin/python -m unittest discover -s tests -p test_pl4_live_operations.py
+STO_REQUIRE_DB=1 PYTHONPATH=src .venv/bin/python -m unittest discover -s tests
+PYTHONPATH=src python3 -m unittest discover -s tests
+```
+
+The V007→V008 upgrade, fresh migration application, schema-drift guard,
+roadmap render/check and gate, compileall, and `git diff --check` passed.
+Hosted CI and authenticated browser acceptance are reported at the final
+published PR head.
 
 PL5 owns device durability and offline reconciliation; PL6 owns supervisor and
 planner approval; PL7 owns broader editing; PL15 owns communication/media and

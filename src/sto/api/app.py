@@ -19,6 +19,8 @@ from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, Respo
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from psycopg.rows import dict_row
+from psycopg_pool import ConnectionPool
 
 #: The largest upload this API will read. A schedule of CALCINER's size is
 #: fourteen megabytes; the legacy workspace already refused past sixty-four,
@@ -37,7 +39,7 @@ STATIC_DIR = Path(__file__).with_name("static")
 from sto.core.model.migrate.sto_v011 import MigrationError
 from sto.persistence import repositories as repo
 from sto.persistence import auth_repositories as auth_repo
-from sto.persistence.db import connect
+from sto.persistence.db import database_url
 from sto.core.calendar.compile import CalendarCompileError
 from sto.core.engine.network import NetworkError
 from sto.scheduling.working_schedule import (
@@ -197,13 +199,25 @@ async def _read_bounded(file: UploadFile) -> bytes:
 def create_app(
     workspace: Workspace | None = None, auth_service: AuthService | None = None
 ) -> FastAPI:
-    workspace = workspace or Workspace(connect=connect)
+    pool = None
+    if workspace is None:
+        # One bounded pool per API process. A stream borrows short-lived
+        # connections on each poll; it never pins one for its lifetime.
+        pool = ConnectionPool(database_url(), kwargs={"row_factory": dict_row},
+                              min_size=2, max_size=16, open=False)
+        workspace = Workspace(connect=pool.connection)
     auth_service = auth_service or AuthService.from_environment(connect=workspace.connect)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        app.state.resident = workspace.rebuild()
-        yield
+        if pool is not None:
+            await asyncio.to_thread(pool.open, wait=True)
+        try:
+            app.state.resident = workspace.rebuild()
+            yield
+        finally:
+            if pool is not None:
+                await asyncio.to_thread(pool.close)
 
     # The controlled-trial surface is the login route, protected application
     # API, static login/planner shell and the deliberately content-free
@@ -219,6 +233,7 @@ def create_app(
     )
     app.state.workspace = workspace
     app.state.auth = auth_service
+    app.state.db_pool = pool
     # Below the multipart parser, so an oversized body is refused while it is
     # arriving rather than after it has been spooled.
     app.add_middleware(BoundedBody, limit=MAX_UPLOAD_BYTES + _MULTIPART_ALLOWANCE)
@@ -414,11 +429,7 @@ def create_app(
             database = f"error: {type(error).__name__}"
             visible = []
         visible_ids = {row["id"] for row in visible}
-        failures = {
-            project_id: failure
-            for project_id, failure in workspace.integrity_failures.items()
-            if project_id in visible_ids
-        }
+        failures = workspace.visible_integrity_failures(visible_ids)
         return schemas.Health(
             status="ok" if database == "ok" and not failures else "degraded",
             database=database,

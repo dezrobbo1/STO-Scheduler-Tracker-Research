@@ -8,6 +8,7 @@ import secrets
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
 import uuid
 from concurrent.futures import ThreadPoolExecutor
@@ -257,6 +258,34 @@ class LiveOperationDatabaseTests(unittest.TestCase):
             self.assertEqual(recovered.json()["server_sequence"], 1)
             self.assertEqual(recovered.json()["operation_id"], str(captured[0]["operation_id"]))
 
+    def test_coded_engine_refusal_is_422_without_any_accepted_effect(self):
+        from sto.persistence import repositories as repo
+
+        with self.client() as client:
+            project, baseline, uids = self.prepared(client)
+            body = self.command(client, project, baseline, uids[0],
+                                remaining=1000000000000)
+            url = f"/api/projects/{project}/execution-operations"
+            refusal = client.post(url, json=body)
+            self.assertEqual(refusal.status_code, 422, refusal.text)
+            self.assertEqual(refusal.json()["detail"]["code"],
+                             "SCHEDULE_HORIZON_EXCEEDED")
+            self.assertEqual(client.get(f"{url}/{body['operation_id']}").status_code, 404)
+            with self.connect() as conn:
+                pid = uuid.UUID(project)
+                self.assertEqual(conn.execute(
+                    "SELECT count(*) AS n FROM live_execution_operations WHERE project_id=%s",
+                    (pid,)).fetchone()["n"], 0)
+                self.assertEqual(conn.execute(
+                    "SELECT count(*) AS n FROM project_committed_changes WHERE project_id=%s",
+                    (pid,)).fetchone()["n"], 0)
+                self.assertEqual(repo.live_cursor(conn, pid), 0)
+                self.assertIsNone(repo.head_version(conn, project_id=pid,
+                    kind="live_working", with_document=False))
+                self.assertEqual(len(repo.list_versions(conn, project_id=pid)), 1)
+            self.assertEqual(client.get(f"/api/projects/{project}/live").json()[
+                "canonical_hash"], baseline["canonical_hash"])
+
     def test_concurrent_duplicates_and_project_authority(self):
         from tests.auth_fixture import AuthTestContext
         from sto.persistence import repositories as repo
@@ -392,8 +421,19 @@ class LiveOperationDatabaseTests(unittest.TestCase):
                 )
                 conn.commit()
         with self.client() as restarted:
-            self.assertIn(uuid.UUID(project), restarted.app.state.workspace.integrity_failures)
+            self.assertIn(uuid.UUID(project), restarted.app.state.workspace.live_integrity_failures)
+            self.assertEqual(restarted.get("/api/health").json()["status"], "degraded")
             self.assertEqual(restarted.get(f"/api/projects/{project}/live").status_code, 500)
+            recalculated = restarted.post(f"/api/projects/{project}/calculations")
+            self.assertEqual(recalculated.status_code, 201, recalculated.text)
+            self.assertEqual(restarted.get("/api/health").json()["status"], "degraded")
+            self.assertEqual(restarted.get(f"/api/projects/{project}/live").status_code, 500)
+            imported = restarted.post(f"/api/projects/{project}/imports",
+                files={"file": (SOURCE.name, SOURCE.read_bytes(), "application/xml")})
+            self.assertEqual(imported.status_code, 201, imported.text)
+            self.assertEqual(restarted.get("/api/health").json()["status"], "ok")
+            self.assertEqual(restarted.get(f"/api/projects/{project}/live").json()[
+                "version_id"], imported.json()["version_id"])
 
     def test_sse_only_emits_committed_rows_and_reconnect_catches_up(self):
         from fastapi import Request
@@ -447,6 +487,88 @@ class LiveOperationDatabaseTests(unittest.TestCase):
                                 params={"after": 0}).json()
             self.assertEqual(missed["events"][0], accepted)
             self.assertEqual(missed["next_cursor"], 1)
+
+    def test_production_sse_reuses_bounded_connections_and_checks_revocation_each_poll(self):
+        from fastapi import Request
+        from sto.api.app import create_app
+        from sto.api.auth import ProjectAccess
+
+        with self.client() as admin:
+            project, baseline, uids = self.prepared(admin)
+            target = self.auth.service.create_user(
+                username=f"pl4-stream-{uuid.uuid4().hex[:8]}",
+                password=self.auth.password, totp_secret=self.auth.secret,
+            )
+            granted = admin.post(f"/api/projects/{project}/memberships",
+                json={"user_id": str(target["id"]), "role": "viewer"})
+            self.assertEqual(granted.status_code, 200, granted.text)
+            issued = admin.post(f"/api/projects/{project}/device-tokens",
+                json={"user_id": str(target["id"]), "role": "viewer"})
+            self.assertEqual(issued.status_code, 201, issued.text)
+            raw = issued.json()["raw_token"]
+            second_token = admin.post(f"/api/projects/{project}/device-tokens",
+                json={"user_id": str(target["id"]), "role": "viewer"})
+            self.assertEqual(second_token.status_code, 201, second_token.text)
+            raw_second = second_token.json()["raw_token"]
+
+            with patch.dict(os.environ, {"STO_DATABASE_URL": self.url,
+                                      "STO_AUTH_MASTER_KEY": self.auth.service.config.master_key.decode()}), \
+                 TestClient(create_app()) as pooled:
+                app = pooled.app
+                pool = getattr(app.state, "db_pool", None)
+                self.assertIsNotNone(pool, "production API must use a bounded pool")
+                route = next(route for route in app.routes if getattr(route, "path", "") ==
+                    "/api/projects/{project_id}/changes/stream")
+                actor = app.state.auth.authenticate_device(raw)
+
+                async def receive():
+                    return {"type": "http.request", "body": b"", "more_body": False}
+
+                request = Request({
+                    "type": "http", "method": "GET", "scheme": "http",
+                    "path": f"/api/projects/{project}/changes/stream",
+                    "headers": [(b"authorization", f"Bearer {raw}".encode())],
+                    "app": app,
+                }, receive)
+
+                async def exercise():
+                    response = await route.endpoint(request, uuid.UUID(project), 0,
+                        ProjectAccess(actor, uuid.UUID(project), "viewer"),
+                        app.state.workspace)
+                    stream = response.body_iterator
+                    created = pool.get_stats()["connections_num"]
+                    for _ in range(4):
+                        self.assertIn("keepalive", await anext(stream))
+                    self.assertLessEqual(pool.get_stats()["connections_num"] - created, 2)
+                    accepted = admin.post(f"/api/projects/{project}/execution-operations",
+                        json=self.command(admin, project, baseline, uids[0]))
+                    self.assertEqual(accepted.status_code, 201, accepted.text)
+                    self.assertIn(accepted.json()["operation_id"], await anext(stream))
+                    revoked_token = admin.delete(
+                        f"/api/projects/{project}/device-tokens/{issued.json()['id']}")
+                    self.assertEqual(revoked_token.status_code, 204, revoked_token.text)
+                    self.assertIn("keepalive", await anext(stream))
+                    with self.assertRaises(StopAsyncIteration):
+                        await anext(stream)
+
+                    second_request = Request({
+                        "type": "http", "method": "GET", "scheme": "http",
+                        "path": f"/api/projects/{project}/changes/stream",
+                        "headers": [(b"authorization", f"Bearer {raw_second}".encode())],
+                        "app": app,
+                    }, receive)
+                    second = await route.endpoint(second_request, uuid.UUID(project), 1,
+                        ProjectAccess(app.state.auth.authenticate_device(raw_second),
+                            uuid.UUID(project), "viewer"), app.state.workspace)
+                    stream = second.body_iterator
+                    self.assertIn("keepalive", await anext(stream))
+                    revoked = admin.delete(
+                        f"/api/projects/{project}/memberships/{target['id']}")
+                    self.assertEqual(revoked.status_code, 204, revoked.text)
+                    with self.assertRaises(StopAsyncIteration):
+                        await anext(stream)
+
+                asyncio.run(exercise())
 
     def test_v008_upgrades_an_existing_baseline_without_rewriting_history(self):
         name = f"sto_pl4_upgrade_{secrets.token_hex(4)}"
@@ -523,3 +645,89 @@ class LiveOperationDatabaseTests(unittest.TestCase):
                                        json=body)
             self.assertEqual(accepted.status_code, 201, accepted.text)
             self.assertTrue(checked)
+
+    def test_authority_mutations_precede_live_credential_and_project_locks(self):
+        from sto.api.auth import ProjectAccess
+        from sto.core.execution import ExecutionChange
+        from sto.persistence import auth_repositories as auth_repo
+        from sto.persistence import repositories as repo
+        from sto.scheduling import live_operations
+        from tests.auth_fixture import AuthTestContext
+
+        for change_kind in ("demote", "revoke_membership", "disable_account", "revoke_token"):
+            with self.subTest(change_kind=change_kind), self.client() as admin:
+                project, baseline, uids = self.prepared(admin)
+                target = AuthTestContext(connect=self.connect,
+                    username=f"pl4-lock-{uuid.uuid4().hex[:8]}")
+                grant = admin.post(f"/api/projects/{project}/memberships",
+                    json={"user_id": str(target.user["id"]), "role": "planner"})
+                self.assertEqual(grant.status_code, 200, grant.text)
+                if change_kind in ("revoke_membership", "revoke_token"):
+                    issued = admin.post(f"/api/projects/{project}/device-tokens",
+                        json={"user_id": str(target.user["id"]), "role": "planner"})
+                    self.assertEqual(issued.status_code, 201, issued.text)
+                    token = issued.json()
+                    actor = self.auth.service.authenticate_device(token["raw_token"])
+                else:
+                    with target.client(admin.app.state.workspace) as field:
+                        actor = target.service.authenticate_session(
+                            field.cookies.get(target.service.config.cookie_name))
+                access = ProjectAccess(actor, uuid.UUID(project), "planner")
+                operation = live_operations.ExecutionOperation(
+                    uuid.uuid4(), uuid.UUID(baseline["version_id"]),
+                    ExecutionChange(uuid.UUID(uids[0]), baseline["canonical_hash"],
+                        datetime.fromisoformat("2026-01-05T09:00:00"),
+                        remaining_seconds=3600),
+                )
+                checked = threading.Event()
+                started = threading.Event()
+                original = live_operations._credential_still_valid
+
+                def observe(conn, access, now):
+                    result = original(conn, access, now)
+                    checked.set()
+                    return result
+
+                with self.connect() as authority:
+                    if change_kind == "revoke_token":
+                        self.assertTrue(auth_repo.revoke_device_token(authority,
+                            project_id=uuid.UUID(project), token_id=uuid.UUID(token["id"])))
+                    else:
+                        auth_repo._lock_admin_state(authority)
+                        auth_repo._lock_project(authority, uuid.UUID(project))
+
+                    def submit():
+                        started.set()
+                        try:
+                            live_operations.submit(admin.app.state.workspace,
+                                uuid.UUID(project), access, operation,
+                                auth_now=self.auth.service.now)
+                        except live_operations.LiveOperationRefused as error:
+                            return error.status, error.code
+                        return 201, "accepted"
+
+                    with patch.object(live_operations, "_credential_still_valid",
+                                      side_effect=observe):
+                        with ThreadPoolExecutor(max_workers=1) as pool:
+                            pending = pool.submit(submit)
+                            self.assertTrue(started.wait(timeout=5))
+                            early_credential_lock = checked.wait(timeout=0.4)
+                            if change_kind == "demote":
+                                auth_repo.grant_membership(authority,
+                                    project_id=uuid.UUID(project), user_id=target.user["id"],
+                                    role="viewer", created_by_user_id=self.auth.user["id"])
+                            elif change_kind == "revoke_membership":
+                                auth_repo.revoke_membership(authority,
+                                    project_id=uuid.UUID(project), user_id=target.user["id"],
+                                    actor_user_id=self.auth.user["id"])
+                            elif change_kind == "disable_account":
+                                auth_repo.disable_user(authority, target.user["id"])
+                            authority.commit()
+                            result = pending.result(timeout=10)
+                    if change_kind != "revoke_token":
+                        self.assertFalse(early_credential_lock,
+                            "live acceptance locked credentials before the auth-admin lock")
+                    self.assertEqual(result[0], 401 if change_kind in
+                        ("disable_account", "revoke_membership", "revoke_token") else 403)
+                    with self.connect() as conn:
+                        self.assertEqual(repo.live_cursor(conn, uuid.UUID(project)), 0)

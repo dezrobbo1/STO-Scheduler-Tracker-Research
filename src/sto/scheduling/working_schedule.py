@@ -372,6 +372,7 @@ class Workspace:
     #: Projects whose head failed verification at the last rebuild, with why.
     #: They are not resident; health reports them; their routes return 500.
     integrity_failures: dict[uuid.UUID, str] = field(default_factory=dict)
+    live_integrity_failures: dict[uuid.UUID, str] = field(default_factory=dict)
     _state_lock: RLock = field(default_factory=RLock, repr=False)
 
     # --- reading ---------------------------------------------------------------
@@ -388,6 +389,7 @@ class Workspace:
         with self._state_lock:
             self._resident.clear()
             self.integrity_failures.clear()
+            self.live_integrity_failures.clear()
         with self.connect() as conn:
             heads = repo.heads_for_all_projects(conn)
         for head in heads:
@@ -411,8 +413,31 @@ class Workspace:
                 if row is not None:
                     _verify(head["project_id"], row)
             except IntegrityError as error:
-                self.integrity_failures[head["project_id"]] = str(error)
+                # A newer import can supersede the row during verification.
+                # Diagnose only the live head that was actually checked.
+                with self._state_lock:
+                    with self.connect() as conn:
+                        current = repo.head_version(
+                            conn, project_id=head["project_id"], kind="live_working",
+                            with_document=False,
+                        )
+                    if current is not None and current["id"] == row["id"]:
+                        self.live_integrity_failures[head["project_id"]] = str(error)
         return len(self._resident)
+
+    def visible_integrity_failures(self, visible_ids: set[uuid.UUID]) -> dict[uuid.UUID, str]:
+        with self._state_lock:
+            return {
+                project_id: "; ".join(
+                    label + ": " + failure for label, failure in (
+                        ("baseline", self.integrity_failures.get(project_id)),
+                        ("live_working", self.live_integrity_failures.get(project_id)),
+                    ) if failure is not None
+                )
+                for project_id in visible_ids
+                if project_id in self.integrity_failures
+                or project_id in self.live_integrity_failures
+            }
 
     def resident_ids(self) -> frozenset[uuid.UUID]:
         with self._state_lock:
@@ -1549,6 +1574,7 @@ class Workspace:
             # A successful import supersedes any integrity diagnosis recorded
             # for the previous head, including one racing this commit.
             self.integrity_failures.pop(project_id, None)
+            self.live_integrity_failures.pop(project_id, None)
         return ImportResult(
             project_id=project_id,
             import_batch_id=batch_id,

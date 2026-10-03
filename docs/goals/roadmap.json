@@ -551,12 +551,12 @@
       "scope": [
         "Authenticated, project-scoped submission with immutable client operation identity, semantic payload fingerprint, idempotent acceptance and effects; conflicting reuse of an identity is refused.",
         "Append-only accepted history, audit and provenance; authoritative acceptance time and committed server order distinct from client time and local order.",
-        "Realtime subscription, reconnect and explicit missed-event catch-up/sync shared by execution and communication without merging their domain objects or putting communication/media into schedule hashes.",
+        "Realtime subscription, reconnect and explicit missed-event catch-up for accepted execution changes; the committed project cursor and change substrate is designed for later communication reuse without merging domain objects or putting communication/media into schedule hashes.",
         "Define operation-specific permission, conflict, receipt and replay rules with S7/PL5. Functional delivery requirements are transport-neutral; authenticated HTTP POST plus SSE is provisional in ADR-016."
       ],
       "acceptance": [
         "A retry after acceptance but lost acknowledgement returns the existing authorised receipt and repeats no effect; the same identity with different operation semantics is refused, including concurrent retries.",
-        "An authenticated subscriber recovers missed committed events through catch-up after reconnect without gaps or duplicate effects; sync and attachments respect current project access.",
+        "An authenticated subscriber recovers missed committed execution changes through catch-up after reconnect without gaps or duplicate effects; receipt, subscription and catch-up reads respect current project access.",
         "The execution update log reproduces authoritative state and the head hash independently of communication/media traffic; P2-G2 bounds only the recorded connected execution workload."
       ]
     },
@@ -611,7 +611,7 @@
       "product_contract": "docs/product/field-communication.md",
       "architecture": "docs/adr/ADR-016-field-communication-offline-delivery-and-execution-authority.md",
       "scope": [
-        "Build on PL4 delivery and PL5 offline state/outbox. Ordinary messages require no mandatory classification form; Execution, Critical and Housekeeping are the initial UX configuration, not immutable domain categories.",
+        "Build a distinct communication domain and committed-change projection on PL4's ordering, subscription and catch-up substrate, alongside PL5 offline state/outbox; communication and attachment reads enforce current project access. Ordinary messages require no mandatory classification form; Execution, Critical and Housekeeping are the initial UX configuration, not immutable domain categories.",
         "Fast text, replies, mentions, simple reactions, timestamps, inherited activity context, activity links/deep links and useful labelled system/execution events in timelines.",
         "Photo capture/selection, annotation, visible upload/sync state and recoverable nonblocking transfer; immutable original with derivatives, annotation representation and rendered annotation as required by the product contract, outside schedule-authoritative state.",
         "Notifications for messages, mentions, replies, critical communication and relevant activity updates, subject to membership and preferences; push is a hint to authenticated sync, not delivery or review authority.",

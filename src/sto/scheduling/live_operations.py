@@ -16,6 +16,7 @@ from typing import Any
 from sto.api.auth import ProjectAccess, lesser_role, role_allows
 from sto.core.execution import ExecutionChange, ExecutionError, apply_execution, calculate_state
 from sto.core.hashing import canonical_sha256
+from sto.core.engine.network import NetworkError
 from sto.core.model.codec import encode_schedule
 from sto.core.model.entities import SCHEMA_VERSION
 from sto.persistence import auth_repositories as auth_repo
@@ -117,9 +118,12 @@ def submit(workspace: Workspace, project_id: uuid.UUID, access: ProjectAccess,
     payload = semantic_payload(project_id, actor.user_id, operation)
     fingerprint = canonical_sha256(payload)
     with workspace.connect() as conn:
-        # Hold both credential and user locks until commit. Account disable
-        # locks the user before affected projects, so take these locks before
-        # the project lock as well.
+        # Authority mutations take this advisory lock exclusively before any
+        # project/user/token row lock. Shared acquisition first excludes their
+        # different row-lock orders while allowing independent live submissions.
+        auth_repo.lock_auth_state_for_acceptance(conn)
+        # Hold credential and user locks through commit. Direct session/token
+        # revocation also serializes through the credential row.
         if not _credential_still_valid(conn, access, auth_now()):
             raise LiveOperationRefused("LIVE_CREDENTIAL_EXPIRED", 401)
         if not repo.lock_project(conn, project_id):
@@ -163,7 +167,7 @@ def submit(workspace: Workspace, project_id: uuid.UUID, access: ProjectAccess,
                                             base_calculation["id"])
         try:
             changed = apply_execution(previous, operation.change)
-        except ExecutionError as error:
+        except (ExecutionError, NetworkError) as error:
             raise LiveOperationRefused(error.code, 422) from error
         effect_id = uuid.uuid4()
         version_id = repo.insert_version(
@@ -199,6 +203,8 @@ def submit(workspace: Workspace, project_id: uuid.UUID, access: ProjectAccess,
             raise LiveOperationRefused("LIVE_CREDENTIAL_EXPIRED", 401)
         repo.set_head(conn, project_id=project_id, kind="live_working", version_id=version_id)
         conn.commit()
+        with workspace._state_lock:
+            workspace.live_integrity_failures.pop(project_id, None)
         return receipt(row), True
 
 
