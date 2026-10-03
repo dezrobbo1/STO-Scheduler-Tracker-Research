@@ -205,6 +205,10 @@ test('expired credential holds original work; same actor resumes, another actor 
 test('revoked membership holds queued work and cannot be bypassed by a later role change', async () => {
   const store = await FieldStore.open(database());
   await store.enqueueExecution(A, P, payload);
+  await store.enqueueMessage(A, P, {id: V, activity_uid: ACT, text: 'photo'});
+  await store.saveMedia(A, P, {id: ACT, message_id: V, activity_uid: ACT,
+    mime: 'image/png', original: new Uint8Array([1, 2]), annotations: []});
+  await store.finalizeMedia(A, P, ACT, []);
   let revoked = true, sends = 0;
   const transport = {
     async authority() { return {user_id: A}; },
@@ -218,9 +222,11 @@ test('revoked membership holds queued work and cannot be bypassed by a later rol
   await sync.run(A, P);
   assert.equal((await store.items(A, P))[0].state, 'needs_attention');
   assert.equal((await store.items(A, P))[0].error_code, 'HTTP_404');
+  assert.equal((await store.media(A, P, ACT)).state, 'needs_attention');
   revoked = false;
   await sync.run(A, P);
   assert.equal(sends, 0);
+  assert.equal((await store.media(A, P, ACT)).state, 'needs_attention');
   store.db.close();
 });
 

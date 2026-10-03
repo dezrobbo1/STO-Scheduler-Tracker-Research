@@ -75,6 +75,14 @@ export class SyncEngine {
       if (['queued', 'sending', 'needs_auth'].includes(item.state))
         await this.store.transition(actor, project, item.id, state, {errorCode: code});
     }
+    for (const row of await this.store.allMedia(actor, project)) {
+      if (['queued', 'link_pending', 'needs_auth'].includes(row.state)) {
+        const media = await this.store.media(actor, project, row.id);
+        await this.store.mediaTransition(actor, project, row.id,
+          state === 'queued' && media.remote_receipt ? 'link_pending' : state,
+          media.remote_receipt, code);
+      }
+    }
   }
 
   async #accepted(actor, project, item, receipt) {
@@ -101,7 +109,8 @@ export class SyncEngine {
     for (const id of await this.store.pendingMedia(actor, project, this.now())) {
       const media = await this.store.media(actor, project, id);
       let uploaded = media.remote_receipt;
-      let uploadDone = media.state === 'uploaded' || media.state === 'link_pending';
+      let uploadDone = Boolean(uploaded) || media.state === 'uploaded' ||
+        media.state === 'link_pending';
       try {
         if (!uploadDone) {
           uploaded = await this.transport.uploadMedia(project, media);
