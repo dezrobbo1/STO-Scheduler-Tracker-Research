@@ -35,13 +35,22 @@ def recalculate_network(
 ) -> Recalculation:
     """Recalculate a changed graph; reuse only proven independent components."""
 
+    explicit_late_finish = (
+        previous_backward.project_late_finish_explicit
+        or previous_backward.project_late_finish != previous_forward.project_finish
+    )
+
     def full() -> Recalculation:
         forward = forward_pass(
             current,
             snap_milestones=previous_forward.snap_milestones,
             progress_policy=previous_forward.progress_policy,
         )
-        backward = backward_pass(current, forward)
+        backward = backward_pass(
+            current, forward,
+            project_late_finish=(previous_backward.project_late_finish
+                                 if explicit_late_finish else None),
+        )
         return Recalculation(forward, backward, "full_fallback", len(current.activities))
 
     if (
@@ -49,7 +58,7 @@ def recalculate_network(
         or previous_backward.network_fingerprint != previous.fingerprint()
         or previous_backward.progress_policy is not previous_forward.progress_policy
         or previous_backward.snap_milestones != previous_forward.snap_milestones
-        or previous_backward.project_late_finish != previous_forward.project_finish
+        or explicit_late_finish
         or previous.project_start != current.project_start
         or previous.horizon != current.horizon
         or previous.status_time != current.status_time

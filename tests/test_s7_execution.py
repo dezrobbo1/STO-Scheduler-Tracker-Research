@@ -331,6 +331,10 @@ class EquivalenceTests(unittest.TestCase):
         self.assertEqual(set(modes), {"incremental", "full_fallback"})
         self.assertEqual(set(finishes), {True, False})
         self.assertTrue(all(code.startswith("SCHEDULE_") for code in refusals))
+        self.assertEqual(modes, {"incremental": 1312, "full_fallback": 688})
+        self.assertEqual(finishes, {True: 297, False: 1703})
+        self.assertEqual(refusals, {"SCHEDULE_FLOOR_EXCEEDED": 4})
+        self.assertEqual(skipped_noops, 16)
         print(f"S7 campaign: seeds=0..999 accepted=2000 modes={dict(modes)} "
               f"finish_changed={dict(finishes)} refused_proposals={dict(refusals)} "
               f"skipped_noops={skipped_noops}", file=sys.stderr)
@@ -341,6 +345,37 @@ class EquivalenceTests(unittest.TestCase):
         late = backward_pass(original, before)
         changed = replace(original, activities=(replace(original.activities[0], actual_start=1, remaining_duration=2), original.activities[1]))
         self.assertEqual(recalculate_network(original, changed, before, late, changed.activities[0].uid).mode, "full_fallback")
+
+    def test_explicit_late_finish_survives_full_fallback(self):
+        original = network(29)
+        before = forward_pass(original)
+        bound = before.project_finish + 50
+        late = backward_pass(original, before, project_late_finish=bound)
+        changed = replace(original, activities=tuple(
+            replace(row, actual_start=before.by_uid()[row.uid].early_start,
+                    remaining_duration=max(1, row.duration - 1)) if i == 0 else row
+            for i, row in enumerate(original.activities)
+        ))
+        computed = recalculate_network(original, changed, before, late, changed.activities[0].uid)
+        expected_forward = forward_pass(changed)
+        self.assertEqual(computed.mode, "full_fallback")
+        self.assertEqual(computed.forward, expected_forward)
+        self.assertEqual(computed.backward,
+                         backward_pass(changed, expected_forward, project_late_finish=bound))
+
+    def test_explicit_late_finish_equal_to_old_finish_survives_changed_finish(self):
+        activity = PlannedActivity(uuid5(NAMESPACE_URL, "s7/explicit-bound"), 4, CAL)
+        original = Network((activity,), (), 0, 3000)
+        before = forward_pass(original)
+        late = backward_pass(original, before, project_late_finish=before.project_finish)
+        changed = replace(original, activities=(replace(activity, actual_start=1, remaining_duration=2),))
+        expected_forward = forward_pass(changed)
+        self.assertNotEqual(before.project_finish, expected_forward.project_finish)
+        computed = recalculate_network(original, changed, before, late, activity.uid)
+        self.assertEqual(computed.mode, "full_fallback")
+        self.assertEqual(computed.backward,
+                         backward_pass(changed, expected_forward,
+                                       project_late_finish=before.project_finish))
 
     def test_disconnected_component_recomputes_both_passes_without_running_full_network(self):
         first = PlannedActivity(uuid5(NAMESPACE_URL, "s7/a"), 3, CAL)

@@ -68,7 +68,8 @@ candidates produced `SCHEDULE_FLOOR_EXCEEDED` on both paths. Sixteen no-op
 proposals were skipped before acceptance; each of the 2,000 accepted changes
 is asserted to change its activity and network. These counts come from the
 post-review rerun under the same network seeds and candidate-selection seeds;
-the mode and finish totals coincidentally match the first run. Targeted tests
+the mode and finish totals coincidentally match the first run. The test pins
+all recorded mode, finish, refusal and skipped-no-op counts. Targeted tests
 cover immutable actual history, completion, stale bases, exclusions, elapsed
 remaining, progress policy, real bounded traversal of a proper component,
 whole-network fallback, released edges, deferred constraints and three fresh
@@ -83,14 +84,20 @@ creation of Remaining Duration with `EXECUTION_ELAPSED_REMAINING_UNSUPPORTED`;
 it cannot silently become non-elapsed. Regression tests cover both settings,
 the corresponding fresh full calculations, refusal and unchanged canonical
 input/hash.
+The bounded review also found that full fallback could drop an explicit
+backward-pass project late-finish bound. The backward pass now records whether
+that bound was named, even when it equals the old forward finish; fallback
+uses the same bound. Default-bound recalculation continues to follow the new
+forward finish. Two regressions compare fallback with a fresh full backward
+pass for both explicit-bound shapes.
 
 Validation at the local branch before publication:
 
 ```text
 PYTHONPATH=src python3 -m unittest discover -s tests -p test_s7_execution.py
-Ran 14 tests — OK
+Ran 16 tests — OK
 PYTHONPATH=src python3 -m unittest discover -s tests
-Ran 1110 tests — OK (skipped=189)
+Ran 1112 tests — OK (skipped=189)
 ```
 
 The bare suite's skips include PostgreSQL/API and unavailable private/native
