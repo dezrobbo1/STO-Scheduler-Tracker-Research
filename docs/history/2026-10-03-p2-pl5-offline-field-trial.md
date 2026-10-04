@@ -102,6 +102,46 @@ messages/replies/reactions/notifications and its long-term retention policy.
 PL6 and PL7 remain untouched. S7 progress semantics and PL4 acceptance
 authority are unchanged.
 
+## Final internal pre-device audit
+
+At reviewed head `a4a6082ac02eae60c00b3e0bff8744a18de0299d`, the trial
+verifier could certify one actor acting as both devices or an unannotated
+photo, and account teardown retained unsaved protected controls. The
+correction binds separate authenticated device credentials and durable
+receipt actors, validates the recovered arrow/circle/text vectors, and clears
+all protected drafts, selections, preview and evidence text on logout. The
+same audit found and corrected coherent relabelling of fixture activities,
+cold-launch deep links lost before sign-in, and Android external-camera
+results lost on activity reclamation. Local schema v4 preserves a pre-capture
+actor/project/note/media association; restored results save the original under
+that association before exposing the annotation UI. A same-actor discard
+control resolves an interrupted attempt without deleting an already saved
+original. The device behaviour itself remains unexecuted.
+
+The complete internal audit traced these supported boundaries:
+
+| Domain | Source-traced result and correction |
+| --- | --- |
+| A — durable outbox | Transactional enqueue and immutable IDs survive restart; states and retry bounds were traced. Local duplicate media IDs now bind activity and MIME too. |
+| B — authority lifecycle | Sync cancellation settles before logout. The audit also closed delayed file-read/account-switch attribution and the protected evidence/draft teardown. Server current access still decides acceptance. |
+| C — sync truth | Authority, project, receipt, submission, media, changes, live head and calculation return paths were traced. Only completed authority/project/catch-up returns confirmed; mismatched durable receipts now become permanent attention. |
+| D — catch-up | Event projection and cursor/head commit in one local transaction. Gap, rollback, repeated page and restart regressions cover the feed. |
+| E — domain isolation | Trial message/media routes call their distinct persistence service and committed change substrate; only explicit execution routes call S7/live publication. Communication/media never enter the canonical schedule hash. |
+| F — media | Original bytes precede preview, hash is verified on read, upload/link receipts recover by immutable ID, and uncertain work is retained. Restored camera context and conflicting local identity are now explicit. |
+| G — local migration | v1→v4, v2→v4 and v3→v4 tests retain queued work, needs-auth/refusal, accepted receipt, media link, committed note and cursor. Native plugin durability still needs hardware. |
+| H — verifier | Exact build, two actors, pinned fixture IDs, baseline, immutable commands, notes, original digest, annotation vectors, committed order and final convergence have positive/negative mutation coverage. Device/process evidence fields are required but their physical truth needs independent review. |
+| I — native packaging | Android ID/namespace/test package, manifest/deep-link/permissions and iOS bundle/Info.plist/deployment/privacy entries were source-checked; native execution remains subject to hosted Android CI and physical platform trial. |
+| J — protected data | Bearer remains in headers, local evidence omits credential/photo bytes, media response is attachment/nosniff, and logout clears the protected transient surface. |
+| K — state reachability | Execution queued/sending/needs-auth/needs-attention/accepted/applied; note queued/sending/needs-auth/needs-attention/accepted; media draft/queued/uploaded (recognized recovery input)/link-pending/needs-auth/needs-attention/linked were traced through retry, refusal, restart and logout. No accepted→queued path is supported; the UI's `rejected` label is not a produced persisted state. |
+| L — trial feasibility | The current UI can enter the prescribed facts, notes, photo annotations and distinct statuses, and now exposes a protected read-only local evidence extract for exact manifest fields. The two-device physical sequence remains unrun. |
+
+The verifier cannot establish that a named physical device ran a binary,
+that a person used the captured token, or that process termination and media
+pixels occurred. Independent install, login, lifecycle and original-photo
+artifacts remain mandatory. No genuine iOS or Android device evidence is
+claimed. PL5 and P2-G4 remain open; P2 effort remains unestimated until that
+checkpoint. This internal audit did not request formal PR review.
+
 ## Automated evidence
 
 The native adapter's transaction serialization, SQLite file reopen,

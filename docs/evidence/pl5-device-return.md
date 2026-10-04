@@ -22,10 +22,15 @@ The trial requires one physical iOS device and one physical Android device.
    `baseline_server.live` and `baseline_server.changes` before either device
    goes offline. Require an empty feed and cursor zero; the verifier also
    checks the immutable `/versions` entry and accepted execution's base.
-   Confirm activity identities returned by `GET /calculations/latest` for
+   Save the authenticated `GET /calculations/latest?kind=baseline` response.
+   Confirm activity identities returned for
    **Isolate equipment**, **Execute inspection**, **Restore equipment**;
-   expected source GUIDs end `0002`, `0003`, `0004` respectively. Record actual
-   canonical activity UUIDs from the API, not from the file alone.
+   the fixture's canonical activity UUIDs are respectively
+   `0d717f24-85ff-5d98-afce-2fcaf8bbb5cf`,
+   `1256e448-70c8-5839-8a89-9300d703d276`, and
+   `88f5407a-79c8-5501-a94a-50d91104ac0d` (source GUIDs end
+   `0002`, `0003`, `0004`). The verifier checks both the pinned IDs and the
+   authenticated baseline calculation names/version/hash.
 2. Create two separate synthetic planner-member users and project-scoped
    device tokens through the existing admin API. Keep raw tokens off the
    evidence files. Install the same PR-head `field/` native build on both
@@ -33,7 +38,12 @@ The trial requires one physical iOS device and one physical Android device.
    macOS for iOS and Android Studio/Gradle SDK for Android. Record actual app
    version/build SHA, device model, OS version and install method. No release
    signing keys belong in git.
-3. Sign in separately. Confirm each device has cached the same live
+3. Sign in separately. Capture each device's authenticated
+   `GET /api/auth/session` actor response as `authority_evidence` and record
+   its `user_id` as `actor_user_id`. The two actors must be different. Keep
+   both device tokens available only as `STO_TRIAL_VERIFY_TOKEN_A` and
+   `STO_TRIAL_VERIFY_TOKEN_B` in the verifier environment; it independently
+   authenticates both and checks current trial-project access. Confirm each device has cached the same live
    version/hash, activity names and committed cursor. Record screenshots
    `A-00-online`, `B-00-online`, and a server baseline JSON export.
 
@@ -52,6 +62,12 @@ The trial requires one physical iOS device and one physical Android device.
    and each note's exact `text`; the verifier binds them to this prescribed
    sequence. The execution array order is A isolation, A inspection, B restore;
    the communication array order is A isolation note, B restore note.
+   Tap **Show synthetic trial evidence** on each signed-in device after queueing
+   and again after reconnect. Copy its read-only actor, frozen payload, note,
+   media digest/annotation and final state fields into the private manifest;
+   it excludes credentials and original bytes and clears on logout. The actual
+   `/api/auth/session` response and independent device evidence still need
+   separate capture; the local export alone does not prove physical provenance.
    If a date is refused by the S7 fixture context
    during the controlled trial, record the actual stable refusal and stop;
    do not silently change the original command.
@@ -96,12 +112,19 @@ termination; explicit force-quit/force-stop; offline reopen; reconnect; lost
 HTTP acknowledgement after server commit (same ID/receipt); token expiry;
 server membership revoke/role downgrade while offline; account disable;
 device-token revoke; logout and Account A→B switch; device reboot; old build
-with pending v2 store→new v3 build upgrade (and v1→v3 where available);
+with pending v2/v3 store→new v4 build upgrade (and v1→v4 where available);
 interrupted media transfer; deep
-link `sto-field://project/<project-id>/activity/<activity-id>` after fresh
+link `sto-field://project/<project-id>/activity/<activity-id>` on cold launch
+while signed out and after fresh
 auth/catch-up. Mark unrun entries **unexecuted**, rather than “pass”. Remote
 revocation cannot be known before network contact. Do not treat push arrival
 as authority; production push infrastructure is not installed by this trial.
+On Android, also launch the camera, let the OS reclaim the app while the
+external camera activity is open, and confirm `appRestoredResult` recovers the
+original under the same account, note and media ID after reopen. Record that
+separately from an ordinary app-switcher termination; its native behaviour is
+unexecuted until physical hardware is used. Local schema v4 persists the
+pre-capture association without replacing the original media/outbox records.
 
 ## Return and verify
 
@@ -114,21 +137,26 @@ redacted `manifest.json`. The manifest keys are `server` (HTTPS), `project_id`,
 `baseline_server` (captured `live` and empty `changes` JSON), `server_sha`,
 `app_sha`, `final_hash`, `device_a`, `device_b`, `execution` (three objects with
 `operation_id`, `activity_uid`, full original `payload`, `local_final_state`,
-`error_code`), and
-`communication` (two objects with `id`, `activity_uid`, exact `text`), and `media` with
-`id`, `message_id`, `activity_uid`, `original_sha256`. Device entries need
-`model`, `os`, `app_sha`, `offline_evidence`, `termination_evidence`,
+   `error_code`, `actor_user_id`), and
+`communication` (two objects with `id`, `actor_user_id`, `activity_uid`, exact `text`), and `media` with
+`id`, `actor_user_id`, `message_id`, `activity_uid`, `original_sha256`. Device entries need
+`model`, `os`, `app_sha`, `actor_user_id`, captured `authority_evidence` (`user_id`),
+`offline_evidence`, `termination_evidence`,
 `reopen_evidence`, `reconnect_evidence`, `final_cursor`, `final_hash`. The stale two must have
 `local_final_state=needs_attention`, `error_code=LIVE_STALE_HEAD`.
 
 Run with a current viewer token stored only in the environment:
 
 ```bash
-STO_TRIAL_VERIFY_TOKEN=... python3 scripts/verify-pl5-device-trial.py manifest.json
+STO_TRIAL_VERIFY_TOKEN=... STO_TRIAL_VERIFY_TOKEN_A=... STO_TRIAL_VERIFY_TOKEN_B=... \
+  python3 scripts/verify-pl5-device-trial.py manifest.json
 ```
 
 The verifier requires exact build SHA equality with its checkout and the
 authenticated server build response, the
+two distinct authenticated device actors, durable execution/note/media actor
+provenance, pinned synthetic fixture activities, arrow/circle/non-empty text
+annotation vectors with normalized coordinates,
 recorded baseline version/hash in immutable server history and the execution
 receipt's base, exactly one accepted execution, both specified notes, exactly
 one matching linked media receipt/event and server original-byte digest, no
@@ -142,3 +170,6 @@ activity links, or a final hash that differs from the accepted execution.
 Inspect returned device evidence and lifecycle matrix separately before
 deciding PL5/P2-G4. This script does not certify a photo's pixels, genuine
 device model, process termination or storage encryption by itself.
+The script also cannot prove which person physically held a token or that the
+recorded device actually ran the named binary: verify independent installation,
+login, and process lifecycle artifacts before a gate decision.

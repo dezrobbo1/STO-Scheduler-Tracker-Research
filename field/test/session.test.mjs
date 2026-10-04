@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {finishAccountSession, syncStatusMessage} from '../src/session.js';
-import {resumeDraftWithNotice, clearProtectedPreview} from '../src/photo.js';
+import {resumeDraftWithNotice, clearProtectedPreview, readSelectedPhoto} from '../src/photo.js';
+import {clearProtectedFieldState} from '../src/protected-state.js';
 
 test('sign-out aborts stream and requests, waits for sync settlement before clearing identity', async () => {
   let released, entered;
@@ -49,4 +50,39 @@ test('logout clears protected photo pixels and hides annotation before another a
   assert.equal(canvas.width, 0);
   assert.equal(canvas.height, 0);
   assert.equal(annotation.hidden, true);
+});
+
+test('account handover empties every protected draft control and transient memory, retaining durable A work', async () => {
+  const names = ['connect-form', 'execution', 'message', 'server', 'project', 'token',
+    'actual-start', 'actual-finish', 'remaining', 'message-text', 'annotation-text',
+    'photo-file', 'trial-evidence-output', 'outbox', 'media-list', 'committed-notes', 'activity',
+    'message-choice', 'account', 'freshness', 'connection', 'annotation'];
+  const controls = Object.fromEntries(names.map(name => [name, {
+    value: 'Account A secret draft', textContent: 'Account A project', hidden: false,
+    children: ['A'], reset() { this.value = ''; }, replaceChildren() { this.children = []; },
+  }]));
+  const canvas = {width: 320, height: 240};
+  let memory = {photo: 'A original', image: 'A preview', annotations: ['arrow'],
+    arrowStart: {x: .1}, tool: 'text', photoUrl: 'blob:A'};
+  const durableA = [{id: 'A operation', actor: 'A'}];
+  clearProtectedFieldState(id => controls[id], canvas, () => { memory = null; });
+  for (const name of ['actual-start', 'actual-finish', 'remaining', 'message-text',
+    'annotation-text', 'photo-file', 'trial-evidence-output', 'server', 'project', 'token'])
+    assert.equal(controls[name].value, '', name);
+  for (const name of ['activity', 'message-choice', 'outbox', 'media-list', 'committed-notes'])
+    assert.deepEqual(controls[name].children, [], name);
+  for (const name of ['account', 'freshness', 'connection'])
+    assert.equal(controls[name].textContent, '', name);
+  assert.deepEqual([canvas.width, canvas.height, controls.annotation.hidden, memory], [0, 0, true, null]);
+  assert.deepEqual(durableA, [{id: 'A operation', actor: 'A'}]);
+});
+
+test('an Account A file-read completion cannot become an Account B photo', async () => {
+  const a = {actor: 'A'}, b = {actor: 'B'};
+  let current = a, release;
+  const selected = {arrayBuffer: () => new Promise(resolve => { release = resolve; })};
+  const pending = readSelectedPhoto(selected, a, () => current);
+  current = b;
+  release(new Uint8Array([1, 2, 3]).buffer);
+  assert.equal(await pending, null);
 });

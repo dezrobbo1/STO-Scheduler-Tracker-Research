@@ -13,6 +13,31 @@ function active(signal) {
   if (signal?.aborted) throw new DOMException('Sync aborted', 'AbortError');
 }
 
+function sameLocalDate(a, b) {
+  if (a == null && b == null) return true;
+  return (a?.length === 16 ? `${a}:00` : a) === (b?.length === 16 ? `${b}:00` : b);
+}
+
+function receiptConflict(code) {
+  return Object.assign(new Error(code), {status: 409, code});
+}
+
+function boundReceipt(actor, project, item, receipt) {
+  if (receipt.actor_user_id !== actor || receipt.project_id !== project ||
+      (receipt.operation_id ?? receipt.id) !== item.id) throw receiptConflict('RECEIPT_IDENTITY_MISMATCH');
+  if (item.kind === 'execution') {
+    const expected = item.payload;
+    const facts = receipt.execution;
+    if (receipt.base_version_id !== expected.expected_version_id ||
+        facts?.activity_uid !== expected.activity_uid ||
+        !sameLocalDate(facts.actual_start, expected.actual_start) ||
+        !sameLocalDate(facts.actual_finish, expected.actual_finish) ||
+        facts.remaining_seconds !== expected.remaining_seconds)
+      throw receiptConflict('RECEIPT_SEMANTIC_MISMATCH');
+  } else if (receipt.activity_uid !== item.payload.activity_uid ||
+             receipt.text !== item.payload.text) throw receiptConflict('RECEIPT_SEMANTIC_MISMATCH');
+}
+
 export class SyncEngine {
   constructor(store, transport, {now = Date.now, jitter = Math.random} = {}) {
     this.store = store;
@@ -132,8 +157,7 @@ export class SyncEngine {
   }
 
   async #accepted(actor, project, item, receipt) {
-    if (receipt.operation_id && receipt.operation_id !== item.id ||
-        receipt.id && receipt.id !== item.id) throw new Error('RECEIPT_IDENTITY_MISMATCH');
+    boundReceipt(actor, project, item, receipt);
     await this.store.transition(actor, project, item.id,
       item.kind === 'execution' && receipt.status === 'applied' ? 'applied' : 'accepted',
       {receipt, errorCode: null, dueAt: 0});

@@ -36,6 +36,7 @@
         <button>Queue note</button></form>
       <label>Attach a photo to a queued note<select id="message-choice"></select></label>
       <button id="camera">Capture photo</button>
+      <button id="cancel-camera" type="button">Discard interrupted camera attempt</button>
       <label class="photo-select">Or select photo<input id="photo-file" type="file" accept="image/png,image/jpeg"></label>
       <div id="annotation" hidden>
         <canvas id="photo-canvas" aria-label="Photo annotation preview"></canvas>
@@ -45,7 +46,10 @@
       </div>
     </section>
     <section class="card"><h2>Outbox</h2><ul id="outbox"></ul><h3>Photo transfers</h3><ul id="media-list"></ul>
-      <h3>Server accepted notes</h3><ul id="committed-notes"></ul></section>
+      <h3>Server accepted notes</h3><ul id="committed-notes"></ul>
+      <button id="trial-evidence" type="button">Show synthetic trial evidence</button>
+      <label>Read-only local evidence (no credential or photo bytes)
+        <textarea id="trial-evidence-output" readonly rows="12"></textarea></label></section>
   </section>
   <p id="notice" role="alert"></p>
 </main>

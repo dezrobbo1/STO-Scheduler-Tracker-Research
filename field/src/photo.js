@@ -16,3 +16,8 @@ export function clearProtectedPreview(canvas, annotation) {
   canvas.height = 0;
   annotation.hidden = true;
 }
+
+export async function readSelectedPhoto(file, originatingIdentity, currentIdentity) {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  return currentIdentity() === originatingIdentity ? bytes : null;
+}

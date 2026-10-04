@@ -6,7 +6,11 @@ import { openNativeDb } from './native-db.js';
 import { FieldTransport } from './transport.js';
 import { SyncEngine } from './sync.js';
 import {finishAccountSession, syncStatusMessage} from './session.js';
-import {resumeDraftWithNotice, clearProtectedPreview} from './photo.js';
+import {resumeDraftWithNotice, readSelectedPhoto} from './photo.js';
+import {clearProtectedFieldState} from './protected-state.js';
+import {DeepLinkInbox} from './deep-link.js';
+import {persistCameraResult, recoverRestoredCamera} from './camera-recovery.js';
+import {localTrialEvidence} from './trial-evidence.js';
 
 const element = id => document.getElementById(id);
 const store = await (async () => FieldStore.open(await openNativeDb()))().catch(error => {
@@ -28,6 +32,7 @@ let photoUrl = null;
 let annotations = [];
 let tool = 'circle';
 let arrowStart = null;
+const deepLinks = new DeepLinkInbox();
 
 function notice(message) { element('notice').textContent = message; }
 function showIdentity() {
@@ -114,6 +119,7 @@ async function syncNow() {
       const result = await engine.run(current.actor, current.project, {signal: controller.signal});
       const message = syncStatusMessage(result);
       if (identity === current && !signingOut && message) notice(message);
+      return result;
     } catch (error) {
       if (identity === current && !signingOut) notice(`Still cached locally; sync unavailable: ${error.message}`);
     } finally {
@@ -158,7 +164,7 @@ element('connect-form').addEventListener('submit', async event => {
     await store.setActiveIdentity(verified);
     identity = verified; transport = next; engine = new SyncEngine(store, next);
     element('token').value = '';
-    await render(); await syncNow(); startLive();
+    await render(); await applyDeepLink(); startLive();
   } catch (error) { notice(`Connection not confirmed: ${error.message}`); }
 });
 
@@ -176,15 +182,13 @@ element('logout').addEventListener('click', async () => {
     return;
   }
   identity = null; transport = null; engine = null;
+  deepLinks.clear();
   element('field').hidden = true;
-  element('outbox').replaceChildren(); element('media-list').replaceChildren();
-  element('committed-notes').replaceChildren();
-  element('activity').replaceChildren(); element('message-choice').replaceChildren();
-  element('message-text').value = '';
-  if (photoUrl) URL.revokeObjectURL(photoUrl);
-  photoUrl = null;
-  photo = null; image = null; annotations = [];
-  clearProtectedPreview(canvas, element('annotation'));
+  clearProtectedFieldState(element, canvas, () => {
+    if (photoUrl) URL.revokeObjectURL(photoUrl);
+    photoUrl = null; photo = null; image = null; annotations = [];
+    arrowStart = null; tool = 'circle';
+  });
   notice('Signed out locally. Pending work is retained for the original account; revoke the device token on the server if the device is lost.');
   showIdentity();
   signingOut = false;
@@ -192,8 +196,10 @@ element('logout').addEventListener('click', async () => {
 
 element('execution').addEventListener('submit', async event => {
   event.preventDefault();
-  if (!identity) return;
-  const cache = await store.cache(identity.actor, identity.project);
+  const currentIdentity = identity;
+  if (!currentIdentity || signingOut) return;
+  const cache = await store.cache(currentIdentity.actor, currentIdentity.project);
+  if (identity !== currentIdentity || signingOut) return;
   if (!cache?.version_id || !cache?.canonical_hash || !element('activity').value) {
     notice('Synchronise a schedule and select an activity first.'); return;
   }
@@ -207,22 +213,29 @@ element('execution').addEventListener('submit', async event => {
     actual_start: actualStart || null, actual_finish: actualFinish || null,
     remaining_seconds: remaining};
   try {
-    await store.enqueueExecution(identity.actor, identity.project, payload);
+    await store.enqueueExecution(currentIdentity.actor, currentIdentity.project, payload);
+    if (identity !== currentIdentity || signingOut) return;
     element('execution').reset(); notice('Execution queued locally. Server validation is pending.');
     await render(); void syncNow();
-  } catch (error) { notice(`Could not save the report: ${error.message}`); }
+  } catch (error) {
+    if (identity === currentIdentity && !signingOut) notice(`Could not save the report: ${error.message}`);
+  }
 });
 
 element('message').addEventListener('submit', async event => {
   event.preventDefault();
-  if (!identity || !element('activity').value) return;
+  const currentIdentity = identity;
+  if (!currentIdentity || signingOut || !element('activity').value) return;
   const payload = {id: crypto.randomUUID(), activity_uid: element('activity').value,
     text: element('message-text').value};
   try {
-    await store.enqueueMessage(identity.actor, identity.project, payload);
+    await store.enqueueMessage(currentIdentity.actor, currentIdentity.project, payload);
+    if (identity !== currentIdentity || signingOut) return;
     element('message').reset(); notice('Note queued locally; it does not change the schedule.');
     await render(); void syncNow();
-  } catch (error) { notice(`Could not save the note: ${error.message}`); }
+  } catch (error) {
+    if (identity === currentIdentity && !signingOut) notice(`Could not save the note: ${error.message}`);
+  }
 });
 
 const canvas = element('photo-canvas');
@@ -276,32 +289,92 @@ async function resumePhoto(id) {
   });
 }
 
-async function capture(bytes, mime) {
-  if (!identity || !element('message-choice').value) { notice('Queue a note before adding a photo.'); return; }
+async function capture(bytes, mime, currentIdentity, messageId) {
+  if (!currentIdentity || !messageId || identity !== currentIdentity || signingOut) return;
   try {
     const id = crypto.randomUUID();
-    const messageId = element('message-choice').value;
-    const note = (await store.items(identity.actor, identity.project)).find(row => row.id === messageId);
-    await store.saveMedia(identity.actor, identity.project, {id, message_id: messageId,
+    const note = (await store.items(currentIdentity.actor, currentIdentity.project)).find(row => row.id === messageId && row.kind === 'message');
+    if (!note || identity !== currentIdentity || signingOut) throw new Error('LOCAL_CAPTURE_NOTE_UNKNOWN');
+    await store.saveMedia(currentIdentity.actor, currentIdentity.project, {id, message_id: messageId,
       activity_uid: note.payload.activity_uid, mime, original: bytes, annotations: []});
     // Native capture has returned; the immutable original is already durable
     // before editing, previewing or claiming the image was saved.
-    if (await resumePhoto(id)) notice('Original photo saved locally. Finish annotation to queue transfer.');
-    await render();
-  } catch (error) { notice(`Photo not saved: ${error.message}`); }
+    if (identity === currentIdentity && !signingOut) {
+      if (await resumePhoto(id)) notice('Original photo saved locally. Finish annotation to queue transfer.');
+      await render();
+    }
+  } catch (error) {
+    if (identity === currentIdentity && !signingOut) notice(`Photo not saved: ${error.message}`);
+  }
 }
 
 element('camera').addEventListener('click', async () => {
+  const currentIdentity = identity;
+  if (!currentIdentity || !element('message-choice').value || signingOut) {
+    notice('Queue a note before adding a photo.'); return;
+  }
+  let context;
   try {
+    context = await store.beginCameraCapture(currentIdentity.actor, currentIdentity.project,
+      element('message-choice').value, crypto.randomUUID());
+    if (identity !== currentIdentity || signingOut) {
+      await store.cancelCameraCapture(context); return;
+    }
     const result = await Camera.getPhoto({source: CameraSource.Camera,
       resultType: CameraResultType.Base64, quality: 75});
-    const original = Uint8Array.from(atob(result.base64String), letter => letter.charCodeAt(0));
-    await capture(original, result.format === 'png' ? 'image/png' : 'image/jpeg');
-  } catch (error) { notice(`Capture unavailable: ${error.message}`); }
+    const id = await persistCameraResult(store, context, result);
+    if (identity === currentIdentity && !signingOut) {
+      if (await resumePhoto(id)) notice('Original photo saved locally. Finish annotation to queue transfer.');
+      await render();
+    }
+  } catch (error) {
+    if (context) await store.cancelCameraCapture(context).catch(() => {});
+    if (identity === currentIdentity && !signingOut) notice(`Capture unavailable: ${error.message}`);
+  }
+});
+element('cancel-camera').addEventListener('click', async () => {
+  const currentIdentity = identity;
+  if (!currentIdentity || signingOut) return;
+  try {
+    const pending = await store.pendingCameraCapture();
+    if (identity !== currentIdentity || signingOut) return;
+    if (!pending) { notice('No interrupted camera attempt.'); return; }
+    if (pending.actor !== currentIdentity.actor || pending.project !== currentIdentity.project) {
+      notice('The interrupted capture belongs to another account. Sign in as that account to resolve it.');
+      return;
+    }
+    await store.cancelCameraCapture(pending);
+    if (identity === currentIdentity && !signingOut)
+      notice('Camera attempt discarded. Any already saved original remains in local photos.');
+  } catch (error) {
+    if (identity === currentIdentity && !signingOut)
+      notice(`Camera attempt still pending: ${error.message}`);
+  }
+});
+element('trial-evidence').addEventListener('click', async () => {
+  const currentIdentity = identity;
+  if (!currentIdentity || signingOut) return;
+  try {
+    const evidence = await localTrialEvidence(store, currentIdentity);
+    if (identity === currentIdentity && !signingOut)
+      element('trial-evidence-output').value = JSON.stringify(evidence, null, 2);
+  } catch (error) {
+    if (identity === currentIdentity && !signingOut)
+      notice(`Local trial evidence unavailable: ${error.message}`);
+  }
 });
 element('photo-file').addEventListener('change', async event => {
+  const currentIdentity = identity;
+  const messageId = element('message-choice').value;
   const file = event.target.files?.[0];
-  if (file) await capture(new Uint8Array(await file.arrayBuffer()), file.type);
+  try {
+    if (file) {
+      const bytes = await readSelectedPhoto(file, currentIdentity, () => identity);
+      if (bytes) await capture(bytes, file.type, currentIdentity, messageId);
+    }
+  } catch (error) {
+    if (identity === currentIdentity && !signingOut) notice(`Photo unavailable: ${error.message}`);
+  }
   event.target.value = '';
 });
 for (const name of ['arrow', 'circle', 'text-tool']) element(name).addEventListener('click', () => {
@@ -321,13 +394,17 @@ canvas.addEventListener('pointerup', event => {
   draw();
 });
 element('save-photo').addEventListener('click', async () => {
-  if (!identity || !photo) return;
+  const currentIdentity = identity;
+  if (!currentIdentity || !photo || signingOut) return;
   try {
-    await store.finalizeMedia(identity.actor, identity.project, photo.id, annotations);
+    await store.finalizeMedia(currentIdentity.actor, currentIdentity.project, photo.id, annotations);
+    if (identity !== currentIdentity || signingOut) return;
     photo = null; image = null; annotations = []; element('annotation').hidden = true;
     notice('Photo and annotation queued locally. Transfer can recover after reconnect.');
     await render(); void syncNow();
-  } catch (error) { notice(`Annotation not queued: ${error.message}`); }
+  } catch (error) {
+    if (identity === currentIdentity && !signingOut) notice(`Annotation not queued: ${error.message}`);
+  }
 });
 
 Network.addListener('networkStatusChange', status => { if (status.connected) void syncNow(); else void render(); });
@@ -336,15 +413,32 @@ App.addListener('appStateChange', event => {
   if (!active) streamAbort?.abort();
   else { void syncNow(); startLive(); }
 });
-App.addListener('appUrlOpen', async event => {
-  // The URI is a hint only. Authentication, catch-up and activity selection
-  // use current permitted server state, never content carried in the link.
-  const match = /^sto-field:\/\/project\/([0-9a-f-]+)\/activity\/([0-9a-f-]+)$/i.exec(event.url);
-  if (!match || !identity || match[1] !== identity.project) return;
-  await syncNow();
-  if ([...element('activity').options].some(option => option.value === match[2]))
-    element('activity').value = match[2];
+App.addListener('appRestoredResult', event => {
+  if (!store) return;
+  void recoverRestoredCamera(store, event).then(async saved => {
+    if (saved && identity?.actor === saved.context.actor && identity?.project === saved.context.project && !signingOut) {
+      if (await resumePhoto(saved.mediaId)) notice('Recovered original photo. Finish annotation to queue transfer.');
+      await render();
+    }
+  }).catch(error => {
+    if (identity && !signingOut) notice(`Camera recovery needs attention: ${error.message}`);
+  });
+});
+async function applyDeepLink() {
+  if (!identity) return;
+  const current = identity;
+  const outcome = await syncNow();
+  if (identity !== current || outcome?.status !== 'confirmed') return;
+  const target = deepLinks.afterConfirmedSync(current, [...element('activity').options]);
+  if (target) element('activity').value = target;
+}
+App.addListener('appUrlOpen', event => {
+  // The URI is only a hint, held until fresh authority and catch-up succeed.
+  deepLinks.offer(event.url);
+  void applyDeepLink();
 });
 setInterval(() => { if (active) void syncNow(); }, 5000);
 await render();
-if (identity) { void syncNow(); startLive(); }
+try { deepLinks.offer((await App.getLaunchUrl())?.url); }
+catch { /* optional OS launch URL support */ }
+if (identity) { void applyDeepLink(); startLive(); }

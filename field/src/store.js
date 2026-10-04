@@ -28,6 +28,11 @@ const V3 = `CREATE TABLE IF NOT EXISTS committed_trial_events (
   kind TEXT NOT NULL, source_id TEXT NOT NULL, payload TEXT NOT NULL,
   PRIMARY KEY(actor, project, server_sequence));`;
 
+const V4 = `CREATE TABLE IF NOT EXISTS pending_camera_capture (
+  singleton INTEGER PRIMARY KEY CHECK(singleton=1), actor TEXT NOT NULL,
+  project TEXT NOT NULL, media_id TEXT NOT NULL, message_id TEXT NOT NULL,
+  activity_uid TEXT NOT NULL);`;
+
 const decode = value => value === null ? null : JSON.parse(value);
 const encode = value => JSON.stringify(value);
 const bytesToBase64 = bytes => {
@@ -50,7 +55,7 @@ export class FieldStore {
       await tx.exec('CREATE TABLE IF NOT EXISTS local_meta (version INTEGER NOT NULL)');
       const rows = await tx.all('SELECT version FROM local_meta');
       let version = rows[0]?.version ?? 0;
-      if (version > 3) throw new Error('LOCAL_SCHEMA_NEWER_THAN_APP');
+      if (version > 4) throw new Error('LOCAL_SCHEMA_NEWER_THAN_APP');
       if (version < 1) {
         await tx.exec(V1);
         await tx.run('INSERT INTO local_meta(version) VALUES (1)');
@@ -64,6 +69,11 @@ export class FieldStore {
       if (version < 3) {
         await tx.exec(V3);
         await tx.run('UPDATE local_meta SET version=3');
+        version = 3;
+      }
+      if (version < 4) {
+        await tx.exec(V4);
+        await tx.run('UPDATE local_meta SET version=4');
       }
     });
     return store;
@@ -120,6 +130,43 @@ export class FieldStore {
     // The outbox stays encrypted and attributed. The protected UI clears at
     // once; the same actor must present a fresh credential to recover it.
     await this.db.run('DELETE FROM active_identity WHERE singleton=1');
+  }
+
+  async beginCameraCapture(actor, project, messageId, mediaId) {
+    return this.db.transaction(async tx => {
+      const existing = await tx.all('SELECT * FROM pending_camera_capture');
+      if (existing.length) throw new Error('LOCAL_CAPTURE_PENDING');
+      const note = (await tx.all("SELECT kind,payload FROM outbox WHERE actor=? AND project=? AND id=?",
+        [actor, project, messageId]))[0];
+      if (!note || note.kind !== 'message') throw new Error('LOCAL_CAPTURE_NOTE_UNKNOWN');
+      const activityUid = decode(note.payload).activity_uid;
+      await tx.run('INSERT INTO pending_camera_capture VALUES(1,?,?,?,?,?)',
+        [actor, project, mediaId, messageId, activityUid]);
+      return {actor, project, media_id: mediaId, message_id: messageId, activity_uid: activityUid};
+    });
+  }
+
+  async pendingCameraCapture() {
+    return (await this.db.all('SELECT * FROM pending_camera_capture WHERE singleton=1'))[0] ?? null;
+  }
+
+  async completeCameraCapture(context, original, mime) {
+    const pending = await this.pendingCameraCapture();
+    if (!pending || pending.media_id !== context.media_id || pending.actor !== context.actor ||
+        pending.project !== context.project || pending.message_id !== context.message_id ||
+        pending.activity_uid !== context.activity_uid) throw new Error('LOCAL_CAPTURE_IDENTITY_CONFLICT');
+    await this.saveMedia(context.actor, context.project, {id: context.media_id,
+      message_id: context.message_id, activity_uid: context.activity_uid,
+      mime, original, annotations: []});
+    // If the process dies after saveMedia, the same media ID and bytes can be
+    // reconciled without a second accepted attachment.
+    await this.db.run('DELETE FROM pending_camera_capture WHERE singleton=1 AND media_id=?',
+      [context.media_id]);
+  }
+
+  async cancelCameraCapture(context) {
+    await this.db.run('DELETE FROM pending_camera_capture WHERE singleton=1 AND media_id=?',
+      [context.media_id]);
   }
 
   async transition(actor, project, id, state, {receipt = null, errorCode = null,
@@ -205,10 +252,11 @@ export class FieldStore {
     const sha256 = await digest(original);
     const encoded = bytesToBase64(original);
     await this.db.transaction(async tx => {
-      const rows = await tx.all('SELECT sha256,message_id,annotations FROM trial_media WHERE actor=? AND project=? AND id=?',
+      const rows = await tx.all('SELECT sha256,message_id,activity_uid,mime,annotations FROM trial_media WHERE actor=? AND project=? AND id=?',
         [actor, project, id]);
       if (rows.length) {
         if (rows[0].sha256 !== sha256 || rows[0].message_id !== message_id ||
+            rows[0].activity_uid !== activity_uid || rows[0].mime !== mime ||
             rows[0].annotations !== encode(annotations)) throw new Error('LOCAL_MEDIA_IDENTITY_CONFLICT');
         return;
       }

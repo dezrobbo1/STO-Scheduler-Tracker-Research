@@ -20,7 +20,9 @@ spec.loader.exec_module(verifier)
 
 PROJECT = "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
 VERSION = "dddddddd-dddd-4ddd-8ddd-dddddddddddd"
-ACTIVITIES = [f"{n:08x}-eeee-4eee-8eee-eeeeeeeeeeee" for n in range(1, 4)]
+ACTIVITIES = [uid for uid, _ in verifier.TRIAL_ACTIVITIES]
+ACTOR_A = "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa"
+ACTOR_B = "bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb"
 EXECUTIONS = [f"{n:08x}-aaaa-4aaa-8aaa-aaaaaaaaaaaa" for n in range(1, 4)]
 MESSAGES = [f"{n:08x}-bbbb-4bbb-8bbb-bbbbbbbbbbbb" for n in range(1, 3)]
 MEDIA = "ffffffff-ffff-4fff-8fff-ffffffffffff"
@@ -29,6 +31,9 @@ HEAD_HASH = "b" * 64
 ORIGINAL = b"synthetic photo"
 ORIGINAL_HASH = hashlib.sha256(ORIGINAL).hexdigest()
 SHA = "d" * 40
+ANNOTATIONS = [{"kind": "arrow", "x": .1, "y": .2, "toX": .3, "toY": .4},
+               {"kind": "circle", "x": .5, "y": .6, "radius": .08},
+               {"kind": "text", "x": .7, "y": .8, "text": "Check"}]
 STARTS = ["2026-01-05T09:00:00", "2026-01-05T13:00:00", "2026-01-06T08:00:00"]
 TEXTS = ["A: isolation observed", "B: restore observed"]
 
@@ -45,8 +50,12 @@ def fixture():
         "baseline_server": {"live": {"version_id": VERSION, "canonical_hash": BASE_HASH,
                                       "kind": "baseline"},
                             "changes": {"events": [], "next_cursor": 0, "has_more": False}},
-        "device_a": copy.deepcopy(devices), "device_b": copy.deepcopy(devices),
+        "device_a": {**copy.deepcopy(devices), "actor_user_id": ACTOR_A,
+                     "authority_evidence": {"user_id": ACTOR_A}},
+        "device_b": {**copy.deepcopy(devices), "actor_user_id": ACTOR_B,
+                     "authority_evidence": {"user_id": ACTOR_B}},
         "execution": [{"operation_id": op, "activity_uid": activity,
+                       "actor_user_id": ACTOR_A if index < 2 else ACTOR_B,
                        "payload": {"operation_id": op, "activity_uid": activity,
                            "expected_version_id": VERSION, "expected_hash": BASE_HASH,
                            "actual_start": STARTS[index], "actual_finish": None,
@@ -54,28 +63,31 @@ def fixture():
                        **({} if index == 0 else {"local_final_state": "needs_attention",
                            "error_code": "LIVE_STALE_HEAD"})}
                       for index, (op, activity) in enumerate(zip(EXECUTIONS, ACTIVITIES))],
-        "communication": [{"id": message, "activity_uid": activity, "text": text}
-                          for message, activity, text in
-                          zip(MESSAGES, [ACTIVITIES[0], ACTIVITIES[2]], TEXTS)],
+        "communication": [{"id": MESSAGES[index], "activity_uid": ACTIVITIES[0 if index == 0 else 2],
+                           "text": TEXTS[index], "actor_user_id": ACTOR_A if index == 0 else ACTOR_B}
+                          for index in range(2)],
         "media": {"id": MEDIA, "message_id": MESSAGES[0],
-                  "activity_uid": ACTIVITIES[0], "original_sha256": ORIGINAL_HASH},
+                  "activity_uid": ACTIVITIES[0], "original_sha256": ORIGINAL_HASH,
+                  "actor_user_id": ACTOR_A},
         "final_hash": HEAD_HASH}
     events = [
         {"operation_id": EXECUTIONS[0], "server_sequence": 1,
-         "canonical_hash": HEAD_HASH},
+         "canonical_hash": HEAD_HASH, "actor_user_id": ACTOR_A},
         {"kind": "trial_message", "id": MESSAGES[0], "activity_uid": ACTIVITIES[0],
-         "text": TEXTS[0], "server_sequence": 2},
+         "text": TEXTS[0], "actor_user_id": ACTOR_A, "server_sequence": 2},
         {"kind": "trial_media_link", "id": "11111111-1111-4111-8111-111111111111",
          "media_id": MEDIA, "message_id": MESSAGES[0], "server_sequence": 3},
         {"kind": "trial_message", "id": MESSAGES[1], "activity_uid": ACTIVITIES[2],
-         "text": TEXTS[1], "server_sequence": 4},
+         "text": TEXTS[1], "actor_user_id": ACTOR_B, "server_sequence": 4},
     ]
     receipt = {"operation_id": EXECUTIONS[0], "base_version_id": VERSION,
+               "actor_user_id": ACTOR_A,
                "canonical_hash": HEAD_HASH, "server_sequence": 1,
                "execution": {"activity_uid": ACTIVITIES[0], "actual_start": STARTS[0],
                              "actual_finish": None, "remaining_seconds": 3600}}
     media_receipt = {"id": MEDIA, "message_id": MESSAGES[0],
                      "activity_uid": ACTIVITIES[0], "sha256": ORIGINAL_HASH,
+                     "actor_user_id": ACTOR_A, "annotations": copy.deepcopy(ANNOTATIONS),
                      "status": "linked", "server_sequence": 3}
     return manifest, events, receipt, media_receipt
 
@@ -98,9 +110,16 @@ class Response:
 
 class VerifierTests(unittest.TestCase):
     def check(self, manifest, events, receipt, media_receipt, original=ORIGINAL,
-              deployed_sha=SHA):
+              deployed_sha=SHA, device_tokens=("A-token", "B-token"),
+              note_actors=(ACTOR_A, ACTOR_B), calculation_rows=None):
         def urlopen(request, timeout):
             path = request.full_url
+            if path.endswith("/api/auth/session"):
+                actor = {"Bearer A-token": ACTOR_A, "Bearer B-token": ACTOR_B}.get(
+                    request.get_header("Authorization"))
+                return Response({"actor": {"user_id": actor}})
+            if path.endswith(f"/projects/{PROJECT}"):
+                return Response({"id": PROJECT})
             if path.endswith("/trial-build"):
                 return Response({"server_sha": deployed_sha})
             if "/changes?" in path:
@@ -111,6 +130,17 @@ class VerifierTests(unittest.TestCase):
             if path.endswith("/versions"):
                 return Response([{"version_id": VERSION, "canonical_hash": BASE_HASH,
                                   "kind": "baseline"}])
+            if "/calculations/latest?" in path:
+                return Response({"version_id": VERSION, "canonical_hash": BASE_HASH,
+                                 "activities": calculation_rows if calculation_rows is not None else
+                                 [{"activity_uid": uid, "name": name}
+                                  for uid, name in verifier.TRIAL_ACTIVITIES]})
+            if "/trial-messages/" in path:
+                for index, message in enumerate(MESSAGES):
+                    if path.endswith(message):
+                        return Response({"id": message, "actor_user_id": note_actors[index],
+                                         "activity_uid": ACTIVITIES[0 if index == 0 else 2],
+                                         "text": TEXTS[index], "server_sequence": 2 if index == 0 else 4})
             if path.endswith("/live"):
                 return Response({"version_id": "eeeeeeee-dddd-4ddd-8ddd-dddddddddddd",
                                  "canonical_hash": HEAD_HASH})
@@ -126,7 +156,8 @@ class VerifierTests(unittest.TestCase):
             raise AssertionError(f"unexpected verifier request: {path}")
 
         with patch.object(verifier.urllib.request, "urlopen", side_effect=urlopen):
-            return verifier.verify(manifest, "synthetic-token", expected_sha=SHA)
+            return verifier.verify(manifest, "synthetic-token", expected_sha=SHA,
+                                   device_tokens=device_tokens)
 
     def test_exact_trial_history_and_provenance_pass(self):
         manifest, events, receipt, media = fixture()
@@ -243,6 +274,79 @@ class VerifierTests(unittest.TestCase):
         for entry in manifest["execution"]:
             entry["payload"]["actual_start"] = entry["payload"]["actual_start"][:-3]
         self.assertTrue(self.check(manifest, events, receipt, media)["passed"])
+
+    def test_distinct_actor_and_durable_actor_provenance(self):
+        changes = [
+            lambda m, e, r, media: m["device_b"].update(actor_user_id=ACTOR_A,
+                                                          authority_evidence={"user_id": ACTOR_A}),
+            lambda m, e, r, media: m["device_a"].update(authority_evidence={"user_id": ACTOR_B}),
+            lambda m, e, r, media: m["execution"][2].update(actor_user_id=ACTOR_A),
+            lambda m, e, r, media: r.update(actor_user_id=ACTOR_B),
+            lambda m, e, r, media: e[0].update(actor_user_id=ACTOR_B),
+            lambda m, e, r, media: e[1].update(actor_user_id=ACTOR_B),
+            lambda m, e, r, media: e[3].update(actor_user_id=ACTOR_A),
+            lambda m, e, r, media: media.update(actor_user_id=ACTOR_B),
+        ]
+        for change in changes:
+            manifest, events, receipt, media = fixture()
+            change(manifest, events, receipt, media)
+            with self.subTest(change=change):
+                with self.assertRaises(ValueError):
+                    self.check(manifest, events, receipt, media)
+        manifest, events, receipt, media = fixture()
+        with self.assertRaisesRegex(ValueError, "authenticated token"):
+            self.check(manifest, events, receipt, media, device_tokens=("B-token", "A-token"))
+        for actors in ((ACTOR_B, ACTOR_B), (ACTOR_A, ACTOR_A)):
+            with self.assertRaisesRegex(ValueError, "durable receipt"):
+                self.check(manifest, events, receipt, media, note_actors=actors)
+        manifest["device_a"]["actor_user_id"] = "not-a-uuid"
+        with self.assertRaises(ValueError):
+            self.check(manifest, events, receipt, media)
+
+    def test_all_three_prescribed_annotations_are_required_and_well_formed(self):
+        variants = [[], ANNOTATIONS[:1], ANNOTATIONS[1:2], ANNOTATIONS[2:],
+                    ANNOTATIONS[1:], [ANNOTATIONS[0], ANNOTATIONS[2]], ANNOTATIONS[:2],
+                    [{**ANNOTATIONS[0], "x": float('nan')}, *ANNOTATIONS[1:]],
+                    [{**ANNOTATIONS[0], "toX": -1}, *ANNOTATIONS[1:]],
+                    [{**ANNOTATIONS[0], "toX": .1, "toY": .2}, *ANNOTATIONS[1:]],
+                    [ANNOTATIONS[0], {**ANNOTATIONS[1], "radius": 0}, ANNOTATIONS[2]],
+                    [*ANNOTATIONS[:2], {**ANNOTATIONS[2], "text": " "}]]
+        for value in variants:
+            manifest, events, receipt, media = fixture()
+            media["annotations"] = value
+            with self.subTest(value=value):
+                with self.assertRaises(ValueError):
+                    self.check(manifest, events, receipt, media)
+
+    def test_task_identity_cannot_be_consistently_relabelled(self):
+        manifest, events, receipt, media = fixture()
+        replacement = "12345678-1111-4111-8111-123456789abc"
+        manifest["execution"][0]["activity_uid"] = replacement
+        manifest["execution"][0]["payload"]["activity_uid"] = replacement
+        manifest["communication"][0]["activity_uid"] = replacement
+        manifest["media"]["activity_uid"] = replacement
+        events[1]["activity_uid"] = replacement
+        receipt["execution"]["activity_uid"] = replacement
+        media["activity_uid"] = replacement
+        with self.assertRaisesRegex(ValueError, "fixture tasks"):
+            self.check(manifest, events, receipt, media)
+        manifest, events, receipt, media = fixture()
+        rows = [{"activity_uid": uid, "name": name} for uid, name in verifier.TRIAL_ACTIVITIES]
+        rows[0]["name"] = "Different project task"
+        with self.assertRaisesRegex(ValueError, "fixture activities"):
+            self.check(manifest, events, receipt, media, calculation_rows=rows)
+
+    def test_device_final_convergence_and_physical_artifact_fields_fail_closed(self):
+        for change in (lambda m: m["device_a"].update(final_cursor=3),
+                       lambda m: m["device_b"].update(final_hash="e" * 64),
+                       lambda m: m.update(final_hash="e" * 64),
+                       lambda m: m["device_a"].update(termination_evidence=""),
+                       lambda m: m["device_b"].update(offline_evidence="")):
+            manifest, events, receipt, media = fixture()
+            change(manifest)
+            with self.subTest(change=change):
+                with self.assertRaises(ValueError):
+                    self.check(manifest, events, receipt, media)
 
 
 if __name__ == "__main__":
