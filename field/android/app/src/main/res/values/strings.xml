@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">STO Field Trial</string>
+    <string name="title_activity_main">STO Field Trial</string>
+    <string name="package_name">au.com.sto.fieldtrial</string>
+    <string name="custom_url_scheme">au.com.sto.fieldtrial</string>
+</resources>

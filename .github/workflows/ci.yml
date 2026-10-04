@@ -6,6 +6,30 @@ on:
   pull_request:
 
 jobs:
+  field:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: field
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: field/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - run: npx cap sync android
+      - run: npx cap sync ios
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - run: ./android/gradlew -p android assembleDebug
+      - run: ./android/gradlew -p android assembleAndroidTest
+
   api:
     # The persistence gate: needs PostgreSQL and the api extra. The bare job
     # below proves the suite still runs with nothing installed.

@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#123443">
+<title>STO field trial</title>
+<link rel="stylesheet" href="/src/field.css">
+<main>
+  <header><h1>STO field</h1><span id="connection" role="status">Opening local store…</span></header>
+  <section id="signin" hidden>
+    <h2>Connect this device</h2>
+    <p>Enter a project-scoped trial device token issued by a project admin. The token is stored in the encrypted device database.</p>
+    <form id="connect-form">
+      <label>Server HTTPS URL<input id="server" type="url" placeholder="https://sto.example" required></label>
+      <label>Project ID<input id="project" required autocomplete="off"></label>
+      <label>Device token<input id="token" type="password" required autocomplete="off"></label>
+      <button>Connect</button>
+    </form>
+  </section>
+  <section id="field" hidden>
+    <div class="toolbar"><strong id="account"></strong><button id="logout">Sign out locally</button></div>
+    <p id="freshness" role="status"></p>
+    <label>Activity<select id="activity"></select></label>
+    <section class="card">
+      <h2>Report execution</h2>
+      <form id="execution">
+        <label>Actual start (if starting)<input id="actual-start" type="datetime-local"></label>
+        <label>Actual finish (if finishing)<input id="actual-finish" type="datetime-local"></label>
+        <label>Remaining hours<input id="remaining" type="number" min="0" step="0.01" required></label>
+        <button>Queue execution</button>
+      </form>
+    </section>
+    <section class="card">
+      <h2>Field note · trial</h2>
+      <form id="message"><label>Message<textarea id="message-text" required maxlength="2000"></textarea></label>
+        <button>Queue note</button></form>
+      <label>Attach a photo to a queued note<select id="message-choice"></select></label>
+      <button id="camera">Capture photo</button>
+      <label class="photo-select">Or select photo<input id="photo-file" type="file" accept="image/png,image/jpeg"></label>
+      <div id="annotation" hidden>
+        <canvas id="photo-canvas" aria-label="Photo annotation preview"></canvas>
+        <div class="toolbar"><button id="arrow">Arrow</button><button id="circle">Circle</button><button id="text-tool">Text</button></div>
+        <label>Short annotation text<input id="annotation-text" maxlength="80"></label>
+        <button id="save-photo">Save photo and queue transfer</button>
+      </div>
+    </section>
+    <section class="card"><h2>Outbox</h2><ul id="outbox"></ul><h3>Photo transfers</h3><ul id="media-list"></ul>
+      <h3>Server accepted notes</h3><ul id="committed-notes"></ul></section>
+  </section>
+  <p id="notice" role="alert"></p>
+</main>
+<script type="module" src="/src/main.js"></script>
+</html>
