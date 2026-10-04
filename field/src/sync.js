@@ -31,9 +31,9 @@ export class SyncEngine {
     try { active(signal); authority = await this.transport.authority({signal}); active(signal); }
     catch (error) {
       active(signal);
-      await this.#hold(actor, project, error?.status === 401 ? 'needs_auth' :
+      const needsAuth = await this.#hold(actor, project, error?.status === 401 ? 'needs_auth' :
         permanent.has(error?.status) ? 'needs_attention' : 'queued', refusal(error).code);
-      return {status: outcome(error)};
+      return {status: needsAuth ? 'needs_auth' : outcome(error)};
     }
     // A different authenticated account cannot inherit the originating queue.
     if (authority.user_id !== actor) return {status: 'needs_attention'};
@@ -42,8 +42,8 @@ export class SyncEngine {
       active(signal);
       const state = error?.status === 401 ? 'needs_auth' :
         permanent.has(error?.status) ? 'needs_attention' : 'queued';
-      await this.#hold(actor, project, state, refusal(error).code);
-      return {status: outcome(error)};
+      const needsAuth = await this.#hold(actor, project, state, refusal(error).code);
+      return {status: needsAuth ? 'needs_auth' : outcome(error)};
     }
 
     let pendingOutcome = 'confirmed';
@@ -106,11 +106,21 @@ export class SyncEngine {
   }
 
   async #hold(actor, project, state, code) {
+    let needsAuth = state === 'needs_auth';
     for (const item of await this.store.items(actor, project)) {
+      // An unavailable check is no evidence that expired credentials recovered.
+      if (state === 'queued' && item.state === 'needs_auth') {
+        needsAuth = true;
+        continue;
+      }
       if (['queued', 'sending', 'needs_auth'].includes(item.state))
         await this.store.transition(actor, project, item.id, state, {errorCode: code});
     }
     for (const row of await this.store.allMedia(actor, project)) {
+      if (state === 'queued' && row.state === 'needs_auth') {
+        needsAuth = true;
+        continue;
+      }
       if (['queued', 'link_pending', 'needs_auth'].includes(row.state)) {
         const media = await this.store.media(actor, project, row.id);
         await this.store.mediaTransition(actor, project, row.id,
@@ -118,6 +128,7 @@ export class SyncEngine {
           media.remote_receipt, code);
       }
     }
+    return needsAuth;
   }
 
   async #accepted(actor, project, item, receipt) {

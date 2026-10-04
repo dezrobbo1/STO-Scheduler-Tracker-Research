@@ -47,7 +47,12 @@ The trial requires one physical iOS device and one physical Android device.
    `2026-01-06T08:00:00`, remaining 1 hour for Restore equipment, and a note
    “B: restore observed” on that task. Record the three execution UUIDs,
    two message UUIDs, exact activity IDs, local creation order and visible
-   queued states from the UI. If a date is refused by the S7 fixture context
+   queued states from the UI. Retain each exact local execution `payload`
+   before drain (including baseline version/hash and all execution facts),
+   and each note's exact `text`; the verifier binds them to this prescribed
+   sequence. The execution array order is A isolation, A inspection, B restore;
+   the communication array order is A isolation note, B restore note.
+   If a date is refused by the S7 fixture context
    during the controlled trial, record the actual stable refusal and stop;
    do not silently change the original command.
 2. On A capture/select one synthetic photo, draw arrow, circle and short
@@ -74,7 +79,10 @@ The trial requires one physical iOS device and one physical Android device.
    the committed order and agree on final live hash. The server has exactly
    one accepted execution effect, two accepted notes and exactly one expected
    link event with the recorded media/message relationship. These are the
-   expected outcomes for this frozen-base trial; if
+   expected outcomes for this frozen-base trial. The exact committed order is
+   A isolation execution, A isolation note, its recovered media link, then B
+   restore note. Keep B offline until that link is confirmed; any other winner
+   or committed order fails this procedure's verifier. If
    P2-G4 interpretation demands three *accepted* execution effects, this
    trial alone does not close the gate and a separately sequenced device run
    must be designed without silently rebasing offline work.
@@ -105,8 +113,9 @@ redacted `manifest.json`. The manifest keys are `server` (HTTPS), `project_id`,
 `baseline_hash`, `baseline_version_id`, `baseline_cursor` (zero),
 `baseline_server` (captured `live` and empty `changes` JSON), `server_sha`,
 `app_sha`, `final_hash`, `device_a`, `device_b`, `execution` (three objects with
-`operation_id`, `activity_uid`, `local_final_state`, `error_code`), and
-`communication` (two objects with `id`, `activity_uid`), and `media` with
+`operation_id`, `activity_uid`, full original `payload`, `local_final_state`,
+`error_code`), and
+`communication` (two objects with `id`, `activity_uid`, exact `text`), and `media` with
 `id`, `message_id`, `activity_uid`, `original_sha256`. Device entries need
 `model`, `os`, `app_sha`, `offline_evidence`, `termination_evidence`,
 `reopen_evidence`, `reconnect_evidence`, `final_cursor`, `final_hash`. The stale two must have
@@ -123,7 +132,8 @@ authenticated server build response, the
 recorded baseline version/hash in immutable server history and the execution
 receipt's base, exactly one accepted execution, both specified notes, exactly
 one matching linked media receipt/event and server original-byte digest, no
-unrelated committed event, and
+unrelated committed event, the prescribed execution facts and note text, the
+specified accepted operation and committed order, and
 both devices' final cursor/hash. A false manifest can still misstate physical
 hardware or installed binary; inspect independent deployment/build and device
 evidence before any gate decision. The verifier fails closed on cursor gaps,

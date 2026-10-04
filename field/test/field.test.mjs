@@ -283,6 +283,57 @@ test('revoked membership holds queued work and cannot be bypassed by a later rol
   store.db.close();
 });
 
+test('known reauthentication survives offline authority/project checks and resumes only after confirmation', async () => {
+  const db = database();
+  let store = await FieldStore.open(db);
+  await store.enqueueExecution(A, P, payload);
+  await store.enqueueMessage(A, P, {id: V, activity_uid: ACT, text: 'await auth'});
+  const uploaded = {id: ACT, status: 'uploaded'};
+  for (const id of [ACT, B]) {
+    await store.saveMedia(A, P, {id, message_id: V, activity_uid: ACT,
+      mime: 'image/png', original: new Uint8Array([1, 2]), annotations: []});
+    await store.finalizeMedia(A, P, id, []);
+  }
+  await store.mediaTransition(A, P, ACT, 'link_pending', uploaded);
+  const transport = {
+    async authority() { throw Object.assign(new Error('expired'), {status: 401}); },
+    async project() { throw new TypeError('offline project'); },
+  };
+  assert.equal((await new SyncEngine(store, transport).run(A, P)).status, 'needs_auth');
+  store = await FieldStore.open(db);
+  transport.authority = async () => { throw new TypeError('offline authority'); };
+  for (const stage of ['authority', 'project']) {
+    if (stage === 'project') transport.authority = async () => ({user_id: A});
+    assert.equal((await new SyncEngine(store, transport).run(A, P)).status, 'needs_auth');
+    assert.deepEqual((await store.items(A, P)).map(row => [row.state, row.error_code]),
+      [['needs_auth', 'HTTP_401'], ['needs_auth', 'HTTP_401']]);
+    for (const id of [ACT, B]) {
+      const row = await store.media(A, P, id);
+      assert.equal(row.state, 'needs_auth');
+      assert.equal(row.error_code, 'HTTP_401');
+      assert.deepEqual(row.remote_receipt, id === ACT ? uploaded : null);
+    }
+  }
+  let sends = 0;
+  Object.assign(transport, {
+    async project() { return {id: P}; },
+    async receipt() { return null; }, async messageReceipt() { return null; },
+    async submitExecution(project, sent) { assert.deepEqual(sent, payload); sends++;
+      return {operation_id: ID, status: 'applied'}; },
+    async submitMessage() { sends++; return {id: V, status: 'accepted'}; },
+    async uploadMedia(project, media) { return {id: media.id, status: 'uploaded'}; },
+    async linkMedia(project, id) { return {id, status: 'linked'}; },
+    async changes(project, after) { return {events: [], next_cursor: after, has_more: false}; },
+    async live() { return {version_id: V, canonical_hash: 'a'.repeat(64)}; },
+  });
+  assert.equal((await new SyncEngine(store, transport).run(A, P)).status, 'confirmed');
+  assert.equal(sends, 2);
+  assert.deepEqual((await store.items(A, P)).map(row => row.state), ['applied', 'accepted']);
+  assert.equal((await store.media(A, P, ACT)).state, 'linked');
+  assert.equal((await store.media(A, P, B)).state, 'linked');
+  db.close();
+});
+
 test('photo transfer lost ack and message pending reconcile without duplicate link', async () => {
   const store = await FieldStore.open(database());
   await store.enqueueMessage(A, P, {id: ID, activity_uid: ACT, text: 'Photograph'});

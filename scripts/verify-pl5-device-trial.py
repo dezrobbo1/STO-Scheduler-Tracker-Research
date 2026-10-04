@@ -17,7 +17,22 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
+from datetime import datetime
 from pathlib import Path
+
+
+TRIAL_STARTS = ("2026-01-05T09:00:00", "2026-01-05T13:00:00", "2026-01-06T08:00:00")
+TRIAL_TEXTS = ("A: isolation observed", "B: restore observed")
+
+
+def normalised_start(payload: dict) -> dict:
+    # datetime-local may omit seconds; compare the parsed semantic value.
+    value = dict(payload)
+    try:
+        value["actual_start"] = datetime.fromisoformat(value["actual_start"]).isoformat()
+    except (KeyError, TypeError, ValueError) as error:
+        raise ValueError("trial actual start missing or invalid") from error
+    return value
 
 
 def verify(manifest: dict, token: str, *, expected_sha: str) -> dict:
@@ -56,6 +71,21 @@ def verify(manifest: dict, token: str, *, expected_sha: str) -> dict:
     activities = {str(uuid.UUID(row["activity_uid"])) for row in manifest["execution"]}
     if len(activities) != 3:
         raise ValueError("execution intentions must target three distinct activities")
+    expected_facts = []
+    for row, start in zip(manifest["execution"], TRIAL_STARTS):
+        facts = {"activity_uid": row["activity_uid"], "actual_start": start,
+                 "actual_finish": None, "remaining_seconds": 3600}
+        expected_payload = {"operation_id": row["operation_id"],
+                            "expected_version_id": manifest["baseline_version_id"],
+                            "expected_hash": manifest["baseline_hash"], **facts}
+        if normalised_start(row.get("payload", {})) != expected_payload:
+            raise ValueError("local execution differs from prescribed trial command")
+        expected_facts.append(facts)
+    for row, activity, text in zip(manifest["communication"],
+                                  (manifest["execution"][0]["activity_uid"],
+                                   manifest["execution"][2]["activity_uid"]), TRIAL_TEXTS):
+        if row.get("activity_uid") != activity or row.get("text") != text:
+            raise ValueError("local message differs from prescribed trial note")
 
     def get(path: str) -> tuple[int, object]:
         request = urllib.request.Request(path, headers={"Authorization": f"Bearer {token}"})
@@ -98,7 +128,7 @@ def verify(manifest: dict, token: str, *, expected_sha: str) -> dict:
     if len(expected) != 3 or len(messages) != 2:
         raise ValueError("duplicate client identities")
     media = manifest["media"]
-    if (media.get("message_id") not in messages or
+    if (media.get("message_id") != manifest["communication"][0]["id"] or
             media.get("activity_uid") != messages[media["message_id"]] or
             not re.fullmatch(r"[0-9a-f]{64}", media.get("original_sha256", ""))):
         raise ValueError("expected media identity/association invalid")
@@ -120,17 +150,26 @@ def verify(manifest: dict, token: str, *, expected_sha: str) -> dict:
     if (len(events) != 4 or len(accepted) != 1 or len(delivered_messages) != 2 or
             len(links) != 1 or len(set(identities)) != 4):
         raise ValueError("unexpected or duplicate committed trial history")
+    ordered_sources = [(event.get("kind") or "execution",
+                        event.get("operation_id") or event.get("media_id") or event.get("id"))
+                       for event in events]
+    if ordered_sources != [("execution", manifest["execution"][0]["operation_id"]),
+                           ("trial_message", manifest["communication"][0]["id"]),
+                           ("trial_media_link", media["id"]),
+                           ("trial_message", manifest["communication"][1]["id"])]:
+        raise ValueError("committed history differs from prescribed trial sequence")
     if (accepted[0].get("kind") not in (None, "execution") or
-            any(row.get("activity_uid") != messages[row["id"]]
-                for row in delivered_messages)):
+            any(row.get("activity_uid") != messages[row["id"]] or
+                row.get("text") != manifest["communication"][index]["text"]
+                for index, row in enumerate(delivered_messages))):
         raise ValueError("committed trial domain/association changed")
     for row in manifest["execution"]:
         status, receipt = get(f"{base}/execution-operations/{row['operation_id']}")
         if row["operation_id"] in {x["operation_id"] for x in accepted}:
             if status != 200 or receipt["operation_id"] != row["operation_id"]:
                 raise ValueError("accepted execution receipt missing")
-            if receipt["execution"]["activity_uid"] != row["activity_uid"]:
-                raise ValueError("execution activity changed")
+            if normalised_start(receipt.get("execution", {})) != expected_facts[0]:
+                raise ValueError("accepted execution differs from prescribed trial facts")
             if (receipt.get("base_version_id") != manifest["baseline_version_id"] or
                     receipt.get("server_sequence") != accepted[0]["server_sequence"] or
                     receipt.get("canonical_hash") != accepted[0]["canonical_hash"]):

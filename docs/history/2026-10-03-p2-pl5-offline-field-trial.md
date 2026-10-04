@@ -81,6 +81,20 @@ base, accounts for the exact committed trial events, and requires the specified
 media link/receipt and original digest. These automated corrections do not
 constitute genuine-device evidence.
 
+The follow-up reviewed head `1302cb2ea44c034ba2409b84d04c93debfbb85f0`
+revealed two remaining trial defects. An unavailable authority/project check
+now preserves a prior `needs_auth` state and its refusal code for execution,
+notes and pending media, including the upload receipt, across local-store
+reopen. The sync outcome continues to request reauthentication; only confirmed
+same-actor authority/project access permits the original queue to resume.
+The verifier now compares captured execution payloads and accepted receipt
+facts with the prescribed starts, absent Actual Finish, remaining duration and frozen
+baseline preconditions, and compares exact note text. It requires A's isolation
+execution to win and the documented execution/note/link/note committed order.
+Negative regressions reproduce the previous false positives. The named field
+and verifier tests passed after correction; hosted validation for the final
+correction head is recorded in the PR body. No physical-device trial ran.
+
 The provisional trial accepts planner/admin capability, because the current
 repository has no separately evidenced field-execution/communication role.
 PL15 owns the permanent communication domain, full media access/product,

@@ -29,6 +29,8 @@ HEAD_HASH = "b" * 64
 ORIGINAL = b"synthetic photo"
 ORIGINAL_HASH = hashlib.sha256(ORIGINAL).hexdigest()
 SHA = "d" * 40
+STARTS = ["2026-01-05T09:00:00", "2026-01-05T13:00:00", "2026-01-06T08:00:00"]
+TEXTS = ["A: isolation observed", "B: restore observed"]
 
 
 def fixture():
@@ -45,11 +47,16 @@ def fixture():
                             "changes": {"events": [], "next_cursor": 0, "has_more": False}},
         "device_a": copy.deepcopy(devices), "device_b": copy.deepcopy(devices),
         "execution": [{"operation_id": op, "activity_uid": activity,
+                       "payload": {"operation_id": op, "activity_uid": activity,
+                           "expected_version_id": VERSION, "expected_hash": BASE_HASH,
+                           "actual_start": STARTS[index], "actual_finish": None,
+                           "remaining_seconds": 3600},
                        **({} if index == 0 else {"local_final_state": "needs_attention",
                            "error_code": "LIVE_STALE_HEAD"})}
                       for index, (op, activity) in enumerate(zip(EXECUTIONS, ACTIVITIES))],
-        "communication": [{"id": message, "activity_uid": activity}
-                          for message, activity in zip(MESSAGES, [ACTIVITIES[0], ACTIVITIES[2]])],
+        "communication": [{"id": message, "activity_uid": activity, "text": text}
+                          for message, activity, text in
+                          zip(MESSAGES, [ACTIVITIES[0], ACTIVITIES[2]], TEXTS)],
         "media": {"id": MEDIA, "message_id": MESSAGES[0],
                   "activity_uid": ACTIVITIES[0], "original_sha256": ORIGINAL_HASH},
         "final_hash": HEAD_HASH}
@@ -57,15 +64,16 @@ def fixture():
         {"operation_id": EXECUTIONS[0], "server_sequence": 1,
          "canonical_hash": HEAD_HASH},
         {"kind": "trial_message", "id": MESSAGES[0], "activity_uid": ACTIVITIES[0],
-         "server_sequence": 2},
+         "text": TEXTS[0], "server_sequence": 2},
         {"kind": "trial_media_link", "id": "11111111-1111-4111-8111-111111111111",
          "media_id": MEDIA, "message_id": MESSAGES[0], "server_sequence": 3},
         {"kind": "trial_message", "id": MESSAGES[1], "activity_uid": ACTIVITIES[2],
-         "server_sequence": 4},
+         "text": TEXTS[1], "server_sequence": 4},
     ]
     receipt = {"operation_id": EXECUTIONS[0], "base_version_id": VERSION,
                "canonical_hash": HEAD_HASH, "server_sequence": 1,
-               "execution": {"activity_uid": ACTIVITIES[0]}}
+               "execution": {"activity_uid": ACTIVITIES[0], "actual_start": STARTS[0],
+                             "actual_finish": None, "remaining_seconds": 3600}}
     media_receipt = {"id": MEDIA, "message_id": MESSAGES[0],
                      "activity_uid": ACTIVITIES[0], "sha256": ORIGINAL_HASH,
                      "status": "linked", "server_sequence": 3}
@@ -111,7 +119,7 @@ class VerifierTests(unittest.TestCase):
             if path.endswith(f"/trial-media/{MEDIA}/original"):
                 return Response(original)
             if "/execution-operations/" in path:
-                if path.endswith(EXECUTIONS[0]):
+                if path.endswith(receipt["operation_id"]):
                     return Response(receipt)
                 from urllib.error import HTTPError
                 raise HTTPError(path, 404, "not found", {}, io.BytesIO(b'{}'))
@@ -187,6 +195,54 @@ class VerifierTests(unittest.TestCase):
         manifest, events, receipt, media = fixture()
         with self.assertRaisesRegex(ValueError, "original bytes"):
             self.check(manifest, events, receipt, media, b"different media")
+
+    def test_changed_execution_or_message_semantics_fail(self):
+        for field, value in (("actual_start", "2026-01-05T10:00:00"),
+                             ("actual_finish", "2026-01-05T10:00:00"),
+                             ("remaining_seconds", 7200)):
+            manifest, events, receipt, media = fixture()
+            receipt["execution"][field] = value
+            with self.subTest(receipt_field=field):
+                with self.assertRaises(ValueError):
+                    self.check(manifest, events, receipt, media)
+        for field, value in (("actual_start", "2026-01-07T08:00:00"),
+                             ("remaining_seconds", 7200),
+                             ("expected_version_id", EXECUTIONS[2]),
+                             ("expected_hash", HEAD_HASH)):
+            manifest, events, receipt, media = fixture()
+            manifest["execution"][1]["payload"][field] = value
+            with self.subTest(local_field=field):
+                with self.assertRaises(ValueError):
+                    self.check(manifest, events, receipt, media)
+        for source in ("manifest", "event"):
+            manifest, events, receipt, media = fixture()
+            if source == "manifest": manifest["communication"][0]["text"] = "different note"
+            else: events[1]["text"] = "different note"
+            with self.subTest(note_source=source):
+                with self.assertRaises(ValueError):
+                    self.check(manifest, events, receipt, media)
+
+    def test_different_execution_winner_or_committed_order_fails(self):
+        manifest, events, receipt, media = fixture()
+        events[0]["operation_id"] = EXECUTIONS[1]
+        receipt["operation_id"] = EXECUTIONS[1]
+        receipt["execution"] = {"activity_uid": ACTIVITIES[1], "actual_start": STARTS[1],
+                                "actual_finish": None, "remaining_seconds": 3600}
+        manifest["execution"][0].update(local_final_state="needs_attention",
+                                         error_code="LIVE_STALE_HEAD")
+        with self.assertRaises(ValueError):
+            self.check(manifest, events, receipt, media)
+        manifest, events, receipt, media = fixture()
+        events[1], events[3] = events[3], events[1]
+        events[1]["server_sequence"], events[3]["server_sequence"] = 2, 4
+        with self.assertRaises(ValueError):
+            self.check(manifest, events, receipt, media)
+
+    def test_local_datetime_minutes_are_semantically_identical(self):
+        manifest, events, receipt, media = fixture()
+        for entry in manifest["execution"]:
+            entry["payload"]["actual_start"] = entry["payload"]["actual_start"][:-3]
+        self.assertTrue(self.check(manifest, events, receipt, media)["passed"])
 
 
 if __name__ == "__main__":
