@@ -138,8 +138,14 @@ redacted `manifest.json`. The manifest keys are `server` (HTTPS), `project_id`,
 `app_sha`, `final_hash`, `device_a`, `device_b`, `execution` (three objects with
 `operation_id`, `activity_uid`, full original `payload`, `local_final_state`,
    `error_code`, `actor_user_id`), and
-`communication` (two objects with `id`, `actor_user_id`, `activity_uid`, exact `text`), and `media` with
-`id`, `actor_user_id`, `message_id`, `activity_uid`, `original_sha256`. Device entries need
+`communication` (two objects with `id`, `actor_user_id`, `activity_uid`, exact
+`text`, `local_final_state`, `error_code`), and `media` with `id`, `actor_user_id`,
+`message_id`, `activity_uid`, `original_sha256`, `local_final_state`, `error_code`.
+Copy final state/error fields from each device's durable local trial export after
+reconciliation; do not derive them from server receipts. The accepted execution
+must have `local_final_state=applied`, both accepted notes
+`local_final_state=accepted`, and linked media `local_final_state=linked`.
+Each successful record must have `error_code` absent, null or an empty string. Device entries need
 `model`, `os`, `app_sha`, `actor_user_id`, captured `authority_evidence` (`user_id`),
 `offline_evidence`, `termination_evidence`,
 `reopen_evidence`, `reconnect_evidence`, `final_cursor`, `final_hash`. The stale two must have
@@ -162,7 +168,8 @@ receipt's base, exactly one accepted execution, both specified notes, exactly
 one matching linked media receipt/event and server original-byte digest, no
 unrelated committed event, the prescribed execution facts and note text, the
 specified accepted operation and committed order, and
-both devices' final cursor/hash. A false manifest can still misstate physical
+both devices' final cursor/hash, and fully reconciled successful local records
+with cleared errors. A false manifest can still misstate physical
 hardware or installed binary; inspect independent deployment/build and device
 evidence before any gate decision. The verifier fails closed on cursor gaps,
 missing/duplicate records, stale items lacking attention state, changed

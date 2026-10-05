@@ -102,6 +102,29 @@ test('read-only trial return binds actor and frozen payload without bearer or or
   db.close();
 });
 
+test('trial return exports successful durable states and errors for execution, notes and media', async () => {
+  const db = database(); const store = await FieldStore.open(db);
+  await store.enqueueExecution(A, P, payload);
+  await store.enqueueMessage(A, P, {id: V, activity_uid: ACT, text: 'A note'});
+  await store.saveMedia(A, P, {id: B, message_id: V, activity_uid: ACT,
+    mime: 'image/png', original: new Uint8Array([1, 2, 3]), annotations: []});
+  await store.transition(A, P, ID, 'applied', {receipt: executionReceipt()});
+  await store.transition(A, P, V, 'accepted', {receipt: noteReceipt(V, 'A note')});
+  await store.mediaTransition(A, P, B, 'linked', {status: 'linked'});
+  let evidence = await localTrialEvidence(store, {actor: A, project: P});
+  assert.deepEqual([evidence.execution[0].local_final_state, evidence.communication[0].local_final_state,
+    evidence.media[0].local_final_state], ['applied', 'accepted', 'linked']);
+  assert.deepEqual([evidence.execution[0].error_code, evidence.communication[0].error_code,
+    evidence.media[0].error_code], [null, null, null]);
+  await store.transition(A, P, V, 'queued', {errorCode: 'HTTP_503'});
+  await store.mediaTransition(A, P, B, 'link_pending', null, 'HTTP_503');
+  evidence = await localTrialEvidence(store, {actor: A, project: P});
+  assert.deepEqual([evidence.communication[0].local_final_state, evidence.communication[0].error_code,
+    evidence.media[0].local_final_state, evidence.media[0].error_code],
+  ['queued', 'HTTP_503', 'link_pending', 'HTTP_503']);
+  db.close();
+});
+
 test('live activity cache requests the matching calculated version, never baseline by default', async () => {
   const original = globalThis.fetch;
   let path;

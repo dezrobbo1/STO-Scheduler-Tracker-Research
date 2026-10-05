@@ -60,15 +60,16 @@ def fixture():
                            "expected_version_id": VERSION, "expected_hash": BASE_HASH,
                            "actual_start": STARTS[index], "actual_finish": None,
                            "remaining_seconds": 3600},
-                       **({} if index == 0 else {"local_final_state": "needs_attention",
+                       **({"local_final_state": "applied", "error_code": None} if index == 0 else {"local_final_state": "needs_attention",
                            "error_code": "LIVE_STALE_HEAD"})}
                       for index, (op, activity) in enumerate(zip(EXECUTIONS, ACTIVITIES))],
         "communication": [{"id": MESSAGES[index], "activity_uid": ACTIVITIES[0 if index == 0 else 2],
-                           "text": TEXTS[index], "actor_user_id": ACTOR_A if index == 0 else ACTOR_B}
+                           "text": TEXTS[index], "actor_user_id": ACTOR_A if index == 0 else ACTOR_B,
+                           "local_final_state": "accepted", "error_code": None}
                           for index in range(2)],
         "media": {"id": MEDIA, "message_id": MESSAGES[0],
                   "activity_uid": ACTIVITIES[0], "original_sha256": ORIGINAL_HASH,
-                  "actor_user_id": ACTOR_A},
+                  "actor_user_id": ACTOR_A, "local_final_state": "linked", "error_code": None},
         "final_hash": HEAD_HASH}
     events = [
         {"operation_id": EXECUTIONS[0], "server_sequence": 1,
@@ -165,6 +166,47 @@ class VerifierTests(unittest.TestCase):
         self.assertTrue(result["passed"])
         self.assertEqual(result["committed_cursor"], 4)
         self.assertEqual(result["media_id"], MEDIA)
+
+    def test_successful_client_records_must_be_reconciled(self):
+        for domain, index in (("execution", 0), ("communication", 0),
+                              ("communication", 1), ("media", None)):
+            for bad_state in (None, "sending", "queued", "link_pending", "needs_attention"):
+                manifest, events, receipt, media = fixture()
+                row = manifest[domain] if index is None else manifest[domain][index]
+                if bad_state is None:
+                    row.pop("local_final_state")
+                else:
+                    row["local_final_state"] = bad_state
+                with self.subTest(domain=domain, index=index, state=bad_state):
+                    with self.assertRaisesRegex(ValueError, "local.*reconciled"):
+                        self.check(manifest, events, receipt, media)
+            for error in ("HTTP_503", "LIVE_STALE_HEAD", False, 0):
+                manifest, events, receipt, media = fixture()
+                row = manifest[domain] if index is None else manifest[domain][index]
+                row["error_code"] = error
+                with self.subTest(domain=domain, index=index, error=error):
+                    with self.assertRaisesRegex(ValueError, "local.*reconciled"):
+                        self.check(manifest, events, receipt, media)
+
+    def test_reconciled_states_accept_only_absent_null_or_empty_errors(self):
+        for cleared in ("absent", None, ""):
+            manifest, events, receipt, media = fixture()
+            for row in [manifest["execution"][0], *manifest["communication"], manifest["media"]]:
+                if cleared == "absent":
+                    row.pop("error_code")
+                else:
+                    row["error_code"] = cleared
+            with self.subTest(cleared=cleared):
+                self.assertTrue(self.check(manifest, events, receipt, media)["passed"])
+
+    def test_stale_execution_still_requires_attention_and_stale_error(self):
+        for index in (1, 2):
+            for field, value in (("local_final_state", "applied"), ("error_code", None)):
+                manifest, events, receipt, media = fixture()
+                manifest["execution"][index][field] = value
+                with self.subTest(index=index, field=field):
+                    with self.assertRaisesRegex(ValueError, "stale intention"):
+                        self.check(manifest, events, receipt, media)
 
     def test_wrong_build_or_baseline_provenance_fails(self):
         for change in (lambda m: m.update(server_sha="e" * 40),

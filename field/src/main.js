@@ -5,7 +5,7 @@ import { FieldStore } from './store.js';
 import { openNativeDb } from './native-db.js';
 import { FieldTransport } from './transport.js';
 import { SyncEngine } from './sync.js';
-import {finishAccountSession, syncStatusMessage} from './session.js';
+import {finishAccountSession, syncStatusMessage, canonicalProjectIdentity} from './session.js';
 import {resumeDraftWithNotice, readSelectedPhoto} from './photo.js';
 import {clearProtectedFieldState} from './protected-state.js';
 import {DeepLinkInbox} from './deep-link.js';
@@ -50,12 +50,14 @@ function label(state) {
 }
 
 async function render() {
+  if (signingOut) return;
   showIdentity();
   if (!identity || !store) return;
   const current = identity;
   const cache = await store.cache(current.actor, current.project);
-  if (identity !== current) return;
+  if (identity !== current || signingOut) return;
   const online = (await Network.getStatus().catch(() => ({connected: false}))).connected;
+  if (identity !== current || signingOut) return;
   element('connection').textContent = online ? 'Connected or checking' : 'Offline';
   element('freshness').textContent = cache
     ? `Cached field state · last confirmed ${new Date(cache.synced_at).toLocaleString()} · ${online ? 'checking current server state' : 'offline'}`
@@ -69,7 +71,7 @@ async function render() {
   }
   if ([...activity.options].some(option => option.value === selected)) activity.value = selected;
   const items = await store.items(current.actor, current.project);
-  if (identity !== current) return;
+  if (identity !== current || signingOut) return;
   const list = element('outbox'); list.replaceChildren();
   const messageChoice = element('message-choice'); messageChoice.replaceChildren();
   for (const item of items) {
@@ -82,9 +84,9 @@ async function render() {
     if (item.kind === 'message') messageChoice.add(new Option(
       `${item.payload.text.slice(0, 40)} · ${label(item.state)}`, item.id));
   }
-  const mediaList = element('media-list'); mediaList.replaceChildren();
   const mediaRows = await store.allMedia(current.actor, current.project);
-  if (identity !== current) return;
+  if (identity !== current || signingOut) return;
+  const mediaList = element('media-list'); mediaList.replaceChildren();
   for (const entry of mediaRows) {
     const li = document.createElement('li');
     li.textContent = `${label(entry.state)} · ${entry.id}${entry.error_code ? ` · ${entry.error_code}` : ''}`;
@@ -96,9 +98,10 @@ async function render() {
     }
     mediaList.append(li);
   }
+  const committedMessages = await store.committedMessages(current.actor, current.project);
+  if (identity !== current || signingOut) return;
   const committed = element('committed-notes'); committed.replaceChildren();
-  for (const event of await store.committedMessages(current.actor, current.project)) {
-    if (identity !== current) return;
+  for (const event of committedMessages) {
     const li = document.createElement('li');
     const heading = document.createElement('strong');
     heading.textContent = 'Server accepted note';
@@ -115,16 +118,21 @@ async function syncNow() {
   const controller = new AbortController();
   syncAbort = controller;
   syncing = (async () => {
+    let result;
     try {
-      const result = await engine.run(current.actor, current.project, {signal: controller.signal});
+      result = await engine.run(current.actor, current.project, {signal: controller.signal});
       const message = syncStatusMessage(result);
       if (identity === current && !signingOut && message) notice(message);
       return result;
     } catch (error) {
       if (identity === current && !signingOut) notice(`Still cached locally; sync unavailable: ${error.message}`);
     } finally {
-      syncing = null; syncAbort = null;
-      if (identity === current && !signingOut) await render();
+      try {
+        if (identity === current && !signingOut) {
+          await render();
+          applyPendingDeepLink(current, result);
+        }
+      } finally { syncing = null; syncAbort = null; }
     }
   })();
   return syncing;
@@ -159,8 +167,8 @@ element('connect-form').addEventListener('submit', async event => {
   try {
     const next = new FieldTransport(proposed.server, proposed.token);
     const actor = await next.authority();
-    await next.project(proposed.project);
-    const verified = {...proposed, actor: actor.user_id};
+    const project = await next.project(proposed.project);
+    const verified = {...proposed, project: canonicalProjectIdentity(proposed.project, project), actor: actor.user_id};
     await store.setActiveIdentity(verified);
     identity = verified; transport = next; engine = new SyncEngine(store, next);
     element('token').value = '';
@@ -424,13 +432,16 @@ App.addListener('appRestoredResult', event => {
     if (identity && !signingOut) notice(`Camera recovery needs attention: ${error.message}`);
   });
 });
-async function applyDeepLink() {
-  if (!identity) return;
-  const current = identity;
-  const outcome = await syncNow();
-  if (identity !== current || outcome?.status !== 'confirmed') return;
+function applyPendingDeepLink(current, outcome) {
+  if (identity !== current || signingOut || outcome?.status !== 'confirmed') return;
   const target = deepLinks.afterConfirmedSync(current, [...element('activity').options]);
   if (target) element('activity').value = target;
+}
+
+async function applyDeepLink() {
+  // Every confirmed sync applies retained hints after rendering its fresh cache.
+  // This trigger never calls back from the pending-hint consumer into sync.
+  await syncNow();
 }
 App.addListener('appUrlOpen', event => {
   // The URI is only a hint, held until fresh authority and catch-up succeed.

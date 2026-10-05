@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {finishAccountSession, syncStatusMessage} from '../src/session.js';
+import {finishAccountSession, syncStatusMessage, canonicalProjectIdentity} from '../src/session.js';
 import {resumeDraftWithNotice, clearProtectedPreview, readSelectedPhoto} from '../src/photo.js';
 import {clearProtectedFieldState} from '../src/protected-state.js';
 
@@ -85,4 +85,17 @@ test('an Account A file-read completion cannot become an Account B photo', async
   current = b;
   release(new Uint8Array([1, 2, 3]).buffer);
   assert.equal(await pending, null);
+});
+
+
+test('canonical project binding accepts equivalent UUID forms and rejects malformed authoritative identity', () => {
+  const project = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+  for (const typed of [project, project.toUpperCase(), `{${project}}`,
+    project.replaceAll('-', ''), `urn:uuid:${project}`])
+    assert.equal(canonicalProjectIdentity(typed, {id: project}), project);
+  for (const returned of [null, {}, {id: 'invalid'}, {id: project.toUpperCase()},
+    {id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd'}])
+    assert.throws(() => canonicalProjectIdentity(project, returned), /PROJECT_IDENTITY/);
+  for (const typed of ['', 'invalid', '{' + project, project + '}', null])
+    assert.throws(() => canonicalProjectIdentity(typed, {id: project}), /PROJECT_IDENTITY/);
 });

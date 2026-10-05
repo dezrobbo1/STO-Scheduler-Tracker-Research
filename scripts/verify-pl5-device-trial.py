@@ -57,6 +57,13 @@ def validate_annotations(value: object) -> None:
         raise ValueError("prescribed arrow, circle and text annotations missing")
 
 
+def require_reconciled_local(row: dict, state: str, domain: str) -> None:
+    error = row.get("error_code")
+    if (row.get("local_final_state") != state or
+            not (error is None or isinstance(error, str) and error == "")):
+        raise ValueError(f"{domain} local record not reconciled to {state} with cleared error")
+
+
 def normalised_start(payload: dict) -> dict:
     # datetime-local may omit seconds; compare the parsed semantic value.
     value = dict(payload)
@@ -232,6 +239,7 @@ def verify(manifest: dict, token: str, *, expected_sha: str,
     for row in manifest["execution"]:
         status, receipt = get(f"{base}/execution-operations/{row['operation_id']}")
         if row["operation_id"] in {x["operation_id"] for x in accepted}:
+            require_reconciled_local(row, "applied", "accepted execution")
             if status != 200 or receipt["operation_id"] != row["operation_id"]:
                 raise ValueError("accepted execution receipt missing")
             if normalised_start(receipt.get("execution", {})) != expected_facts[0]:
@@ -244,6 +252,7 @@ def verify(manifest: dict, token: str, *, expected_sha: str,
         elif status != 404 or row.get("local_final_state") != "needs_attention" or row.get("error_code") != "LIVE_STALE_HEAD":
             raise ValueError("stale intention was lost or misrepresented locally")
     for index, row in enumerate(manifest["communication"]):
+        require_reconciled_local(row, "accepted", "accepted note")
         status, note_receipt = get(f"{base}/trial-messages/{row['id']}")
         if (status != 200 or note_receipt.get("id") != row["id"] or
                 str(note_receipt.get("actor_user_id")) != (actor_a if index == 0 else actor_b) or
@@ -251,6 +260,7 @@ def verify(manifest: dict, token: str, *, expected_sha: str,
                 note_receipt.get("text") != row["text"] or
                 note_receipt.get("server_sequence") != delivered_messages[index]["server_sequence"]):
             raise ValueError("trial note actor or content differs from durable receipt")
+    require_reconciled_local(media, "linked", "linked media")
     status, media_receipt = get(f"{base}/trial-media/{media['id']}")
     if (status != 200 or media_receipt.get("status") != "linked" or
             media_receipt.get("id") != media["id"] or
