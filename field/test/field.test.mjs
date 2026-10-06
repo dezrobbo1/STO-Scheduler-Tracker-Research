@@ -6,6 +6,7 @@ import { SyncEngine } from '../src/sync.js';
 import { FieldTransport } from '../src/transport.js';
 import {persistCameraResult, recoverRestoredCamera} from '../src/camera-recovery.js';
 import {localTrialEvidence} from '../src/trial-evidence.js';
+import {temporaryDatabasePath} from './helpers/temp-database.mjs';
 
 function database(file = ':memory:') {
   const db = new DatabaseSync(file);
@@ -39,7 +40,7 @@ const noteReceipt = (id = ID, text = 'Photo') => ({id, actor_user_id: A,
   project_id: P, activity_uid: ACT, text, status: 'accepted'});
 
 test('Android restored Camera result survives process restart with the original actor and note', async () => {
-  const file = `/tmp/sto-camera-${crypto.randomUUID()}.db`;
+  const file = temporaryDatabasePath('sto-camera');
   let db = database(file);
   let store = await FieldStore.open(db);
   await store.enqueueMessage(A, P, {id: ID, activity_uid: ACT, text: 'Original note'});
@@ -178,7 +179,7 @@ test('aborted subscription never starts another request with the old bearer', as
 });
 
 test('queued success follows durable insert; restart and account switch preserve identity and visibility', async () => {
-  const file = `/tmp/sto-field-${crypto.randomUUID()}.db`;
+  const file = temporaryDatabasePath('sto-field');
   const db = database(file);
   const store = await FieldStore.open(db);
   await store.enqueueExecution(A, P, payload);
@@ -679,7 +680,7 @@ test('cancelled media sync cannot begin another old-credential transfer or link'
 });
 
 test('committed trial note and link project durably before cursor advance and repeat without duplication', async () => {
-  const file = `/tmp/sto-field-feed-${crypto.randomUUID()}.db`;
+  const file = temporaryDatabasePath('sto-field-feed');
   const db = database(file);
   const store = await FieldStore.open(db);
   const events = [

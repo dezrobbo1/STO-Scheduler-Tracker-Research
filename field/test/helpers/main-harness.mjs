@@ -1,6 +1,7 @@
 // Execute the production entry point with native/HTTP/DOM boundaries controlled.
 // Store, sync, transport, teardown and deep-link code remain real.
 import {readFile} from 'node:fs/promises';
+import {prepareMainSource} from './main-source.mjs';
 import {DatabaseSync} from 'node:sqlite';
 import {FieldStore} from '../../src/store.js';
 import {FieldTransport} from '../../src/transport.js';
@@ -111,8 +112,7 @@ export async function mainHarness({actor = A, launchUrl = null} = {}) {
     clearProtectedFieldState, DeepLinkInbox, persistCameraResult, recoverRestoredCamera, localTrialEvidence,
     document, Option: class {constructor(text, value) {this.text = text; this.value = value;}},
     setInterval: action => {intervals.push(action);}, Image: class {}};
-  const source = (await readFile(new URL('../../src/main.js', import.meta.url), 'utf8'))
-    .replace(/^import[\s\S]*?;\n/gm, '');
+  const source = prepareMainSource(await readFile(new URL('../../src/main.js', import.meta.url), 'utf8'));
   const AsyncFunction = Object.getPrototypeOf(async function() {}).constructor;
   const entry = new AsyncFunction(...Object.keys(dependencies), source + '\nreturn {render, syncNow};');
   const entrypoint = await entry(...Object.values(dependencies));
