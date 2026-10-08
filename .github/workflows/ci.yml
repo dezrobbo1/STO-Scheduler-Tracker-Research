@@ -266,11 +266,14 @@ jobs:
 
           launch_output="$(xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID")"
           printf '%s\n' "$launch_output" | tee "$EVIDENCE/launch.txt"
+          APP_PID="${launch_output##*: }"
+          if ! [[ "$APP_PID" =~ ^[0-9]+$ ]]; then
+            echo "could not parse launched simulator process id: $launch_output" >&2
+            exit 1
+          fi
           sleep 8
 
-          xcrun simctl spawn "$SIM_UDID" ps -A -o pid=,comm= \
-            | tee "$EVIDENCE/processes.txt"
-          if ! grep -Eq '[/ ]App$' "$EVIDENCE/processes.txt"; then
+          if ! /bin/ps -p "$APP_PID" -o pid=,comm= | tee "$EVIDENCE/process.txt" | grep -q .; then
             echo "STO Field Trial process did not remain alive after launch" >&2
             exit 1
           fi
