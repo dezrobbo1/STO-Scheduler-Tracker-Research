@@ -105,14 +105,16 @@ def verify_android(setup, queued, reopened, reconciled, account_b, feed):
     require(feed['next_cursor'] == expected and feed['has_more'] is False and len(events) == expected, 'unexpected disposable event feed')
     require(events[0] == reconciled['execution'][0]['receipt'] and events[1] == reconciled['communication'][0]['receipt'], 'feed does not match durable local receipts')
     require(events[0]['operation_id'] == queued['execution'][0]['operation_id'] and events[1]['id'] == queued['communication'][0]['id'], 'feed UUID mismatch')
-    require(all(event['project_id'] == setup['project_id'] and event['actor_user_id'] == setup['actor_a'] and event['server_sequence'] == index for index, event in enumerate(events, 1)), 'unexpected feed provenance/order')
+    require(all(event['project_id'] == setup['project_id'] and (index > 2 or event['actor_user_id'] == setup['actor_a']) and event['server_sequence'] == index for index, event in enumerate(events, 1)), 'unexpected feed provenance/order')
     require(reconciled['canonical_hash'] == events[0]['canonical_hash'] and reconciled['version_id'] == events[0]['result_version_id'], 'local final head differs from accepted execution')
     for media, event in zip(reconciled['media'], events[2:]):
         require(media['local_final_state'] == 'linked' and not media.get('error_code'), 'media not locally reconciled')
         require(event['kind'] == 'trial_media_link' and event['media_id'] == media['id'] and event['message_id'] == queued['communication'][0]['id'], 'media link mismatch')
         require({row['kind'] for row in media['annotations']} == {'arrow', 'circle', 'text'} and any(row.get('text', '').strip() for row in media['annotations']), 'media annotation coverage missing')
         receipt = media['remote_receipt']
-        require(receipt['sha256'] == media['original_sha256'] and receipt['annotations'] == media['annotations'], 'uploaded original/annotation mismatch')
+        require(receipt['project_id'] == setup['project_id'] and receipt['actor_user_id'] == setup['actor_a'] and receipt['id'] == media['id'] and receipt['activity_uid'] == media['activity_uid'] and receipt['message_id'] == event['message_id'] and receipt['server_sequence'] == event['server_sequence'] and receipt['status'] == 'linked', 'uploaded media provenance/link mismatch')
+        normalized = [{key: value for key, value in row.items() if value is not None} for row in receipt['annotations']]
+        require(receipt['sha256'] == media['original_sha256'] and normalized == media['annotations'], 'uploaded original/annotation mismatch')
     require(account_b['actor_user_id'] == setup['actor_b'] != setup['actor_a'] and account_b['project_id'] == setup['project_id'], 'account B identity mismatch')
     require(not account_b['execution'] and not account_b['communication'] and not account_b['media'], 'account B sees account A local records')
     require(account_b['cursor'] == reconciled['cursor'] == expected and account_b['canonical_hash'] == reconciled['canonical_hash'], 'final cache/cursor mismatch')

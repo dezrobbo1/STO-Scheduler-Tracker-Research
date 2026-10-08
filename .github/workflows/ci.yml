@@ -220,6 +220,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # Simulator-only ad-hoc signing enables Keychain; no Apple account/profile.
           xcodebuild \
             -project field/ios/App/App.xcodeproj \
             -scheme App \
@@ -227,8 +228,8 @@ jobs:
             -sdk iphonesimulator \
             -destination "id=$SIM_UDID" \
             -derivedDataPath "$DERIVED_DATA" \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=YES \
+            CODE_SIGN_IDENTITY="-" \
             build | tee "$EVIDENCE/xcodebuild.log"
 
       - name: Install, launch and capture simulator evidence
@@ -237,6 +238,8 @@ jobs:
           set -euo pipefail
           APP_PATH="$DERIVED_DATA/Build/Products/Debug-iphonesimulator/App.app"
           test -d "$APP_PATH"
+          codesign --verify --strict "$APP_PATH"
+          codesign -d --entitlements :- "$APP_PATH" > "$EVIDENCE/simulator-entitlements.txt" 2>&1
 
           INFO="$APP_PATH/Info.plist"
           BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$INFO")"
@@ -282,7 +285,7 @@ jobs:
 
           xcrun simctl io "$SIM_UDID" screenshot "$EVIDENCE/launch.png"
           xcrun simctl spawn "$SIM_UDID" log show --style compact --last 3m \
-            --predicate 'process == "App"' > "$EVIDENCE/app.log" 2>&1 || true
+            --predicate 'process == "App" OR process == "securityd"' > "$EVIDENCE/app.log" 2>&1 || true
 
       - name: Capture bounded iOS diagnostics
         if: always() && env.SIM_UDID != ''
@@ -290,7 +293,7 @@ jobs:
         run: |
           mkdir -p "$EVIDENCE"
           xcrun simctl spawn "$SIM_UDID" log show --style compact --last 3m \
-            --predicate 'process == "App"' > "$EVIDENCE/app.log" 2>&1 || true
+            --predicate 'process == "App" OR process == "securityd"' > "$EVIDENCE/app.log" 2>&1 || true
 
       - name: Finalize safe iOS evidence
         if: always()

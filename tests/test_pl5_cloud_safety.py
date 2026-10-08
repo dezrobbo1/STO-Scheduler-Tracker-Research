@@ -93,3 +93,28 @@ class IosEncryptionConfigurationTests(unittest.TestCase):
         config=json.loads((ROOT/'field/capacitor.config.json').read_text())
         self.assertTrue(config['plugins']['CapacitorSQLite']['iosIsEncryption'])
         self.assertEqual(config['plugins']['CapacitorSQLite'].get('iosKeychainPrefix'),'au.com.sto.fieldtrial')
+
+class SimulatorSigningContractTests(unittest.TestCase):
+    def test_simulator_uses_local_adhoc_signature_for_keychain(self):
+        workflow=(ROOT/'.github/workflows/ci.yml').read_text()
+        self.assertIn('CODE_SIGNING_ALLOWED=YES',workflow)
+        self.assertIn('CODE_SIGN_IDENTITY="-"',workflow)
+        self.assertIn('codesign --verify',workflow)
+        self.assertNotIn('CODE_SIGNING_ALLOWED=NO',workflow)
+
+class AndroidMediaReceiptTests(AndroidEvidenceTests):
+    def test_media_feed_uses_upload_provenance_and_normalized_annotations(self):
+        args=self.fixture()
+        setup,queued,reopened,reconciled,account_b,feed=args
+        annotations=[{'kind':'arrow','x':.2,'y':.2,'toX':.8,'toY':.8},{'kind':'circle','x':.5,'y':.5,'radius':.08},{'kind':'text','x':.2,'y':.7,'text':'CI annotation'}]
+        media=dict(id='media',message_id='note',activity_uid='activity',actor_user_id='actor-a',original_sha256='digest',annotations=annotations,local_final_state='queued',error_code=None)
+        import copy
+        queued['media']=[copy.deepcopy(media)];reopened['media']=[copy.deepcopy(media)]
+        remote=dict(id='media',project_id='project',actor_user_id='actor-a',activity_uid='activity',sha256='digest',annotations=[{**dict(toX=None,toY=None,radius=None,text=None),**a} for a in annotations],status='linked',message_id='note',server_sequence=3)
+        reconciled['media']=[{**media,'local_final_state':'linked','remote_receipt':remote}]
+        reconciled['cursor']=account_b['cursor']=feed['next_cursor']=3
+        feed['events'].append(dict(kind='trial_media_link',project_id='project',media_id='media',message_id='note',server_sequence=3))
+        tool=load_script();tool.verify_android(*args)
+        for mutate in [lambda a:a[3]['media'][0]['remote_receipt'].update(actor_user_id='other'),lambda a:a[3]['media'][0]['remote_receipt']['annotations'][0].update(x=.9),lambda a:a[5]['events'][2].update(media_id='other')]:
+            changed=copy.deepcopy(args);mutate(changed)
+            with self.assertRaises(ValueError):tool.verify_android(*changed)

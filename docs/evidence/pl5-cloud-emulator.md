@@ -144,3 +144,14 @@ configuration now pins the app-specific prefix to the bundle identifier; no
 signing credential or encryption key is committed. Keep this prefix stable for
 future upgrades. The old compilation/launch-only success did not establish
 native storage readiness.
+
+The simulator build uses a local ad-hoc signature (`CODE_SIGN_IDENTITY=-`),
+without certificates, provisioning profiles or Apple credentials. Removing all
+signing allowed launch but denied the production Keychain secret write. The
+gate captures/verifies the simulator signature and requires native encrypted
+startup; it does not bypass Keychain or weaken physical signing requirements.
+
+Media feed events have no actor field: provenance is bound through the durable
+upload receipt plus link UUID/sequence/project. Server annotation receipts
+normalize optional absent fields to null; the verifier compares non-null facts
+and still rejects altered coordinates, text, digest, owner or link identity.
