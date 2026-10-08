@@ -47,8 +47,9 @@ contains only safe identifiers, hashes, states and receipts.
 
 ## CI-only networking
 
-The disposable API is reachable from the Android emulator through the standard
-host bridge at `10.0.2.2`.
+The disposable API is reachable from the Android emulator through its standard
+host-bridge address. The literal CI-only address is kept in executable test
+infrastructure rather than documentation.
 
 The production field boundary requires HTTPS, so the cloud gate does not weaken
 the JavaScript identity check to accept HTTP. Instead each CI run creates an
