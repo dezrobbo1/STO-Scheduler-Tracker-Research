@@ -1,0 +1,150 @@
+name: PL5 Android cloud emulator
+
+on:
+  pull_request:
+    paths:
+      - "field/**"
+      - "src/sto/api/**"
+      - "src/sto/core/**"
+      - "src/sto/persistence/**"
+      - "src/sto/scheduling/**"
+      - "infra/migrations/**"
+      - "scripts/setup-pl5-cloud-emulator.py"
+      - "scripts/run-pl5-cloud-emulator.sh"
+      - ".github/workflows/pl5-cloud-emulator.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pl5-android-emulator-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android-emulator:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports: ["5433:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: "5433"
+      PGUSER: postgres
+      PGDATABASE: sto_emulator
+      STO_DATABASE_URL: postgresql://postgres@127.0.0.1:5433/sto_emulator
+      STO_REQUIRE_DB: "1"
+      STO_SOURCE_DIR: /tmp/sto-pl5-emulator-source
+      STO_EMULATOR_SETUP_FILE: /tmp/sto-pl5-emulator-setup.json
+      STO_BUILD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Enable KVM for the Android emulator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: field/package-lock.json
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Install locked application dependencies
+        run: uv sync --frozen --extra api
+
+      - name: Run field unit tests and build web assets
+        working-directory: field
+        run: |
+          npm ci
+          npm test
+          npm run build
+
+      - name: Prepare disposable PostgreSQL
+        run: |
+          psql -d postgres -c 'CREATE DATABASE sto_emulator'
+          scripts/db/apply-migrations.sh
+          scripts/db/check-schema-drift.sh
+
+      - name: Create ephemeral authentication key
+        shell: bash
+        run: |
+          key="$(.venv/bin/python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')"
+          echo "::add-mask::$key"
+          echo "STO_AUTH_MASTER_KEY=$key" >> "$GITHUB_ENV"
+
+      - name: Create disposable PL5 emulator project and device identities
+        run: |
+          mkdir -p "$STO_SOURCE_DIR"
+          .venv/bin/python scripts/setup-pl5-cloud-emulator.py
+
+      - name: Prepare CI-only Android networking
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path("field/capacitor.config.json")
+          payload = json.loads(path.read_text(encoding="utf-8"))
+          payload.setdefault("android", {})["allowMixedContent"] = True
+          payload.setdefault("server", {})["cleartext"] = True
+          path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+          PY
+          cd field
+          npx cap sync android
+          mkdir -p android/app/src/debug
+          cat > android/app/src/debug/AndroidManifest.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+            <application android:usesCleartextTraffic="true" />
+          </manifest>
+          EOF
+
+      - name: Build app and instrumented-test APKs
+        run: ./field/android/gradlew -p field/android assembleDebug assembleAndroidTest
+
+      - name: Run cloud emulator convergence smoke
+        uses: ReactiveCircus/android-emulator-runner@v2.38.0
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          emulator-options: >-
+            -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio
+            -no-boot-anim -camera-back none -camera-front none
+          disable-animations: true
+          script: bash scripts/run-pl5-cloud-emulator.sh
+
+      - name: Upload emulator evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pl5-cloud-emulator
+          path: artifacts/pl5-cloud-emulator
+          if-no-files-found: warn
