@@ -4,10 +4,11 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 EVIDENCE="$ROOT/artifacts/pl5-cloud-emulator"
 SETUP_FILE="${STO_EMULATOR_SETUP_FILE:?STO_EMULATOR_SETUP_FILE is required}"
+TLS_CA="${STO_EMULATOR_TLS_CA:?STO_EMULATOR_TLS_CA is required}"
 APP_APK="$ROOT/field/android/app/build/outputs/apk/debug/app-debug.apk"
 TEST_APK="$ROOT/field/android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk"
-HOST_SERVER="http://127.0.0.1:8092"
-DEVICE_SERVER="http://10.0.2.2:8092"
+HOST_SERVER="https://127.0.0.1:8443"
+DEVICE_SERVER="https://10.0.2.2:8443"
 PACKAGE="au.com.sto.fieldtrial"
 TEST_RUNNER="au.com.sto.fieldtrial.test/androidx.test.runner.AndroidJUnitRunner"
 SERVER_PID=""
@@ -42,6 +43,10 @@ RESTORE_UID="${VALUES[8]}"
 echo "::add-mask::$CREDENTIAL_A"
 echo "::add-mask::$CREDENTIAL_B"
 
+curl_ci() {
+  curl --silent --show-error --fail --cacert "$TLS_CA" "$@"
+}
+
 start_server() {
   local logfile="$1"
   if [[ -n "$SERVER_PID" ]] && kill -0 "$SERVER_PID" 2>/dev/null; then
@@ -49,16 +54,16 @@ start_server() {
   fi
   (
     cd "$ROOT"
-    exec env PYTHONPATH="$ROOT/src" "$ROOT/.venv/bin/python"       -m sto.cli serve --host 0.0.0.0 --port 8092
+    exec env PYTHONPATH="$ROOT/src" "$ROOT/.venv/bin/python"       scripts/serve-pl5-cloud-emulator.py
   ) >>"$logfile" 2>&1 &
   SERVER_PID=$!
-  for _ in $(seq 1 80); do
-    if curl -fsS "$HOST_SERVER/healthz" >/dev/null 2>&1; then
+  for _ in $(seq 1 100); do
+    if curl_ci "$HOST_SERVER/healthz" >/dev/null 2>&1; then
       return 0
     fi
     sleep 0.25
   done
-  echo "STO API did not become healthy" >&2
+  echo "STO TLS API did not become healthy" >&2
   tail -200 "$logfile" >&2 || true
   return 1
 }
@@ -68,7 +73,7 @@ start_server_after_delay() {
   (
     sleep 8
     cd "$ROOT"
-    exec env PYTHONPATH="$ROOT/src" "$ROOT/.venv/bin/python"       -m sto.cli serve --host 0.0.0.0 --port 8092
+    exec env PYTHONPATH="$ROOT/src" "$ROOT/.venv/bin/python"       scripts/serve-pl5-cloud-emulator.py
   ) >>"$logfile" 2>&1 &
   SERVER_PID=$!
 }
@@ -122,7 +127,7 @@ adb install -r "$TEST_APK"
 
 start_server "$EVIDENCE/server.log"
 
-BUILD_JSON="$(curl -fsS -H "Authorization: Bearer $CREDENTIAL_A" "$HOST_SERVER/api/trial-build")"
+BUILD_JSON="$(curl_ci -H "Authorization: Bearer $CREDENTIAL_A" "$HOST_SERVER/api/trial-build")"
 "$ROOT/.venv/bin/python" - "$BUILD_JSON" "$STO_BUILD_SHA" <<'PY'
 import json
 import sys
@@ -156,14 +161,14 @@ start_server_after_delay "$EVIDENCE/server-delayed-restart.log"
 
 run_instrumentation offlineDeepLinkRecovers   -e stoProject "$PROJECT_ID"   -e stoActivity "$INSPECT_UID"
 
-for _ in $(seq 1 80); do
-  if curl -fsS "$HOST_SERVER/healthz" >/dev/null 2>&1; then
+for _ in $(seq 1 100); do
+  if curl_ci "$HOST_SERVER/healthz" >/dev/null 2>&1; then
     break
   fi
   sleep 0.25
 done
 
-curl -fsS -H "Authorization: Bearer $CREDENTIAL_A"   "$HOST_SERVER/api/projects/$PROJECT_ID/changes?after=0"   >"$EVIDENCE/final-feed.json"
+curl_ci -H "Authorization: Bearer $CREDENTIAL_A"   "$HOST_SERVER/api/projects/$PROJECT_ID/changes?after=0"   >"$EVIDENCE/final-feed.json"
 
 "$ROOT/.venv/bin/python" - "$SETUP_FILE" "$EVIDENCE/final-feed.json" "$EVIDENCE/summary.json" <<'PY'
 import json
