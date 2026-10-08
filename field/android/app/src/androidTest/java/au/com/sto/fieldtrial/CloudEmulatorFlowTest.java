@@ -171,7 +171,16 @@ public class CloudEmulatorFlowTest {
             "document.getElementById('token').value=" + JSONObject.quote(credential) + ";" +
             "document.querySelector('#connect-form button').click(); true;";
         evaluateRaw(script);
-        waitForField();
+        try {
+            waitForField();
+        } catch (AssertionError error) {
+            String notice = evaluateString("document.getElementById('notice').textContent");
+            String signedIn = evaluateRaw("document.getElementById('signin').hidden");
+            throw new AssertionError(
+                "field did not open; notice=" + notice + ", signin.hidden=" + signedIn,
+                error
+            );
+        }
         waitFor("document.getElementById('activity').options.length >= 3", 30_000);
     }
 
