@@ -284,6 +284,14 @@ jobs:
           xcrun simctl spawn "$SIM_UDID" log show --style compact --last 3m \
             --predicate 'process == "App"' > "$EVIDENCE/app.log" 2>&1 || true
 
+      - name: Capture bounded iOS diagnostics
+        if: always() && env.SIM_UDID != ''
+        shell: bash
+        run: |
+          mkdir -p "$EVIDENCE"
+          xcrun simctl spawn "$SIM_UDID" log show --style compact --last 3m \
+            --predicate 'process == "App"' > "$EVIDENCE/app.log" 2>&1 || true
+
       - name: Finalize safe iOS evidence
         if: always()
         run: python scripts/pl5-cloud-evidence.py finalize "$EVIDENCE" artifacts/pl5-cloud-ios-simulator

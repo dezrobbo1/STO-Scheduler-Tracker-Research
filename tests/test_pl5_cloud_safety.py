@@ -71,8 +71,25 @@ class ArtifactRetirementTests(unittest.TestCase):
     def test_only_previous_cloud_android_artifacts_from_trial_branch_are_retired(self):
         spec=importlib.util.spec_from_file_location('retire',ROOT/'scripts/cleanup-pl5-cloud-artifacts.py')
         tool=importlib.util.module_from_spec(spec);spec.loader.exec_module(tool)
-        row={'name':'pl5-cloud-emulator','workflow_run':{'head_branch':tool.BRANCH,'head_sha':'prior'}}
+        row={'id':11543100748,'name':'pl5-cloud-emulator','workflow_run':{'head_branch':tool.BRANCH,'head_sha':'prior'}}
         self.assertTrue(tool.eligible(row,'current'))
+        self.assertFalse(tool.eligible({**row,'id':999999},'current'))
         self.assertFalse(tool.eligible(row,'prior'))
         self.assertFalse(tool.eligible({**row,'name':'pl5-device-return'},'current'))
         self.assertFalse(tool.eligible({**row,'workflow_run':{'head_branch':'main','head_sha':'prior'}},'current'))
+
+class OfflineLinkHandshakeTests(unittest.TestCase):
+    def test_server_restart_waits_for_native_offline_assertion(self):
+        shell=(ROOT/'scripts/run-pl5-cloud-emulator.sh').read_text()
+        java=(ROOT/'field/android/app/src/androidTest/java/au/com/sto/fieldtrial/CloudEmulatorFlowTest.java').read_text()
+        self.assertIn('start_server_after_offline_hint',shell)
+        self.assertIn('OFFLINE_HINT_CONFIRMED',shell)
+        method=java.split('public void offlineDeepLinkRecovers()',1)[1]
+        self.assertLess(method.index('assertNotEquals('),method.index('OFFLINE_HINT_CONFIRMED'))
+        self.assertNotIn('sleep 8',shell)
+
+class IosEncryptionConfigurationTests(unittest.TestCase):
+    def test_ios_encrypted_store_has_stable_app_keychain_namespace(self):
+        config=json.loads((ROOT/'field/capacitor.config.json').read_text())
+        self.assertTrue(config['plugins']['CapacitorSQLite']['iosIsEncryption'])
+        self.assertEqual(config['plugins']['CapacitorSQLite'].get('iosKeychainPrefix'),'au.com.sto.fieldtrial')

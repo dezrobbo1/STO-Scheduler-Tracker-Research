@@ -11,6 +11,7 @@ import android.content.Intent;
 import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.SystemClock;
+import android.util.Log;
 import android.webkit.WebView;
 
 import androidx.test.core.app.ActivityScenario;
@@ -393,6 +394,7 @@ public class CloudEmulatorFlowTest {
         SystemClock.sleep(1500);
         assertNotEquals("offline hint was applied before a confirmed sync",
             target, selectedActivity());
+        Log.i("PL5CloudGate", "OFFLINE_HINT_CONFIRMED");
 
         waitFor(
             "document.getElementById('activity').value===" + JSONObject.quote(target),

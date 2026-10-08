@@ -97,12 +97,15 @@ Native bridge argument logging is disabled: debug bridge output previously
 included disposable tokens and the SQLite passphrase. Evidence is collected
 outside the upload directory, redacted, scanned and published only through the
 safe finalizer. The cloud workflow retires earlier same-branch emulator
-artifacts with raw debug logs; it cannot delete physical return artifacts.
+artifacts with raw debug logs, pinned by their audited artifact IDs; it cannot
+delete future safe evidence or physical return artifacts.
 
 Queue/reopen/reconciliation evidence now binds immutable UUIDs and frozen
 execution/note facts, original media digest and annotation vectors, final
 local states, server receipts, actor provenance and final cursor/hash. Account
-B must have no A local execution, note or media records.
+B must have no A local execution, note or media records. The server stays
+unavailable for the retained-link assertion and restarts only after a native
+test readiness signal; a fixed delay cannot race simulator startup.
 
 ### Synthetic media
 
@@ -134,3 +137,10 @@ the native database exists and has an encrypted header, without exporting it.
 It retains a source-bound startup result, screenshot, install/launch/process
 identity, Xcode/runtime details and sanitized bounded logs. This is a native
 startup smoke, not the deeper Android behavioural oracle or physical evidence.
+
+The rendered startup check exposed the missing iOS SQLite keychain namespace:
+setting the encryption secret failed before the local store could open. The
+configuration now pins the app-specific prefix to the bundle identifier; no
+signing credential or encryption key is committed. Keep this prefix stable for
+future upgrades. The old compilation/launch-only success did not establish
+native storage readiness.

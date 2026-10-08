@@ -10,10 +10,13 @@ import urllib.request
 
 REPO = 'dezrobbo1/STO-Scheduler-Tracker-Research'
 BRANCH = 'feat/p2-pl5-offline-field-app'
+# Audited pre-correction artifacts. Never retire future safe evidence.
+UNSAFE_ARTIFACT_IDS = {11543100748, 11541818381, 11541606516, 11527950332,
+                       11527460716, 11527354865, 11526078921}
 
 def eligible(artifact, current_sha):
     run = artifact.get('workflow_run', {})
-    return artifact.get('name') == 'pl5-cloud-emulator' and run.get('head_branch') == BRANCH and run.get('head_sha') != current_sha
+    return artifact.get('id') in UNSAFE_ARTIFACT_IDS and artifact.get('name') == 'pl5-cloud-emulator' and run.get('head_branch') == BRANCH and run.get('head_sha') != current_sha
 
 def main():
     if os.environ['GITHUB_REPOSITORY'] != REPO:

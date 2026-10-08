@@ -64,6 +64,7 @@ def ios_wait(udid, evidence, ocr):
     while time.monotonic() < deadline:
         subprocess.run(['xcrun', 'simctl', 'io', udid, 'screenshot', str(evidence / 'launch.png')], check=True, capture_output=True)
         lines = json.loads(subprocess.check_output([ocr, str(evidence / 'launch.png')], text=True))
+        (evidence / 'screen-text.json').write_text(json.dumps(lines, indent=2) + '\n')
         if ios_screen_ready(lines):
             container = subprocess.check_output(['xcrun', 'simctl', 'get_app_container', udid, 'au.com.sto.fieldtrial', 'data'], text=True).strip()
             databases = list(Path(container).rglob('sto_field_trialSQLite.db'))

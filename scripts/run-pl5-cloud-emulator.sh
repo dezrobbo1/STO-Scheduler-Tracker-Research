@@ -69,10 +69,21 @@ start_server() {
   return 1
 }
 
-start_server_after_delay() {
+start_server_after_offline_hint() {
   local logfile="$1"
   (
-    sleep 8
+    local observed=false
+    for _ in $(seq 1 300); do
+      if adb logcat -d -s PL5CloudGate:I '*:S' | grep 'OFFLINE_HINT_CONFIRMED' >/dev/null; then
+        observed=true
+        break
+      fi
+      sleep 0.2
+    done
+    if [[ "$observed" != true ]]; then
+      echo "native offline deep-link assertion did not signal readiness" >&2
+      exit 1
+    fi
     cd "$ROOT"
     exec env PYTHONPATH="$ROOT/src" "$ROOT/.venv/bin/python"       scripts/serve-pl5-cloud-emulator.py
   ) >>"$logfile" 2>&1 &
@@ -166,7 +177,7 @@ run_instrumentation logoutAndConnectB   -e stoServer "$DEVICE_SERVER"   -e stoPr
 run_instrumentation onlineDeepLinkSelectsTarget   -e stoProject "$PROJECT_ID"   -e stoActivity "$RESTORE_UID"
 
 stop_server
-start_server_after_delay "$EVIDENCE/server-delayed-restart.log"
+start_server_after_offline_hint "$EVIDENCE/server-delayed-restart.log"
 
 run_instrumentation offlineDeepLinkRecovers   -e stoProject "$PROJECT_ID"   -e stoActivity "$INSPECT_UID"
 
