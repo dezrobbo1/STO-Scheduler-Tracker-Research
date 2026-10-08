@@ -208,6 +208,11 @@ jobs:
           with open(os.path.join(os.environ["EVIDENCE"], "simulator.txt"), "w", encoding="utf-8") as handle:
               handle.write(f"name={name}\nruntime={runtime}\nudid={udid}\n")
           PY
+
+      - name: Boot the selected iPhone simulator
+        shell: bash
+        run: |
+          set -euo pipefail
           xcrun simctl boot "$SIM_UDID" || true
           xcrun simctl bootstatus "$SIM_UDID" -b
 
