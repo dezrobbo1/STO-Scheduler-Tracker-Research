@@ -138,7 +138,7 @@ jobs:
     runs-on: macos-latest
     env:
       STO_BUILD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-      DERIVED_DATA: ${{ runner.temp }}/pl5-ios-derived
+      DERIVED_DATA: /tmp/pl5-ios-derived
       EVIDENCE: artifacts/pl5-cloud-ios-simulator
 
     steps:
