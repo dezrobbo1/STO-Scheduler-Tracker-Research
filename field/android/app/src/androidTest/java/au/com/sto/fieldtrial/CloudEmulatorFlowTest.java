@@ -107,6 +107,12 @@ public class CloudEmulatorFlowTest {
         waitFor("!!document.getElementById('field') && !document.getElementById('field').hidden", 30_000);
     }
 
+    private void assertClearedError(JSONObject row) {
+        Object value = row.opt("error_code");
+        assertTrue("expected cleared local error but found " + value,
+            value == null || value == JSONObject.NULL || "".equals(value));
+    }
+
     private JSONObject evidence() throws Exception {
         evaluateRaw(
             "document.getElementById('trial-evidence-output').value='';" +
@@ -292,10 +298,8 @@ public class CloudEmulatorFlowTest {
                 "accepted".equals(messages.optJSONObject(0).optString("local_final_state")) &&
                 value.optInt("cursor", -1) >= 2;
         }, 45_000);
-        assertEquals("", current.getJSONArray("execution").getJSONObject(0)
-            .optString("error_code", ""));
-        assertEquals("", current.getJSONArray("communication").getJSONObject(0)
-            .optString("error_code", ""));
+        assertClearedError(current.getJSONArray("execution").getJSONObject(0));
+        assertClearedError(current.getJSONArray("communication").getJSONObject(0));
         writeEvidence("04-reconciled", current);
         screenshot("04-reconciled");
     }
