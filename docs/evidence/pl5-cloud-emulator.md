@@ -47,13 +47,24 @@ contains only safe identifiers, hashes, states and receipts.
 
 ## CI-only networking
 
-The hosted disposable API is reachable from the Android emulator through the
-standard emulator host bridge. The committed production field configuration
-continues to require the hosted HTTPS boundary.
+The disposable API is reachable from the Android emulator through the standard
+host bridge at `10.0.2.2`.
 
-For the CI job only, the runner may adjust its checked-out/generated debug
-configuration to permit traffic to the disposable local API. Those temporary
-files are not committed and must never be treated as release-network evidence.
+The production field boundary requires HTTPS, so the cloud gate does not weaken
+the JavaScript identity check to accept HTTP. Instead each CI run creates an
+ephemeral certificate authority and a one-run server certificate for the
+emulator host bridge. The debug Android variant receives that CA as a temporary
+debug-only trust anchor through files created in the runner workspace after
+checkout.
+
+The CA private key, server key and generated debug trust files are runner-only.
+They are not committed or uploaded as evidence. The ordinary production
+Capacitor configuration and HTTPS requirement remain unchanged.
+
+The resulting emulator APK is therefore a CI debug shakeout build, not the
+physical-device release candidate. The final return still requires the exact
+unmodified source/server SHA and independent native install provenance on
+physical iOS and Android hardware against the hosted HTTPS backend.
 
 ## Autonomous Work convergence
 
