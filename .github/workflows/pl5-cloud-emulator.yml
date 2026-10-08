@@ -4,14 +4,15 @@ on:
   pull_request:
     paths:
       - "field/**"
-      - "src/sto/api/**"
-      - "src/sto/core/**"
-      - "src/sto/persistence/**"
-      - "src/sto/scheduling/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "src/sto/**"
       - "infra/migrations/**"
+      - "scripts/db/**"
       - "scripts/setup-pl5-cloud-emulator.py"
       - "scripts/serve-pl5-cloud-emulator.py"
       - "scripts/run-pl5-cloud-emulator.sh"
+      - "tests/fixtures/synthetic-workspace-chain.mspdi.xml"
       - ".github/workflows/pl5-cloud-emulator.yml"
   workflow_dispatch:
 
