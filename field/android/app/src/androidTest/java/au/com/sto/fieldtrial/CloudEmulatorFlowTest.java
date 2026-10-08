@@ -207,6 +207,12 @@ public class CloudEmulatorFlowTest {
     }
 
     private void selectDifferentActivity(String target) throws Exception {
+        waitFor(
+            "document.getElementById('activity').options.length >= 2 && " +
+            "[...document.getElementById('activity').options].some(o => o.value===" +
+            JSONObject.quote(target) + ")",
+            20_000
+        );
         String selected = evaluateString(
             "(() => {" +
             " const s=document.getElementById('activity');" +
