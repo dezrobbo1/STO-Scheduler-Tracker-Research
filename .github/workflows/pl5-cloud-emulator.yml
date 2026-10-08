@@ -10,6 +10,7 @@ on:
       - "src/sto/scheduling/**"
       - "infra/migrations/**"
       - "scripts/setup-pl5-cloud-emulator.py"
+      - "scripts/serve-pl5-cloud-emulator.py"
       - "scripts/run-pl5-cloud-emulator.sh"
       - ".github/workflows/pl5-cloud-emulator.yml"
   workflow_dispatch:
@@ -44,6 +45,10 @@ jobs:
       STO_REQUIRE_DB: "1"
       STO_SOURCE_DIR: /tmp/sto-pl5-emulator-source
       STO_EMULATOR_SETUP_FILE: /tmp/sto-pl5-emulator-setup.json
+      STO_EMULATOR_TLS_DIR: /tmp/sto-pl5-emulator-tls
+      STO_EMULATOR_TLS_CA: /tmp/sto-pl5-emulator-tls/ca.crt
+      STO_EMULATOR_TLS_CERT: /tmp/sto-pl5-emulator-tls/server.crt
+      STO_EMULATOR_TLS_KEY: /tmp/sto-pl5-emulator-tls/server.key
       STO_BUILD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
 
     steps:
@@ -103,25 +108,47 @@ jobs:
           mkdir -p "$STO_SOURCE_DIR"
           .venv/bin/python scripts/setup-pl5-cloud-emulator.py
 
-      - name: Prepare CI-only Android networking
+      - name: Create ephemeral TLS identity for emulator host bridge
+        shell: bash
         run: |
-          python - <<'PY'
-          import json
-          from pathlib import Path
+          set -euo pipefail
+          mkdir -p "$STO_EMULATOR_TLS_DIR"
+          openssl genrsa -out "$STO_EMULATOR_TLS_DIR/ca.key" 2048
+          openssl req -x509 -new -key "$STO_EMULATOR_TLS_DIR/ca.key"             -sha256 -days 1 -subj "/CN=PL5 Cloud Emulator CI CA"             -out "$STO_EMULATOR_TLS_CA"
+          openssl genrsa -out "$STO_EMULATOR_TLS_KEY" 2048
+          openssl req -new -key "$STO_EMULATOR_TLS_KEY"             -subj "/CN=10.0.2.2" -out "$STO_EMULATOR_TLS_DIR/server.csr"
+          cat > "$STO_EMULATOR_TLS_DIR/server.ext" <<'EOF'
+          subjectAltName=IP:10.0.2.2,IP:127.0.0.1,DNS:localhost
+          extendedKeyUsage=serverAuth
+          EOF
+          openssl x509 -req -in "$STO_EMULATOR_TLS_DIR/server.csr"             -CA "$STO_EMULATOR_TLS_CA" -CAkey "$STO_EMULATOR_TLS_DIR/ca.key"             -CAcreateserial -out "$STO_EMULATOR_TLS_CERT" -days 1 -sha256             -extfile "$STO_EMULATOR_TLS_DIR/server.ext"
+          chmod 600 "$STO_EMULATOR_TLS_DIR/ca.key" "$STO_EMULATOR_TLS_KEY"
 
-          path = Path("field/capacitor.config.json")
-          payload = json.loads(path.read_text(encoding="utf-8"))
-          payload.setdefault("android", {})["allowMixedContent"] = True
-          payload.setdefault("server", {})["cleartext"] = True
-          path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
-          PY
+      - name: Prepare Android debug trust for disposable CI CA
+        shell: bash
+        run: |
+          set -euo pipefail
           cd field
           npx cap sync android
-          mkdir -p android/app/src/debug
+          mkdir -p android/app/src/debug/res/raw android/app/src/debug/res/xml
+          cp "$STO_EMULATOR_TLS_CA" android/app/src/debug/res/raw/pl5_ci_ca.crt
+          cat > android/app/src/debug/res/xml/pl5_ci_network_security_config.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <network-security-config>
+            <base-config cleartextTrafficPermitted="false">
+              <trust-anchors>
+                <certificates src="system" />
+                <certificates src="@raw/pl5_ci_ca" />
+              </trust-anchors>
+            </base-config>
+          </network-security-config>
+          EOF
           cat > android/app/src/debug/AndroidManifest.xml <<'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-            <application android:usesCleartextTraffic="true" />
+            <application
+              android:usesCleartextTraffic="false"
+              android:networkSecurityConfig="@xml/pl5_ci_network_security_config" />
           </manifest>
           EOF
 
