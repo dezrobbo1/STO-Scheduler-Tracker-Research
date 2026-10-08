@@ -2,6 +2,7 @@
   "appId": "au.com.sto.fieldtrial",
   "appName": "STO Field Trial",
   "webDir": "dist",
+  "loggingBehavior": "none",
   "server": {"androidScheme": "https"},
   "plugins": {
     "CapacitorSQLite": {

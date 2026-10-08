@@ -85,3 +85,52 @@ PR head
 A runner/emulator infrastructure failure must be classified separately from a
 product defect. Work must stop before changing physical-device acceptance
 requirements, exposing credentials, marking the PR ready, or merging it.
+
+## Cloud mobile convergence correction
+
+The Android path filter includes locked Python dependencies, all STO server
+modules (including the fixture importer), migrations/database scripts, the
+synthetic fixture, field app/native tests and the harness/evidence scripts.
+Unrelated documentation does not trigger the emulator gate.
+
+Native bridge argument logging is disabled: debug bridge output previously
+included disposable tokens and the SQLite passphrase. Evidence is collected
+outside the upload directory, redacted, scanned and published only through the
+safe finalizer. The cloud workflow retires earlier same-branch emulator
+artifacts with raw debug logs; it cannot delete physical return artifacts.
+
+Queue/reopen/reconciliation evidence now binds immutable UUIDs and frozen
+execution/note facts, original media digest and annotation vectors, final
+local states, server receipts, actor provenance and final cursor/hash. Account
+B must have no A local execution, note or media records.
+
+### Synthetic media
+
+Android instrumentation supplies a generated PNG to the real production file
+input, invokes its change handler, and uses the actual annotation controls and
+canvas pointer events for arrow, circle and nonempty text. It queues through
+production handlers into native SQLite, survives force-stop/offline reopen,
+and reconciles original upload and media link to the disposable API. This
+proves the application path after file selection, not the OS picker or camera.
+Real camera, OS camera reclamation and interrupted transfer remain physical
+acceptance requirements.
+
+### Reboot
+
+REBOOT — DEFERRED TO PHYSICAL DEVICE. The cloud gate retains force-stop and
+offline process reopen. It already tests durable cache/identity and outbox
+recovery; reboot adds runner boot variability without proving physical secure
+storage behaviour. The physical lifecycle matrix still requires reboot.
+
+### iOS startup
+
+The separate macOS job in ordinary CI selects an available iPhone runtime,
+builds the committed App project without distribution signing and verifies
+bundle identity/version/build. Runner-only Vision OCR polls the actual
+simulator screenshot for the rendered connection form. That form starts
+hidden and is shown only after the production encrypted database and
+FieldStore migrations/active identity read finish. The job also checks that
+the native database exists and has an encrypted header, without exporting it.
+It retains a source-bound startup result, screenshot, install/launch/process
+identity, Xcode/runtime details and sanitized bounded logs. This is a native
+startup smoke, not the deeper Android behavioural oracle or physical evidence.

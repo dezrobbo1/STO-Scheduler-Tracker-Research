@@ -271,6 +271,35 @@ public class CloudEmulatorFlowTest {
                 "queued".equals(executions.optJSONObject(0).optString("local_final_state")) &&
                 "queued".equals(messages.optJSONObject(0).optString("local_final_state"));
         }, 20_000);
+        // Supply a deterministic PNG through the real production file-input change handler.
+        // This exercises selection->capture->annotation->native durable store, not camera UI.
+        waitFor("document.getElementById('message-choice').options.length === 1", 10_000);
+        evaluateRaw(
+            "(() => { const c=document.createElement('canvas'); c.width=128; c.height=128;" +
+            " const ctx=c.getContext('2d'); ctx.fillStyle='#123443'; ctx.fillRect(0,0,128,128);" +
+            " const data=atob(c.toDataURL('image/png').split(',')[1]);" +
+            " const bytes=Uint8Array.from(data, x=>x.charCodeAt(0)); const dt=new DataTransfer();" +
+            " dt.items.add(new File([bytes], 'synthetic.png', {type:'image/png'}));" +
+            " const input=document.getElementById('photo-file'); input.files=dt.files;" +
+            " input.dispatchEvent(new Event('change', {bubbles:true})); return true; })()"
+        );
+        waitFor("!document.getElementById('annotation').hidden", 15_000);
+        evaluateRaw(
+            "(() => { const c=document.getElementById('photo-canvas');" +
+            " const tap=(x,y)=>{const r=c.getBoundingClientRect(); c.dispatchEvent(new PointerEvent('pointerup'," +
+            " {clientX:r.left+r.width*x,clientY:r.top+r.height*y,bubbles:true}));};" +
+            " document.getElementById('arrow').click();tap(.2,.2);tap(.8,.8);" +
+            " document.getElementById('circle').click();tap(.5,.5);" +
+            " document.getElementById('annotation-text').value='CI annotation';" +
+            " document.getElementById('text-tool').click();tap(.2,.7);" +
+            " document.getElementById('save-photo').click();return true;})()"
+        );
+        current = waitForEvidence(value -> {
+            JSONArray media = value.optJSONArray("media");
+            return media != null && media.length() == 1 &&
+                "queued".equals(media.optJSONObject(0).optString("local_final_state")) &&
+                media.optJSONObject(0).optJSONArray("annotations").length() == 3;
+        }, 20_000);
         writeEvidence("02-offline-queued", current);
         screenshot("02-offline-queued");
     }
@@ -286,7 +315,9 @@ public class CloudEmulatorFlowTest {
                 messages != null && messages.length() == 1 &&
                 activity.equals(executions.optJSONObject(0).optString("activity_uid")) &&
                 "queued".equals(executions.optJSONObject(0).optString("local_final_state")) &&
-                "queued".equals(messages.optJSONObject(0).optString("local_final_state"));
+                "queued".equals(messages.optJSONObject(0).optString("local_final_state")) &&
+                value.optJSONArray("media").length() == 1 &&
+                "queued".equals(value.optJSONArray("media").optJSONObject(0).optString("local_final_state"));
         }, 20_000);
         writeEvidence("03-offline-reopen", current);
         screenshot("03-offline-reopen");
@@ -302,10 +333,13 @@ public class CloudEmulatorFlowTest {
                 messages != null && messages.length() == 1 &&
                 "applied".equals(executions.optJSONObject(0).optString("local_final_state")) &&
                 "accepted".equals(messages.optJSONObject(0).optString("local_final_state")) &&
-                value.optInt("cursor", -1) >= 2;
+                value.optInt("cursor", -1) == 3 &&
+                value.optJSONArray("media").length() == 1 &&
+                "linked".equals(value.optJSONArray("media").optJSONObject(0).optString("local_final_state"));
         }, 45_000);
         assertClearedError(current.getJSONArray("execution").getJSONObject(0));
         assertClearedError(current.getJSONArray("communication").getJSONObject(0));
+        assertClearedError(current.getJSONArray("media").getJSONObject(0));
         writeEvidence("04-reconciled", current);
         screenshot("04-reconciled");
     }
@@ -327,6 +361,7 @@ public class CloudEmulatorFlowTest {
         );
         assertEquals(0, current.getJSONArray("execution").length());
         assertEquals(0, current.getJSONArray("communication").length());
+        assertEquals(0, current.getJSONArray("media").length());
         writeEvidence("05-account-b", current);
         screenshot("05-account-b");
     }

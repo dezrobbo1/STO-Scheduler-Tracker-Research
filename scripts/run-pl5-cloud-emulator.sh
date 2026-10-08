@@ -2,7 +2,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-EVIDENCE="$ROOT/artifacts/pl5-cloud-emulator"
+EVIDENCE="/tmp/pl5-cloud-emulator-raw"
+SAFE_EVIDENCE="$ROOT/artifacts/pl5-cloud-emulator"
 SETUP_FILE="${STO_EMULATOR_SETUP_FILE:?STO_EMULATOR_SETUP_FILE is required}"
 TLS_CA="${STO_EMULATOR_TLS_CA:?STO_EMULATOR_TLS_CA is required}"
 APP_APK="$ROOT/field/android/app/build/outputs/apk/debug/app-debug.apk"
@@ -90,6 +91,7 @@ collect_evidence() {
   adb logcat -d >"$EVIDENCE/logcat.txt" 2>&1 || true
   adb shell dumpsys package "$PACKAGE" >"$EVIDENCE/package.txt" 2>&1 || true
   adb pull "/sdcard/Android/data/$PACKAGE/files/cloud-emulator"     "$EVIDENCE/screenshots" >/dev/null 2>&1 || true
+  "$ROOT/.venv/bin/python" "$ROOT/scripts/pl5-cloud-evidence.py" finalize "$EVIDENCE" "$SAFE_EVIDENCE" --setup "$SETUP_FILE"
 }
 
 cleanup() {
@@ -119,6 +121,9 @@ if [[ ! -f "$APP_APK" || ! -f "$TEST_APK" ]]; then
   exit 1
 fi
 
+test "$(git -C "$ROOT" rev-parse HEAD)" = "$STO_BUILD_SHA"
+adb shell getprop ro.build.version.sdk >"$EVIDENCE/emulator-api.txt"
+adb shell getprop ro.product.model >"$EVIDENCE/emulator-model.txt"
 sha256sum "$APP_APK" >"$EVIDENCE/app-debug.sha256"
 printf '%s\n' "$STO_BUILD_SHA" >"$EVIDENCE/source-sha.txt"
 adb logcat -c
@@ -140,6 +145,10 @@ PY
 run_instrumentation connectAndCache   -e stoServer "$DEVICE_SERVER"   -e stoProject "$PROJECT_ID"   -e stoCredential "$CREDENTIAL_A"   -e stoActor "$ACTOR_A"   -e stoBaselineHash "$BASELINE_HASH"
 
 stop_server
+if curl_ci "$HOST_SERVER/healthz" >/dev/null 2>&1; then
+  echo "backend unexpectedly available during offline phase" >&2
+  exit 1
+fi
 adb shell am force-stop "$PACKAGE"
 
 run_instrumentation queueWhileBackendUnavailable   -e stoActivity "$ISOLATE_UID"
@@ -170,20 +179,31 @@ done
 
 curl_ci -H "Authorization: Bearer $CREDENTIAL_A"   "$HOST_SERVER/api/projects/$PROJECT_ID/changes?after=0"   >"$EVIDENCE/final-feed.json"
 
+collect_evidence
+
 "$ROOT/.venv/bin/python" - "$SETUP_FILE" "$EVIDENCE/final-feed.json" "$EVIDENCE/summary.json" <<'PY'
 import json
 import sys
 from pathlib import Path
+import importlib.util
 
 setup = json.load(open(sys.argv[1], encoding="utf-8"))
 feed = json.load(open(sys.argv[2], encoding="utf-8"))
 events = feed.get("events", [])
-if feed.get("next_cursor") != 2 or feed.get("has_more") is not False or len(events) != 2:
+if feed.get("next_cursor") != 3 or feed.get("has_more") is not False or len(events) != 3:
     raise SystemExit(f"unexpected disposable emulator history: {feed!r}")
 if sum(1 for row in events if row.get("operation_id")) != 1:
     raise SystemExit(f"expected exactly one execution event: {events!r}")
 if sum(1 for row in events if row.get("kind") == "trial_message") != 1:
     raise SystemExit(f"expected exactly one trial message: {events!r}")
+
+spec = importlib.util.spec_from_file_location("cloud_evidence", Path("scripts/pl5-cloud-evidence.py"))
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+root = Path(sys.argv[3]).parent / "screenshots" / "cloud-emulator"
+phases = [json.loads((root / f"{name}.json").read_text()) for name in (
+    "02-offline-queued", "03-offline-reopen", "04-reconciled", "05-account-b")]
+module.verify_android(setup, *phases, feed)
 
 safe = {
     "server_sha": setup["server_sha"],

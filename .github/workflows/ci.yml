@@ -139,7 +139,7 @@ jobs:
     env:
       STO_BUILD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       DERIVED_DATA: /tmp/pl5-ios-derived
-      EVIDENCE: artifacts/pl5-cloud-ios-simulator
+      EVIDENCE: /tmp/pl5-cloud-ios-raw
 
     steps:
       - uses: actions/checkout@v4
@@ -271,6 +271,8 @@ jobs:
             echo "could not parse launched simulator process id: $launch_output" >&2
             exit 1
           fi
+          xcrun swiftc scripts/pl5-ios-screen.swift -o /tmp/pl5-ios-screen
+          python scripts/pl5-cloud-evidence.py ios-wait "$SIM_UDID" "$EVIDENCE" /tmp/pl5-ios-screen
           sleep 8
 
           if ! /bin/ps -p "$APP_PID" -o pid=,comm= | tee "$EVIDENCE/process.txt" | grep -q .; then
@@ -281,6 +283,10 @@ jobs:
           xcrun simctl io "$SIM_UDID" screenshot "$EVIDENCE/launch.png"
           xcrun simctl spawn "$SIM_UDID" log show --style compact --last 3m \
             --predicate 'process == "App"' > "$EVIDENCE/app.log" 2>&1 || true
+
+      - name: Finalize safe iOS evidence
+        if: always()
+        run: python scripts/pl5-cloud-evidence.py finalize "$EVIDENCE" artifacts/pl5-cloud-ios-simulator
 
       - name: Upload iOS simulator evidence
         if: always()

@@ -12,6 +12,9 @@ on:
       - "scripts/setup-pl5-cloud-emulator.py"
       - "scripts/serve-pl5-cloud-emulator.py"
       - "scripts/run-pl5-cloud-emulator.sh"
+      - "scripts/pl5-cloud-evidence.py"
+      - "scripts/cleanup-pl5-cloud-artifacts.py"
+      - "tests/test_pl5_cloud_safety.py"
       - "tests/fixtures/synthetic-workspace-chain.mspdi.xml"
       - ".github/workflows/pl5-cloud-emulator.yml"
   workflow_dispatch:
@@ -24,6 +27,22 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  retire-unsafe-evidence:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Retire previous disposable artifacts with raw native secret logs
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          STO_BUILD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: python3 scripts/cleanup-pl5-cloud-artifacts.py
+
   android-emulator:
     runs-on: ubuntu-latest
     services:
