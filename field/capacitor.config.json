@@ -1,0 +1,16 @@
+{
+  "appId": "au.com.sto.fieldtrial",
+  "appName": "STO Field Trial",
+  "webDir": "dist",
+  "loggingBehavior": "none",
+  "server": {"androidScheme": "https"},
+  "plugins": {
+    "CapacitorSQLite": {
+      "iosIsEncryption": true,
+      "iosKeychainPrefix": "au.com.sto.fieldtrial",
+      "androidIsEncryption": true,
+      "iosBiometric": {"biometricAuth": false},
+      "androidBiometric": {"biometricAuth": false}
+    }
+  }
+}

@@ -6,6 +6,47 @@ on:
   pull_request:
 
 jobs:
+  field:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: field
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: field/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - run: npx cap sync android
+      - run: npx cap sync ios
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - run: ./android/gradlew -p android assembleDebug
+      - run: ./android/gradlew -p android assembleAndroidTest
+
+  field-windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: field
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: field/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - run: npx cap sync android
+
   api:
     # The persistence gate: needs PostgreSQL and the api extra. The bare job
     # below proves the suite still runs with nothing installed.
@@ -91,3 +132,177 @@ jobs:
           else
             git show --check --format=oneline --no-renames HEAD
           fi
+
+
+  ios-simulator:
+    runs-on: macos-latest
+    env:
+      STO_BUILD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      DERIVED_DATA: /tmp/pl5-ios-derived
+      EVIDENCE: /tmp/pl5-cloud-ios-raw
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: field/package-lock.json
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Build web assets and sync the committed iOS project
+        working-directory: field
+        run: |
+          set -euo pipefail
+          npm ci
+          npm test
+          npm run build
+          npx cap sync ios
+
+      - name: Record Xcode and exact-source provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$EVIDENCE"
+          git rev-parse HEAD | tee "$EVIDENCE/source-sha.txt"
+          test "$(git rev-parse HEAD)" = "$STO_BUILD_SHA"
+          xcodebuild -version | tee "$EVIDENCE/xcode-version.txt"
+          xcrun simctl list runtimes available | tee "$EVIDENCE/available-runtimes.txt"
+
+      - name: Select and boot an available iPhone simulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          import re
+          import subprocess
+
+          payload = json.loads(subprocess.check_output(
+              ["xcrun", "simctl", "list", "devices", "available", "-j"],
+              text=True,
+          ))
+          candidates = []
+          for runtime, devices in payload.get("devices", {}).items():
+              if ".SimRuntime.iOS-" not in runtime:
+                  continue
+              version = tuple(int(part) for part in re.findall(r"\d+", runtime))
+              for device in devices:
+                  if device.get("isAvailable") and device.get("name", "").startswith("iPhone"):
+                      candidates.append((version, device["name"], runtime, device["udid"]))
+          if not candidates:
+              raise SystemExit("no available iPhone simulator runtime/device")
+          version, name, runtime, udid = sorted(candidates, reverse=True)[0]
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as handle:
+              handle.write(f"SIM_UDID={udid}\n")
+              handle.write(f"SIM_NAME={name}\n")
+              handle.write(f"SIM_RUNTIME={runtime}\n")
+          with open(os.path.join(os.environ["EVIDENCE"], "simulator.txt"), "w", encoding="utf-8") as handle:
+              handle.write(f"name={name}\nruntime={runtime}\nudid={udid}\n")
+          PY
+
+      - name: Boot the selected iPhone simulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcrun simctl boot "$SIM_UDID" || true
+          xcrun simctl bootstatus "$SIM_UDID" -b
+
+      - name: Build the exact app for iOS Simulator without distribution signing
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Simulator-only ad-hoc signing enables Keychain; no Apple account/profile.
+          xcodebuild \
+            -project field/ios/App/App.xcodeproj \
+            -scheme App \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination "id=$SIM_UDID" \
+            -derivedDataPath "$DERIVED_DATA" \
+            CODE_SIGNING_ALLOWED=YES \
+            CODE_SIGN_IDENTITY="-" \
+            build | tee "$EVIDENCE/xcodebuild.log"
+
+      - name: Install, launch and capture simulator evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP_PATH="$DERIVED_DATA/Build/Products/Debug-iphonesimulator/App.app"
+          test -d "$APP_PATH"
+          codesign --verify --strict "$APP_PATH"
+          codesign -d --entitlements :- "$APP_PATH" > "$EVIDENCE/simulator-entitlements.txt" 2>&1
+
+          INFO="$APP_PATH/Info.plist"
+          BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$INFO")"
+          VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$INFO")"
+          BUILD="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$INFO")"
+          EXECUTABLE="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$INFO")"
+
+          test "$BUNDLE_ID" = "au.com.sto.fieldtrial"
+          test "$VERSION" = "1.0"
+          test "$BUILD" = "1"
+          test -f "$APP_PATH/$EXECUTABLE"
+
+          {
+            echo "source_sha=$STO_BUILD_SHA"
+            echo "app_path=$APP_PATH"
+            echo "bundle_id=$BUNDLE_ID"
+            echo "version=$VERSION"
+            echo "build=$BUILD"
+            echo "simulator=$SIM_NAME"
+            echo "runtime=$SIM_RUNTIME"
+          } | tee "$EVIDENCE/app-metadata.txt"
+          shasum -a 256 "$APP_PATH/$EXECUTABLE" | tee "$EVIDENCE/app-executable.sha256"
+
+          xcrun simctl install "$SIM_UDID" "$APP_PATH"
+          xcrun simctl get_app_container "$SIM_UDID" "$BUNDLE_ID" app \
+            | tee "$EVIDENCE/app-container.txt"
+
+          launch_output="$(xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID")"
+          printf '%s\n' "$launch_output" | tee "$EVIDENCE/launch.txt"
+          APP_PID="${launch_output##*: }"
+          if ! [[ "$APP_PID" =~ ^[0-9]+$ ]]; then
+            echo "could not parse launched simulator process id: $launch_output" >&2
+            exit 1
+          fi
+          xcrun swiftc scripts/pl5-ios-screen.swift -o /tmp/pl5-ios-screen
+          python scripts/pl5-cloud-evidence.py ios-wait "$SIM_UDID" "$EVIDENCE" /tmp/pl5-ios-screen
+          sleep 8
+
+          if ! /bin/ps -p "$APP_PID" -o pid=,comm= | tee "$EVIDENCE/process.txt" | grep -q .; then
+            echo "STO Field Trial process did not remain alive after launch" >&2
+            exit 1
+          fi
+
+          xcrun simctl io "$SIM_UDID" screenshot "$EVIDENCE/launch.png"
+          xcrun simctl spawn "$SIM_UDID" log show --style compact --last 3m \
+            --predicate 'process == "App" OR process == "securityd"' > "$EVIDENCE/app.log" 2>&1 || true
+
+      - name: Capture bounded iOS diagnostics
+        if: always() && env.SIM_UDID != ''
+        shell: bash
+        run: |
+          mkdir -p "$EVIDENCE"
+          xcrun simctl spawn "$SIM_UDID" log show --style compact --last 3m \
+            --predicate 'process == "App" OR process == "securityd"' > "$EVIDENCE/app.log" 2>&1 || true
+
+      - name: Finalize safe iOS evidence
+        if: always()
+        run: python scripts/pl5-cloud-evidence.py finalize "$EVIDENCE" artifacts/pl5-cloud-ios-simulator
+
+      - name: Upload iOS simulator evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pl5-cloud-ios-simulator
+          path: artifacts/pl5-cloud-ios-simulator
+          if-no-files-found: warn
