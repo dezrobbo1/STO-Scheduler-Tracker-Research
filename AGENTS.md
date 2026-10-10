@@ -14,6 +14,13 @@ behind it. `docs/adr/` holds the decisions, `docs/history/` how they were
 reached, and `docs/roadmap/CONSOLIDATION-PLAN.md` the design that produced them
 — a **frozen record** of 2026-09-02, not a description of the repository today.
 
+For the owner-authorized intra-P2 sequencing exception, also read
+`docs/goals/P2-CONTINUATION.md`. It permits independent PL6/PL7 server/browser
+work while PL5 physical acceptance remains open, and scopes additional cloud
+evidence without making it a blanket development gate. It does not waive
+P2-G4, PL15 physical acceptance, phase gates, or explicit merge approval. The
+phase/criterion state in `docs/goals/roadmap.json` remains authoritative.
+
 ## Conventions this file relies on
 
 A backtick around a path means **a path that exists in this repository now**;
